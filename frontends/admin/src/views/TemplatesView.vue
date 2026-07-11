@@ -248,12 +248,27 @@ const onDragEnd = () => {
 const extractJinjaTags = (silent = false) => {
   const html = editForm.value.html || ''
   const regex = /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g
-  const found: string[] = []
+  const allFound: string[] = []
   let m: RegExpExecArray | null
   while ((m = regex.exec(html)) !== null) {
     const name = m[1] as string
-    if (name && !found.includes(name)) found.push(name)
+    if (name && !allFound.includes(name)) allFound.push(name)
   }
+
+  // var_<name> tags are magic tags, not containers: ensure the magic tag
+  // exists and exclude it from the container list below.
+  const magicNames = allFound.filter((name) => name.startsWith('var_'))
+  magicNames.forEach((name) => {
+    const magicName = name.slice(4)
+    if (!magicName) return
+    const exists = magicTagsStore.magicTags.some((t) => t.name.toLowerCase() === magicName.toLowerCase())
+    if (!exists) {
+      emit('displayhive:admin:cts:create_magic_tag', { name: magicName, value: '' })
+    }
+  })
+  if (magicNames.length > 0) magicTagsStore.fetch()
+
+  const found = allFound.filter((name) => !name.startsWith('var_'))
 
   if (found.length === 0) {
     if (!silent) {
