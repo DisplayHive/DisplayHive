@@ -11,14 +11,17 @@ import { isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 
 // PrimeVue components
 import Card from 'primevue/card'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 const router = useRouter()
-const { on, off, emit } = useSocket()
+const { on, off, emit, emitWithAck } = useSocket()
 
 const welcomeHeadline = ref('Welcome to DisplayHive Admin')
 const welcomeText = ref('Use the navigation menu to manage your digital signage system.')
 const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
+const hideDemoMode = ref(false)
+const demoModeSaving = ref(false)
 
 const handleSettings = (data: any) => {
   const sys = data?.system_settings || {}
@@ -26,7 +29,30 @@ const handleSettings = (data: any) => {
   if (sys.welcome_text !== undefined) welcomeText.value = sys.welcome_text
   if (sys.hide_community_links !== undefined) hideCommunityLinks.value = sys.hide_community_links === true || sys.hide_community_links === 'true'
   if (sys.hide_helping_hand !== undefined) hideHelpingHand.value = sys.hide_helping_hand === true || sys.hide_helping_hand === 'true'
+  if (sys.hide_demo_mode !== undefined) hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
 }
+
+const demoModeEnabled = computed({
+  get: () => !hideDemoMode.value,
+  set: async (value: boolean) => {
+    const previous = hideDemoMode.value
+    hideDemoMode.value = !value
+    demoModeSaving.value = true
+    try {
+      const ack = await emitWithAck<{ success: boolean; error?: string }>(
+        'displayhive:admin:cts:set_system_settings',
+        { settings: { hide_demo_mode: hideDemoMode.value ? 'true' : 'false' } },
+      )
+      if (!ack?.success) {
+        hideDemoMode.value = previous
+      }
+    } catch {
+      hideDemoMode.value = previous
+    } finally {
+      demoModeSaving.value = false
+    }
+  },
+})
 const devicesStore = useDevicesStore()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
@@ -79,6 +105,32 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 
 <template>
   <div class="dashboard">
+
+    <!-- Demo mode hint -->
+    <Card v-if="demoModeEnabled" class="demo-hint-card">
+      <template #content>
+        <div class="demo-hint-body">
+          <i class="pi pi-sparkles demo-hint-icon"></i>
+          <div class="demo-hint-text">
+            <div class="demo-hint-title">Demo mode is active on this instance</div>
+            <p>
+              You can import example configurations from the
+              <a href="#" @click.prevent="router.push('/demo')">Demo page</a>.
+              Please note that, with the exception of user accounts, this will overwrite
+              <strong>all</strong> content previously created on this instance — system-wide.
+              You can back up your current data beforehand via
+              <a href="#" @click.prevent="router.push('/importexport')">Import / Export</a>.
+            </p>
+          </div>
+        </div>
+        <div class="demo-hint-footer">
+          <ToggleSwitch v-model="demoModeEnabled" :disabled="demoModeSaving" class="demo-hint-switch" />
+          <span class="demo-hint-switch-desc">
+            Turn off to disable access to demo mode. It can be re-enabled later in Settings.
+          </span>
+        </div>
+      </template>
+    </Card>
 
     <!-- Welcome card -->
     <Card class="welcome-card">
@@ -380,6 +432,69 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   flex-direction: column;
   gap: 1.5rem;
   padding: 0.5rem;
+}
+
+.demo-hint-card {
+  border: 1px solid var(--p-amber-300, #fcd34d);
+  background: var(--p-amber-50, #fffbeb);
+}
+
+.demo-hint-card :deep(.p-card-body) {
+  padding: 1.1rem 1.4rem;
+}
+
+.demo-hint-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.demo-hint-icon {
+  font-size: 1.4rem;
+  color: var(--p-amber-500, #f59e0b);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.demo-hint-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.demo-hint-title {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: var(--p-text-color, #111827);
+}
+
+.demo-hint-text p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color, #6b7280);
+  line-height: 1.5;
+}
+
+.demo-hint-text p:last-child {
+  margin-bottom: 0;
+}
+
+.demo-hint-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--p-amber-200, #fde68a);
+}
+
+.demo-hint-switch {
+  flex-shrink: 0;
+}
+
+.demo-hint-switch-desc {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #6b7280);
+  line-height: 1.4;
 }
 
 .welcome-card :deep(.p-card-body) {

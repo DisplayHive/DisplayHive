@@ -103,7 +103,6 @@ const confirmImport = (pkg: DemoPackage) => {
         </template>
         <template #content>
           <p class="description">{{ pkg.description }}</p>
-          <p class="filename">{{ pkg.filename }}</p>
           <Button
             label="Import Demo"
             icon="pi pi-cloud-download"
@@ -142,18 +141,14 @@ const confirmImport = (pkg: DemoPackage) => {
 }
 
 .card-header {
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .description {
-  margin-bottom: 0.5rem;
-  color: var(--text-color-secondary);
-}
-
-.filename {
   margin-bottom: 1rem;
-  font-family: monospace;
-  font-size: 0.8rem;
   color: var(--text-color-secondary);
 }
 </style>
