@@ -103,6 +103,39 @@ def register_admin_contenttypes_handlers(socketio, app, db):
     def get_admin_contenttypes(message=None):
         _emit_contenttypes(room=request.sid)
 
+    def _serialize_contenttype_detail(ct):
+        """Build the full contenttype detail payload (used by both get and update)."""
+        containers = getattr(ct, 'contentcontainers', []) or []
+        tagconfigs = getattr(ct, 'tagconfigs', []) or []
+        return {
+            'id': ct.id,
+            'name': ct.name,
+            'description': ct.description or '',
+            'html': ct.html or '',
+            'css': getattr(ct, 'css', None) or '',
+            'container_ids': [c.id for c in containers],
+            'containers': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'title': c.title or c.name,
+                    'order': c.order,
+                    'template_name': getattr(getattr(c, 'template', None), 'name', None),
+                }
+                for c in containers
+            ],
+            'tagconfigs': [
+                {
+                    'id': t.id,
+                    'field_name': t.field_name,
+                    'field_label': t.field_label,
+                    'field_handler': t.field_handler,
+                    'order': t.order,
+                }
+                for t in tagconfigs
+            ],
+        }
+
     @socketio.on('displayhive:admin:cts:get_contenttype')
     @admin_handler
     def get_contenttype(message=None):
@@ -114,38 +147,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         ct = db.session.get(Contenttype, int(ct_id))
         if not ct:
             return
-        containers = getattr(ct, 'contentcontainers', []) or []
-        tagconfigs = getattr(ct, 'tagconfigs', []) or []
-        payload = {
-            'contenttype': {
-                'id': ct.id,
-                'name': ct.name,
-                'description': ct.description or '',
-                'html': ct.html or '',
-                'css': getattr(ct, 'css', None) or '',
-                'container_ids': [c.id for c in containers],
-                'containers': [
-                    {
-                        'id': c.id,
-                        'name': c.name,
-                        'title': c.title or c.name,
-                        'order': c.order,
-                        'template_name': getattr(getattr(c, 'template', None), 'name', None),
-                    }
-                    for c in containers
-                ],
-                'tagconfigs': [
-                    {
-                        'id': t.id,
-                        'field_name': t.field_name,
-                        'field_label': t.field_label,
-                        'field_handler': t.field_handler,
-                        'order': t.order,
-                    }
-                    for t in tagconfigs
-                ],
-            }
-        }
+        payload = {'contenttype': _serialize_contenttype_detail(ct)}
         socketio.emit('displayhive:admin:stc:contenttype_detail', payload, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:update_contenttype')
@@ -176,15 +178,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
         db.session.commit()
 
-        payload = {
-            'contenttype': {
-                'id': ct.id,
-                'name': ct.name,
-                'description': ct.description or '',
-                'html': ct.html or '',
-                'css': getattr(ct, 'css', None) or '',
-            }
-        }
+        payload = {'contenttype': _serialize_contenttype_detail(ct)}
         socketio.emit('displayhive:admin:stc:contenttype_detail', payload, room=request.sid)
         _emit_contenttypes()
 
