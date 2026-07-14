@@ -12,3 +12,6 @@ pyjwt
 # In the Nix production environment, python3Packages.psycopg2 from nixpkgs is used instead.
 psycopg2-binary
 pytest
+# Docs (npm run docs:serve / docs:build) — already provided by shell.nix in the Nix dev shell.
+mkdocs
+mkdocs-material

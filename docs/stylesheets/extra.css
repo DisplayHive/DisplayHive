@@ -1,0 +1,107 @@
+/* DisplayHive brand color (#ffcc00, from frontends/admin/public/logo_bl.png)
+   layered on top of the Material "amber" accent so links, buttons, and
+   highlights use the exact brand gold rather than the closest built-in. */
+:root {
+  --md-accent-fg-color: #ffcc00;
+  --md-accent-fg-color--transparent: #ffcc001a;
+  --md-accent-bg-color: #181818;
+}
+
+.md-header {
+  background-color: #181818;
+}
+
+.md-tabs {
+  background-color: #181818;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.6rem;
+  width: auto;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* Home page wordmark: swap the black-on-transparent and white-on-transparent
+   variants with the color scheme, since Material's palette can flip at
+   runtime via the header toggle (not just OS preference). */
+.brand-logo-wrap {
+  text-align: center;
+}
+
+.brand-logo {
+  margin-bottom: 1rem;
+}
+
+.brand-logo--dark {
+  display: none;
+}
+
+[data-md-color-scheme="slate"] .brand-logo--light {
+  display: none;
+}
+
+[data-md-color-scheme="slate"] .brand-logo--dark {
+  display: inline;
+}
+
+/* Lightbox: click any documentation screenshot or Mermaid diagram to view it
+   enlarged (see docs/javascripts/lightbox.js). */
+.md-content img:not(.brand-logo),
+.md-content .mermaid svg {
+  cursor: zoom-in;
+}
+
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.lightbox-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.lightbox-content {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+}
+
+.lightbox-content img,
+.lightbox-content svg {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 4rem);
+  border-radius: 4px;
+}
+
+.lightbox-content img {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* The Mermaid diagram is rendered on a transparent background, so give the
+   enlarged copy an opaque backdrop matching the page theme. */
+.lightbox-content svg {
+  background: var(--md-default-bg-color, #fff);
+  padding: 1.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}

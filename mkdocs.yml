@@ -1,0 +1,79 @@
+site_name: DisplayHive Documentation
+site_description: Self-hosted digital signage — user and developer documentation
+site_url: https://displayhive.github.io/DisplayHive/
+repo_url: https://github.com/DisplayHive/DisplayHive
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/lightbox.js
+
+theme:
+  name: material
+  logo: assets/logo-mark.png
+  favicon: assets/favicon.ico
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+    - search.suggest
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Installation: user/installation.md
+      - Overview: user/index.md
+      - Getting started: user/getting-started.md
+      - Templates, containers & content: user/content-and-templates.md
+      - Magic tags: user/magic-tags.md
+      - Screens, devices & groups: user/screens-devices-groups.md
+      - Pretalx integration: user/pretalx.md
+      - Alerting: user/alerting.md
+      - Import & export: user/import-export.md
+      - Users & login: user/users-and-login.md
+      - Settings: user/settings.md
+      - FAQ: user/faq.md
+  - Developer Guide:
+      - Overview: developer/index.md
+      - Architecture: developer/architecture.md
+      - Real-time content push: developer/realtime-push.md
+      - Contributing: developer/contributing.md
+  - Contact: contact.md

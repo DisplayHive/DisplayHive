@@ -22,7 +22,6 @@ display or a hundred at once.
 
 DisplayHive is currently in its early stages of development. Even if it is already quite powerful, there may be some issues. If you encounter them or want to help, just contact us on Mastodon (displayhive@chaos.social).
 Some of our main issues are:
-- Next to no documentation
 - No rights management
 - Some features are not as feature-rich or self-explanatory as they should be
 
@@ -94,6 +93,24 @@ Copy `.env.example` to `.env` (or export the variables in your shell) to configu
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app, for correct client IPs behind nginx |
 | `FLASK_DEBUG` | Enables the Werkzeug debugger — local development only, never on a network-reachable host |
 | `LOG_LEVEL` | Python logging level (default `INFO`) |
+
+## Documentation
+
+The full docs are published at **[displayhive.github.io/DisplayHive](https://displayhive.github.io/DisplayHive/)**
+(rebuilt automatically on every push to `main` that touches `docs/`).
+
+The source lives in [`docs/`](docs/) and is built with
+[MkDocs](https://www.mkdocs.org/) + Material. To browse it locally instead:
+
+```bash
+npm run docs:serve   # http://localhost:8000
+```
+
+- **User guide** ([`docs/user/`](docs/user/)) — using the admin panel:
+  templates, content, magic tags, screens/devices/groups, integrations,
+  import/export, and settings.
+- **Developer guide** ([`docs/developer/`](docs/developer/)) — architecture,
+  the real-time content push pipeline, and how to contribute.
 
 ## Deployment
 

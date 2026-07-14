@@ -1,10 +1,10 @@
 .vscode/
 .claude/
+CLAUDE.md
 __pycache__/
 dist/
-docs/
-Docs/
 node_modules/
+site/
 project.db
 # Never commit local databases — they hold admin password hashes, device keys,
 # and API tokens. The scrubbed seed is displayhive-db-default.json only.

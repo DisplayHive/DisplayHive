@@ -8,7 +8,9 @@
     "dev": "run-p dev:backend dev:admin dev:screen",
     "test:e2e": "npm --prefix testing run test:e2e",
     "test:e2e:headed": "npm --prefix testing run test:e2e:headed",
-    "test:e2e:ui": "npm --prefix testing run test:e2e:ui"
+    "test:e2e:ui": "npm --prefix testing run test:e2e:ui",
+    "docs:serve": "mkdocs serve",
+    "docs:build": "mkdocs build"
   },
   "devDependencies": {
     "npm-run-all2": "^8.0.4"
