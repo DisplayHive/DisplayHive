@@ -22,22 +22,21 @@ display or a hundred at once.
 
 DisplayHive is currently in its early stages of development. Even if it is already quite powerful, there may be some issues. If you encounter them or want to help, just contact us on Mastodon (displayhive@chaos.social).
 Some of our main issues are:
+
 - No rights management
 - Some features are not as feature-rich or self-explanatory as they should be
-
 
 ## AI Usage
 
 At the beginning of development, DisplayHive started without any AI usage. As the code evolved, more and more AI-generated code was introduced to the codebase. But there are no blind commits, and the code should be similar to that of a human programmer. In cases where things were AI-generated, there may be things that slipped through review. If you find something, get in touch. If you intend to use AI help for coding on DisplayHive, this is fine, but ensure small, topic-focused, and checkable commits/pull requests.
 
-
 ## Architecture
 
-| Component | Stack | Purpose |
-|---|---|---|
-| **Backend** | Flask + Flask-SocketIO (eventlet), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends |
-| **Admin panel** | Vue 3, PrimeVue, Pinia, Vite | Manage content, screens, devices, templates, settings |
-| **Screen client** | TypeScript (no framework), Vite | Kiosk-facing display client, renders pushed content |
+| Component         | Stack                                                  | Purpose                                               |
+| ----------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| **Backend**       | Flask + Flask-SocketIO (eventlet), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends        |
+| **Admin panel**   | Vue 3, PrimeVue, Pinia, Vite                           | Manage content, screens, devices, templates, settings |
+| **Screen client** | TypeScript (no framework), Vite                        | Kiosk-facing display client, renders pushed content   |
 
 SQLite is used for local development; set `DATABASE_URL` to point at PostgreSQL in
 production. Schema changes are managed with Alembic migrations.
@@ -67,11 +66,11 @@ npm run dev
 
 Starts the backend and both frontends together:
 
-| Service | Command | URL |
-|---|---|---|
+| Service                     | Command               | URL                   |
+| --------------------------- | --------------------- | --------------------- |
 | Backend (Flask + Socket.IO) | `npm run dev:backend` | http://localhost:5000 |
-| Admin panel | `npm run dev:admin` | http://localhost:5173 |
-| Screen client | `npm run dev:screen` | http://localhost:5174 |
+| Admin panel                 | `npm run dev:admin`   | http://localhost:5173 |
+| Screen client               | `npm run dev:screen`  | http://localhost:5174 |
 
 ### Tests
 
@@ -85,14 +84,17 @@ npm run test:e2e:ui      # Playwright interactive UI
 
 Copy `.env.example` to `.env` (or export the variables in your shell) to configure:
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string (omit for local SQLite) |
-| `SECRET_KEY` | Flask session/JWT signing key — set a real value before deploying |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated list of origins allowed to connect over Socket.IO/API |
-| `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app, for correct client IPs behind nginx |
-| `FLASK_DEBUG` | Enables the Werkzeug debugger — local development only, never on a network-reachable host |
-| `LOG_LEVEL` | Python logging level (default `INFO`) |
+| Variable                   | Purpose                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`             | PostgreSQL connection string (omit for local SQLite)                                      |
+| `SECRET_KEY`               | Flask session/JWT signing key — set a real value before deploying                         |
+| `POSTGRES_PASSWORD`        | Password for the bundled PostgreSQL service (Docker Compose)                              |
+| `ADMIN_BOOTSTRAP_USERNAME` | Username of the admin account created on first start (default `admin`)                    |
+| `ADMIN_BOOTSTRAP_PASSWORD` | Password for the bootstrap admin account, set on first start                              |
+| `CORS_ALLOWED_ORIGINS`     | Comma-separated list of origins allowed to connect over Socket.IO/API                     |
+| `TRUSTED_PROXY_COUNT`      | Number of reverse proxies in front of the app, for correct client IPs behind nginx        |
+| `FLASK_DEBUG`              | Enables the Werkzeug debugger — local development only, never on a network-reachable host |
+| `LOG_LEVEL`                | Python logging level (default `INFO`)                                                     |
 
 ## Documentation
 
@@ -113,6 +115,52 @@ npm run docs:serve   # http://localhost:8000
   the real-time content push pipeline, and how to contribute.
 
 ## Deployment
+
+### Docker (single container + PostgreSQL)
+
+The [`Dockerfile`](Dockerfile) builds a single image that bundles the Flask/Socket.IO
+backend _and_ both pre-built frontends. A [`compose.yml`](compose.yml) is included that
+runs this container alongside a PostgreSQL service.
+
+**Requirements:** Docker with the Compose plugin.
+
+```bash
+cp .env.example .env      # then edit .env and set the secrets
+# Generate a strong SECRET_KEY:  openssl rand -hex 32
+
+docker compose up -d --build
+```
+
+On startup the container applies Alembic migrations (`alembic upgrade head`), then
+launches gunicorn with the eventlet worker. Once it's up, everything is served from a
+single port:
+
+| Surface               | URL                          |
+| --------------------- | ---------------------------- |
+| Screen / kiosk client | http://localhost:5000/       |
+| Admin panel           | http://localhost:5000/admin/ |
+| REST API + Socket.IO  | http://localhost:5000/       |
+
+Set at least `SECRET_KEY`, `POSTGRES_PASSWORD`, and `ADMIN_BOOTSTRAP_PASSWORD` in `.env`
+before first start. Uploaded media and generated previews persist in the `media` and
+`media_previews` Docker volumes; the database persists in `pgdata`, so they survive
+container upgrades.
+
+Useful commands:
+
+```bash
+docker compose logs -f displayhive   # follow app logs
+docker compose up -d --build          # rebuild and restart after changes
+docker compose down                   # stop (add -v to also delete volumes/data)
+```
+
+To pull a pre-built image from GitHub Container Registry instead of building locally,
+swap the `build: .` line in [`compose.yml`](compose.yml) for
+`image: ghcr.io/displayhive/displayhive:latest`. Images are published automatically by
+the [`docker-image`](.github/workflows/docker-image.yml) workflow on every push to
+`main` and on version tags.
+
+### NixOS
 
 A NixOS module ([`nix/module.nix`](nix/module.nix)) is included for running one or more
 DisplayHive instances as systemd services, each with its own PostgreSQL database and

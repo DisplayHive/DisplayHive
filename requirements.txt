@@ -4,7 +4,9 @@ flask-sqlalchemy
 flask-cors
 alembic
 pillow
-gunicorn
+# Pin to 23.x: gunicorn 24+ removed the bundled eventlet/gevent/tornado workers,
+# breaking `--worker-class eventlet` (No module named 'gunicorn.workers.geventlet').
+gunicorn>=23,<24
 eventlet
 requests
 pyjwt

@@ -1,0 +1,34 @@
+# Version control / tooling
+.git
+.gitignore
+.github
+.direnv
+.envrc
+
+# Nix dev environment
+flake.nix
+flake.lock
+shell.nix
+
+# Node modules (reinstalled inside the build stage)
+**/node_modules
+
+# Pre-built frontend output (rebuilt fresh in the frontend stage)
+dist
+site
+
+# Python caches / local envs
+**/__pycache__
+*.pyc
+.venv
+.pytest_cache
+
+# Local SQLite databases and secrets (never bake into the image)
+*.db
+project.db
+.env
+
+# Not needed at runtime
+testing
+docs
+_old
