@@ -1,0 +1,43 @@
+services:
+  displayhive:
+    #image: ghcr.io/displayhive/displayhive:latest
+    build: .
+    container_name: displayhive
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://displayhive:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/displayhive
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      # Comma-separated list of allowed origins for the API / Socket.IO.
+      # Set to your public URL(s) in production, e.g. https://signage.example.com
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      # Initial admin account (created on first start if no users exist).
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      # Number of reverse proxies in front of the app (0 = reached directly).
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - 5000:5000
+    volumes:
+      # Uploaded media and generated previews must survive container upgrades.
+      - media:/app/static/media
+      - media_previews:/app/static/media_previews
+
+  db:
+    image: postgres:16-alpine
+    container_name: displayhive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: displayhive
+      POSTGRES_USER: displayhive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  media:
+  media_previews:
+  pgdata:

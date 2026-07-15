@@ -1,6 +1,8 @@
 .vscode/
 .claude/
 CLAUDE.md
+# Local secrets / environment — never commit.
+.env
 __pycache__/
 dist/
 node_modules/
