@@ -74,21 +74,22 @@ const executeCopyTemplate = () => {
 
 const showTagDialog = ref(false)
 const isNewTag = ref(false)
-const tagForm = ref<{ id: number | null; name: string; value: string }>({
+const tagForm = ref<{ id: number | null; name: string; value: string; description: string }>({
   id: null,
   name: '',
   value: '',
+  description: '',
 })
 
 const openNewTagDialog = () => {
   isNewTag.value = true
-  tagForm.value = { id: null, name: '', value: '' }
+  tagForm.value = { id: null, name: '', value: '', description: '' }
   showTagDialog.value = true
 }
 
 const openEditTagDialog = (v: MagicTag) => {
   isNewTag.value = false
-  tagForm.value = { id: v.id, name: v.name, value: v.value }
+  tagForm.value = { id: v.id, name: v.name, value: v.value, description: v.description || '' }
   showTagDialog.value = true
 }
 
@@ -96,7 +97,7 @@ const saveTag = (keepOpen = false) => {
   const event = isNewTag.value
     ? 'displayhive:admin:cts:create_magic_tag'
     : 'displayhive:admin:cts:update_magic_tag'
-  emit(event, { id: tagForm.value.id, name: tagForm.value.name, value: tagForm.value.value })
+  emit(event, { id: tagForm.value.id, name: tagForm.value.name, value: tagForm.value.value, description: tagForm.value.description })
   toast.add({ severity: 'success', summary: 'Success', detail: isNewTag.value ? 'Magic tag created' : 'Magic tag updated', life: 3000 })
   if (!keepOpen) showTagDialog.value = false
 }
@@ -549,6 +550,11 @@ const deleteTemplate = (template: Template) => {
               {{ data.value.length > 80 ? data.value.substring(0, 80) + '...' : data.value }}
             </template>
           </Column>
+          <Column field="description" header="Description">
+            <template #body="{ data }">
+              {{ data.description && data.description.length > 80 ? data.description.substring(0, 80) + '...' : (data.description || '-') }}
+            </template>
+          </Column>
           <Column header="Actions" style="width: 120px">
             <template #body="{ data }">
               <div class="action-buttons">
@@ -576,6 +582,10 @@ const deleteTemplate = (template: Template) => {
         <div class="field">
           <label for="var-value">Value</label>
           <Textarea id="var-value" v-model="tagForm.value" rows="4" class="w-full" />
+        </div>
+        <div class="field">
+          <label for="var-description">Description</label>
+          <Textarea id="var-description" v-model="tagForm.description" rows="2" class="w-full" />
         </div>
       </div>
       <template #footer>
@@ -656,7 +666,7 @@ const deleteTemplate = (template: Template) => {
               class="var-chip"
               draggable="true"
               @dragstart="onMagicTagDragStart($event, v.name)"
-              :title="`Drag {{ var_${v.name} }} into the editor`"
+              :title="v.description ? `${v.description}\n\nDrag {{ var_${v.name} }} into the editor` : `Drag {{ var_${v.name} }} into the editor`"
             >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
           </div>
         </div>

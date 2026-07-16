@@ -68,6 +68,7 @@ export interface MagicTag {
   id: number
   name: string
   value: string
+  description?: string
 }
 
 /** An item stored in the media library. */

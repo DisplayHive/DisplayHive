@@ -595,7 +595,7 @@ const deleteContentType = (ct: ContentType) => {
               draggable="true"
               @dragstart="onMagicTagDragStart($event, v.name)"
               @click="insertMagicTag(v.name)"
-              :title="`Insert {{ var_${v.name} }} into the active editor`"
+              :title="v.description ? `${v.description}\n\nInsert {{ var_${v.name} }} into the active editor` : `Insert {{ var_${v.name} }} into the active editor`"
             >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
           </div>
         </div>

@@ -9,12 +9,16 @@ Manage them from the **Magic Tags** card on the **Templates** page
 
 ## Defining a tag
 
-Create a magic tag with a name and a value, for example:
+Create a magic tag with a name and a value, plus an optional description to
+remind editors what the tag is for, for example:
 
-| Name | Value |
-|---|---|
-| `wifi_password` | `Guest1234` |
-| `venue_name` | `Hall B` |
+| Name | Value | Description |
+|---|---|---|
+| `wifi_password` | `Guest1234` | Guest Wi-Fi password shown on info screens |
+| `venue_name` | `Hall B` | Display name of the venue/hall |
+
+The description isn't substituted into content — it's shown as a tooltip on
+the tag chip when inserting tags into templates or content types.
 
 ## Using a tag
 

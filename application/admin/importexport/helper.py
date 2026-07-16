@@ -152,7 +152,7 @@ def export_database(app, db):
         # --- Magic Tags ---
         magic_tags = []
         for v in db.session.execute(db.select(MagicTag)).scalars().all():
-            magic_tags.append({'id': v.id, 'name': v.name, 'value': v.value})
+            magic_tags.append({'id': v.id, 'name': v.name, 'value': v.value, 'description': v.description or ''})
 
         return {
             'export_version': 2,
@@ -374,7 +374,7 @@ def import_database(app, db, data: dict) -> dict:
 
             # --- Magic Tags (no FK dependencies) ---
             for row in data.get('magic_tags', []):
-                db.session.add(MagicTag(id=row['id'], name=row['name'], value=row['value']))
+                db.session.add(MagicTag(id=row['id'], name=row['name'], value=row['value'], description=row.get('description') or ''))
             db.session.flush()
 
             # --- Devices (needs Screen via screen_id) ---

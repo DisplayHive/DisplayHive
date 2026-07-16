@@ -102,6 +102,7 @@ class MagicTag(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     value: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, nullable=True, default='')
 
 
 class SystemSetting(db.Model):
