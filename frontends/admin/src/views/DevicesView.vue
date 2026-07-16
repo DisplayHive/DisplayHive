@@ -260,6 +260,21 @@ const toggleActiveDevice = (device: Device, val: boolean) => {
   toast.add({ severity: 'success', summary: 'Updated', detail: `Device ${device.name} ${val ? 'activated' : 'deactivated'}`, life: 2000 })
 }
 
+// Allow overriding screen URL via Vite env `VITE_SCREEN_URL`. Otherwise:
+// - In dev (`npm run dev`), the admin SPA is served by its own Vite dev
+//   server (e.g. :5173), which is NOT where Flask renders the screen/
+//   handles the devicekey socket auth — default to the Flask backend URL
+//   instead (same fallback used for the socket connection).
+// - In production, admin + screen are both served by Flask on the same
+//   origin, so `window.location.origin` is correct.
+const getScreenBaseUrl = (): string => {
+  const env = (import.meta as any).env || {}
+  return (
+    (env.VITE_SCREEN_URL as string) ||
+    (env.DEV ? (env.VITE_BACKEND_URL as string) || (env.VITE_SOCKET_URL as string) || 'http://localhost:5000' : window.location.origin)
+  )
+}
+
 const playDevice = (device: Device) => {
   if (!device.devicekey) {
     toast.add({
@@ -271,17 +286,7 @@ const playDevice = (device: Device) => {
     return
   }
   try {
-    const env = (import.meta as any).env || {}
-    // Allow overriding screen URL via Vite env `VITE_SCREEN_URL`. Otherwise:
-    // - In dev (`npm run dev`), the admin SPA is served by its own Vite dev
-    //   server (e.g. :5173), which is NOT where Flask renders the screen/
-    //   handles the devicekey socket auth — default to the Flask backend URL
-    //   instead (same fallback used for the socket connection).
-    // - In production, admin + screen are both served by Flask on the same
-    //   origin, so `window.location.origin` is correct.
-    const base =
-      (env.VITE_SCREEN_URL as string) ||
-      (env.DEV ? (env.VITE_BACKEND_URL as string) || (env.VITE_SOCKET_URL as string) || 'http://localhost:5000' : window.location.origin)
+    const base = getScreenBaseUrl()
     const key = device.devicekey || ''
     const separator = base.includes('?') ? '&' : '?'
     const url = `${base}${separator}impersonate=true&devicekey=${encodeURIComponent(key)}`
@@ -299,6 +304,32 @@ const copyDeviceKey = async (device: Device) => {
     toast.add({ severity: 'success', summary: 'Copied', detail: 'Device key copied to clipboard', life: 2000 })
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to copy device key', life: 3000 })
+  }
+}
+
+// Builds a one-time screen URL carrying the device key in the URL fragment
+// (`#devicekey=...`) rather than the query string, so it's never sent to a
+// server in an access log or Referer header. The screen client reads it,
+// uses it for this session only, and scrubs the fragment from the URL/
+// history on load - it is never written to that device's localStorage.
+const copyDeviceUrl = async (device: Device) => {
+  if (!device.devicekey) {
+    toast.add({
+      severity: 'error',
+      summary: 'Cannot copy',
+      detail: 'Device key is not visible to this account (requires device.showkey).',
+      life: 4000,
+    })
+    return
+  }
+  try {
+    const base = getScreenBaseUrl()
+    const key = device.devicekey || ''
+    const url = `${base}#devicekey=${encodeURIComponent(key)}`
+    await navigator.clipboard.writeText(url)
+    toast.add({ severity: 'success', summary: 'Copied', detail: 'Dynamic device URL copied to clipboard', life: 2000 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to copy device URL', life: 3000 })
   }
 }
 
@@ -414,6 +445,8 @@ const deleteDevice = (device: Device) => {
             <template #body="{ data }">
               <div class="key-cell">
                 <Button class="key-button" icon="pi pi-key" size="small" outlined @click="() => copyDeviceKey(data)" :title="'Copy key'">
+                </Button>
+                <Button class="key-button" icon="pi pi-link" size="small" outlined @click="() => copyDeviceUrl(data)" :title="'Copy dynamic device URL'">
                 </Button>
                 <span class="key-text">{{ data.devicekey }}</span>
               </div>

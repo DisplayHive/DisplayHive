@@ -4,6 +4,7 @@
 // otherwise start the adoption workflow.
 
 import { getDeviceKey } from "./storage";
+import { getSessionDdk } from "./ddk";
 
 type InitOptions = {
   getAdoptionToken?: () => string | null;
@@ -14,12 +15,29 @@ type InitOptions = {
 
 export function initializeAuthentication(adopt?: InitOptions) {
   console.log("[Authentication] Starting authentication flow");
-  // First check for impersonation via URL parameters. If present we will
-  // honor the URL-provided devicekey for this session but NOT persist it
-  // to localStorage (so this is a transient impersonation).
+  // First check for a dynamic device key (ddk) delivered via the URL
+  // fragment. If present we use it for this session only - it is never
+  // persisted to localStorage, and the fragment has already been stripped
+  // from the URL/history by consumeDdkFromFragment().
   let deviceKey: string | null = null;
   try {
-    if (typeof window !== "undefined") {
+    const ddk = getSessionDdk();
+    if (ddk) {
+      console.log(
+        "[Authentication] Dynamic device key (ddk) found in URL fragment - using it for this session only",
+      );
+      deviceKey = ddk;
+      if (typeof window !== "undefined") (window as any).deviceKey = deviceKey;
+    }
+  } catch (e) {
+    console.warn("[Authentication] Error reading dynamic device key", e);
+  }
+
+  // Next check for impersonation via URL parameters. If present we will
+  // honor the URL-provided devicekey for this session but NOT persist it
+  // to localStorage (so this is a transient impersonation).
+  try {
+    if (!deviceKey && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const impersonate = params.get("impersonate");
       const urlKey = params.get("devicekey");
