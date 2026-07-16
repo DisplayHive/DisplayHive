@@ -171,6 +171,9 @@ const handleScreenbasedScreengroups = (data: any) => {
     }))
     .sort((a: any, b: any) => a.name.localeCompare(b.name))
   oneScreenGroups.value = groups
+  if (selectedScreenFilter.value === null && groups.length > 0) {
+    selectedScreenFilter.value = groups[0].id
+  }
   groups.forEach((sg: { id: number }) => {
     emit('displayhive:admin:cts:get_content_by_screengroup', { screengroup_id: sg.id })
   })
