@@ -133,12 +133,11 @@ def register_admin_templates_handlers(socketio, app, db):
         db.session.commit()
         _emit_templates()
 
-        if getattr(tpl, 'isDefault', False):
-            try:
-                from application.utils import push_content_list_to_all_screens
-                push_content_list_to_all_screens(socketio, app, db)
-            except Exception:
-                logger.exception('update_template: failed to push content to screens')
+        try:
+            from application.utils import reload_devices_for_template
+            reload_devices_for_template(socketio, db, tpl)
+        except Exception:
+            logger.exception('update_template: failed to reload screens using this template')
 
     @socketio.on('displayhive:admin:cts:delete_template')
     @require_right('templates.delete')

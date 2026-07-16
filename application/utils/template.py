@@ -1,6 +1,9 @@
 """Shared template/content utility helpers reused across multiple modules."""
 
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_default_template(db):
@@ -25,6 +28,49 @@ def get_default_template(db):
             db.select(Template).order_by(Template.id).limit(1)
         ).scalar()
     return template
+
+
+def reload_devices_on_screen(socketio, db, screen):
+    """Mark all devices on *screen* offline and send a RELOAD command to each."""
+    from application.models import Device
+
+    devices = db.session.execute(
+        db.select(Device).where(Device.screen_id == screen.id)
+    ).scalars().all()
+    for device in devices:
+        if getattr(device, 'devicekey', None):
+            try:
+                device.is_online = False
+                db.session.add(device)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            socketio.emit('command', {'CMD': 'RELOAD'}, room=f'device_{device.devicekey}')
+    logger.info("Reload command sent to screen '%s'", screen.name)
+
+
+def reload_devices_for_template(socketio, db, template):
+    """Send a RELOAD command to every device whose screen uses *template*.
+
+    A screen uses a template either directly (`Screen.template_id ==
+    template.id`) or implicitly, by leaving `template_id` unset, when
+    *template* is the resolved system default.
+    """
+    from application.models import Screen
+
+    if getattr(template, 'isDefault', False):
+        screens = db.session.execute(
+            db.select(Screen).where(
+                db.or_(Screen.template_id == template.id, Screen.template_id.is_(None))
+            )
+        ).scalars().all()
+    else:
+        screens = db.session.execute(
+            db.select(Screen).where(Screen.template_id == template.id)
+        ).scalars().all()
+
+    for screen in screens:
+        reload_devices_on_screen(socketio, db, screen)
 
 
 def build_field_handlers(contenttype_obj) -> dict:

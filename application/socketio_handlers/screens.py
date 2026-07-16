@@ -11,26 +11,13 @@ def register_screen_handlers(socketio, app, db):
     """Register all screen-related socket.io event handlers."""
 
     from application.models import Screen, Screengroup, Device
-    from application.utils import emit_zuweisungen_matrix_update
+    from application.utils import emit_zuweisungen_matrix_update, reload_devices_on_screen
     from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
     from application.permissions import has_right
     from flask import request
 
     def _reload_devices_on_screen(screen):
-        """Mark all devices on *screen* offline and send RELOAD command to each."""
-        devices = db.session.execute(
-            db.select(Device).where(Device.screen_id == screen.id)
-        ).scalars().all()
-        for device in devices:
-            if getattr(device, 'devicekey', None):
-                try:
-                    device.is_online = False
-                    db.session.add(device)
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-                socketio.emit('command', {'CMD': 'RELOAD'}, room=f'device_{device.devicekey}')
-        logger.info("Reload command sent to screen '%s'", screen.name)
+        reload_devices_on_screen(socketio, db, screen)
 
     @socketio.on('displayhive:screens:cts:reload_screen')
     @require_right('screens.reload')
