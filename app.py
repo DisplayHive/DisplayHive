@@ -439,9 +439,15 @@ def _restore_from_zip_bytes(raw: bytes) -> dict:
 
         db_payload = json.loads(zf.read('db.json').decode('utf-8'))
 
-        # Clear existing media files before restoring
+        # Clear existing media files before restoring.
+        # shutil.rmtree on the folder itself fails when it is a Docker volume
+        # mount point (EBUSY), so delete only the contents.
         if os.path.isdir(_MEDIA_FOLDER):
-            shutil.rmtree(_MEDIA_FOLDER)
+            for entry in os.scandir(_MEDIA_FOLDER):
+                if entry.is_dir(follow_symlinks=False):
+                    shutil.rmtree(entry.path)
+                else:
+                    os.remove(entry.path)
         os.makedirs(_MEDIA_FOLDER, exist_ok=True)
 
         for name in zf.namelist():
