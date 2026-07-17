@@ -6,7 +6,7 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useTemplatesStore } from '../stores/templates'
 import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
-import type { Template, MagicTag } from '../types/models'
+import type { Template } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -46,13 +46,9 @@ const canCreate = computed(() => rightsStore.can('templates.create'))
 const canEdit = computed(() => rightsStore.can('templates.edit'))
 const canDelete = computed(() => rightsStore.can('templates.delete'))
 const canMagicTagsPage = computed(() => rightsStore.can('magictags.page'))
-const canMagicTagsCreate = computed(() => rightsStore.can('magictags.create'))
-const canMagicTagsEdit = computed(() => rightsStore.can('magictags.edit'))
-const canMagicTagsDelete = computed(() => rightsStore.can('magictags.delete'))
 
 const filterText = ref('')
 
-// Magic Tags state
 // Copy dialog
 const showCopyDialog = ref(false)
 const copySourceId = ref<number | null>(null)
@@ -70,49 +66,6 @@ const executeCopyTemplate = () => {
   pendingCopyName.value = copyNewName.value.trim()
   emit('displayhive:admin:cts:get_template', { id: copySourceId.value })
   showCopyDialog.value = false
-}
-
-const showTagDialog = ref(false)
-const isNewTag = ref(false)
-const tagForm = ref<{ id: number | null; name: string; value: string; description: string }>({
-  id: null,
-  name: '',
-  value: '',
-  description: '',
-})
-
-const openNewTagDialog = () => {
-  isNewTag.value = true
-  tagForm.value = { id: null, name: '', value: '', description: '' }
-  showTagDialog.value = true
-}
-
-const openEditTagDialog = (v: MagicTag) => {
-  isNewTag.value = false
-  tagForm.value = { id: v.id, name: v.name, value: v.value, description: v.description || '' }
-  showTagDialog.value = true
-}
-
-const saveTag = (keepOpen = false) => {
-  const event = isNewTag.value
-    ? 'displayhive:admin:cts:create_magic_tag'
-    : 'displayhive:admin:cts:update_magic_tag'
-  emit(event, { id: tagForm.value.id, name: tagForm.value.name, value: tagForm.value.value, description: tagForm.value.description })
-  toast.add({ severity: 'success', summary: 'Success', detail: isNewTag.value ? 'Magic tag created' : 'Magic tag updated', life: 3000 })
-  if (!keepOpen) showTagDialog.value = false
-}
-
-const deleteTag = (v: MagicTag) => {
-  confirm.require({
-    message: `Are you sure you want to delete "${v.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_magic_tag', { id: v.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Magic tag deleted', life: 3000 })
-    },
-  })
 }
 
 // Containers (loaded from server via socket)
@@ -519,81 +472,6 @@ const deleteTemplate = (template: Template) => {
         </DataTable>
       </template>
     </Card>
-
-    <!-- Magic Tags Card -->
-    <Card v-if="canMagicTagsPage">
-      <template #title>
-        <div class="card-header">
-          <span>Magic Tags</span>
-          <div class="header-actions">
-            <Button v-if="canMagicTagsCreate" icon="pi pi-plus" label="New Magic Tag" @click="openNewTagDialog" size="small" />
-            <Button icon="pi pi-refresh" @click="magicTagsStore.fetch()" size="small" outlined />
-          </div>
-        </div>
-      </template>
-      <template #content>
-        <DataTable
-          :value="magicTagsStore.magicTags"
-          :loading="magicTagsStore.loading"
-          sortField="name"
-          :sortOrder="1"
-          stripedRows
-          size="small"
-          :paginator="magicTagsStore.magicTags.length > 10"
-          :rows="10"
-          responsiveLayout="scroll"
-        >
-          <Column field="id" header="ID" style="width: 60px" sortable />
-          <Column field="name" header="Name" sortable />
-          <Column field="value" header="Value">
-            <template #body="{ data }">
-              {{ data.value.length > 80 ? data.value.substring(0, 80) + '...' : data.value }}
-            </template>
-          </Column>
-          <Column field="description" header="Description">
-            <template #body="{ data }">
-              {{ data.description && data.description.length > 80 ? data.description.substring(0, 80) + '...' : (data.description || '-') }}
-            </template>
-          </Column>
-          <Column header="Actions" style="width: 120px">
-            <template #body="{ data }">
-              <div class="action-buttons">
-                <Button v-if="canMagicTagsEdit" icon="pi pi-pencil" @click="openEditTagDialog(data)" size="small" outlined title="Edit" />
-                <Button v-if="canMagicTagsDelete" icon="pi pi-trash" @click="deleteTag(data)" size="small" severity="danger" outlined title="Delete" />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-      </template>
-    </Card>
-
-    <!-- Magic Tag Edit Dialog -->
-    <Dialog
-      v-model:visible="showTagDialog"
-      :header="isNewTag ? 'New Magic Tag' : 'Edit Magic Tag'"
-      modal
-      :style="{ width: '480px' }"
-    >
-      <div class="dialog-content">
-        <div class="field">
-          <label for="var-name">Name</label>
-          <InputText id="var-name" v-model="tagForm.name" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="var-value">Value</label>
-          <Textarea id="var-value" v-model="tagForm.value" rows="4" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="var-description">Description</label>
-          <Textarea id="var-description" v-model="tagForm.description" rows="2" class="w-full" />
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="showTagDialog = false" text />
-        <Button v-if="!isNewTag" label="Update" severity="secondary" outlined @click="saveTag(true)" />
-        <Button label="Save" @click="saveTag()" />
-      </template>
-    </Dialog>
 
     <!-- Copy Dialog -->
     <Dialog v-model:visible="showCopyDialog" header="Copy Template" modal :style="{ width: '400px' }">

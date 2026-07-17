@@ -63,12 +63,32 @@ export interface Content {
   contenttype_name?: string
 }
 
-/** A global magic tag (key/value pair) injected into templates and other content. */
+/** A global magic tag injected into templates and other content.
+ *
+ * A 'text' tag renders `value` literally. A 'list' tag renders the value of
+ * the entry in `value_list_id` whose key matches `value`.
+ */
 export interface MagicTag {
   id: number
   name: string
   value: string
   description?: string
+  type: 'text' | 'list'
+  value_list_id: number | null
+}
+
+/** A single key/value entry belonging to a MagicTagValueList. */
+export interface MagicTagValueListEntry {
+  id: number
+  key: string
+  value: string
+}
+
+/** A named list of key/value entries a 'list'-type MagicTag can draw from. */
+export interface MagicTagValueList {
+  id: number
+  name: string
+  entries: MagicTagValueListEntry[]
 }
 
 /** An item stored in the media library. */

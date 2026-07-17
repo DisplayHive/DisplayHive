@@ -231,6 +231,15 @@ const adminMenuItems = computed(() => [
         },
       ]
     : []),
+  ...(rightsStore.can('magictags.page') || rightsStore.can('magictagvaluelists.page')
+    ? [
+        {
+          label: 'Magic Tags',
+          icon: 'pi pi-tags',
+          command: () => router.push('/magictags'),
+        },
+      ]
+    : []),
   ...(rightsStore.can('settings.page')
     ? [
         {
@@ -332,6 +341,7 @@ const pageTitle = computed(() => {
     content: 'Content',
     contenttypes: 'Content Types',
     templates: 'Templates',
+    magictags: 'Magic Tags',
     settings: 'Settings',
     logger: 'Logger',
     media: 'Media',

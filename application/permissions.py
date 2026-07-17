@@ -106,6 +106,11 @@ RIGHTS = [
     ('magictags.edit', 'magictags', 'Edit magic tag'),
     ('magictags.delete', 'magictags', 'Delete magic tag'),
 
+    ('magictagvaluelists.page', 'magictagvaluelists', 'View Magic Tag Value Lists page'),
+    ('magictagvaluelists.create', 'magictagvaluelists', 'Create magic tag value list'),
+    ('magictagvaluelists.edit', 'magictagvaluelists', 'Edit magic tag value list'),
+    ('magictagvaluelists.delete', 'magictagvaluelists', 'Delete magic tag value list'),
+
     ('users.page', 'users', 'View Users page'),
     ('users.create', 'users', 'Create admin user'),
     ('users.edit', 'users', 'Edit admin user (username)'),

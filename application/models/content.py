@@ -96,13 +96,40 @@ class TagConfig(db.Model):
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="tagconfigs")
 
 
+class MagicTagValueList(db.Model):
+    """A named list of key/value entries a 'list'-type MagicTag can draw from."""
+    __tablename__ = 'magic_tag_value_list'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    entries: Mapped[list["MagicTagValueListEntry"]] = relationship(
+        "MagicTagValueListEntry", back_populates="value_list", cascade="all, delete-orphan"
+    )
+
+
+class MagicTagValueListEntry(db.Model):
+    """A single key/value entry belonging to a MagicTagValueList."""
+    __tablename__ = 'magic_tag_value_list_entry'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    value_list_id: Mapped[int] = mapped_column(Integer, ForeignKey('magic_tag_value_list.id'), nullable=False)
+    key: Mapped[str] = mapped_column(String(255))
+    value: Mapped[str] = mapped_column(Text)
+    value_list: Mapped["MagicTagValueList"] = relationship("MagicTagValueList", back_populates="entries")
+
+
 class MagicTag(db.Model):
-    """Global magic tag (key/value pair) injected into templates and other content."""
+    """Global magic tag injected into templates and other content.
+
+    A 'text' tag renders `value` literally. A 'list' tag renders the value
+    of the entry in `value_list` whose key matches `value`.
+    """
     __tablename__ = 'magic_tag'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     value: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text, nullable=True, default='')
+    type: Mapped[str] = mapped_column(String(20), nullable=False, default='text', server_default='text')
+    value_list_id: Mapped[int] = mapped_column(Integer, ForeignKey('magic_tag_value_list.id'), nullable=True, default=None)
+    value_list: Mapped["MagicTagValueList"] = relationship("MagicTagValueList", foreign_keys=[value_list_id])
 
 
 class SystemSetting(db.Model):

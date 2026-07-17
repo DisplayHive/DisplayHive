@@ -11,6 +11,7 @@ def export_database(app, db):
     from application.models import (
         Screen, Screengroup, ContentElement, Template, Contenttype,
         ContentContainer, TagConfig, Media, Device, MagicTag,
+        MagicTagValueList,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import contenttype_container
@@ -149,13 +150,29 @@ def export_database(app, db):
                 'screen_id': d.screen_id,
             })
 
+        # --- Magic Tag Value Lists (must be exported before Magic Tags reference them) ---
+        magic_tag_value_lists = []
+        for l in db.session.execute(db.select(MagicTagValueList)).scalars().all():
+            magic_tag_value_lists.append({
+                'id': l.id,
+                'name': l.name,
+                'entries': [{'id': e.id, 'key': e.key, 'value': e.value} for e in l.entries],
+            })
+
         # --- Magic Tags ---
         magic_tags = []
         for v in db.session.execute(db.select(MagicTag)).scalars().all():
-            magic_tags.append({'id': v.id, 'name': v.name, 'value': v.value, 'description': v.description or ''})
+            magic_tags.append({
+                'id': v.id,
+                'name': v.name,
+                'value': v.value,
+                'description': v.description or '',
+                'type': v.type or 'text',
+                'value_list_id': v.value_list_id,
+            })
 
         return {
-            'export_version': 2,
+            'export_version': 3,
             'exported_at': datetime.now(timezone.utc).isoformat(),
             'screens': screens,
             'screengroups': screengroups,
@@ -169,6 +186,7 @@ def export_database(app, db):
             'content_element_screengroup': mc_sg_assoc,
             'media': medias,
             'devices': devices,
+            'magic_tag_value_lists': magic_tag_value_lists,
             'magic_tags': magic_tags,
         }
 
@@ -182,6 +200,7 @@ def import_database(app, db, data: dict) -> dict:
     from application.models import (
         Screen, Screengroup, ContentElement, Template, Contenttype,
         ContentContainer, TagConfig, Media, Device, MagicTag,
+        MagicTagValueList, MagicTagValueListEntry,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import contenttype_container
@@ -220,6 +239,8 @@ def import_database(app, db, data: dict) -> dict:
             db.session.execute(db.delete(Template))
             db.session.execute(db.delete(Media))
             db.session.execute(db.delete(MagicTag))
+            db.session.execute(db.delete(MagicTagValueListEntry))
+            db.session.execute(db.delete(MagicTagValueList))
             db.session.commit()
 
             # -------------------------------------------------------
@@ -372,9 +393,26 @@ def import_database(app, db, data: dict) -> dict:
                 db.session.add(med)
             db.session.flush()
 
-            # --- Magic Tags (no FK dependencies) ---
+            # --- Magic Tag Value Lists (must exist before Magic Tags reference them) ---
+            for row in data.get('magic_tag_value_lists', []):
+                value_list = MagicTagValueList(id=row['id'], name=row['name'])
+                db.session.add(value_list)
+                db.session.flush()
+                for entry in row.get('entries', []):
+                    db.session.add(MagicTagValueListEntry(
+                        id=entry['id'], value_list_id=value_list.id,
+                        key=entry['key'], value=entry.get('value') or '',
+                    ))
+            db.session.flush()
+
+            # --- Magic Tags (value_list_id → magic_tag_value_list.id) ---
             for row in data.get('magic_tags', []):
-                db.session.add(MagicTag(id=row['id'], name=row['name'], value=row['value'], description=row.get('description') or ''))
+                db.session.add(MagicTag(
+                    id=row['id'], name=row['name'], value=row['value'],
+                    description=row.get('description') or '',
+                    type=row.get('type') or 'text',
+                    value_list_id=row.get('value_list_id'),
+                ))
             db.session.flush()
 
             # --- Devices (needs Screen via screen_id) ---
@@ -410,6 +448,8 @@ def import_database(app, db, data: dict) -> dict:
                     ('content_element', 'id'),
                     ('media', 'id'),
                     ('device', 'id'),
+                    ('magic_tag_value_list', 'id'),
+                    ('magic_tag_value_list_entry', 'id'),
                     ('magic_tag', 'id'),
                 ]
                 for table, col in sequences:
@@ -440,6 +480,7 @@ def import_database(app, db, data: dict) -> dict:
                     'media': len(data.get('media', [])),
                     'devices': len(data.get('devices', [])),
                     'magic_tags': len(data.get('magic_tags', [])),
+                    'magic_tag_value_lists': len(data.get('magic_tag_value_lists', [])),
                 },
             }
         except Exception as e:
