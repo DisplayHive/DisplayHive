@@ -5,9 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="DisplayHive - Home of digital signage">
     <meta name="theme-color" content="#000000">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=BBH+Bogle&display=swap" rel="stylesheet">
+<style>
+        @font-face {
+            font-family: 'BBH Bogle';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('/screen/assets/BBHBogle.ttf') format('truetype');
+        }
+    </style>
     <link rel="stylesheet" href="/screen/assets/screen.css?v={{ config.ASSET_VERSION }}">
 
     <style id="template-css"></style>
@@ -72,9 +78,9 @@
     {%- include 'partials/debug_panel.html' -%}
 
     <!-- Vendor scripts: load before local scripts -->
-    <script defer src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-    <!-- QR Code Library - MIT Licensed -->
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script defer src="/screen/assets/socket.io.min.js"></script>
+    <!-- QR Code Library - MIT Licensed, self-hosted -->
+    <script defer src="/screen/assets/qrcode.min.js"></script>
     <!-- Local scripts: screen bundles -->
     {%- if config.SCREEN_DEV_SERVER %}
     <!-- Dev mode (SCREEN_DEV_SERVER=1): load live from the Vite dev server with HMR
