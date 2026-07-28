@@ -78,7 +78,7 @@ def _build_payload(db, screen):
             db.select(ContentContainer)
             .where(ContentContainer.template_id == template.id)
         ).scalars().all()
-        containers = [c.name for c in contentcontainers if getattr(c, 'contenttypes', None)]
+        containers = [c.name for c in contentcontainers]
     if not containers:
         containers = ['maincontent']
 

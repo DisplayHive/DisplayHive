@@ -22,7 +22,6 @@ interface Container {
   title: string
   order: number
   contentCount: number
-  contenttype_ids?: number[]
 }
 
 interface ContentElement {
@@ -42,7 +41,6 @@ interface ContentType {
   name: string
   description?: string
   html?: string
-  container_ids?: number[]
 }
 
 interface TagConfig {
@@ -233,11 +231,6 @@ const durationSeconds = computed({
   set: (s: number) => {
     createForm.value.duration = Math.floor(createForm.value.duration / 60) * 60 + (s ?? 0)
   },
-})
-
-const availableContentTypes = computed(() => {
-  if (!currentContainer.value?.contenttype_ids?.length) return props.contentTypes
-  return props.contentTypes.filter(ct => currentContainer.value!.contenttype_ids!.includes(ct.id))
 })
 
 const filteredScreengroups = computed(() => {
@@ -1019,7 +1012,7 @@ onUnmounted(() => {
   >
     <div class="contenttype-list">
       <Card
-        v-for="ct in availableContentTypes"
+        v-for="ct in props.contentTypes"
         :key="ct.id"
         class="contenttype-card"
         @click="selectContentType(ct)"
@@ -1029,9 +1022,9 @@ onUnmounted(() => {
           <p v-if="ct.description" class="text-muted">{{ ct.description }}</p>
         </template>
       </Card>
-      <div v-if="availableContentTypes.length === 0" class="empty-state">
+      <div v-if="props.contentTypes.length === 0" class="empty-state">
         <i class="pi pi-inbox"></i>
-        <p>No content types available for this container</p>
+        <p>No content types available</p>
       </div>
     </div>
     <template #footer>

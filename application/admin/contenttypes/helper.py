@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def emit_contenttypes_update(socketio, app, db, room: Optional[str] = None):
     """Build a minimal contenttypes payload and emit to clients.
 
-    Payload shape: {'data': [ {id, name, description, containers_count}, ... ]}
+    Payload shape: {'data': [ {id, name, description}, ... ]}
     """
     try:
         all_ct = db.session.execute(db.select(Contenttype)).scalars().all()
@@ -23,7 +23,6 @@ def emit_contenttypes_update(socketio, app, db, room: Optional[str] = None):
                 'id': ct.id,
                 'name': ct.name,
                 'description': ct.description or '',
-                'containers_count': len(ct.contentcontainers) if ct.contentcontainers is not None else 0,
             }
             for ct in all_ct
         ]

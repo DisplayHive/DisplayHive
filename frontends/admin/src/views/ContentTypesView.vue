@@ -14,7 +14,6 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
-import MultiSelect from 'primevue/multiselect'
 import Dropdown from 'primevue/dropdown'
 
 import { Codemirror } from 'vue-codemirror'
@@ -29,15 +28,6 @@ interface ContentType {
   description: string
   html: string
   css: string
-  container_ids: number[]
-}
-
-interface Container {
-  id?: number
-  name: string
-  title?: string
-  template_name?: string
-  order?: number
 }
 
 const toast = useToast()
@@ -51,7 +41,6 @@ const canDelete = computed(() => rightsStore.can('contenttypes.delete'))
 const canMagicTagsPage = computed(() => rightsStore.can('magictags.page'))
 
 const contentTypes = ref<ContentType[]>([])
-const containers = ref<Container[]>([])
 const loading = ref(true)
 const filterText = ref('')
 
@@ -88,7 +77,6 @@ const editForm = ref({
   description: '',
   html: '',
   css: '',
-  container_ids: [] as number[],
 })
 
 const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
@@ -194,19 +182,6 @@ const filteredContentTypes = computed(() => {
   )
 })
 
-const containerOptions = computed(() =>
-  // Use the container id when available, otherwise fall back to the container name.
-  // This preserves previous behaviour where option values could be either numeric ids
-  // or string names so already-selected values still render correctly when the
-  // dropdown is not opened.
-  containers.value.map((c) => {
-    const tmpl = c.template_name && String(c.template_name).trim()
-    const title = (c.title && String(c.title).trim()) || c.name || ''
-    const label = tmpl ? `${tmpl} - ${title}` : title
-    return { label, value: (c.id ?? c.name) as any }
-  })
-)
-
 const handleContentTypesList = (data: any) => {
   // backend sometimes sends { data: [...] } (upd_contenttypes) or { contenttypes: [...] }
   if (data) {
@@ -244,7 +219,6 @@ const handleContentTypeDetail = async (data: any) => {
       description: ct.description || '',
       html: ct.html || '',
       css: ct.css || '',
-      container_ids: ct.container_ids || [],
       tagconfigs,
     })
     if (ack?.ok) {
@@ -256,42 +230,10 @@ const handleContentTypeDetail = async (data: any) => {
     return
   }
 
-  // If edit dialog is open for this id, populate html and container ids
+  // If edit dialog is open for this id, populate html
   if (showEditDialog.value && editForm.value.id === ct.id) {
     editForm.value.html = ct.html || ''
     editForm.value.css = ct.css || ''
-    // Restore previous behaviour: accept whatever the server sent for container ids
-    // (they may be numeric ids or string names). Do not aggressively coerce or
-    // filter here so selected values keep their labels when the dropdown is closed.
-    editForm.value.container_ids = ct.container_ids || ct.containerIds || []
-
-    // If the detail payload also includes `containers`, merge them into the
-    // global `containers.value` list so the UI has labels available immediately.
-    const incomingContainers = Array.isArray(ct.containers) ? ct.containers : []
-    if (incomingContainers.length) {
-      incomingContainers.forEach((ic: any) => {
-        const key = ic.id ?? ic.name
-        // Normalise container object
-        const normalized: Container = {
-          id: ic.id ?? undefined,
-          name: ic.name ?? String(ic.id ?? ''),
-          title: ic.title ?? ic.name ?? String(ic.id ?? ''),
-          template_name: ic.template_name ?? undefined,
-          order: ic.order ?? undefined,
-        }
-
-        const idx = containers.value.findIndex((c) => (c.id ?? c.name) === key)
-        if (idx >= 0) {
-          // update existing entry
-          containers.value[idx] = { ...containers.value[idx], ...normalized }
-        } else {
-          // add new entry
-          containers.value.push(normalized)
-        }
-      })
-      // keep containers sorted by `order` if present
-      containers.value.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    }
 
           // If the detail payload includes saved tagconfigs, use them to populate the
           // tagconfigs editor (this preserves server-saved titles and order).
@@ -316,29 +258,18 @@ const handleContentTypeDetail = async (data: any) => {
   }
 }
 
-const handleContainersList = (data: { containers: Container[] }) => {
-  containers.value = data.containers || []
-  // Do not alter `editForm.container_ids` here — keep the selected list as the
-  // server provided it so the MultiSelect shows the correct labels when closed.
-}
-
 onMounted(() => {
   // backend emits 'displayhive:admin:stc:upd_contenttypes' with payload { data: [...] }
   on('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
   on('displayhive:admin:stc:contenttype_detail', handleContentTypeDetail)
-  // Use all-containers picker endpoint so every template's containers appear with template_name
-  on('displayhive:admin:stc:all_containers_for_picker', handleContainersList)
 
   // emit legacy event name the server registers ('get_contenttypes')
   emit('displayhive:admin:cts:get_contenttypes')
-  // request all containers across all templates
-  emit('displayhive:admin:cts:get_all_containers_for_picker')
   magicTagsStore.fetch()
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
-  off('displayhive:admin:stc:all_containers_for_picker', handleContainersList)
 })
 
 const refreshData = () => {
@@ -354,7 +285,6 @@ const openNewDialog = () => {
     description: '',
     html: '',
     css: '',
-    container_ids: [],
   }
   showEditDialog.value = true
 }
@@ -367,7 +297,6 @@ const openEditDialog = (ct: ContentType) => {
     description: ct.description || '',
     html: ct.html,
     css: ct.css || '',
-    container_ids: ct.container_ids || [],
   }
   // Request full contenttype detail (including html) from server
   try {
@@ -410,7 +339,6 @@ const saveContentType = async (keepOpen = false) => {
       description: editForm.value.description,
       html: editForm.value.html,
       css: editForm.value.css,
-      container_ids: editForm.value.container_ids,
       tagconfigs: tagconfigs_payload,
     })
 
@@ -546,18 +474,6 @@ const deleteContentType = (ct: ContentType) => {
         <div class="field">
           <label for="ct-description">Description</label>
           <Textarea id="ct-description" v-model="editForm.description" rows="2" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="ct-containers">Containers</label>
-          <MultiSelect
-            id="ct-containers"
-            v-model="editForm.container_ids"
-            :options="containerOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select containers"
-            class="w-full"
-          />
         </div>
         <div class="code-editors-row">
           <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">

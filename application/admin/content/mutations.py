@@ -127,12 +127,10 @@ def register_content_mutation_handlers(socketio, app, db):
             emit('displayhive:admin:stc:move_content_element_result', {'success': True, 'content_element_id': content_element.id, 'container': None})
             return {'success': True, 'content_element_id': content_element.id, 'container': None}
 
-        # Otherwise, validate and move to target container.
-        # ContentElement.contentcontainer is a bare name string with no template
-        # affiliation, so a container is looked up by name alone — not scoped to
-        # the default (or any single) template. A name can exist on more than one
-        # ContentContainer row (one per template it appears in); the move is
-        # allowed if *any* of them permits this contenttype.
+        # Otherwise, move to target container. ContentElement.contentcontainer is
+        # a bare name string with no template affiliation, so a container is
+        # looked up by name alone — not scoped to the default (or any single)
+        # template. Any contenttype may be assigned to any container.
         containers_with_name = db.session.execute(
             db.select(ContentContainer).where(ContentContainer.name == target)
         ).scalars().all()
@@ -140,12 +138,6 @@ def register_content_mutation_handlers(socketio, app, db):
         if not containers_with_name:
             emit('displayhive:admin:stc:move_content_element_result', {'success': False, 'error': 'Container nicht gefunden'})
             return
-
-        if content_element.contenttype_id:
-            allowed_ids = {ct.id for c in containers_with_name for ct in (c.contenttypes or [])}
-            if content_element.contenttype_id not in allowed_ids:
-                emit('displayhive:admin:stc:move_content_element_result', {'success': False, 'error': 'Ziel-Container ist für diesen Contenttype nicht erlaubt'})
-                return
 
         content_element.contentcontainer = target
         db.session.add(content_element)
@@ -254,14 +246,12 @@ def register_content_mutation_handlers(socketio, app, db):
         rendered = render_content_element_html(selected_content, serialized, field_handlers or None, db=db) if selected_content else ''
 
         def _resolve_container(existing_value=None):
-            """Pick the container: explicit value, else keep existing, else contenttype default, else maincontent."""
+            """Pick the container: explicit value, else keep existing, else maincontent."""
             explicit = get_val('contentcontainer', '')
             if explicit:
                 return explicit
             if existing_value:
                 return existing_value
-            if contenttype_obj and contenttype_obj.contentcontainers:
-                return contenttype_obj.contentcontainers[0].name
             return 'maincontent'
 
         if edit_id:

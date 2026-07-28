@@ -14,7 +14,6 @@ def export_database(app, db):
         MagicTagValueList,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
-    from application.models.content import contenttype_container
 
     with app.app_context():
         # --- Screens ---
@@ -79,12 +78,6 @@ def export_database(app, db):
                 'html': ct.html,
                 'css': ct.css,
             })
-
-        # --- Association: contenttype_container ---
-        ct_container_rows = db.session.execute(
-            db.select(contenttype_container)
-        ).fetchall()
-        ct_container_assoc = [{'contenttype_id': r[0], 'contentcontainer_id': r[1]} for r in ct_container_rows]
 
         # --- TagConfigs ---
         tagconfigs = []
@@ -180,7 +173,6 @@ def export_database(app, db):
             'templates': templates,
             'contentcontainers': containers,
             'contenttypes': contenttypes,
-            'contenttype_container': ct_container_assoc,
             'tagconfigs': tagconfigs,
             'content_elements': content_elements,
             'content_element_screengroup': mc_sg_assoc,
@@ -203,7 +195,6 @@ def import_database(app, db, data: dict) -> dict:
         MagicTagValueList, MagicTagValueListEntry,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
-    from application.models.content import contenttype_container
 
     version = data.get('export_version', 1)
     logger.info('Starting import, export_version=%s', version)
@@ -228,7 +219,6 @@ def import_database(app, db, data: dict) -> dict:
             #   ContentContainer (template_id → template.id) must go before Template
             db.session.execute(db.delete(content_element_screengroup))
             db.session.execute(db.delete(screengroup_screen))
-            db.session.execute(db.delete(contenttype_container))
             db.session.execute(db.delete(TagConfig))
             db.session.execute(db.delete(ContentElement))
             db.session.execute(db.delete(Device))
@@ -249,7 +239,7 @@ def import_database(app, db, data: dict) -> dict:
             #   Contenttype (referenced by ContentContainer assoc + TagConfig + ContentElement)
             #   Screen (template_id → template.id)
             #   Screengroup → screengroup_screen assoc
-            #   ContentContainer → contenttype_container assoc
+            #   ContentContainer
             #   TagConfig
             #   ContentElement → content_element_screengroup assoc
             #   Media
@@ -326,16 +316,6 @@ def import_database(app, db, data: dict) -> dict:
                     title=row.get('title'),
                 )
                 db.session.add(c)
-            db.session.flush()
-
-            # --- Association: contenttype_container (needs both Contenttype + ContentContainer) ---
-            for row in data.get('contenttype_container', []):
-                db.session.execute(
-                    contenttype_container.insert().values(
-                        contenttype_id=row['contenttype_id'],
-                        contentcontainer_id=row['contentcontainer_id'],
-                    )
-                )
             db.session.flush()
 
             # --- TagConfigs (needs Contenttype) ---

@@ -2,17 +2,9 @@
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, Table, Column, Integer, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import String, Text, Column, Integer, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db, content_element_screengroup
-
-# Many-to-many association table for Contenttype and ContentContainer
-contenttype_container = Table(
-    'contenttype_container',
-    db.Model.metadata,
-    Column('contenttype_id', Integer, ForeignKey('contenttype.id'), primary_key=True),
-    Column('contentcontainer_id', Integer, ForeignKey('contentcontainer.id'), primary_key=True)
-)
 
 
 class ContentElement(db.Model):
@@ -62,8 +54,6 @@ class ContentContainer(db.Model):
     title: Mapped[str] = mapped_column(String(255), nullable=True)  # Container title/description
     # Relationship to Template
     template: Mapped["Template"] = relationship("Template", back_populates="contentcontainers")
-    # Many-to-many relationship to Contenttype
-    contenttypes: Mapped[list["Contenttype"]] = relationship("Contenttype", secondary=contenttype_container, back_populates="contentcontainers")
 
 
 class Contenttype(db.Model):
@@ -75,8 +65,6 @@ class Contenttype(db.Model):
     css: Mapped[str] = mapped_column(Text, nullable=True)
     # Relationship to ContentElement
     content_elements: Mapped[list["ContentElement"]] = relationship("ContentElement", back_populates="contenttype")
-    # Many-to-many relationship to ContentContainer
-    contentcontainers: Mapped[list["ContentContainer"]] = relationship("ContentContainer", secondary=contenttype_container, back_populates="contenttypes")
     # Relationship to TagConfig
     tagconfigs: Mapped[list["TagConfig"]] = relationship("TagConfig", back_populates="contenttype", cascade="all, delete-orphan")
 

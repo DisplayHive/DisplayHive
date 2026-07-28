@@ -135,7 +135,6 @@ def register_content_query_handlers(socketio, app, db):
                     'order': cc.order,
                     'template_name': tpl.name,
                     'template_id': tpl.id,
-                    'contenttype_ids': [ct.id for ct in (cc.contenttypes or [])],
                 })
         containers.sort(key=lambda x: (x.get('template_name') or '', x.get('order') or 0))
         socketio.emit('displayhive:admin:stc:all_containers_for_picker', {'containers': containers}, room=sid)

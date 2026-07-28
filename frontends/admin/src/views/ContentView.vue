@@ -25,7 +25,6 @@ interface Container {
   title: string
   order: number
   contentCount: number
-  contenttype_ids?: number[]
 }
 
 interface ContentElement {
@@ -52,7 +51,6 @@ interface ContentType {
   name: string
   description?: string
   html?: string
-  container_ids?: number[]
 }
 
 const getContentFields = (content: any): ContentField[] => {

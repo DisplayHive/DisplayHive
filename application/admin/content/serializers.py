@@ -9,7 +9,7 @@ Flask-SQLAlchemy ``db`` instance explicitly.
 import json
 import re
 
-from application.models import ContentElement, ContentContainer, Template
+from application.models import ContentElement, Template
 
 
 def extract_template_css(tpl) -> str:
@@ -41,25 +41,18 @@ def fmt_dt(dt) -> str | None:
 
 
 def build_containers_for_template(db, template):
-    """Return a sorted list of container dicts for *template*, with content counts and allowed contenttype IDs."""
+    """Return a sorted list of container dicts for *template*, with content counts."""
     containers = []
     for cc in (template.contentcontainers if template else []):
         count = db.session.execute(
             db.select(db.func.count()).select_from(ContentElement).where(ContentElement.contentcontainer == cc.name)
         ).scalar()
-        allowed_ids = set()
-        for sibling in db.session.execute(
-            db.select(ContentContainer).where(ContentContainer.name == cc.name)
-        ).scalars().all():
-            if hasattr(sibling, 'contenttypes') and sibling.contenttypes:
-                allowed_ids.update(ct.id for ct in sibling.contenttypes)
         containers.append({
             'id': cc.id,
             'name': cc.name,
             'title': cc.title or cc.name,
             'order': cc.order,
             'contentCount': count,
-            'contenttype_ids': list(allowed_ids),
             'template_name': getattr(template, 'name', None),
         })
     containers.sort(key=lambda x: x['order'])
