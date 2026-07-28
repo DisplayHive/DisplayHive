@@ -116,6 +116,8 @@ def register_admin_layouts_handlers(socketio, app, db):
             left=float(data.get('left') or 0),
             width=float(data.get('width') or 100),
             height=float(data.get('height') or 100),
+            default_field_handler=data.get('default_field_handler') or None,
+            default_content=data.get('default_content') or None,
         )
         db.session.add(container)
         db.session.commit()
@@ -142,6 +144,12 @@ def register_admin_layouts_handlers(socketio, app, db):
         for field in ('top', 'left', 'width', 'height'):
             if data.get(field) is not None:
                 setattr(container, field, float(data[field]))
+        # Explicit keys (rather than "is not None") so clearing either field
+        # back to "no default" by sending an empty value actually takes effect.
+        if 'default_field_handler' in data:
+            container.default_field_handler = data.get('default_field_handler') or None
+        if 'default_content' in data:
+            container.default_content = data.get('default_content') or None
 
         db.session.add(container)
         db.session.commit()

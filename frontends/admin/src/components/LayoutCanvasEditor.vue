@@ -8,7 +8,37 @@ import type { Layout, ContentContainer } from '../types/models'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
+import Textarea from 'primevue/textarea'
+import Dropdown from 'primevue/dropdown'
 import Dialog from 'primevue/dialog'
+import Editor from 'primevue/editor'
+import MediaPickerDialog from './MediaPickerDialog.vue'
+
+interface MediaItem { id: number; url: string }
+
+// Same arrow set as ContentEditor.vue's field picker.
+const ARROW_OPTIONS = [
+  { char: '←', label: 'Left' },
+  { char: '→', label: 'Right' },
+  { char: '↑', label: 'Up' },
+  { char: '↓', label: 'Down' },
+  { char: '↖', label: 'Up-Left' },
+  { char: '↗', label: 'Up-Right' },
+  { char: '↙', label: 'Down-Left' },
+  { char: '↘', label: 'Down-Right' },
+  { char: '↔', label: 'Left-Right' },
+  { char: '↕', label: 'Up-Down' },
+  { char: '⇐', label: 'Double Left' },
+  { char: '⇒', label: 'Double Right' },
+  { char: '⇑', label: 'Double Up' },
+  { char: '⇓', label: 'Double Down' },
+  { char: '⇖', label: 'Double Up-Left' },
+  { char: '⇗', label: 'Double Up-Right' },
+  { char: '⇙', label: 'Double Down-Left' },
+  { char: '⇘', label: 'Double Down-Right' },
+  { char: '⇔', label: 'Double Left-Right' },
+  { char: '⇕', label: 'Double Up-Down' },
+]
 
 const props = defineProps<{
   layout: Layout
@@ -421,12 +451,33 @@ const onCanvasDrop = async (e: DragEvent) => {
 }
 
 // --- Editing a container's exact fields, in a modal ------------------------
+// Field handler options mirror ContentTypesView.vue's field list, plus a
+// "None" option since a container's default is optional.
+const defaultFieldHandlerOptions = [
+  { label: 'None', value: '' },
+  { label: 'Text (klein)', value: 'textklein' },
+  { label: 'Text (groß)', value: 'textbig' },
+  { label: 'WYSIWYG', value: 'wysiwyg' },
+  { label: 'Link/URL', value: 'link' },
+  { label: 'Zahl', value: 'numbers' },
+  { label: 'Image', value: 'image' },
+  { label: 'Pfeil (Arrow)', value: 'arrows' },
+  { label: 'Table', value: 'table' },
+  { label: 'Date / Time Format', value: 'datetime_format' },
+]
+
 const showContainerEditModal = ref(false)
+const showImagePickerDialog = ref(false)
 const containerEditForm = reactive({
   id: null as number | null,
   name: '', title: '',
   top: 0, left: 0, width: 20, height: 20,
+  default_field_handler: '', default_content: '',
 })
+
+const onDefaultImagePicked = (item: MediaItem) => {
+  containerEditForm.default_content = item.url
+}
 
 const openContainerEditModal = (c: ContentContainer) => {
   selectedId.value = c.id
@@ -438,11 +489,94 @@ const openContainerEditModal = (c: ContentContainer) => {
   containerEditForm.left = p.left
   containerEditForm.width = p.width
   containerEditForm.height = p.height
+  containerEditForm.default_field_handler = c.default_field_handler || ''
+  containerEditForm.default_content = c.default_content || ''
   showContainerEditModal.value = true
 }
 
 const closeContainerEditModal = () => {
   showContainerEditModal.value = false
+}
+
+// Switching the handler in the dropdown re-seeds default_content with a
+// sensible starting shape for that type (only on an actual user change —
+// opening the modal sets containerEditForm directly, bypassing this).
+const onDefaultHandlerChange = (newHandler: string) => {
+  containerEditForm.default_field_handler = newHandler
+  if (newHandler === 'arrows') {
+    containerEditForm.default_content = JSON.stringify({ char: '', size: 48 })
+  } else if (newHandler === 'table') {
+    containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
+  } else if (newHandler === 'datetime_format') {
+    containerEditForm.default_content = 'HH:mm:ss'
+  } else {
+    containerEditForm.default_content = ''
+  }
+}
+
+// --- 'arrows' handler: char + size, packed as JSON into default_content ----
+const arrowChar = computed({
+  get: () => {
+    try { return JSON.parse(containerEditForm.default_content || '{}').char || '' } catch { return '' }
+  },
+  set: (v: string) => {
+    let size = 48
+    try { size = JSON.parse(containerEditForm.default_content || '{}').size ?? 48 } catch { /* keep default */ }
+    containerEditForm.default_content = JSON.stringify({ char: v, size })
+  },
+})
+const arrowSize = computed({
+  get: () => {
+    try { return JSON.parse(containerEditForm.default_content || '{}').size ?? 48 } catch { return 48 }
+  },
+  set: (v: number | null) => {
+    let char = ''
+    try { char = JSON.parse(containerEditForm.default_content || '{}').char || '' } catch { /* keep default */ }
+    containerEditForm.default_content = JSON.stringify({ char, size: v ?? 48 })
+  },
+})
+
+// --- 'table' handler: {columns, rows}, stored directly as JSON -------------
+interface TableData { columns: string[]; rows: string[][] }
+const tableData = computed<TableData>(() => {
+  try {
+    const parsed = JSON.parse(containerEditForm.default_content || '{}')
+    if (Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) return parsed
+  } catch { /* fall through to default shape */ }
+  return { columns: ['Column 1', 'Column 2'], rows: [['', '']] }
+})
+const setTableData = (data: TableData) => {
+  containerEditForm.default_content = JSON.stringify(data)
+}
+const addTableColumn = () => {
+  const d = tableData.value
+  setTableData({ columns: [...d.columns, `Column ${d.columns.length + 1}`], rows: d.rows.map((r) => [...r, '']) })
+}
+const removeTableColumn = (ci: number) => {
+  const d = tableData.value
+  if (d.columns.length <= 1) return
+  setTableData({ columns: d.columns.filter((_, i) => i !== ci), rows: d.rows.map((r) => r.filter((_, i) => i !== ci)) })
+}
+const addTableRow = () => {
+  const d = tableData.value
+  setTableData({ columns: d.columns, rows: [...d.rows, d.columns.map(() => '')] })
+}
+const removeTableRow = (ri: number) => {
+  const d = tableData.value
+  if (d.rows.length <= 1) return
+  setTableData({ columns: d.columns, rows: d.rows.filter((_, i) => i !== ri) })
+}
+const updateTableHeader = (ci: number, v: string) => {
+  const d = tableData.value
+  const columns = [...d.columns]
+  columns[ci] = v
+  setTableData({ columns, rows: d.rows })
+}
+const updateTableCell = (ri: number, ci: number, v: string) => {
+  const d = tableData.value
+  const rows = d.rows.map((r) => [...r])
+  if (rows[ri]) rows[ri][ci] = v
+  setTableData({ columns: d.columns, rows })
 }
 
 const saveContainerEditModal = () => {
@@ -451,9 +585,18 @@ const saveContainerEditModal = () => {
   const c = props.containers.find((x) => x.id === id)
   if (!c) return
 
-  if (containerEditForm.name !== c.name || containerEditForm.title !== (c.title || '')) {
+  if (
+    containerEditForm.name !== c.name ||
+    containerEditForm.title !== (c.title || '') ||
+    containerEditForm.default_field_handler !== (c.default_field_handler || '') ||
+    containerEditForm.default_content !== (c.default_content || '')
+  ) {
     socketEmit('displayhive:admin:cts:update_container', {
-      id, name: containerEditForm.name, title: containerEditForm.title,
+      id,
+      name: containerEditForm.name,
+      title: containerEditForm.title,
+      default_field_handler: containerEditForm.default_field_handler,
+      default_content: containerEditForm.default_content,
     })
   }
 
@@ -606,6 +749,119 @@ const toggleSelectedLayoutMembership = () => {
           </div>
         </div>
         <p class="hint">Position changes here save with this Layout too — not immediately.</p>
+
+        <div class="field">
+          <label>Default Field Handler</label>
+          <Dropdown
+            :model-value="containerEditForm.default_field_handler"
+            :options="defaultFieldHandlerOptions"
+            optionLabel="label"
+            optionValue="value"
+            size="small"
+            class="w-full"
+            @update:model-value="onDefaultHandlerChange"
+          />
+          <small class="hint">Shown when no active scene currently targets this container.</small>
+        </div>
+
+        <template v-if="containerEditForm.default_field_handler">
+          <div v-if="['textklein', 'link'].includes(containerEditForm.default_field_handler)" class="field">
+            <label>Default Content</label>
+            <InputText v-model="containerEditForm.default_content" size="small" class="w-full" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'textbig'" class="field">
+            <label>Default Content</label>
+            <Textarea v-model="containerEditForm.default_content" rows="3" class="w-full" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'wysiwyg'" class="field">
+            <label>Default Content</label>
+            <Editor v-model="containerEditForm.default_content" editorStyle="height: 160px" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'numbers'" class="field">
+            <label>Default Content</label>
+            <InputNumber
+              :model-value="Number(containerEditForm.default_content) || 0"
+              size="small" class="w-full"
+              @update:model-value="(v) => (containerEditForm.default_content = String(v ?? 0))"
+            />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'datetime_format'" class="field">
+            <label>Default Content</label>
+            <InputText v-model="containerEditForm.default_content" size="small" class="w-full" placeholder="HH:mm:ss" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'image'" class="field image-field-wrapper">
+            <label>Default Content</label>
+            <div v-if="containerEditForm.default_content" class="image-field-preview">
+              <img :src="containerEditForm.default_content" class="image-field-thumb" alt="selected" />
+              <div class="image-field-actions">
+                <Button icon="pi pi-pencil" size="small" label="Change" outlined @click="showImagePickerDialog = true" />
+                <Button icon="pi pi-times" size="small" severity="danger" outlined @click="containerEditForm.default_content = ''" />
+              </div>
+            </div>
+            <div v-else class="image-field-empty" @click="showImagePickerDialog = true">
+              <i class="pi pi-image" style="font-size: 2rem; color: #94a3b8" />
+              <span>Click to select an image</span>
+            </div>
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'arrows'" class="field arrow-picker-wrapper">
+            <label>Default Content</label>
+            <div class="arrow-grid">
+              <button
+                v-for="arrow in ARROW_OPTIONS"
+                :key="arrow.char"
+                type="button"
+                :class="['arrow-btn', arrowChar === arrow.char ? 'arrow-btn--selected' : '']"
+                :title="arrow.label"
+                @click="arrowChar = arrow.char"
+              >{{ arrow.char }}</button>
+            </div>
+            <div class="arrow-selected-preview" v-if="arrowChar">
+              Selected: <span class="arrow-preview-char">{{ arrowChar }}</span>
+              <Button icon="pi pi-times" size="small" text @click="arrowChar = ''" title="Clear" />
+            </div>
+            <div class="arrow-size-row">
+              <label class="arrow-size-label">Größe (px)</label>
+              <InputNumber v-model="arrowSize" :min="8" :max="512" suffix=" px" style="width: 120px" />
+            </div>
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'table'" class="field">
+            <label>Default Content</label>
+            <table class="default-table-editor">
+              <thead>
+                <tr>
+                  <th v-for="(col, ci) in tableData.columns" :key="ci">
+                    <InputText
+                      :model-value="col" size="small" placeholder="Header"
+                      @update:model-value="(v) => updateTableHeader(ci, String(v ?? ''))"
+                    />
+                    <Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.columns.length <= 1" @click="removeTableColumn(ci)" />
+                  </th>
+                  <th><Button icon="pi pi-plus" size="small" text title="Add column" @click="addTableColumn" /></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, ri) in tableData.rows" :key="ri">
+                  <td v-for="(cell, ci) in row" :key="ci">
+                    <InputText
+                      :model-value="cell" size="small"
+                      @update:model-value="(v) => updateTableCell(ri, ci, String(v ?? ''))"
+                    />
+                  </td>
+                  <td><Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.rows.length <= 1" @click="removeTableRow(ri)" /></td>
+                </tr>
+              </tbody>
+            </table>
+            <Button label="Add Row" icon="pi pi-plus" size="small" text @click="addTableRow" />
+          </div>
+        </template>
+
         <div class="selected-actions">
           <Button
             :label="isSelectedPlaced ? 'Remove from Layout' : 'Add to Layout'"
@@ -626,6 +882,12 @@ const toggleSelectedLayoutMembership = () => {
         <Button label="Save" @click="saveContainerEditModal" />
       </template>
     </Dialog>
+
+    <MediaPickerDialog
+      v-model:visible="showImagePickerDialog"
+      :selected-url="containerEditForm.default_content"
+      @select="onDefaultImagePicked"
+    />
   </div>
 </template>
 
@@ -891,5 +1153,134 @@ const toggleSelectedLayoutMembership = () => {
 .sidebar-icon-btn.disabled:hover {
   background: transparent;
   color: #ccc;
+}
+
+.default-table-editor {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.4rem;
+}
+
+.default-table-editor th,
+.default-table-editor td {
+  border: 1px solid var(--p-surface-border, #ddd);
+  padding: 0.25rem;
+  text-align: left;
+}
+
+.default-table-editor th {
+  display: table-cell;
+}
+
+/* Image field — mirrors ContentEditor.vue's image field widget */
+.image-field-wrapper {
+  width: 100%;
+}
+
+.image-field-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.image-field-empty:hover {
+  border-color: var(--p-primary-color, #3b82f6);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.image-field-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.image-field-thumb {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.image-field-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Arrow picker — mirrors ContentEditor.vue's arrow field widget */
+.arrow-picker-wrapper {
+  width: 100%;
+}
+
+.arrow-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  background: var(--p-surface-50, #f8fafc);
+  border: 1px solid var(--p-surface-200, #e2e8f0);
+  border-radius: 8px;
+}
+
+.arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  font-size: 1.4rem;
+  border: 1px solid var(--p-surface-300, #cbd5e1);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+
+.arrow-btn:hover {
+  background: var(--p-primary-50, #eff6ff);
+  border-color: var(--p-primary-color, #3b82f6);
+}
+
+.arrow-btn--selected {
+  background: var(--p-primary-color, #3b82f6);
+  border-color: var(--p-primary-color, #3b82f6);
+  color: white;
+}
+
+.arrow-selected-preview {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
+}
+
+.arrow-preview-char {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.arrow-size-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.arrow-size-label {
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
+  white-space: nowrap;
 }
 </style>

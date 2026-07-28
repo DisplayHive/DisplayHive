@@ -184,6 +184,40 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     return rendered_by_container
 
 
+def render_default_value(field_handler: str, content: str, db=None) -> str:
+    """Render a single ad-hoc value through *field_handler*'s transform,
+    reusing the same logic as a regular Contenttype field (TagConfig).
+
+    Used both for a ContentContainer's own fallback content and for the
+    admin's live preview of that default while editing it. The 'arrows'
+    handler stores {char, size} as JSON in *content* (mirroring how a
+    regular field keeps its size in a separate `<field>_size` key) — every
+    other handler treats *content* as the field's plain raw value.
+    """
+    if not field_handler or not content:
+        return ''
+    from application.models import TagConfig
+
+    fake_tc = TagConfig(field_name='default', field_handler=field_handler, contentcontainer_id=0)
+    ctx = {'default': content}
+    if field_handler == 'arrows':
+        try:
+            parsed = json.loads(content)
+            ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 48)}
+        except Exception:
+            ctx = {'default': content}
+    serialized = json.dumps(ctx, ensure_ascii=False)
+    rendered = render_content_fields([fake_tc], serialized, db=db)
+    return rendered.get('0', '')
+
+
+def render_container_default(container, db=None) -> str:
+    """Render a ContentContainer's own fallback content through its
+    default_field_handler. Returns '' if no default is configured.
+    """
+    return render_default_value(container.default_field_handler, container.default_content, db=db)
+
+
 def rerender_content_element_for_contenttype(db, contenttype_id: int) -> list[int]:
     """Re-render all ContentElement rows that use a given Contenttype.
 

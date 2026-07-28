@@ -83,6 +83,12 @@ class ContentContainer(db.Model):
     left: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vw
     width: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vw
     height: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vh
+    # Fallback content shown when no active scene's field currently targets
+    # this container. Reuses the same field_handler transform as TagConfig
+    # (textklein, image, pretalx_table, etc); null field_handler means no
+    # default is configured and the container just stays blank as before.
+    default_field_handler: Mapped[str] = mapped_column(String(50), nullable=True)
+    default_content: Mapped[str] = mapped_column(Text, nullable=True)
     # Many-to-many relationship to Layout
     layouts: Mapped[list["Layout"]] = relationship("Layout", secondary=layout_container, back_populates="contentcontainers")
 

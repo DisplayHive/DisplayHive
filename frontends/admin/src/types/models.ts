@@ -74,6 +74,10 @@ export interface ContentContainer {
   left: number
   width: number
   height: number
+  /** Field handler used to render `default_content` as this container's fallback. */
+  default_field_handler?: string | null
+  /** Shown (via default_field_handler's transform) when no active scene targets this container. */
+  default_content?: string | null
   /** True if at least one Contenttype field (TagConfig) renders into it. */
   in_use?: boolean
 }

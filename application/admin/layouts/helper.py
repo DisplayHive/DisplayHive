@@ -21,6 +21,8 @@ def _serialize_container(c, used_container_ids: set) -> dict:
         'left': c.left,
         'width': c.width,
         'height': c.height,
+        'default_field_handler': c.default_field_handler,
+        'default_content': c.default_content,
         # In use = at least one Contenttype field (TagConfig) renders into it.
         # Deleting it out from under a live field would break that field's
         # rendering, so the admin UI blocks deletion while this is true.

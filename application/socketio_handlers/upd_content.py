@@ -14,7 +14,9 @@ Best-effort; callers must not rely on it raising.
 Rendering model: a screen has no independent per-container playlists anymore.
 Each ContentElement is a "scene" — when it's showing, every container its
 Contenttype's fields (TagConfig) map to switches together; containers not
-covered by the current scene go blank. The payload's `scenes` array is the
+covered by the current scene fall back to their own `default_content`
+(rendered once into `container_defaults`, keyed by container id) if one is
+configured, or stay blank otherwise. The payload's `scenes` array is the
 screen's full shared rotation queue (ordered, deduplicated); the screen
 client (frontends/screen/ts/screen) owns advancing through it by `duration`
 and creating/positioning each scene's container divs from the per-scene
@@ -77,6 +79,7 @@ def _build_payload(db, screen):
     # Each ContentElement is one "scene": every container its Contenttype's
     # fields (TagConfig) target must switch together when this scene is showing.
     scenes = []
+    all_container_ids: set = set()
     for mc in content_elements:
         tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
         rendered_by_container = parse_content_html(mc.html, tagconfigs)
@@ -98,6 +101,8 @@ def _build_payload(db, screen):
             # container) — skip it rather than occupy a rotation slot with
             # a blank scene.
             continue
+
+        all_container_ids.update(int(cid) for cid in scene_containers)
 
         scene: dict = {
             'id': mc.id,
@@ -123,11 +128,34 @@ def _build_payload(db, screen):
 
         scenes.append(scene)
 
+    # Fallback content for containers that show up in this screen's rotation
+    # but aren't targeted by whichever scene is currently active — rendered
+    # once here (not per-scene) since a container's default doesn't change
+    # from scene to scene.
+    container_defaults = {}
+    if all_container_ids:
+        from application.admin.content.helper import render_container_default
+        from application.models import ContentContainer
+
+        for container in db.session.execute(
+            db.select(ContentContainer).where(ContentContainer.id.in_(all_container_ids))
+        ).scalars().all():
+            html = render_container_default(container, db=db)
+            if not html:
+                continue
+            container_defaults[str(container.id)] = {
+                'name': container.name,
+                'top': container.top, 'left': container.left,
+                'width': container.width, 'height': container.height,
+                'html': html,
+            }
+
     from datetime import datetime as _dt, timezone as _tz
     return {
-        'design':       design_payload,
-        'scenes':       scenes,
-        'server_time':  _dt.now(_tz.utc).isoformat(),
+        'design':             design_payload,
+        'scenes':             scenes,
+        'container_defaults': container_defaults,
+        'server_time':        _dt.now(_tz.utc).isoformat(),
     }
 
 

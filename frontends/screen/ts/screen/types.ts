@@ -13,6 +13,16 @@ export interface SceneContainer {
   css: string;
 }
 
+/** A container's fallback content, shown when no active scene targets it. */
+export interface ContainerDefault {
+  name: string;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  html: string;
+}
+
 /**
  * A Scene is one ContentElement's turn in the shared screen-wide rotation.
  * When active, every container in `containers` switches together; any
