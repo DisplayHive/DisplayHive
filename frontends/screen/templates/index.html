@@ -65,7 +65,12 @@
 </div>
 
 <div id="main-container">
-   {{ template_html|safe }}
+   <!-- Design background: the active Design's HTML/CSS skin, rendered once.
+        Kept separate from #scene-containers so re-rendering scenes never touches it. -->
+   <div id="design-background">{{ template_html|safe }}</div>
+   <!-- Scene containers: absolutely-positioned (vh/vw) overlay divs created
+        dynamically per the current scene — see container-manager.ts. -->
+   <div id="scene-containers"></div>
 </div>
 
 {%- if not hide_powered_by %}

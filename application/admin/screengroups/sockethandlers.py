@@ -251,7 +251,6 @@ def register_admin_screengroups_handlers(socketio, app, db):
                 'id': mc.id,
                 'title': mc.title,
                 'type': mc.contenttype.name if mc.contenttype else '',
-                'container': mc.contentcontainer,
                 'duration': mc.duration,
                 'active': mc.active,
             }

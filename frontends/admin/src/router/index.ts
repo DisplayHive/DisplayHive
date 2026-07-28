@@ -24,9 +24,14 @@ const router = createRouter({
       component: () => import('../views/ContentTypesView.vue'),
     },
     {
-      path: '/templates',
-      name: 'templates',
-      component: () => import('../views/TemplatesView.vue'),
+      path: '/designs',
+      name: 'designs',
+      component: () => import('../views/DesignsView.vue'),
+    },
+    {
+      path: '/layouts',
+      name: 'layouts',
+      component: () => import('../views/LayoutsView.vue'),
     },
     {
       path: '/magictags',

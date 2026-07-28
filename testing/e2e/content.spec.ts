@@ -3,11 +3,12 @@
  *
  * Covered:
  *  Setup
- *  0.  Seed a template (needed for containers) + content item via socket
+ *  0.  Seed a container + layout (needed by the contenttype) + contenttype
+ *      (with one ContentHandler) + content item, all via socket
  *
- *  Main table / container card
- *  1.  Groupbased tab shows a container card after a template with containers exists
- *  2.  Seeded content appears inside the container card
+ *  Main table / contenttype card
+ *  1.  A card for the seeded Contenttype appears
+ *  2.  Seeded content appears inside that card
  *  3.  Text filter narrows the content list
  *  4.  Toggle-active switch disables/re-enables a content item
  *  5.  Edit dialog renames the content item and updates the row
@@ -15,8 +16,9 @@
  *  7.  Delete button removes the content item after confirmation
  *
  * Strategy:
- *  - A template with a 'maincontent' container is seeded via socket so the UI
- *    has at least one container card to interact with.
+ *  - A ContentContainer + Layout + Contenttype (with a ContentHandler) are
+ *    seeded via socket so the UI has at least one Contenttype card with a
+ *    real container to target.
  *  - Content is seeded via socket and then interacted with through the UI.
  *  - All tests run serially on the same worker / isolated DB.
  */
@@ -41,65 +43,85 @@ async function gotoContent(page: Page, workerBackendUrl: string) {
   await expect(page.locator('.content-view')).toBeVisible({ timeout: 10_000 })
 }
 
-/** Create a template with a 'maincontent' container and return the template id. */
-async function seedTemplate(page: Page, name: string): Promise<number> {
+/** Create a standalone ContentContainer and return its id. */
+async function seedContainer(page: Page, name: string): Promise<number> {
   return page.evaluate(
     ({ name }: { name: string }) =>
       new Promise<number>((resolve, reject) => {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error('Timed out waiting for upd_templates')), 10_000)
-        socket.once('displayhive:admin:stc:upd_templates', (data: any) => {
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_container result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_container', {
+          name, title: name, order: 0, top: 0, left: 0, width: 100, height: 100,
+        }, (ack: any) => {
           clearTimeout(t)
-          const list: any[] = data?.data || []
-          const tpl = list.find((item: any) => item.name === name)
-          resolve(tpl ? Number(tpl.id) : 0)
-        })
-        socket.emit('displayhive:admin:cts:create_template', {
-          name,
-          html: '<div id="maincontent"></div>',
-          container_config: JSON.stringify({ maincontent: { order: 0, title: 'Main Content' } }),
+          resolve(ack?.id ? Number(ack.id) : 0)
         })
       }),
     { name },
   )
 }
 
-/** Delete a template by id via socket. */
-async function deleteTemplate(page: Page, id: number): Promise<void> {
+/** Delete a container by id via socket. */
+async function deleteContainer(page: Page, id: number): Promise<void> {
   await page.evaluate(
-    ({ id }: { id: number }) =>
-      new Promise<void>((resolve) => {
-        const socket = (window as any).__displayhive_socket__
-        if (!socket) { resolve(); return }
-        const t = setTimeout(() => resolve(), 8_000)
-        socket.once('displayhive:admin:stc:upd_templates', () => {
-          clearTimeout(t)
-          resolve()
-        })
-        socket.emit('displayhive:admin:cts:delete_template', { template_id: id })
-      }),
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_container', { id })
+    },
     { id },
   )
 }
 
-/** Create a content type via socket and return its id. */
-async function seedContentType(page: Page, name: string): Promise<number> {
+/** Create a Layout containing *containerId* and return the layout id. */
+async function seedLayout(page: Page, name: string, containerId: number): Promise<number> {
   return page.evaluate(
-    ({ name }: { name: string }) =>
+    ({ name, containerId }: { name: string; containerId: number }) =>
       new Promise<number>((resolve, reject) => {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error('Timed out waiting for upd_contenttypes')), 10_000)
-        socket.once('displayhive:admin:stc:upd_contenttypes', (data: any) => {
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_layout result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_layout', {
+          name, description: '', container_ids: [containerId],
+        }, (ack: any) => {
           clearTimeout(t)
-          const list: any[] = data?.data || []
-          const ct = list.find((item: any) => item.name === name)
-          resolve(ct ? Number(ct.id) : 0)
+          resolve(ack?.id ? Number(ack.id) : 0)
         })
-        socket.emit('displayhive:admin:cts:create_contenttype', { name, html: '', css: '' })
       }),
-    { name },
+    { name, containerId },
+  )
+}
+
+/** Delete a layout by id via socket. */
+async function deleteLayout(page: Page, id: number): Promise<void> {
+  await page.evaluate(
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_layout', { id })
+    },
+    { id },
+  )
+}
+
+/** Create a content type (with one ContentHandler targeting containerId) via socket and return its id. */
+async function seedContentType(page: Page, name: string, layoutId: number, containerId: number): Promise<number> {
+  return page.evaluate(
+    ({ name, layoutId, containerId }: { name: string; layoutId: number; containerId: number }) =>
+      new Promise<number>((resolve, reject) => {
+        const socket = (window as any).__displayhive_socket__
+        if (!socket) { reject(new Error('Socket not available')); return }
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_contenttype result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_contenttype', {
+          name,
+          layout_id: layoutId,
+          content_handlers: [{ contentcontainer_id: containerId, html: '{{ title_field }}', css: '' }],
+        }, (ack: any) => {
+          clearTimeout(t)
+          if (ack?.ok) resolve(Number(ack.id))
+          else reject(new Error(`create_contenttype failed: ${JSON.stringify(ack)}`))
+        })
+      }),
+    { name, layoutId, containerId },
   )
 }
 
@@ -134,7 +156,6 @@ async function seedContent(page: Page, title: string, contenttypeId: number): Pr
         socket.emit('displayhive:admin:cts:create_content_element', {
           title,
           duration: 10,
-          contentcontainer: 'maincontent',
           contenttype_id: contenttypeId,
         })
       }),
@@ -159,50 +180,48 @@ async function deleteContent(page: Page, id: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Content page', () => {
-  const tplName = `e2e-cnt-tpl-${Math.random().toString(36).slice(2, 8)}`
+  const containerName = `e2e-cnt-container-${Math.random().toString(36).slice(2, 8)}`
+  const layoutName = `e2e-cnt-layout-${Math.random().toString(36).slice(2, 8)}`
   const ctName = `e2e-cnt-ct-${Math.random().toString(36).slice(2, 8)}`
   const contentTitle = `e2e-cnt-${Math.random().toString(36).slice(2, 8)}`
   const contentTitleHolder = { current: contentTitle }
 
-  let tplId = 0
+  let containerId = 0
+  let layoutId = 0
   let ctId = 0
   let contentId = 0
 
   // ---------------------------------------------------------------------------
-  // 0. Seed template + content type + content
+  // 0. Seed container + layout + content type + content
   // ---------------------------------------------------------------------------
 
-  test('seed: template with container and content item created', async ({ page, backendUrl }) => {
+  test('seed: container, layout, contenttype, and content item created', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    tplId = await seedTemplate(page, tplName)
-    expect(tplId).toBeGreaterThan(0)
-    ctId = await seedContentType(page, ctName)
+    containerId = await seedContainer(page, containerName)
+    expect(containerId).toBeGreaterThan(0)
+    layoutId = await seedLayout(page, layoutName, containerId)
+    expect(layoutId).toBeGreaterThan(0)
+    ctId = await seedContentType(page, ctName, layoutId, containerId)
     expect(ctId).toBeGreaterThan(0)
     contentId = await seedContent(page, contentTitle, ctId)
     expect(contentId).toBeGreaterThan(0)
   })
 
   // ---------------------------------------------------------------------------
-  // 1. Groupbased tab shows a container card
+  // 1. A card for the seeded Contenttype appears
   // ---------------------------------------------------------------------------
 
-  test('Groupbased tab shows a container card after template seeding', async ({ page, backendUrl }) => {
+  test('a card for the seeded contenttype appears', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-
-    // Switch to Groupbased tab
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
-    await expect(page.locator('.container-card').first()).toBeVisible({ timeout: 10_000 })
-    // The seeded container is named 'maincontent' / titled 'Main Content'
-    await expect(page.locator('.container-card').first()).toContainText(/main/i)
+    await expect(page.locator('.container-card', { hasText: ctName })).toBeVisible({ timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------
-  // 2. Seeded content appears in the container card
+  // 2. Seeded content appears in the contenttype card
   // ---------------------------------------------------------------------------
 
-  test('seeded content appears inside the container card', async ({ page, backendUrl }) => {
+  test('seeded content appears inside the contenttype card', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
@@ -214,13 +233,12 @@ test.describe('Content page', () => {
 
   test('text filter hides non-matching rows and reveals matching ones', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    // Type a string that won't match our title
-    const filterInput = page.locator('.container-card').first().locator('input[type="text"]').first()
+    const card = page.locator('.container-card', { hasText: ctName })
+    const filterInput = card.locator('input[type="text"]').first()
     await filterInput.fill('__no_match_xyz__')
     await expect(row).toBeHidden({ timeout: 3_000 })
 
@@ -237,7 +255,6 @@ test.describe('Content page', () => {
 
   test('toggle active switch disables then re-enables the content item', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
@@ -260,7 +277,6 @@ test.describe('Content page', () => {
 
   test('edit dialog renames the content item and table row updates', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
@@ -289,7 +305,6 @@ test.describe('Content page', () => {
 
   test('refresh button reloads the content list', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
@@ -306,7 +321,6 @@ test.describe('Content page', () => {
 
   test('delete button removes the content item after confirmation', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await page.locator('.p-tab', { hasText: 'Groupbased' }).click()
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
@@ -325,10 +339,11 @@ test.describe('Content page', () => {
   // Cleanup
   // ---------------------------------------------------------------------------
 
-  test('cleanup: delete seeded content, content type, and template', async ({ page, backendUrl }) => {
+  test('cleanup: delete seeded content, content type, layout, and container', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
     if (contentId > 0) await deleteContent(page, contentId)
     if (ctId > 0) await deleteContentType(page, ctId)
-    if (tplId > 0) await deleteTemplate(page, tplId)
+    if (layoutId > 0) await deleteLayout(page, layoutId)
+    if (containerId > 0) await deleteContainer(page, containerId)
   })
 })

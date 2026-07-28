@@ -20,14 +20,10 @@ import type {
   SocketCommand,
   UpdDeviceConfigMessage,
   DeviceConfig,
+  Scene,
 } from "./types.js";
-import {
-  initContainer,
-  getContainer,
-  getContainers,
-  rebuildContainerCache,
-  setSocketEmitter,
-} from "./container-manager.js";
+import { setSocketEmitter } from "./container-manager.js";
+import { startSceneRotation, patchCurrentScene } from "./content-display.js";
 import { applyServerTime, setClockEmitter, startClockTicker } from "./clock.js";
 import { startAdoptionFlow, hideAdoptionOverlay } from "./adopt.js";
 import { setDeviceKey, clearAdoptionToken } from "./storage";
@@ -72,26 +68,21 @@ function startPingInterval(socket: any): void {
   );
 }
 
-/** Initialise preview-mode content when the URL contains `preview=true`. */
+/**
+ * Initialise preview-mode content when the URL contains `preview=true`.
+ *
+ * A previewed ContentElement is shown full-bleed as a single ad-hoc scene —
+ * preview is a quick one-off look at one item's rendered output, not a real
+ * position within a Layout, so container placement doesn't apply here.
+ */
 function handlePreviewMode(socket: any): void {
   const params = new URLSearchParams(window.location.search);
   if (params.get("preview") !== "true") return;
   const previewContentId = parseInt(params.get("content_id") || "", 10);
-  const previewContainer = params.get("container");
-  if (!previewContentId || !previewContainer) return;
+  if (!previewContentId) return;
 
-  log("info", "preview", `Preview mode for content ${previewContentId} in ${previewContainer}`);
-  initContainer(previewContainer);
-  const container = getContainer(previewContainer);
-  if (container) {
-    container.playlist = [{ id: previewContentId, duration: 10 }];
-    container.pendingPlaylist = container.playlist.slice();
-  }
-  socket.emit("device_request", {
-    type: "contentelement",
-    id: previewContentId,
-    container: previewContainer,
-  });
+  log("info", "preview", `Preview mode for content ${previewContentId}`);
+  socket.emit("device_request", { type: "contentelement", id: previewContentId });
 }
 
 /** Start the device ping on connect, unless this is an impersonation session. */
@@ -346,106 +337,42 @@ export function setupSocketHandlers(socket: any): void {
 
       if (msg.server_time) applyServerTime(String(msg.server_time));
 
-      const template = msg.template || null;
-      const containers = msg.containers || [];
-      const playlists = msg.playlists || [];
-      const contentHtml = msg.content_html || {};
-      const contentCss = msg.content_css || {};
+      const design = msg.design || null;
+      const scenes: Scene[] = msg.scenes || [];
 
       log("debug", "socket.on(upd_content)", "Received content snapshot", {
-        containers: containers,
-        playlists: playlists,
-        htmlCount: contentHtml,
+        sceneCount: scenes.length,
       });
 
-      // Apply template HTML and CSS if provided
-      if (template) {
+      // Apply the Design background (a single global skin — see
+      // #design-background in index.html, kept separate from
+      // #scene-containers so re-rendering scenes never touches it).
+      if (design) {
         window.debugPanel?.push(
           "Screen Info",
-          "Template",
+          "Design",
           "Name",
-          typeof template.name === "string" && template.name ? template.name : "—",
+          typeof design.name === "string" && design.name ? design.name : "—",
         );
-        if (typeof template.html === "string") {
-          const mainContainer = document.getElementById("main-container");
-          if (mainContainer) {
-            mainContainer.innerHTML = template.html;
-          }
+        if (typeof design.html === "string") {
+          const backgroundEl = document.getElementById("design-background");
+          if (backgroundEl) backgroundEl.innerHTML = design.html;
         }
-        if (typeof template.css === "string") {
+        if (typeof design.css === "string") {
           const styleEl = document.getElementById("template-css");
-          if (styleEl) {
-            styleEl.textContent = template.css;
-          }
+          if (styleEl) styleEl.textContent = design.css;
         }
       }
 
-      // Clear stale HTML/CSS caches. This ensures deactivated items don't linger.
-      containers.forEach((cName: string) => {
-        initContainer(cName);
-        const container = getContainer(cName);
-        if (container) { container.htmlCache = {}; container.cssCache = {}; }
-      });
-
-      // For each playlist entry, populate only that container's cache from the
-      // server-provided maps, then set pendingPlaylist and request any missing HTML.
-      playlists.forEach((playlist: any) => {
-        const containerName = playlist.container || "maincontent";
-        const data = playlist.data || [];
-        initContainer(containerName);
-        const container = getContainer(containerName);
-        if (!container) return;
-
-        for (const item of data) {
-          const idStr = String(item.id);
-          if (idStr in contentHtml) {
-            container.htmlCache[item.id] = contentHtml[idStr];
-            preloadIframesInHtml(contentHtml[idStr]);
-          }
-          if (idStr in contentCss) container.cssCache[item.id] = contentCss[idStr];
-        }
-
-        container.pendingPlaylist = data;
-        log("debug", "socket.on(upd_content)", `pendingPlaylist for ${containerName}:`,
-          data.map((d: any) => ({ id: d.id, start_time: d.start_time ?? null, end_time: d.end_time ?? null }))
-        );
-
-        const missingIds: number[] = [];
-        for (let i = 0; i < data.length; i++) {
-          if (!container.htmlCache[data[i].id]) missingIds.push(data[i].id);
-        }
-
-        if (missingIds.length > 0) {
-          log(
-            "debug",
-            "socket.on(upd_content)",
-            "Requesting missing HTML for IDs:",
-            missingIds.join(", "),
-          );
-          socket.emit("device_request", {
-            type: "contentelement",
-            ids: missingIds,
-            container: containerName,
-          });
-        } else {
-          rebuildContainerCache(containerName);
-        }
-      });
-
-      // Seed all containers with any content_html entries not yet assigned to a
-      // playlist (e.g. pre-scheduled items). This avoids a blank-render delay when
-      // they become active, matching the previous behaviour of caching all IDs.
-      const allContainers = getContainers();
-      for (const [idStr, html] of Object.entries(contentHtml)) {
-        const numId = Number(idStr);
-        for (const c of Object.values(allContainers)) {
-          if (!(numId in c.htmlCache)) {
-            c.htmlCache[numId] = html as string;
-            preloadIframesInHtml(html as string);
-            if (idStr in contentCss) c.cssCache[numId] = contentCss[idStr] as string;
-          }
+      // Preload any iframes embedded in scene HTML so they're warm by the
+      // time each scene's turn comes up in the rotation.
+      for (const scene of scenes) {
+        for (const container of Object.values(scene.containers)) {
+          if (container.html) preloadIframesInHtml(container.html);
         }
       }
+
+      startSceneRotation(scenes);
 
       if (cb) cb();
     } catch (e) {
@@ -464,26 +391,17 @@ export function setupSocketHandlers(socket: any): void {
     if (msg?.server_time) applyServerTime(String(msg.server_time));
   });
 
-  // Receive a freshly re-rendered HTML for a single content element.
-  // Only the htmlCache entry for that id is updated — the playlist keeps running.
+  // Receive freshly re-rendered HTML for a scene's containers (e.g. a random
+  // image refresh). If that scene is currently showing, patch its container
+  // elements in place — the rotation timer keeps running unaffected.
   socket.on("displayhive:screen:stc:content_updated", (msg: any) => {
     log("debug", "socket.on(content_updated)", "Received content_updated", msg);
     const id: number = parseInt(msg?.id, 10);
-    const html: string | undefined = msg?.html;
-    if (!id || typeof html !== "string") return;
-    // Patch htmlCache in every container that holds this id
-    const containers = getContainers();
-    for (const cName of Object.keys(containers)) {
-      const c = containers[cName];
-      if (c && id in c.htmlCache) {
-        c.htmlCache[id] = html;
-        preloadIframesInHtml(html);
-        log(
-          "debug",
-          "content_updated",
-          `Updated htmlCache[${id}] in container ${cName}`,
-        );
-      }
+    const containers: Record<string, string> | undefined = msg?.containers;
+    if (!id || !containers) return;
+    for (const html of Object.values(containers)) {
+      if (typeof html === "string") preloadIframesInHtml(html);
     }
+    patchCurrentScene(id, containers);
   });
 }

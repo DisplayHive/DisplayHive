@@ -2,28 +2,34 @@
  * Type definitions for the screen client
  */
 
-export interface ContentItem {
+/** One container's rendered fragment within a Scene, positioned in vh/vw. */
+export interface SceneContainer {
+  name: string;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  html: string;
+  css: string;
+}
+
+/**
+ * A Scene is one ContentElement's turn in the shared screen-wide rotation.
+ * When active, every container in `containers` switches together; any
+ * container not present here goes blank while this Scene is showing.
+ */
+export interface Scene {
   id: number;
   title?: string;
   duration: number;
-  /** When true, the client should request a fresh re-render after showing this item. */
+  /** When true, the client should request a fresh re-render after showing this scene. */
   update_after_show?: boolean;
-  /** ISO 8601 datetime string — item must not be shown before this time. */
+  /** ISO 8601 datetime string — scene must not be shown before this time. */
   start_time?: string;
-  /** ISO 8601 datetime string — item must not be shown after this time. */
+  /** ISO 8601 datetime string — scene must not be shown after this time. */
   end_time?: string;
-}
-
-export interface Container {
-  currentId: number | null;
-  playlist: ContentItem[];
-  htmlCache: Record<number, string>;
-  cssCache: Record<number, string>;
-  pendingPlaylist: ContentItem[];
-  timer: ReturnType<typeof setTimeout> | null;
-  lastDisplayedId: number | null;
-  startTime: number | null;
-  stopped?: boolean;
+  /** Keyed by ContentContainer id (string). */
+  containers: Record<string, SceneContainer>;
 }
 
 /**

@@ -23,6 +23,9 @@ def emit_contenttypes_update(socketio, app, db, room: Optional[str] = None):
                 'id': ct.id,
                 'name': ct.name,
                 'description': ct.description or '',
+                'layout_id': ct.layout_id,
+                'layout_name': ct.layout.name if ct.layout else '',
+                'field_count': len(ct.tagconfigs or []),
             }
             for ct in all_ct
         ]

@@ -38,7 +38,7 @@ def register_admin_screens_handlers(socketio, app, db):
     def handle_create_screen(data):
         """Create a new screen and a dedicated is_one_screen Screengroup for it."""
         logger.debug('create_screen data=%s', data)
-        name, width, height, template_id = fields(data, 'name', 'width', 'height', 'template_id')
+        name, width, height = fields(data, 'name', 'width', 'height')
         name = (name or '').strip()
         if not name:
             return {'success': False, 'error': 'name is required'}
@@ -55,7 +55,6 @@ def register_admin_screens_handlers(socketio, app, db):
             lastseen=datetime.now(timezone.utc),
             resolution_width=int(width) if width else 0,
             resolution_height=int(height) if height else 0,
-            template_id=int(template_id) if template_id else None,
         )
         db.session.add(screen)
         db.session.flush()

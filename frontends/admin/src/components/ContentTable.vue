@@ -12,7 +12,6 @@ import { useRightsStore } from '../stores/rights'
 const rightsStore = useRightsStore()
 const canEdit = computed(() => rightsStore.can('content.edit'))
 const canDelete = computed(() => rightsStore.can('content.delete'))
-const canMove = computed(() => rightsStore.can('content.move'))
 const canEnable = computed(() => rightsStore.can('content.enable'))
 const canCreate = computed(() => rightsStore.can('content.create'))
 
@@ -23,7 +22,6 @@ interface ContentElement {
   duration: number
   start_time?: string | null
   end_time?: string | null
-  contentcontainer: string
   contenttypeName: string
   screengroups?: Array<{ id: number; name: string }>
   [key: string]: any
@@ -39,7 +37,6 @@ interface ContentField {
 const props = withDefaults(defineProps<{
   items: ContentElement[]
   emptyMessage?: string
-  containerName?: string
   /** Unfiltered total from the backend. When 0 the search box and table are hidden. */
   totalItems?: number
   search?: string
@@ -47,7 +44,6 @@ const props = withDefaults(defineProps<{
   oneScreenGroupIds?: number[]
 }>(), {
   emptyMessage: 'No content',
-  containerName: '',
   totalItems: undefined,
   search: '',
   oneScreenGroupIds: () => [],
@@ -65,9 +61,8 @@ const getScreensAndGroups = (data: ContentElement) => {
 const emit = defineEmits<{
   (e: 'edit', content: ContentElement): void
   (e: 'preview', content: ContentElement): void
-  (e: 'move', content: ContentElement): void
   (e: 'copy', content: ContentElement): void
-  (e: 'delete', content: ContentElement, containerName: string): void
+  (e: 'delete', content: ContentElement): void
   (e: 'toggleActive', content: ContentElement): void
   (e: 'updateDuration', content: ContentElement): void
   (e: 'setDuration', content: ContentElement, val: number): void
@@ -114,9 +109,24 @@ const scalePreviewFrame = (wrapper: HTMLElement | null) => {
   apply()
 }
 
+/** ContentElement.html is a JSON map of {contentcontainer_id: rendered_html} — one
+ * fragment per field (TagConfig) on the Contenttype. Concatenate them for a rough
+ * combined preview (a full multi-container render isn't meaningful outside its Layout). */
+const combinedHtml = (raw: string): string => {
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      return Object.values(parsed).join('\n')
+    }
+  } catch {
+    // Not JSON — fall back to treating it as a raw HTML string (e.g. legacy data).
+  }
+  return raw
+}
+
 const buildSrcdoc = (data: ContentElement): string => {
   const css = data.preview_css || ''
-  const html = data.html || ''
+  const html = combinedHtml(data.html || '')
   // Strip sourceMappingURL comments from injected CSS — srcdoc iframes use
   // "about:srcdoc" as base URL so relative map paths can never resolve,
   // which causes a noisy DevTools warning.
@@ -145,7 +155,7 @@ ${html}
 const getContentFields = (content: any): ContentField[] => {
   if (!content) return []
   const ignore = new Set([
-    'id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer',
+    'id', 'title', 'active', 'duration', 'start_time', 'end_time',
     'contenttypeName', 'screengroups', 'contenttype_id', 'template', 'html', 'preview_css', '_field_metadata',
   ])
   const fields: ContentField[] = []
@@ -260,15 +270,6 @@ const getContentFields = (content: any): ContentField[] => {
             <Button v-if="canEdit" icon="pi pi-pencil" @click="emit('edit', data)" size="small" outlined title="Edit" />
             <Button icon="pi pi-eye" @click="emit('preview', data)" size="small" outlined title="Preview" />
             <Button
-              v-if="canMove"
-              icon="pi pi-arrow-right"
-              @click="emit('move', data)"
-              size="small"
-              outlined
-              severity="secondary"
-              title="Move"
-            />
-            <Button
               v-if="canCreate"
               icon="pi pi-copy"
               @click="emit('copy', data)"
@@ -279,7 +280,7 @@ const getContentFields = (content: any): ContentField[] => {
             <Button
               v-if="canDelete"
               icon="pi pi-trash"
-              @click="emit('delete', data, containerName)"
+              @click="emit('delete', data)"
               size="small"
               severity="danger"
               outlined

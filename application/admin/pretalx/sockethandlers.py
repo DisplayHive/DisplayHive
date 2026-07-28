@@ -53,9 +53,9 @@ def register_admin_pretalx_handlers(socketio, app, db):
 
     def _rerender_and_push(affected_ids):
         """Re-render the given ContentElement ids and push the update to screens."""
+        import json
         from application.models import ContentElement
-        from application.admin.content.helper import render_content_element_html
-        from application.utils.template import build_field_handlers
+        from application.admin.content.helper import render_content_fields
         from application.socketio_handlers.upd_content import send_upd_content
 
         for mc_id in affected_ids:
@@ -63,13 +63,9 @@ def register_admin_pretalx_handlers(socketio, app, db):
                 mc = db.session.get(ContentElement, mc_id)
                 if not mc:
                     continue
-                field_handlers = build_field_handlers(mc.contenttype)
-                mc.html = render_content_element_html(
-                    mc.contenttype.html if mc.contenttype else '',
-                    mc.serialized_input or '{}',
-                    field_handlers or None,
-                    db=db,
-                )
+                tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
+                rendered_by_container = render_content_fields(tagconfigs, mc.serialized_input or '{}', db=db)
+                mc.html = json.dumps(rendered_by_container, ensure_ascii=False)
                 db.session.add(mc)
             except Exception:
                 logger.exception('Failed to re-render content element %s', mc_id)

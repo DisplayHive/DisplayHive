@@ -2,13 +2,27 @@
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, Column, Integer, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import String, Text, Table, Column, Integer, Float, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db, content_element_screengroup
 
+# Many-to-many association table for Layout and ContentContainer
+layout_container = Table(
+    'layout_container',
+    db.Model.metadata,
+    Column('layout_id', Integer, ForeignKey('layout.id'), primary_key=True),
+    Column('contentcontainer_id', Integer, ForeignKey('contentcontainer.id'), primary_key=True),
+)
+
 
 class ContentElement(db.Model):
-    """Content element model for displaying on screens."""
+    """Content element model for displaying on screens.
+
+    A ContentElement has no direct container reference: its Contenttype
+    defines one field (TagConfig) per container it targets, so a single
+    ContentElement's field values fan out to every container its
+    Contenttype's fields are mapped to.
+    """
     __tablename__ = 'content_element'
     id: Mapped[int] = mapped_column(primary_key=True)
     active: Mapped[bool]
@@ -22,58 +36,88 @@ class ContentElement(db.Model):
     end_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Foreign key to Contenttype
     contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True)
-    # Content container from default template this content belongs to
-    contentcontainer: Mapped[str] = mapped_column(String(255), nullable=True, default='maincontent')
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="content_elements")
     # many-to-many: a ContentElement can be assigned to many Screengroups
     screengroups: Mapped[list["Screengroup"]] = relationship("Screengroup", secondary="content_element_screengroup", back_populates="content_elements")
 
 
-class Template(db.Model):
-    """Template model for screen layout templates."""
+class Design(db.Model):
+    """Design model: global screen skin (HTML/CSS). Exactly one is active instance-wide."""
+    __tablename__ = 'design'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, nullable=True)
     html: Mapped[str] = mapped_column(Text)
     css: Mapped[str] = mapped_column(Text, nullable=True)
     isDefault: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
-    # Relationship to ContentContainer (Jinja tags)
-    contentcontainers: Mapped[list["ContentContainer"]] = relationship("ContentContainer", back_populates="template", cascade="all, delete-orphan")
-    # Screens that have this template set as their override
-    screens: Mapped[list["Screen"]] = relationship("Screen", back_populates="template", foreign_keys="Screen.template_id")
 
 
-class ContentContainer(db.Model):
-    """Content container (Jinja tag) extracted from template."""
-    __tablename__ = 'contentcontainer'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255))  # The Jinja tag name (e.g., 'maincontent', 'sidebar')
-    template_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('template.id'))
-    order: Mapped[int] = mapped_column(Integer, default=0)  # Display order in template
-    title: Mapped[str] = mapped_column(String(255), nullable=True)  # Container title/description
-    # Relationship to Template
-    template: Mapped["Template"] = relationship("Template", back_populates="contentcontainers")
+class Layout(db.Model):
+    """A named, reusable group of positioned ContentContainers.
 
-
-class Contenttype(db.Model):
-    """Content type model defining how content is structured."""
+    Purely an admin-side organizational concept: it groups containers and
+    scopes which containers a Contenttype's handlers may target. It has no
+    runtime "screen uses this Layout" meaning.
+    """
+    __tablename__ = 'layout'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, nullable=True)
-    html: Mapped[str]
-    css: Mapped[str] = mapped_column(Text, nullable=True)
+    # Many-to-many relationship to ContentContainer
+    contentcontainers: Mapped[list["ContentContainer"]] = relationship("ContentContainer", secondary=layout_container, back_populates="layouts")
+    # Contenttypes scoped to this Layout
+    contenttypes: Mapped[list["Contenttype"]] = relationship("Contenttype", back_populates="layout")
+
+
+class ContentContainer(db.Model):
+    """A standalone content container: a screen-relative position (vh/vw) and size,
+    rendered as an absolutely-positioned overlay. Reusable across multiple Layouts."""
+    __tablename__ = 'contentcontainer'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))  # Display/reference name (e.g., 'maincontent', 'sidebar')
+    order: Mapped[int] = mapped_column(Integer, default=0)  # Display order in admin lists
+    title: Mapped[str] = mapped_column(String(255), nullable=True)  # Container title/description
+    # Position/size on screen, in viewport-relative units.
+    top: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vh
+    left: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vw
+    width: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vw
+    height: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vh
+    # Many-to-many relationship to Layout
+    layouts: Mapped[list["Layout"]] = relationship("Layout", secondary=layout_container, back_populates="contentcontainers")
+
+
+class Contenttype(db.Model):
+    """Content type model defining how content is structured.
+
+    Bound to exactly one Layout. Each ContentContainer the Contenttype uses
+    is itself one field (TagConfig) with an assigned field_handler — there is
+    no separate render template: a field's transformed value directly becomes
+    its target container's rendered content.
+    """
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    layout_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('layout.id'), nullable=True)
+    layout: Mapped["Layout"] = relationship("Layout", back_populates="contenttypes")
     # Relationship to ContentElement
     content_elements: Mapped[list["ContentElement"]] = relationship("ContentElement", back_populates="contenttype")
-    # Relationship to TagConfig
+    # Relationship to TagConfig (fields; one per container this contenttype uses)
     tagconfigs: Mapped[list["TagConfig"]] = relationship("TagConfig", back_populates="contenttype", cascade="all, delete-orphan")
 
 
 class TagConfig(db.Model):
-    """Configuration field for a content type."""
+    """A field belonging to a Contenttype, targeting one of its containers.
+
+    Reuses the existing field_handler types (textklein, image, pretalx_table,
+    etc). The field's transformed value becomes the rendered content of
+    contentcontainer_id, which must be one of the containers in the
+    Contenttype's Layout.
+    """
     __tablename__ = 'tagconfig'
     id: Mapped[int] = mapped_column(primary_key=True)
-    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'))
+    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True)
+    contentcontainer_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contentcontainer.id'), nullable=True)
     field_name: Mapped[str] = mapped_column(String(255))  # e.g., 'title', 'text', 'image_url'
     field_handler: Mapped[str] = mapped_column(String(50))   # e.g., 'text', 'textarea', 'number', 'url'
     field_label: Mapped[str] = mapped_column(String(255), nullable=True)  # Display label
@@ -82,6 +126,7 @@ class TagConfig(db.Model):
     order: Mapped[int] = mapped_column(Integer, default=0)  # Display order
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="tagconfigs")
+    contentcontainer: Mapped["ContentContainer"] = relationship("ContentContainer")
 
 
 class MagicTagValueList(db.Model):

@@ -1,23 +1,18 @@
 /**
  * E2E tests for the screen client (the display page served at the Flask root URL).
  *
- * Covered:
- *  40. Content renders on screen after device connects — the #main-container gets
- *      content injected into [data-container="maincontent"] within a reasonable
- *      timeout after the device joins its room.
- *  41. Scheduling — content with an end_time in the past is present in the
- *      upd_content playlist (server sends it) but is skipped by the client's
- *      isWithinSchedule logic; verified by reading container state via JS.
- *  42. Multi-container — when a template has two containers and a contenttype
- *      is linked to both, the server-built upd_content payload includes separate
- *      playlist entries for 'maincontent' and 'sidebar'.
+ * Currently covers seeding a full scene (container, layout, contenttype with
+ * one ContentHandler, screen, device, screengroup, content) via socket and
+ * tearing it down again — a foundation for asserting on the `upd_content`
+ * `scenes` payload (see waitForUpdContent below), which a real device
+ * connection then receives via the socket client opened by openScreenPage.
  *
  * Strategy:
- *  - All setup (template, screen, device, screengroup, content) is done via socket
- *    from the admin page, then the test opens a new browser context to simulate
- *    a real device connecting.
- *  - The screen page receives `upd_content` from the server; we intercept it via
- *    page.evaluate() and expose the payload for assertions.
+ *  - All setup (container, layout, contenttype, screen, device, screengroup,
+ *    content) is done via socket from the admin page, then the test opens a
+ *    new browser context to simulate a real device connecting.
+ *  - The screen page receives `upd_content` from the server; we intercept it
+ *    via page.evaluate() and expose the payload for assertions.
  *  - All tests run serially on the same worker / isolated DB.
  */
 
@@ -157,21 +152,19 @@ async function addScreenToGroup(page: Page, sgId: number, screenId: number): Pro
 async function seedContent(
   page: Page,
   title: string,
-  opts: { duration?: number; endTimePast?: boolean; container?: string; contenttypeId?: number } = {},
+  opts: { duration?: number; endTimePast?: boolean; contenttypeId?: number } = {},
 ): Promise<number> {
-  const { duration = 3, endTimePast = false, container = 'maincontent', contenttypeId = 0 } = opts
+  const { duration = 3, endTimePast = false, contenttypeId = 0 } = opts
   return page.evaluate(
     ({
       title,
       duration,
       endTimePast,
-      container,
       contenttypeId,
     }: {
       title: string
       duration: number
       endTimePast: boolean
-      container: string
       contenttypeId: number
     }) =>
       new Promise<number>((resolve, reject) => {
@@ -181,7 +174,6 @@ async function seedContent(
         const payload: Record<string, any> = {
           title,
           duration,
-          contentcontainer: container,
         }
         if (contenttypeId > 0) payload.contenttype_id = contenttypeId
         if (endTimePast) {
@@ -196,7 +188,7 @@ async function seedContent(
         })
         socket.emit('displayhive:admin:cts:create_content_element', payload)
       }),
-    { title, duration, endTimePast, container, contenttypeId },
+    { title, duration, endTimePast, contenttypeId },
   )
 }
 
@@ -268,38 +260,85 @@ async function deleteDevice(page: Page, devicekey: string): Promise<void> {
   )
 }
 
-/** Delete a template by id via socket. */
-async function deleteTemplate(page: Page, id: number): Promise<void> {
-  await page.evaluate(
-    ({ id }: { id: number }) =>
-      new Promise<void>((resolve) => {
+/** Create a standalone ContentContainer and return its id. */
+async function seedContainer(page: Page, name: string): Promise<number> {
+  return page.evaluate(
+    ({ name }: { name: string }) =>
+      new Promise<number>((resolve, reject) => {
         const socket = (window as any).__displayhive_socket__
-        if (!socket) { resolve(); return }
-        const t = setTimeout(() => resolve(), 5_000)
-        socket.once('displayhive:admin:stc:upd_templates', () => { clearTimeout(t); resolve() })
-        socket.emit('displayhive:admin:cts:delete_template', { template_id: id })
+        if (!socket) { reject(new Error('Socket not available')); return }
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_container result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_container', {
+          name, title: name, order: 0, top: 0, left: 0, width: 100, height: 100,
+        }, (ack: any) => {
+          clearTimeout(t)
+          resolve(ack?.id ? Number(ack.id) : 0)
+        })
       }),
+    { name },
+  )
+}
+
+/** Delete a container by id via socket. */
+async function deleteContainer(page: Page, id: number): Promise<void> {
+  await page.evaluate(
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_container', { id })
+    },
     { id },
   )
 }
 
-/** Create a contenttype with the given HTML and return its id. */
-async function seedContentType(page: Page, name: string, html: string): Promise<number> {
+/** Create a Layout containing *containerId* and return the layout id. */
+async function seedLayout(page: Page, name: string, containerId: number): Promise<number> {
   return page.evaluate(
-    ({ name, html }: { name: string; html: string }) =>
+    ({ name, containerId }: { name: string; containerId: number }) =>
       new Promise<number>((resolve, reject) => {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error('Timed out waiting for upd_contenttypes')), 10_000)
-        socket.once('displayhive:admin:stc:upd_contenttypes', (data: any) => {
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_layout result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_layout', {
+          name, description: '', container_ids: [containerId],
+        }, (ack: any) => {
           clearTimeout(t)
-          const list: any[] = data?.data || []
-          const ct = list.find((item: any) => item.name === name)
-          resolve(ct ? Number(ct.id) : 0)
+          resolve(ack?.id ? Number(ack.id) : 0)
         })
-        socket.emit('displayhive:admin:cts:create_contenttype', { name, html, css: '' })
       }),
-    { name, html },
+    { name, containerId },
+  )
+}
+
+/** Delete a layout by id via socket. */
+async function deleteLayout(page: Page, id: number): Promise<void> {
+  await page.evaluate(
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_layout', { id })
+    },
+    { id },
+  )
+}
+
+/** Create a contenttype (with one ContentHandler targeting containerId rendering *html*) and return its id. */
+async function seedContentType(page: Page, name: string, layoutId: number, containerId: number, html: string): Promise<number> {
+  return page.evaluate(
+    ({ name, layoutId, containerId, html }: { name: string; layoutId: number; containerId: number; html: string }) =>
+      new Promise<number>((resolve, reject) => {
+        const socket = (window as any).__displayhive_socket__
+        if (!socket) { reject(new Error('Socket not available')); return }
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_contenttype result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_contenttype', {
+          name,
+          layout_id: layoutId,
+          content_handlers: [{ contentcontainer_id: containerId, html, css: '' }],
+        }, (ack: any) => {
+          clearTimeout(t)
+          if (ack?.ok) resolve(Number(ack.id))
+          else reject(new Error(`create_contenttype failed: ${JSON.stringify(ack)}`))
+        })
+      }),
+    { name, layoutId, containerId, html },
   )
 }
 
@@ -378,11 +417,15 @@ test.describe('Screen client rendering', () => {
   const screenName = `e2e-sc-scr-${Math.random().toString(36).slice(2, 8)}`
   const deviceName = `e2e-sc-dev-${Math.random().toString(36).slice(2, 8)}`
   const sgName = `e2e-sc-sg-${Math.random().toString(36).slice(2, 8)}`
+  const containerName = `e2e-sc-container-${Math.random().toString(36).slice(2, 8)}`
+  const layoutName = `e2e-sc-layout-${Math.random().toString(36).slice(2, 8)}`
   const ctName = `e2e-sc-ct-${Math.random().toString(36).slice(2, 8)}`
 
   let screenId = 0
   let devicekey = ''
   let sgId = 0
+  let containerId = 0
+  let layoutId = 0
   let ctId = 0
   const contentIds: number[] = []
 
@@ -414,8 +457,13 @@ test.describe('Screen client rendering', () => {
     // Add screen to screengroup
     await addScreenToGroup(page, sgId, screenId)
 
-    // Seed a contenttype with real HTML so the screen client can render it
-    ctId = await seedContentType(page, ctName, '<p>E2E screen test</p>')
+    // Seed a container + layout + contenttype (with one ContentHandler
+    // carrying real HTML) so the screen client can render a scene.
+    containerId = await seedContainer(page, containerName)
+    expect(containerId).toBeGreaterThan(0)
+    layoutId = await seedLayout(page, layoutName, containerId)
+    expect(layoutId).toBeGreaterThan(0)
+    ctId = await seedContentType(page, ctName, layoutId, containerId, '<p>E2E screen test</p>')
     expect(ctId).toBeGreaterThan(0)
 
     // Seed one active content item — contenttype_id ensures mc.html is non-empty
@@ -445,5 +493,7 @@ test.describe('Screen client rendering', () => {
     await deleteDevice(page, devicekey)
     if (screenId > 0) await deleteScreen(page, screenId)
     if (ctId > 0) await deleteContentType(page, ctId)
+    if (layoutId > 0) await deleteLayout(page, layoutId)
+    if (containerId > 0) await deleteContainer(page, containerId)
   })
 })

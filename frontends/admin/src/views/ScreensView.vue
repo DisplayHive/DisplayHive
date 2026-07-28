@@ -7,7 +7,6 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useScreensStore } from '../stores/screens'
 import { useScreengroupsStore } from '../stores/screengroups'
-import { useTemplatesStore } from '../stores/templates'
 import { useDevicesStore } from '../stores/devices'
 import { useRightsStore } from '../stores/rights'
 import type { Screen } from '../types/models'
@@ -21,14 +20,12 @@ import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
-import Select from 'primevue/select'
 
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit } = useSocket()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
-const templatesStore = useTemplatesStore()
 const devicesStore = useDevicesStore()
 const rightsStore = useRightsStore()
 
@@ -56,7 +53,6 @@ const createForm = ref({
   name: '',
   width: null as string | null,
   height: null as string | null,
-  template_id: null as number | null,
 })
 
 // Rename screen dialog
@@ -66,7 +62,6 @@ const renamingScreen = ref<Screen | null>(null)
 const renameForm = ref({
   name: '',
   screengroup_ids: [] as number[],
-  template_id: null as number | null,
 })
 
 const windowedCount = computed(() => screensStore.screens.filter(isWindowed).length)
@@ -96,7 +91,6 @@ onMounted(() => {
   on('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
   screensStore.fetch()
   screengroupsStore.fetch()
-  templatesStore.fetch()
 })
 
 onUnmounted(() => {
@@ -106,7 +100,7 @@ onUnmounted(() => {
 const refreshScreens = () => screensStore.fetch()
 
 const openCreateDialog = () => {
-  createForm.value = { name: '', width: null, height: null, template_id: null }
+  createForm.value = { name: '', width: null, height: null }
   showCreateDialog.value = true
 }
 
@@ -122,9 +116,6 @@ const createScreen = async () => {
       payload.width = createForm.value.width
       payload.height = createForm.value.height
     }
-    if (createForm.value.template_id !== null) {
-      payload.template_id = createForm.value.template_id
-    }
     screensStore.createScreen(payload)
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen created', life: 3000 })
     showCreateDialog.value = false
@@ -138,7 +129,6 @@ const openRenameDialog = (screen: Screen) => {
   renameForm.value = {
     name: screen.name,
     screengroup_ids: [],
-    template_id: screen.template_id ?? null,
   }
   emit('displayhive:screens:cts:get_screen_screengroups', { screen_id: screen.id })
   showRenameDialog.value = true
@@ -153,7 +143,6 @@ const saveRename = async (keepOpen = false) => {
       old_name: renamingScreen.value.name,
       new_name: renameForm.value.name,
       screengroup_ids: renameForm.value.screengroup_ids,
-      template_id: renameForm.value.template_id,
     })
     toast.add({ severity: 'success', summary: 'Screen saved', detail: renameForm.value.name, life: 3000 })
     if (!keepOpen) showRenameDialog.value = false
@@ -417,18 +406,6 @@ const resetScreenSize = (screen: Screen) => {
           <label for="create-height">Height (optional)</label>
           <InputText id="create-height" v-model="createForm.height" class="w-full" placeholder="1080" type="number" />
         </div>
-        <div class="field">
-          <label for="create-template">Template</label>
-          <Select
-            id="create-template"
-            v-model="createForm.template_id"
-            :options="templatesStore.asOptions"
-            optionLabel="name"
-            optionValue="id"
-            placeholder="System Default"
-            class="w-full"
-          />
-        </div>
       </div>
       <template #footer>
         <Button label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
@@ -455,18 +432,6 @@ const resetScreenSize = (screen: Screen) => {
               <label :for="`sg-${sg.id}`">{{ sg.name }}</label>
             </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="rename-template">Template</label>
-          <Select
-            id="rename-template"
-            v-model="renameForm.template_id"
-            :options="templatesStore.asOptions"
-            optionLabel="name"
-            optionValue="id"
-            placeholder="System Default"
-            class="w-full"
-          />
         </div>
       </div>
       <template #footer>

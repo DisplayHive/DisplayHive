@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
+import type { Layout, ContentContainer } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -15,19 +15,23 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Dropdown from 'primevue/dropdown'
+import Tag from 'primevue/tag'
 
-import { Codemirror } from 'vue-codemirror'
-import { html as cmHtml } from '@codemirror/lang-html'
-import { css as cmCss } from '@codemirror/lang-css'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { EditorView } from '@codemirror/view'
+interface TagConfig {
+  id?: number | null
+  name: string
+  title: string
+  field_handler: string
+  contentcontainer_id: number | null
+}
 
 interface ContentType {
   id: number
   name: string
   description: string
-  html: string
-  css: string
+  layout_id: number | null
+  layout_name?: string
+  field_count?: number
 }
 
 const toast = useToast()
@@ -38,16 +42,37 @@ const rightsStore = useRightsStore()
 const canCreate = computed(() => rightsStore.can('contenttypes.create'))
 const canEdit = computed(() => rightsStore.can('contenttypes.edit'))
 const canDelete = computed(() => rightsStore.can('contenttypes.delete'))
-const canMagicTagsPage = computed(() => rightsStore.can('magictags.page'))
 
 const contentTypes = ref<ContentType[]>([])
+const layouts = ref<Layout[]>([])
+const containers = ref<ContentContainer[]>([])
 const loading = ref(true)
 const filterText = ref('')
 
-// Loading state for when we request full contenttype detail (html)
-const loadingContentType = ref(false)
-const loadingContentTypeError = ref('')
-let contentTypeLoadTimer: number | null = null
+const layoutOptions = computed(() => layouts.value.map(l => ({ label: l.name, value: l.id })))
+
+// Containers available to the currently-selected Layout in the edit form.
+const containerOptionsForLayout = computed(() => {
+  const layout = layouts.value.find(l => l.id === editForm.value.layout_id)
+  const ids = new Set(layout?.container_ids || [])
+  return containers.value
+    .filter(c => ids.has(c.id))
+    .map(c => ({ label: c.title || c.name, value: c.id }))
+})
+
+// Field handler options (matches legacy UI and DB schema)
+const fieldHandlerOptions = [
+  { label: 'Text (klein)', value: 'textklein' },
+  { label: 'Text (groß)', value: 'textbig' },
+  { label: 'WYSIWYG', value: 'wysiwyg' },
+  { label: 'Link/URL', value: 'link' },
+  { label: 'Zahl', value: 'numbers' },
+  { label: 'Image', value: 'image' },
+  { label: 'Pfeil (Arrow)', value: 'arrows' },
+  { label: 'pretalx', value: 'pretalx_table' },
+  { label: 'Table', value: 'table' },
+  { label: 'Date / Time Format', value: 'datetime_format' },
+]
 
 // Copy dialog
 const showCopyDialog = ref(false)
@@ -75,101 +100,42 @@ const editForm = ref({
   id: null as number | null,
   name: '',
   description: '',
-  html: '',
-  css: '',
+  layout_id: null as number | null,
+  tagconfigs: [] as TagConfig[],
 })
 
-const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
-const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
+const loadingContentType = ref(false)
+const loadingContentTypeError = ref('')
+let contentTypeLoadTimer: number | null = null
 
-const magicTagsStore = useMagicTagsStore()
-
-const htmlEditorRef = ref<{ view: EditorView } | null>(null)
-const cssEditorRef = ref<{ view: EditorView } | null>(null)
-const lastFocusedEditor = ref<'html' | 'css'>('html')
-
-const insertMagicTag = (tagName: string) => {
-  const text = `{{ var_${tagName} }}`
-  const editorRef = lastFocusedEditor.value === 'css' ? cssEditorRef.value : htmlEditorRef.value
-  if (!editorRef?.view) return
-  const view = editorRef.view
-  const cursor = view.state.selection.main.head
-  view.dispatch({ changes: { from: cursor, insert: text }, selection: { anchor: cursor + text.length } })
-  view.focus()
+const addField = () => {
+  editForm.value.tagconfigs.push({
+    id: null, name: '', title: '', field_handler: 'textklein', contentcontainer_id: null,
+  })
 }
 
-const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
-  e.dataTransfer?.setData('text/plain', `{{ var_${tagName} }}`)
-}
-
-// TagConfig extraction + editor for content type HTML
-const tagconfigs = ref<Array<{ id?: number; name: string; title: string; field_handler: string }>>([])
-
-// Field handler options (matches legacy UI and DB schema)
-const fieldHandlerOptions = [
-  { label: 'Text (klein)', value: 'textklein' },
-  { label: 'Text (groß)', value: 'textbig' },
-  { label: 'WYSIWYG', value: 'wysiwyg' },
-  { label: 'Link/URL', value: 'link' },
-  { label: 'Zahl', value: 'numbers' },
-  { label: 'Image', value: 'image' },
-  { label: 'Pfeil (Arrow)', value: 'arrows' },
-  { label: 'pretalx', value: 'pretalx_table' },
-  { label: 'Table', value: 'table' },
-  { label: 'Date / Time Format', value: 'datetime_format' },
-]
-
-const extractTagConfigs = () => {
-  const html = editForm.value.html || ''
-  const re = /{{\s*([^}]+?)\s*}}/g
-  const existing = new Map(tagconfigs.value.map(t => [t.name, t]))
-  const found = new Map<string, { id?: number; name: string; title: string; field_handler: string }>()
-  let m: RegExpExecArray | null
-  while ((m = re.exec(html))) {
-    let raw = String(m[1] ?? '').trim()
-    if (!raw) continue
-    // strip filters or attribute access (take the first token before | or .)
-    const beforeFilter = (raw.split('|')[0] ?? '').toString()
-    raw = ((beforeFilter.split('.')[0] ?? '') as string).trim()
-    if (!raw) continue
-    if (!found.has(raw)) {
-      const prev = existing.get(raw)
-      found.set(raw, prev ? { ...prev } : { name: raw, title: raw, field_handler: 'textklein' })
-    }
-  }
-  tagconfigs.value = Array.from(found.values())
-}
-
-const updateTagConfigTitle = (idx: number, title: string) => {
-  if (tagconfigs.value[idx]) tagconfigs.value[idx].title = title
-}
-
-// Drag and drop state for tagconfigs
+// Drag and drop state for reordering the fields list
 const dragIndex = ref<number | null>(null)
-const onTagDragStart = (e: DragEvent, idx: number) => {
-  dragIndex.value = idx
-  e.dataTransfer?.setData('text/plain', String(idx))
-}
-
-const onTagDragOver = (e: DragEvent) => {
-  e.preventDefault()
-}
-
-const onTagDrop = (e: DragEvent, idx: number) => {
-  e.preventDefault()
+const onTagDragStart = (idx: number) => { dragIndex.value = idx }
+const onTagDragOver = (e: DragEvent) => e.preventDefault()
+const onTagDrop = (idx: number) => {
   const from = dragIndex.value
-  if (from === null || from === idx) return
-  const item = tagconfigs.value.splice(from, 1)[0]
-  if (!item) {
-    dragIndex.value = null
-    return
-  }
-  tagconfigs.value.splice(idx, 0, item)
+  if (from === null || from === idx) { dragIndex.value = null; return }
+  const tagconfigs = editForm.value.tagconfigs
+  const item = tagconfigs.splice(from, 1)[0]
+  if (item) tagconfigs.splice(idx, 0, item)
   dragIndex.value = null
 }
 
-const prepareTagConfigs = () => {
-  return tagconfigs.value.map((t, i) => ({ id: t.id, name: t.name, title: t.title, field_handler: t.field_handler, order: i }))
+const removeTagConfig = (idx: number) => {
+  editForm.value.tagconfigs.splice(idx, 1)
+}
+
+const prepareTagConfigsPayload = () => {
+  return editForm.value.tagconfigs.map((t, i) => ({
+    id: t.id, name: t.name, title: t.title, field_handler: t.field_handler,
+    contentcontainer_id: t.contentcontainer_id, order: i,
+  }))
 }
 
 const filteredContentTypes = computed(() => {
@@ -183,21 +149,16 @@ const filteredContentTypes = computed(() => {
 })
 
 const handleContentTypesList = (data: any) => {
-  // backend sometimes sends { data: [...] } (upd_contenttypes) or { contenttypes: [...] }
-  if (data) {
-    if (Array.isArray(data.contenttypes)) {
-      contentTypes.value = data.contenttypes
-    } else if (Array.isArray(data.data)) {
-      contentTypes.value = data.data
-    } else if (Array.isArray(data.contentTypes)) {
-      contentTypes.value = data.contentTypes
-    } else {
-      contentTypes.value = []
-    }
-  } else {
-    contentTypes.value = []
-  }
+  contentTypes.value = data?.data || data?.contenttypes || []
   loading.value = false
+}
+
+const handleLayoutsList = (data: any) => {
+  layouts.value = data?.data || []
+}
+
+const handleContainersList = (data: any) => {
+  containers.value = data?.data || []
 }
 
 const handleContentTypeDetail = async (data: any) => {
@@ -209,16 +170,13 @@ const handleContentTypeDetail = async (data: any) => {
     const name = pendingCopyName.value
     pendingCopyName.value = ''
     const tagconfigs = (ct.tagconfigs || []).map((t: any) => ({
-      name: t.field_name,
-      title: t.field_label,
-      field_handler: t.field_handler,
-      order: t.order,
+      name: t.field_name, title: t.field_label, field_handler: t.field_handler,
+      contentcontainer_id: t.contentcontainer_id, order: t.order,
     }))
     const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:create_contenttype', {
       name,
       description: ct.description || '',
-      html: ct.html || '',
-      css: ct.css || '',
+      layout_id: ct.layout_id,
       tagconfigs,
     })
     if (ack?.ok) {
@@ -230,25 +188,17 @@ const handleContentTypeDetail = async (data: any) => {
     return
   }
 
-  // If edit dialog is open for this id, populate html
+  // If edit dialog is open for this id, populate fields
   if (showEditDialog.value && editForm.value.id === ct.id) {
-    editForm.value.html = ct.html || ''
-    editForm.value.css = ct.css || ''
+    editForm.value.layout_id = ct.layout_id
+    editForm.value.tagconfigs = (ct.tagconfigs || [])
+      .slice()
+      .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+      .map((t: any) => ({
+        id: t.id, name: t.field_name, title: t.field_label || t.field_name,
+        field_handler: t.field_handler || 'textklein', contentcontainer_id: t.contentcontainer_id ?? null,
+      }))
 
-          // If the detail payload includes saved tagconfigs, use them to populate the
-          // tagconfigs editor (this preserves server-saved titles and order).
-          const incomingTagConfigs = Array.isArray(ct.tagconfigs) ? ct.tagconfigs : []
-          if (incomingTagConfigs.length) {
-            tagconfigs.value = incomingTagConfigs
-              .slice()
-              .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-              .map((t: any) => ({ id: t.id, name: t.field_name || String(t.id || ''), title: t.field_label || t.field_name || String(t.id || ''), field_handler: t.field_handler || 'textklein' }))
-          } else {
-            // fallback: extract tags from HTML
-            extractTagConfigs()
-          }
-
-    // loaded successfully
     loadingContentType.value = false
     loadingContentTypeError.value = ''
     if (contentTypeLoadTimer) {
@@ -259,17 +209,20 @@ const handleContentTypeDetail = async (data: any) => {
 }
 
 onMounted(() => {
-  // backend emits 'displayhive:admin:stc:upd_contenttypes' with payload { data: [...] }
   on('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
   on('displayhive:admin:stc:contenttype_detail', handleContentTypeDetail)
+  on('displayhive:admin:stc:upd_layouts', handleLayoutsList)
+  on('displayhive:admin:stc:upd_containers', handleContainersList)
 
-  // emit legacy event name the server registers ('get_contenttypes')
   emit('displayhive:admin:cts:get_contenttypes')
-  magicTagsStore.fetch()
+  emit('displayhive:admin:cts:get_layouts')
+  emit('displayhive:admin:cts:get_containers')
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
+  off('displayhive:admin:stc:upd_layouts', handleLayoutsList)
+  off('displayhive:admin:stc:upd_containers', handleContainersList)
 })
 
 const refreshData = () => {
@@ -279,35 +232,21 @@ const refreshData = () => {
 
 const openNewDialog = () => {
   isNew.value = true
-  editForm.value = {
-    id: null,
-    name: '',
-    description: '',
-    html: '',
-    css: '',
-  }
+  editForm.value = { id: null, name: '', description: '', layout_id: null, tagconfigs: [] }
   showEditDialog.value = true
 }
 
 const openEditDialog = (ct: ContentType) => {
   isNew.value = false
-  editForm.value = {
-    id: ct.id,
-    name: ct.name,
-    description: ct.description || '',
-    html: ct.html,
-    css: ct.css || '',
-  }
-  // Request full contenttype detail (including html) from server
+  editForm.value = { id: ct.id, name: ct.name, description: ct.description || '', layout_id: ct.layout_id, tagconfigs: [] }
   try {
     loadingContentType.value = true
     loadingContentTypeError.value = ''
-    emit('get_contenttype', { id: ct.id })
     emit('displayhive:admin:cts:get_contenttype', { id: ct.id })
     if (contentTypeLoadTimer) clearTimeout(contentTypeLoadTimer)
     contentTypeLoadTimer = window.setTimeout(() => {
       loadingContentType.value = false
-      loadingContentTypeError.value = 'Timed out while fetching content type HTML.'
+      loadingContentTypeError.value = 'Timed out while fetching content type detail.'
       contentTypeLoadTimer = null
     }, 8000)
   } catch (e) {}
@@ -325,21 +264,22 @@ const closeDialog = () => {
 }
 
 const saveContentType = async (keepOpen = false) => {
+  if (!editForm.value.layout_id) {
+    toast.add({ severity: 'warn', summary: 'Validation', detail: 'A Layout is required', life: 3000 })
+    return
+  }
+
   const event = isNew.value
     ? 'displayhive:admin:cts:create_contenttype'
     : 'displayhive:admin:cts:update_contenttype'
-
-  // include jinja tag configuration (name/title/order)
-  const tagconfigs_payload = prepareTagConfigs()
 
   try {
     const ack = await emitWithAck<{ ok: boolean; error?: string }>(event, {
       id: editForm.value.id,
       name: editForm.value.name,
       description: editForm.value.description,
-      html: editForm.value.html,
-      css: editForm.value.css,
-      tagconfigs: tagconfigs_payload,
+      layout_id: editForm.value.layout_id,
+      tagconfigs: prepareTagConfigsPayload(),
     })
 
     if (ack?.ok) {
@@ -429,7 +369,15 @@ const deleteContentType = (ct: ContentType) => {
               {{ data.description ? data.description.substring(0, 50) + (data.description.length > 50 ? '...' : '') : '-' }}
             </template>
           </Column>
-          <!-- HTML column removed to declutter the list -->
+          <Column header="Layout" style="width: 160px">
+            <template #body="{ data }">
+              <Tag v-if="data.layout_name" :value="data.layout_name" />
+              <span v-else class="hint">none</span>
+            </template>
+          </Column>
+          <Column header="Fields" style="width: 100px">
+            <template #body="{ data }">{{ data.field_count || 0 }}</template>
+          </Column>
           <Column header="Actions" style="width: 150px">
             <template #body="{ data }">
               <div class="action-buttons">
@@ -460,11 +408,11 @@ const deleteContentType = (ct: ContentType) => {
       v-model:visible="showEditDialog"
       :header="isNew ? 'New Content Type' : 'Edit Content Type'"
       modal
-      :style="{ width: '95vw', maxWidth: '1800px' }"
+      :style="{ width: '90vw', maxWidth: '1200px' }"
     >
       <div class="dialog-content">
         <div v-if="loadingContentType" class="tpl-loading">
-          Loading content type HTML…
+          Loading content type…
           <div v-if="loadingContentTypeError" class="tpl-loading-error">{{ loadingContentTypeError }}</div>
         </div>
         <div class="field">
@@ -475,88 +423,85 @@ const deleteContentType = (ct: ContentType) => {
           <label for="ct-description">Description</label>
           <Textarea id="ct-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
-        <div class="code-editors-row">
-          <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">
-            <label>HTML Template</label>
-            <Codemirror
-              ref="htmlEditorRef"
-              v-model="editForm.html"
-              :extensions="cmHtmlExtensions"
-              :style="{ height: '400px' }"
-              :autofocus="false"
-              :indent-with-tab="true"
-              :tab-size="2"
-            />
-          </div>
-          <div class="code-editor-field" @focusin="lastFocusedEditor = 'css'">
-            <label>CSS</label>
-            <Codemirror
-              ref="cssEditorRef"
-              v-model="editForm.css"
-              :extensions="cmCssExtensions"
-              :style="{ height: '400px' }"
-              :autofocus="false"
-              :indent-with-tab="true"
-              :tab-size="2"
-            />
-          </div>
+        <div class="field">
+          <label for="ct-layout">Layout</label>
+          <Dropdown
+            id="ct-layout"
+            v-model="editForm.layout_id"
+            :options="layoutOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select a layout"
+            class="w-full"
+          />
+          <small class="hint">Scopes which containers this content type's fields may target.</small>
         </div>
-        <div v-if="canMagicTagsPage && magicTagsStore.magicTags.length" class="var-tags-section">
-          <label>Magic Tags <small>(click or drag into editor)</small></label>
-          <div class="var-chips">
-            <span
-              v-for="v in magicTagsStore.magicTags"
-              :key="v.id"
-              class="var-chip"
-              draggable="true"
-              @dragstart="onMagicTagDragStart($event, v.name)"
-              @click="insertMagicTag(v.name)"
-              :title="v.description ? `${v.description}\n\nInsert {{ var_${v.name} }} into the active editor` : `Insert {{ var_${v.name} }} into the active editor`"
-            >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
-          </div>
-        </div>
-        <div class="field jinja-tags-field">
-          <label>Jinja Tags</label>
-            <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
-            <Button label="Extract Tags" icon="pi pi-search" @click="extractTagConfigs" size="small" />
-            <small class="p-m-0" style="align-self:center;color:var(--text-secondary);">Detects &#123;&#123; variable &#125;&#125; tokens from the HTML.</small>
-          </div>
 
-          <div v-if="!(tagconfigs && tagconfigs.length)" class="p-text-muted">No tags extracted yet.</div>
+        <!-- Fields (TagConfig) — each is one container of the selected Layout,
+             rendered directly from its field_handler's transformed value. -->
+        <div class="fields-section">
+          <div class="fields-header">
+            <label>Fields <small>one per container this type populates</small></label>
+            <Button
+              label="Add Field"
+              icon="pi pi-plus"
+              size="small"
+              :disabled="!editForm.layout_id"
+              @click="addField"
+            />
+          </div>
+          <p v-if="!editForm.layout_id" class="hint">Select a Layout above before adding fields.</p>
+          <div v-else-if="!editForm.tagconfigs.length" class="p-text-muted">No fields yet — click "Add Field" to bind a container to a field.</div>
           <div v-else class="tagconfigs-table">
             <div class="tagconfig-header">
               <div class="tagconfig-col-drag"></div>
-              <div class="tagconfig-col-name">Tag</div>
+              <div class="tagconfig-col-name">Name</div>
               <div class="tagconfig-col-title">Label</div>
               <div class="tagconfig-col-type">Field Handler</div>
+              <div class="tagconfig-col-container">Container</div>
+              <div></div>
             </div>
-            <div 
-              v-for="(t, idx) in tagconfigs" 
-              :key="t.id ?? t.name" 
-              class="tagconfig-row" 
-              draggable="true" 
-              @dragstart="onTagDragStart($event, idx)" 
-              @dragover.prevent="onTagDragOver" 
-              @drop="onTagDrop($event, idx)"
+            <div
+              v-for="(t, tIdx) in editForm.tagconfigs"
+              :key="t.id ?? `new-${tIdx}`"
+              class="tagconfig-row"
+              draggable="true"
+              @dragstart="onTagDragStart(tIdx)"
+              @dragover.prevent="onTagDragOver"
+              @drop="onTagDrop(tIdx)"
             >
               <div class="tagconfig-col-drag">
                 <i class="pi pi-bars" style="cursor: grab;"></i>
               </div>
               <div class="tagconfig-col-name">
-                <label style="font-size:0.875rem;font-weight:600;color:var(--text-color);">{{ t.name }}</label>
+                <InputText v-model="t.name" class="w-full" size="small" placeholder="field_name" />
               </div>
               <div class="tagconfig-col-title">
                 <InputText v-model="t.title" class="w-full" size="small" />
               </div>
               <div class="tagconfig-col-type">
-                <Dropdown 
-                  v-model="t.field_handler" 
-                  :options="fieldHandlerOptions" 
-                  optionLabel="label" 
-                  optionValue="value" 
+                <Dropdown
+                  v-model="t.field_handler"
+                  :options="fieldHandlerOptions"
+                  optionLabel="label"
+                  optionValue="value"
                   class="w-full"
                   size="small"
                 />
+              </div>
+              <div class="tagconfig-col-container">
+                <Dropdown
+                  v-model="t.contentcontainer_id"
+                  :options="containerOptionsForLayout"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Container"
+                  class="w-full"
+                  size="small"
+                />
+              </div>
+              <div>
+                <Button icon="pi pi-trash" severity="danger" text size="small" @click="removeTagConfig(tIdx)" title="Remove field" />
               </div>
             </div>
           </div>
@@ -578,40 +523,25 @@ const deleteContentType = (ct: ContentType) => {
   gap: 1rem;
 }
 
-.html-preview {
+.hint {
+  color: #888;
   font-size: 0.75rem;
-  background: #f5f5f5;
-  padding: 0.25rem 0.5rem;
+}
+
+.tpl-loading {
+  background: var(--surface-b);
+  border: 1px dashed var(--surface-d);
+  padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 300px;
+  color: var(--text-color, #333);
+  font-style: italic;
+  margin-bottom: 0.5rem;
 }
 
-.code-editors-row {
-  display: flex;
-  gap: 1rem;
-}
-
-.code-editor-field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.code-editor-field label {
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-.code-editor-field .vue-codemirror {
-  border: 1px solid var(--p-inputtext-border-color, #d1d5db);
-  border-radius: 6px;
-  overflow: hidden;
+.tpl-loading-error {
+  color: var(--error-color, #c62828);
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
 }
 
 /* Tagconfigs table styling */
@@ -625,7 +555,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-header {
   display: grid;
-  grid-template-columns: 40px 180px 1fr 200px;
+  grid-template-columns: 40px 160px 1fr 180px 200px 40px;
   gap: 0.5rem;
   padding: 0.5rem;
   background: #f5f5f5;
@@ -636,7 +566,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row {
   display: grid;
-  grid-template-columns: 40px 180px 1fr 200px;
+  grid-template-columns: 40px 160px 1fr 180px 200px 40px;
   gap: 0.5rem;
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
@@ -666,51 +596,33 @@ const deleteContentType = (ct: ContentType) => {
 }
 
 .tagconfig-col-title,
-.tagconfig-col-type {
+.tagconfig-col-type,
+.tagconfig-col-container {
   display: flex;
   align-items: center;
 }
 
-.var-tags-section {
+.fields-section {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
 
-.var-tags-section label {
+.fields-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fields-header label {
   font-weight: 600;
   font-size: 0.875rem;
 }
 
-.var-tags-section label small {
+.fields-header label small {
   font-weight: 400;
   color: #888;
   margin-left: 0.3rem;
-}
-
-.var-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.var-chip {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  background: #1e3a5f;
-  color: #7dd3fc;
-  border: 1px solid #2563ab;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s, color 0.15s;
-}
-
-.var-chip:hover {
-  background: #2563ab;
-  color: #e0f2fe;
 }
 </style>

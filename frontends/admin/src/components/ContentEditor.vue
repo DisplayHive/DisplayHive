@@ -16,14 +16,6 @@ import DatePicker from 'primevue/datepicker'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 
-interface Container {
-  id?: number
-  name: string
-  title: string
-  order: number
-  contentCount: number
-}
-
 interface ContentElement {
   id: number
   title: string
@@ -31,7 +23,6 @@ interface ContentElement {
   duration: number
   start_time?: string | null
   end_time?: string | null
-  contentcontainer: string
   contenttypeName: string
   screengroups?: Array<{ id: number; name: string }>
 }
@@ -76,7 +67,6 @@ const { on, off, emit: socketEmit, emitWithAck: socketEmitWithAck } = useSocket(
 
 const showSelectContentTypeDialog = ref(false)
 const showCreateContentDialog = ref(false)
-const currentContainer = ref<Container | null>(null)
 const editMode = ref(false)
 const pendingIsCreate = ref(false)
 const pendingKeepOpen = ref(false)
@@ -93,7 +83,6 @@ const createForm = ref({
   start_time: null as Date | null,
   end_time: null as Date | null,
   contenttype_id: null as number | null,
-  contentcontainer: 'maincontent',
   fields: {} as Record<string, string | number | boolean>
 })
 const tagConfigs = ref<TagConfig[]>([])
@@ -278,12 +267,10 @@ const resetCreateForm = () => {
     start_time: null,
     end_time: null,
     contenttype_id: null,
-    contentcontainer: 'maincontent',
     fields: {}
   }
   tagConfigs.value = []
   selectedContentType.value = null
-  currentContainer.value = null
   editMode.value = false
   editorReady.value = false
   contentDetailReceived.value = false
@@ -296,19 +283,23 @@ const resetCreateForm = () => {
   screenPage.value = 0
 }
 
-const openCreate = (container: Container) => {
+const openCreate = () => {
   resetCreateForm()
-  currentContainer.value = container
-  createForm.value.contentcontainer = container.name
   formScreengroupIds.value = []
   originalScreengroupIds.value = []
   showSelectContentTypeDialog.value = true
 }
 
-const openCreateForScreen = (container: Container, sgId: number) => {
+/** Skip the "select content type" step — used when creating from a specific Contenttype's group. */
+const openCreateForType = (ct: ContentType) => {
   resetCreateForm()
-  currentContainer.value = container
-  createForm.value.contentcontainer = container.name
+  formScreengroupIds.value = []
+  originalScreengroupIds.value = []
+  selectContentType(ct)
+}
+
+const openCreateForScreen = (sgId: number) => {
+  resetCreateForm()
   formScreengroupIds.value = [sgId]
   originalScreengroupIds.value = [sgId]
   showSelectContentTypeDialog.value = true
@@ -327,14 +318,13 @@ const openEdit = async (content: ContentElement) => {
   createForm.value.title = content.title
   createForm.value.duration = content.duration
   createForm.value.contenttype_id = contentType.id
-  createForm.value.contentcontainer = content.contentcontainer
 
   const sgIds = (content.screengroups || []).map(sg => sg.id)
   formScreengroupIds.value = [...sgIds]
   originalScreengroupIds.value = [...sgIds]
 
   createForm.value.fields = {}
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
+  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
   for (const key of Object.keys(content)) {
     if (!ignore.has(key)) {
       const value = (content as any)[key]
@@ -377,7 +367,7 @@ const openCopy = async (content: ContentElement) => {
   createForm.value.title = `Copy of ${content.title}`
 }
 
-defineExpose({ openCreate, openCreateForScreen, openEdit, openCopy })
+defineExpose({ openCreate, openCreateForType, openCreateForScreen, openEdit, openCopy })
 
 const selectContentType = (ct: ContentType) => {
   createForm.value.contenttype_id = ct.id
@@ -689,7 +679,6 @@ const submitCreateContent = (keepOpen = false) => {
     start_time: fmtDt(createForm.value.start_time),
     end_time: fmtDt(createForm.value.end_time),
     contenttype_id: createForm.value.contenttype_id,
-    contentcontainer: createForm.value.contentcontainer,
     ...createForm.value.fields
   }
 
@@ -714,6 +703,8 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
   loadingContentTypeDetail.value = false
   if (data.contenttype) {
     selectedContentType.value = data.contenttype
+    // Fields (TagConfig) belong to the Contenttype itself — each one maps
+    // directly to one of its Layout's containers.
     const serverTagConfigs: any[] = (data.contenttype as any).tagconfigs || []
     if (serverTagConfigs && serverTagConfigs.length > 0) {
       tagConfigs.value = serverTagConfigs.flatMap((t: any) => {
@@ -1006,7 +997,7 @@ onUnmounted(() => {
   <!-- Step 1: Select Content Type -->
   <Dialog
     v-model:visible="showSelectContentTypeDialog"
-    :header="`Select Content Type for ${currentContainer?.title || 'Container'}`"
+    header="Select Content Type"
     modal
     :style="{ width: '600px' }"
   >

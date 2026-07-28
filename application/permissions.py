@@ -55,7 +55,6 @@ RIGHTS = [
     ('content.create', 'content', 'Create content element'),
     ('content.edit', 'content', 'Edit content element'),
     ('content.enable', 'content', 'Enable / disable content element'),
-    ('content.move', 'content', 'Move content element to another container'),
     ('content.delete', 'content', 'Delete content element'),
 
     ('contenttypes.page', 'contenttypes', 'View Content Types page'),
@@ -63,14 +62,19 @@ RIGHTS = [
     ('contenttypes.edit', 'contenttypes', 'Edit contenttype'),
     ('contenttypes.delete', 'contenttypes', 'Delete contenttype'),
 
-    ('templates.page', 'templates', 'View Templates page'),
-    ('templates.create', 'templates', 'Create template'),
-    ('templates.edit', 'templates', 'Edit template'),
-    ('templates.delete', 'templates', 'Delete template'),
+    ('designs.page', 'designs', 'View Designs page'),
+    ('designs.create', 'designs', 'Create design'),
+    ('designs.edit', 'designs', 'Edit design'),
+    ('designs.delete', 'designs', 'Delete design'),
+
+    ('layouts.page', 'layouts', 'View Layouts page'),
+    ('layouts.create', 'layouts', 'Create layout / content container'),
+    ('layouts.edit', 'layouts', 'Edit layout / content container'),
+    ('layouts.delete', 'layouts', 'Delete layout / content container'),
 
     ('screens.page', 'screens', 'View Screens page'),
     ('screens.create', 'screens', 'Create screen'),
-    ('screens.edit', 'screens', 'Rename screen / change template / screengroups'),
+    ('screens.edit', 'screens', 'Rename screen / change screengroups'),
     ('screens.delete', 'screens', 'Delete screen'),
     ('screens.monitor', 'screens', 'Toggle screen online monitoring'),
     ('screens.resize', 'screens', 'Reset screen resolution to device max'),
@@ -86,7 +90,7 @@ RIGHTS = [
     ('screengroups.manage_content', 'screengroups', 'Assign / remove content in a screen group'),
 
     ('settings.page', 'settings', 'View Settings page'),
-    ('settings.edit', 'settings', 'Edit system settings / default template'),
+    ('settings.edit', 'settings', 'Edit system settings / active design'),
 
     ('alerting.page', 'alerting', 'View Alerting page'),
     ('alerting.manage', 'alerting', 'Manage alert recipients / subscriptions / test messages'),

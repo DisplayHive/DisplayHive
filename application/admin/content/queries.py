@@ -1,5 +1,9 @@
-"""Read-only admin socket handlers for Content — media pickers, container and
+"""Read-only admin socket handlers for Content — media pickers and
 content listings. Split out of the former monolithic ``sockethandlers`` module.
+
+Container listing/CRUD lives in the Layouts admin domain
+(``application/admin/layouts``) now that containers are standalone entities
+scoped to a Layout rather than owned by a Design/Template.
 """
 
 import json
@@ -7,15 +11,14 @@ import logging
 
 from flask import request
 
-from application.utils.template import get_default_template, media_file_urls
 from application.admin.content.serializers import (
-    build_containers_for_template,
     resolve_preview_css,
     build_content_dict,
     fmt_dt,
 )
-from application.models import ContentElement, ContentContainer, Contenttype, Template
+from application.models import ContentElement
 from application.models.content import Media
+from application.utils.template import media_file_urls
 
 logger = logging.getLogger(__name__)
 
@@ -75,112 +78,6 @@ def register_content_query_handlers(socketio, app, db):
                 matched.append(_media_entry(m))
         socketio.emit('displayhive:admin:stc:images_by_tags', {'images': matched, 'tags': tags}, room=sid)
 
-    @socketio.on('displayhive:admin:cts:get_containers')
-    @require_right('content.page')
-    def handle_get_containers(data=None):
-        """Get all content containers from the default template."""
-        sid = request.sid
-        template = get_default_template(db)
-        containers = build_containers_for_template(db, template)
-        socketio.emit('displayhive:admin:stc:containers', {'containers': containers}, room=sid)
-        logger.debug('Sent %s containers to %s', len(containers), sid)
-
-    @socketio.on('displayhive:admin:cts:get_containers_for_screen')
-    @require_right('content.page')
-    def handle_get_containers_for_screen(data=None):
-        """Return content containers for a specific screen, using its assigned template.
-
-        Falls back to the system default template if the screen has no template assigned.
-        """
-        sid = request.sid
-        screen_id = (data or {}).get('screen_id')
-        if not screen_id:
-            return
-
-        from application.models import Screen
-        screen = db.session.get(Screen, int(screen_id))
-        if not screen:
-            return
-
-        # Resolve template: screen-specific → isDefault → first
-        template = None
-        if screen.template_id:
-            template = db.session.get(Template, screen.template_id)
-        if not template:
-            template = (
-                db.session.execute(db.select(Template).where(Template.isDefault == True)).scalar_one_or_none()
-                or db.session.execute(db.select(Template)).scalars().first()
-            )
-
-        containers = build_containers_for_template(db, template)
-        socketio.emit('displayhive:admin:stc:containers_for_screen', {'containers': containers}, room=sid)
-        logger.debug('Sent %s containers for screen %s (template: %s) to %s',
-                     len(containers), screen_id, getattr(template, 'name', 'none'), sid)
-
-    @socketio.on('displayhive:admin:cts:get_all_containers_for_picker')
-    @admin_handler
-    def handle_get_all_containers_for_picker(data=None):
-        """Return containers from every template, each with template_name, for the contenttype editor."""
-        sid = request.sid
-        all_templates = db.session.execute(
-            db.select(Template).order_by(Template.isDefault.desc(), Template.name)
-        ).scalars().all()
-        containers = []
-        for tpl in all_templates:
-            for cc in (tpl.contentcontainers or []):
-                containers.append({
-                    'id': getattr(cc, 'id', None),
-                    'name': cc.name,
-                    'title': cc.title or cc.name,
-                    'order': cc.order,
-                    'template_name': tpl.name,
-                    'template_id': tpl.id,
-                })
-        containers.sort(key=lambda x: (x.get('template_name') or '', x.get('order') or 0))
-        socketio.emit('displayhive:admin:stc:all_containers_for_picker', {'containers': containers}, room=sid)
-        logger.debug('Sent %s all_containers_for_picker to %s', len(containers), sid)
-
-    @socketio.on('displayhive:admin:cts:get_template_containers')
-    @admin_handler
-    def handle_get_template_containers(data=None):
-        """Get content containers for a specific template by id."""
-        sid = request.sid
-        template_id = None
-        if data and isinstance(data, dict):
-            template_id = data.get('id') or data.get('template_id')
-        if not template_id:
-            return
-
-        tpl = None
-        try:
-            tpl = db.session.get(Template, int(template_id))
-        except (ValueError, TypeError):
-            tpl = None
-
-        containers = []
-        if tpl and tpl.contentcontainers:
-            for cc in tpl.contentcontainers:
-                count = db.session.execute(
-                    db.select(db.func.count()).select_from(ContentElement).where(
-                        ContentElement.contentcontainer == cc.name
-                    )
-                ).scalar()
-                containers.append({
-                    'id': getattr(cc, 'id', None),
-                    'name': cc.name,
-                    'title': cc.title or cc.name,
-                    'order': cc.order,
-                    'contentCount': count,
-                    'template_name': tpl.name,
-                })
-
-        containers.sort(key=lambda x: x['order'])
-
-        socketio.emit('displayhive:admin:stc:template_containers', {'containers': containers, 'template_id': template_id}, room=sid)
-        # legacy name
-        socketio.emit('template_containers', {'containers': containers, 'template_id': template_id}, room=sid)
-        logger.debug('Sent %s template_containers for template %s to %s', len(containers), template_id, sid)
-
     def _emit_content_list(event, extra, content_items):
         """Serialize content items with preview CSS and emit them under *event*."""
         preview_css = resolve_preview_css(db)
@@ -188,23 +85,21 @@ def register_content_query_handlers(socketio, app, db):
         socketio.emit(event, {**extra, 'content': content_list}, room=request.sid)
         return content_list
 
-    @socketio.on('displayhive:admin:cts:get_content_by_container')
+    @socketio.on('displayhive:admin:cts:get_all_content_detailed')
     @require_right('content.page')
-    def handle_get_content_by_container(data):
-        """Get all content_element for a specific container."""
-        container_name = data.get('container') if data else None
-        if not container_name:
-            return
+    def handle_get_all_content_detailed(data=None):
+        """Get full detail for every ContentElement (fields, html preview, screengroups).
 
+        Used by the Content page to group items by Contenttype client-side —
+        content is no longer organized by container.
+        """
         content_items = db.session.execute(
-            db.select(ContentElement)
-            .where(ContentElement.contentcontainer == container_name)
-            .order_by(ContentElement.title)
+            db.select(ContentElement).order_by(ContentElement.title)
         ).scalars().all()
 
         content_list = _emit_content_list(
-            'displayhive:admin:stc:content_list', {'container': container_name}, content_items)
-        logger.debug('Sent %s items for container %s', len(content_list), container_name)
+            'displayhive:admin:stc:all_content_detailed', {}, content_items)
+        logger.debug('Sent %s detailed content items', len(content_list))
 
     @socketio.on('displayhive:admin:cts:get_content_by_screengroup')
     @require_right('content.page')
@@ -230,33 +125,6 @@ def register_content_query_handlers(socketio, app, db):
             'displayhive:admin:stc:content_by_screengroup', {'screengroup_id': screengroup_id}, content_items)
         logger.debug('Sent %s items for screengroup %s', len(content_list), screengroup_id)
 
-    @socketio.on('displayhive:admin:cts:get_content_by_screengroup_and_container')
-    @require_right('content.page')
-    def handle_get_content_by_screengroup_and_container(data):
-        """Get content_element for a specific screengroup filtered by container name."""
-        raw_id = data.get('screengroup_id') if data else None
-        if isinstance(raw_id, dict):
-            raw_id = raw_id.get('id')
-        container_name = data.get('container') if data else None
-        if raw_id is None or not container_name:
-            return
-        screengroup_id = int(raw_id)
-
-        from application.models import Screengroup
-
-        content_items = db.session.execute(
-            db.select(ContentElement)
-            .join(ContentElement.screengroups)
-            .where(ContentElement.contentcontainer == container_name)
-            .where(Screengroup.id == screengroup_id)
-            .order_by(ContentElement.title)
-        ).unique().scalars().all()
-
-        content_list = _emit_content_list(
-            'displayhive:admin:stc:content_by_screengroup_and_container',
-            {'screengroup_id': screengroup_id, 'container': container_name}, content_items)
-        logger.debug('Sent %s items for sg=%s container=%s', len(content_list), screengroup_id, container_name)
-
     @socketio.on('displayhive:admin:cts:get_content_element_detail')
     @require_right('content.page')
     def handle_get_content_element_detail(data):
@@ -279,7 +147,6 @@ def register_content_query_handlers(socketio, app, db):
             'duration': content_element.duration,
             'start_time': fmt_dt(getattr(content_element, 'start_time', None)),
             'end_time': fmt_dt(getattr(content_element, 'end_time', None)),
-            'contentcontainer': content_element.contentcontainer,
             'contenttype_id': content_element.contenttype_id,
         }
 
@@ -291,16 +158,16 @@ def register_content_query_handlers(socketio, app, db):
         except Exception:
             logger.exception('Failed to parse serialized_input for content_element %s', content_element_id)
 
-        # If tagconfigs exist, prefer values from serialized_input, fallback to model attributes
-        if content_element.contenttype and hasattr(content_element.contenttype, 'tagconfigs'):
-            for tagconfig in (content_element.contenttype.tagconfigs or []):
-                field_name = getattr(tagconfig, 'field_name', None) or getattr(tagconfig, 'name', None)
-                if not field_name:
-                    continue
-                if field_name in input_data:
-                    content_data[field_name] = input_data.get(field_name)
-                elif hasattr(content_element, field_name):
-                    content_data[field_name] = getattr(content_element, field_name)
+        # If the contenttype has tagconfigs, prefer values from
+        # serialized_input, fallback to model attributes.
+        for tagconfig in (getattr(content_element.contenttype, 'tagconfigs', None) or []):
+            field_name = getattr(tagconfig, 'field_name', None)
+            if not field_name:
+                continue
+            if field_name in input_data:
+                content_data[field_name] = input_data.get(field_name)
+            elif hasattr(content_element, field_name):
+                content_data[field_name] = getattr(content_element, field_name)
 
         # Also merge any other keys present in serialized_input that may not be in tagconfigs
         for k, v in input_data.items():
@@ -313,45 +180,12 @@ def register_content_query_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:cts:get_unassigned_content')
     @require_right('content.page')
     def handle_get_unassigned_content(data=None):
-        """Get all content that is unassigned.
-
-        A content item counts as unassigned if:
-          - its contentcontainer is empty or null, or
-          - its contentcontainer name does not exist in any of the templates
-            used by the screens it is actually assigned to (via its
-            screengroups). Content with no screengroups, or whose
-            screengroups have no screens in them, has no templates to match
-            against and is therefore also unassigned.
-        """
-        default_template = get_default_template(db)
-
-        def _template_for_screen(screen):
-            return screen.template if screen.template_id else default_template
-
+        """Get all content that is unassigned (has no screengroups)."""
         all_content = db.session.execute(
             db.select(ContentElement).order_by(ContentElement.title)
         ).scalars().all()
 
-        unassigned = []
-        for ce in all_content:
-            if not ce.contentcontainer:
-                unassigned.append(ce)
-                continue
-
-            assigned_screens = {
-                screen
-                for sg in (ce.screengroups or [])
-                for screen in (sg.screens or [])
-            }
-
-            container_names = set()
-            for screen in assigned_screens:
-                tpl = _template_for_screen(screen)
-                if tpl:
-                    container_names.update(cc.name for cc in (tpl.contentcontainers or []))
-
-            if ce.contentcontainer not in container_names:
-                unassigned.append(ce)
+        unassigned = [ce for ce in all_content if not ce.screengroups]
 
         content_list = _emit_content_list('displayhive:admin:stc:unassigned_content', {}, unassigned)
         logger.debug('Sent %s unassigned items', len(content_list))
@@ -359,7 +193,7 @@ def register_content_query_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:cts:get_all_content_element')
     @admin_handler
     def handle_get_all_content_element(data=None):
-        """Return all ContentElement items regardless of container.
+        """Return all ContentElement items.
 
         Shared by two callers with different rights: the Content page itself
         (content.page) and the screengroup "assign content" modal
@@ -381,7 +215,6 @@ def register_content_query_handlers(socketio, app, db):
                 'title': mc.title,
                 'active': mc.active,
                 'duration': mc.duration,
-                'contentcontainer': mc.contentcontainer or '',
                 'contenttypeName': mc.contenttype.name if mc.contenttype else '',
             }
             for mc in items

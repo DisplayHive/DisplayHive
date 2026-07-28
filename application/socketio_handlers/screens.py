@@ -78,7 +78,6 @@ def register_screen_handlers(socketio, app, db):
         old_name = message.get('old_name', '')
         new_name = message.get('new_name', '').strip()
         screengroup_ids = message.get('screengroup_ids', [])
-        template_id = message.get('template_id', None)
 
         if old_name.startswith('preview_'):
             logger.warning('Blocked attempt to rename preview screen: %s', old_name)
@@ -93,7 +92,6 @@ def register_screen_handlers(socketio, app, db):
             return
 
         screen.name = new_name
-        screen.template_id = int(template_id) if template_id else None
 
         if screengroup_ids:
             groups = db.session.execute(

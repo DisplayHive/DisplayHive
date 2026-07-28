@@ -10,8 +10,18 @@ This module exposes:
     All three sources are merged and de-duplicated by screen id before pushing.
 
 Best-effort; callers must not rely on it raising.
+
+Rendering model: a screen has no independent per-container playlists anymore.
+Each ContentElement is a "scene" — when it's showing, every container its
+Contenttype's fields (TagConfig) map to switches together; containers not
+covered by the current scene go blank. The payload's `scenes` array is the
+screen's full shared rotation queue (ordered, deduplicated); the screen
+client (frontends/screen/ts/screen) owns advancing through it by `duration`
+and creating/positioning each scene's container divs from the per-scene
+`containers` map (vh/vw top/left/width/height).
 """
 
+import json
 import logging
 from typing import List, Optional
 
@@ -21,29 +31,22 @@ logger = logging.getLogger(__name__)
 def _build_payload(db, screen):
     """Build the upd_content payload dict for a given screen.
 
-    Template resolution order:
-      1. Screen-specific template (screen.template_id is set)
-      2. System default template via get_default_template()
+    Design resolution: Design is a single, instance-wide active setting (no
+    per-screen override) — see get_default_design().
 
     Returns the payload dict, or None if building fails.
     """
-    from application.models import Template, ContentContainer, ContentElement, Screengroup
-    from application.utils.template import get_default_template
+    from application.models import ContentElement, Screengroup
+    from application.utils.template import get_default_design, parse_content_html
 
-    # 1. Screen-specific template, then system default fallback
-    template = None
-    if screen and getattr(screen, 'template_id', None):
-        template = db.session.get(Template, screen.template_id)
-    if not template:
-        template = get_default_template(db)
-
-    template_payload = {
-        'name': getattr(template, 'name', '') or '',
-        'html': getattr(template, 'html', '') or '',
-        'css':  getattr(template, 'css',  '') or ''
+    design = get_default_design(db)
+    design_payload = {
+        'name': getattr(design, 'name', '') or '',
+        'html': getattr(design, 'html', '') or '',
+        'css':  getattr(design, 'css',  '') or '',
     }
 
-    # Load magic tags once; applied to HTML, template CSS, and contenttype CSS below.
+    # Load magic tags once; applied to Design HTML/CSS and content-handler CSS below.
     _tvars: dict = {}
     try:
         from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
@@ -51,105 +54,79 @@ def _build_payload(db, screen):
     except Exception:
         pass
 
-    # Replace {{ tag_name }} placeholders with <div data-container="tag_name"></div>
-    # so the client receives ready-to-inject HTML (same substitution done in app.py for page load).
-    import re as _re
-    raw_html = template_payload['html']
-    if raw_html:
-        # Substitute {{ var_<name> }} before converting container tags so var_ tags
-        # are not turned into data-container divs.
-        if _tvars:
-            raw_html = substitute_magic_tags(raw_html, _tvars)
-        template_payload['html'] = _re.sub(
-            r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}',
-            r'<div data-container="\1"></div>',
-            raw_html,
-        )
-    else:
-        template_payload['html'] = '<div data-container="maincontent"></div>'
-
-    # Substitute magic tags in template CSS.
-    if _tvars and template_payload['css']:
-        template_payload['css'] = substitute_magic_tags(template_payload['css'], _tvars)
-
-    containers = []
-    if template:
-        contentcontainers = db.session.execute(
-            db.select(ContentContainer)
-            .where(ContentContainer.template_id == template.id)
-        ).scalars().all()
-        containers = [c.name for c in contentcontainers]
-    if not containers:
-        containers = ['maincontent']
+    if _tvars:
+        if design_payload['html']:
+            design_payload['html'] = substitute_magic_tags(design_payload['html'], _tvars)
+        if design_payload['css']:
+            design_payload['css'] = substitute_magic_tags(design_payload['css'], _tvars)
 
     screen_group_ids = set()
     if screen and hasattr(screen, 'screengroups'):
         screen_group_ids = {sg.id for sg in screen.screengroups}
 
-    playlists = []
-    all_ids: set = set()
-    for container in containers:
-        if screen_group_ids:
-            content_elements = db.session.execute(
-                db.select(ContentElement)
-                .where(ContentElement.active == True)
-                .where(
-                    (ContentElement.contentcontainer == container)
-                    | ((ContentElement.contentcontainer == None) & (container == 'maincontent'))
-                )
-                .where(ContentElement.screengroups.any(Screengroup.id.in_(list(screen_group_ids))))
-                .distinct()
-            ).scalars().all()
-        else:
-            content_elements = []
+    content_elements = []
+    if screen_group_ids:
+        content_elements = db.session.execute(
+            db.select(ContentElement)
+            .where(ContentElement.active == True)
+            .where(ContentElement.screengroups.any(Screengroup.id.in_(list(screen_group_ids))))
+            .distinct()
+            .order_by(ContentElement.id)
+        ).unique().scalars().all()
 
-        content_list = []
-        for mc in content_elements:
-            entry: dict = {'id': mc.id, 'title': mc.title, 'duration': mc.duration}
-            # Transmit scheduling window so the screen can skip items that
-            # have not started yet or have already ended.
-            if mc.start_time is not None:
-                entry['start_time'] = mc.start_time.isoformat()
-            if mc.end_time is not None:
-                entry['end_time'] = mc.end_time.isoformat()
-            # Flag items that use random_tags or pretalx_table so the client
-            # requests a re-render after each display, keeping content fresh.
-            try:
-                import json as _json
-                si = _json.loads(mc.serialized_input or '{}')
-                if any(v == 'random_tags' for k, v in si.items() if k.endswith('__image_mode')):
-                    entry['update_after_show'] = True
-                elif any(
-                    getattr(tc, 'field_handler', '') == 'pretalx_table'
-                    for tc in getattr(getattr(mc, 'contenttype', None), 'tagconfigs', [])
-                ):
-                    entry['update_after_show'] = True
-            except Exception:
-                pass
-            content_list.append(entry)
-            all_ids.add(mc.id)
-        playlists.append({'container': container, 'data': content_list})
+    # Each ContentElement is one "scene": every container its Contenttype's
+    # fields (TagConfig) target must switch together when this scene is showing.
+    scenes = []
+    for mc in content_elements:
+        tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
+        rendered_by_container = parse_content_html(mc.html, tagconfigs)
 
-    content_html = {}
-    content_css = {}
-    if all_ids:
-        for mc in db.session.execute(
-            db.select(ContentElement).where(ContentElement.id.in_(list(all_ids)))
-        ).scalars().all():
-            content_html[mc.id] = mc.html
-            ct_css = getattr(getattr(mc, 'contenttype', None), 'css', None)
-            if ct_css:
-                if _tvars:
-                    ct_css = substitute_magic_tags(ct_css, _tvars)
-                content_css[mc.id] = ct_css
+        scene_containers = {}
+        for tc in tagconfigs:
+            container = tc.contentcontainer
+            if container is None:
+                continue
+            scene_containers[str(container.id)] = {
+                'name': container.name,
+                'top': container.top, 'left': container.left,
+                'width': container.width, 'height': container.height,
+                'html': rendered_by_container.get(str(tc.contentcontainer_id), ''),
+            }
+
+        if not scene_containers:
+            # Nothing to show for this scene (no fields targeting a real
+            # container) — skip it rather than occupy a rotation slot with
+            # a blank scene.
+            continue
+
+        scene: dict = {
+            'id': mc.id,
+            'title': mc.title,
+            'duration': mc.duration,
+            'containers': scene_containers,
+        }
+        if mc.start_time is not None:
+            scene['start_time'] = mc.start_time.isoformat()
+        if mc.end_time is not None:
+            scene['end_time'] = mc.end_time.isoformat()
+        try:
+            si = json.loads(mc.serialized_input or '{}')
+            if any(v == 'random_tags' for k, v in si.items() if k.endswith('__image_mode')):
+                scene['update_after_show'] = True
+            elif any(
+                getattr(tc, 'field_handler', '') == 'pretalx_table'
+                for tc in (getattr(mc.contenttype, 'tagconfigs', None) or [])
+            ):
+                scene['update_after_show'] = True
+        except Exception:
+            pass
+
+        scenes.append(scene)
 
     from datetime import datetime as _dt, timezone as _tz
     return {
-        'template':     template_payload,
-        'containers':   containers,
-        'playlists':    playlists,
-        'content_html': content_html,
-        'content_css':  content_css,
+        'design':       design_payload,
+        'scenes':       scenes,
         'server_time':  _dt.now(_tz.utc).isoformat(),
     }
 

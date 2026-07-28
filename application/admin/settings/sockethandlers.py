@@ -27,19 +27,19 @@ def register_admin_settings_handlers(socketio, app, db):
 
     def _emit_settings(sid=None):
         """Build the full settings payload and emit it."""
-        from application.models import Template
+        from application.models import Design
         from datetime import datetime, timezone
-        templates = db.session.execute(db.select(Template)).scalars().all()
-        tpl_list = [
-            {'id': t.id, 'name': t.name, 'isDefault': bool(getattr(t, 'isDefault', False))}
-            for t in templates
+        designs = db.session.execute(db.select(Design)).scalars().all()
+        design_list = [
+            {'id': d.id, 'name': d.name, 'isDefault': bool(getattr(d, 'isDefault', False))}
+            for d in designs
         ]
-        default_template_id = next(
-            (t.id for t in templates if getattr(t, 'isDefault', False)), None
+        default_design_id = next(
+            (d.id for d in designs if getattr(d, 'isDefault', False)), None
         )
         payload = {
-            'templates': tpl_list,
-            'default_template_id': default_template_id,
+            'designs': design_list,
+            'default_design_id': default_design_id,
             'system_settings': _get_system_settings(),
             'server_time': datetime.now(timezone.utc).isoformat(),
         }
@@ -50,22 +50,22 @@ def register_admin_settings_handlers(socketio, app, db):
     def get_admin_settings(message=None):
         _emit_settings(getattr(request, 'sid', None))
 
-    @socketio.on('displayhive:admin:cts:set_default_template')
+    @socketio.on('displayhive:admin:cts:set_default_design')
     @require_right('settings.edit')
-    def handle_set_default_template(data):
+    def handle_set_default_design(data):
         sid = getattr(request, 'sid', None)
-        template_id = data.get('id') if data else None
-        if template_id is None:
+        design_id = data.get('id') if data else None
+        if design_id is None:
             return
 
-        from application.models import Template
-        all_templates = db.session.execute(db.select(Template)).scalars().all()
-        for t in all_templates:
-            t.isDefault = False
+        from application.models import Design
+        all_designs = db.session.execute(db.select(Design)).scalars().all()
+        for d in all_designs:
+            d.isDefault = False
 
-        new_default = db.session.get(Template, template_id)
+        new_default = db.session.get(Design, design_id)
         if not new_default:
-            logger.warning('Template with id %s not found', template_id)
+            logger.warning('Design with id %s not found', design_id)
             return
 
         new_default.isDefault = True
@@ -75,7 +75,7 @@ def register_admin_settings_handlers(socketio, app, db):
             from application.utils import push_content_list_to_all_screens
             push_content_list_to_all_screens(socketio, app, db)
         except Exception:
-            logger.exception('set_default_template: failed to push content to screens')
+            logger.exception('set_default_design: failed to push content to screens')
 
         _emit_settings(sid)
 

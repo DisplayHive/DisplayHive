@@ -1,6 +1,6 @@
 """Pretalx schedule + table rendering helpers for the admin Content page.
 
-Self-contained rendering routines consumed by ``content.helper.render_content_element_html``
+Self-contained rendering routines consumed by ``content.helper.render_content_fields``
 to turn Pretalx API data (and generic table field values) into HTML. Kept in a separate
 module so the general content element renderer stays focused and this Pretalx-specific logic
 can be read and tested on its own.

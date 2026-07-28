@@ -1,33 +1,52 @@
-"""Shared template/content utility helpers reused across multiple modules."""
+"""Shared design/content utility helpers reused across multiple modules."""
 
+import json
 import os
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def get_default_template(db):
-    """Return the active default template using the standard fallback chain.
+def parse_content_html(raw, handlers) -> dict:
+    """Parse ContentElement.html into {contentcontainer_id_str: rendered_html}.
+
+    Rows created by the current pipeline already store this JSON map. Rows
+    that predate the per-field container mapping (or came from a v3 import)
+    store a single rendered HTML string instead — in that case the same
+    string is applied to every one of *handlers*' containers, since legacy
+    data only ever had one field/container per Contenttype.
+    """
+    try:
+        parsed = json.loads(raw or '{}')
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    return {str(h.contentcontainer_id): (raw or '') for h in (handlers or [])}
+
+
+def get_default_design(db):
+    """Return the active default design using the standard fallback chain.
 
     Resolution order:
-      1. Template with isDefault == True
-      2. Template named 'default'
-      3. First template by id
+      1. Design with isDefault == True
+      2. Design named 'default'
+      3. First design by id
     """
-    from application.models import Template
+    from application.models import Design
 
-    template = db.session.execute(
-        db.select(Template).where(Template.isDefault == True)
+    design = db.session.execute(
+        db.select(Design).where(Design.isDefault == True)
     ).scalar()
-    if not template:
-        template = db.session.execute(
-            db.select(Template).where(Template.name == 'default')
+    if not design:
+        design = db.session.execute(
+            db.select(Design).where(Design.name == 'default')
         ).scalar()
-    if not template:
-        template = db.session.execute(
-            db.select(Template).order_by(Template.id).limit(1)
+    if not design:
+        design = db.session.execute(
+            db.select(Design).order_by(Design.id).limit(1)
         ).scalar()
-    return template
+    return design
 
 
 def reload_devices_on_screen(socketio, db, screen):
@@ -49,39 +68,17 @@ def reload_devices_on_screen(socketio, db, screen):
     logger.info("Reload command sent to screen '%s'", screen.name)
 
 
-def reload_devices_for_template(socketio, db, template):
-    """Send a RELOAD command to every device whose screen uses *template*.
+def reload_devices_on_all_screens(socketio, db):
+    """Send a RELOAD command to every device on every screen.
 
-    A screen uses a template either directly (`Screen.template_id ==
-    template.id`) or implicitly, by leaving `template_id` unset, when
-    *template* is the resolved system default.
+    Design is a single instance-wide setting (no per-screen override), so
+    changing the active Design affects every screen at once.
     """
     from application.models import Screen
 
-    if getattr(template, 'isDefault', False):
-        screens = db.session.execute(
-            db.select(Screen).where(
-                db.or_(Screen.template_id == template.id, Screen.template_id.is_(None))
-            )
-        ).scalars().all()
-    else:
-        screens = db.session.execute(
-            db.select(Screen).where(Screen.template_id == template.id)
-        ).scalars().all()
-
+    screens = db.session.execute(db.select(Screen)).scalars().all()
     for screen in screens:
         reload_devices_on_screen(socketio, db, screen)
-
-
-def build_field_handlers(contenttype_obj) -> dict:
-    """Return {field_name: field_handler} from a Contenttype's tagconfigs."""
-    if not contenttype_obj:
-        return {}
-    return {
-        tc.field_name: tc.field_handler
-        for tc in (getattr(contenttype_obj, 'tagconfigs', None) or [])
-        if getattr(tc, 'field_name', None) and getattr(tc, 'field_handler', None)
-    }
 
 
 def media_file_urls(m) -> tuple:

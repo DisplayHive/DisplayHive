@@ -225,12 +225,21 @@ const contentStructureGroupItems = computed(() => [
         },
       ]
     : []),
-  ...(rightsStore.can('templates.page')
+  ...(rightsStore.can('designs.page')
     ? [
         {
-          label: 'Templates',
+          label: 'Designs',
           icon: 'pi pi-palette',
-          command: () => router.push('/templates'),
+          command: () => router.push('/designs'),
+        },
+      ]
+    : []),
+  ...(rightsStore.can('layouts.page')
+    ? [
+        {
+          label: 'Layouts',
+          icon: 'pi pi-th-large',
+          command: () => router.push('/layouts'),
         },
       ]
     : []),
@@ -359,7 +368,8 @@ const pageTitle = computed(() => {
     screengroups: 'Screen Groups',
     content: 'Content',
     contenttypes: 'Content Types',
-    templates: 'Templates',
+    designs: 'Designs',
+    layouts: 'Layouts',
     magictags: 'Magic Tags',
     settings: 'Settings',
     logger: 'Logger',

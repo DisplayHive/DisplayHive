@@ -2,7 +2,10 @@
  * E2E tests for the Content Types admin page (/contenttypes).
  *
  * Covered:
- *  1.  "New Content Type" button opens dialog; fill name → row appears in table
+ *  Setup
+ *  0.  Seed a container + layout via socket (a Contenttype now requires a Layout)
+ *
+ *  1.  "New Content Type" button opens dialog; fill name, pick layout → row appears in table
  *  2.  Text filter narrows the contenttypes table
  *  3.  Edit dialog renames the content type and updates the row
  *  4.  A second content type is created for delete testing (to avoid deleting
@@ -10,6 +13,7 @@
  *  5.  Delete button removes the disposable content type after confirmation
  *
  * Strategy:
+ *  - A container + layout are seeded via socket (needed for the Layout dropdown).
  *  - One content type is seeded via the UI dialog (test 1) and mutated in place.
  *  - A second disposable content type is created via socket for the delete test.
  *  - All tests run serially on the same worker / isolated DB.
@@ -34,10 +38,68 @@ async function gotoContentTypes(page: Page, workerBackendUrl: string) {
   await expect(page.locator('.p-datatable')).toBeVisible({ timeout: 10_000 })
 }
 
-/** Create a content type via socket and return its name. Returns the name on success. */
-async function seedContentType(page: Page, name: string): Promise<void> {
-  await page.evaluate(
+/** Create a standalone ContentContainer and return its id. */
+async function seedContainer(page: Page, name: string): Promise<number> {
+  return page.evaluate(
     ({ name }: { name: string }) =>
+      new Promise<number>((resolve, reject) => {
+        const socket = (window as any).__displayhive_socket__
+        if (!socket) { reject(new Error('Socket not available')); return }
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_container result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_container', {
+          name, title: name, order: 0, top: 0, left: 0, width: 100, height: 100,
+        }, (ack: any) => {
+          clearTimeout(t)
+          resolve(ack?.id ? Number(ack.id) : 0)
+        })
+      }),
+    { name },
+  )
+}
+
+async function deleteContainer(page: Page, id: number): Promise<void> {
+  await page.evaluate(
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_container', { id })
+    },
+    { id },
+  )
+}
+
+/** Create a Layout containing *containerId* and return the layout id. */
+async function seedLayout(page: Page, name: string, containerId: number): Promise<number> {
+  return page.evaluate(
+    ({ name, containerId }: { name: string; containerId: number }) =>
+      new Promise<number>((resolve, reject) => {
+        const socket = (window as any).__displayhive_socket__
+        if (!socket) { reject(new Error('Socket not available')); return }
+        const t = setTimeout(() => reject(new Error('Timed out waiting for create_layout result')), 10_000)
+        socket.emit('displayhive:admin:cts:create_layout', {
+          name, description: '', container_ids: [containerId],
+        }, (ack: any) => {
+          clearTimeout(t)
+          resolve(ack?.id ? Number(ack.id) : 0)
+        })
+      }),
+    { name, containerId },
+  )
+}
+
+async function deleteLayout(page: Page, id: number): Promise<void> {
+  await page.evaluate(
+    ({ id }: { id: number }) => {
+      const socket = (window as any).__displayhive_socket__
+      if (socket) socket.emit('displayhive:admin:cts:delete_layout', { id })
+    },
+    { id },
+  )
+}
+
+/** Create a content type via socket and return its name. Returns the name on success. */
+async function seedContentType(page: Page, name: string, layoutId: number): Promise<void> {
+  await page.evaluate(
+    ({ name, layoutId }: { name: string; layoutId: number }) =>
       new Promise<void>((resolve, reject) => {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { reject(new Error('Socket not available')); return }
@@ -46,9 +108,9 @@ async function seedContentType(page: Page, name: string): Promise<void> {
           clearTimeout(t)
           resolve()
         })
-        socket.emit('displayhive:admin:cts:create_contenttype', { name, description: '', html: '', css: '' })
+        socket.emit('displayhive:admin:cts:create_contenttype', { name, description: '', layout_id: layoutId })
       }),
-    { name },
+    { name, layoutId },
   )
 }
 
@@ -75,15 +137,31 @@ async function deleteContentTypeById(page: Page, id: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 test.describe('Content Types page', () => {
+  const containerName = `e2e-ct-container-${Math.random().toString(36).slice(2, 8)}`
+  const layoutName = `e2e-ct-layout-${Math.random().toString(36).slice(2, 8)}`
   const ctName = `e2e-ct-${Math.random().toString(36).slice(2, 8)}`
   const ctNameHolder = { current: ctName }
+  let containerId = 0
+  let layoutId = 0
   let ctId = 0
+
+  // ---------------------------------------------------------------------------
+  // 0. Seed a container + layout (a Contenttype now requires a Layout)
+  // ---------------------------------------------------------------------------
+
+  test('seed: container and layout created', async ({ page, backendUrl }) => {
+    await gotoContentTypes(page, backendUrl)
+    containerId = await seedContainer(page, containerName)
+    expect(containerId).toBeGreaterThan(0)
+    layoutId = await seedLayout(page, layoutName, containerId)
+    expect(layoutId).toBeGreaterThan(0)
+  })
 
   // ---------------------------------------------------------------------------
   // 1. Create content type via UI dialog
   // ---------------------------------------------------------------------------
 
-  test('"New Content Type" button opens dialog, fill name, save → row appears', async ({
+  test('"New Content Type" button opens dialog, fill name, pick layout, save → row appears', async ({
     page,
     backendUrl,
   }) => {
@@ -95,6 +173,11 @@ test.describe('Content Types page', () => {
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
     await dialog.locator('#ct-name').fill(ctName)
+
+    // Pick the seeded Layout from the dropdown (required field)
+    await dialog.locator('#ct-layout').click()
+    await page.locator('.p-select-option', { hasText: layoutName }).click()
+
     await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(dialog).toBeHidden({ timeout: 5_000 })
 
@@ -182,7 +265,7 @@ test.describe('Content Types page', () => {
 
     // Seed a disposable content type to delete (avoids deleting the main one)
     const delName = `e2e-ct-del-${Math.random().toString(36).slice(2, 8)}`
-    await seedContentType(page, delName)
+    await seedContentType(page, delName, layoutId)
 
     await page.reload()
     await expect(page.locator('.p-datatable')).toBeVisible({ timeout: 10_000 })
@@ -202,7 +285,7 @@ test.describe('Content Types page', () => {
   // Cleanup
   // ---------------------------------------------------------------------------
 
-  test('cleanup: delete the main seeded content type', async ({ page, backendUrl }) => {
+  test('cleanup: delete the main seeded content type, layout, and container', async ({ page, backendUrl }) => {
     await gotoContentTypes(page, backendUrl)
     if (ctId > 0) {
       await deleteContentTypeById(page, ctId)
@@ -212,5 +295,7 @@ test.describe('Content Types page', () => {
         timeout: 5_000,
       })
     }
+    if (layoutId > 0) await deleteLayout(page, layoutId)
+    if (containerId > 0) await deleteContainer(page, containerId)
   })
 })

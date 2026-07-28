@@ -8,8 +8,7 @@ import logging
 from flask_socketio import emit
 
 from application.utils import push_content_list_to_all_screens
-from application.utils.template import build_field_handlers
-from application.models import ContentElement, ContentContainer, Contenttype
+from application.models import ContentElement, Contenttype
 
 logger = logging.getLogger(__name__)
 
@@ -76,14 +75,12 @@ def register_content_mutation_handlers(socketio, app, db):
         if not content_element:
             return
 
-        container = content_element.contentcontainer or 'maincontent'
         socketio.emit('show_single_content', {
             'id': content_element.id,
             'html': content_element.html,
             'duration': content_element.duration,
-            'container': container,
         }, room='screen_preview_admin')
-        logger.info("Sent content_element %s to preview_admin in container '%s'", content_element_id, container)
+        logger.info('Sent content_element %s to preview_admin', content_element_id)
 
     @socketio.on('displayhive:admin:cts:delete_content_element')
     @require_right('content.delete')
@@ -102,71 +99,6 @@ def register_content_mutation_handlers(socketio, app, db):
         push_content_list_to_all_screens(socketio, app, db)
         logger.info('ContentElement %s deleted', content_element_id)
 
-    @socketio.on('displayhive:admin:cts:move_content_element_container')
-    @require_right('content.move')
-    def move_content_element_container(message):
-        """Move a content_element to another contentcontainer if allowed for its contenttype, or unassign if target is empty"""
-        content_element_id, target = fields(message, 'content_element_id', 'target_container')
-        if not content_element_id:
-            emit('displayhive:admin:stc:move_content_element_result', {'success': False, 'error': 'Ungültige Parameter'})
-            return
-
-        content_element = db.session.get(ContentElement, content_element_id)
-        if not content_element:
-            emit('displayhive:admin:stc:move_content_element_result', {'success': False, 'error': 'Content not found'})
-            return
-
-        # If target is empty or None, unassign the content
-        if not target:
-            content_element.contentcontainer = None
-            db.session.add(content_element)
-            db.session.commit()
-
-            push_content_list_to_all_screens(socketio, app, db)
-
-            emit('displayhive:admin:stc:move_content_element_result', {'success': True, 'content_element_id': content_element.id, 'container': None})
-            return {'success': True, 'content_element_id': content_element.id, 'container': None}
-
-        # Otherwise, move to target container. ContentElement.contentcontainer is
-        # a bare name string with no template affiliation, so a container is
-        # looked up by name alone — not scoped to the default (or any single)
-        # template. Any contenttype may be assigned to any container.
-        containers_with_name = db.session.execute(
-            db.select(ContentContainer).where(ContentContainer.name == target)
-        ).scalars().all()
-
-        if not containers_with_name:
-            emit('displayhive:admin:stc:move_content_element_result', {'success': False, 'error': 'Container nicht gefunden'})
-            return
-
-        content_element.contentcontainer = target
-        db.session.add(content_element)
-        db.session.commit()
-
-        push_content_list_to_all_screens(socketio, app, db)
-
-        vars_list = []
-        try:
-            if content_element.serialized_input:
-                parsed = json.loads(content_element.serialized_input)
-                for k, v in parsed.items():
-                    if k not in ('contenttype_id', 'id', 'duration', 'test', 'title'):
-                        vars_list.append({'key': k, 'value': str(v)})
-        except Exception:
-            logger.exception('move_content_element: failed to parse serialized_input')
-
-        socketio.emit('content_element_moved', {
-            'id': content_element.id,
-            'title': content_element.title,
-            'container': content_element.contentcontainer,
-            'type': content_element.contenttype.name if content_element.contenttype else '',
-            'vars': vars_list,
-            'content_text': ' '.join([v['value'].lower() if isinstance(v['value'], str) else str(v['value']) for v in vars_list]),
-        })
-
-        emit('displayhive:admin:stc:move_content_element_result', {'success': True, 'content_element_id': content_element.id, 'container': content_element.contentcontainer})
-        return {'success': True, 'content_element_id': content_element.id, 'container': content_element.contentcontainer}
-
     @socketio.on('displayhive:admin:cts:create_content_element')
     @admin_handler
     def create_content_element(message):
@@ -176,7 +108,7 @@ def register_content_mutation_handlers(socketio, app, db):
         Otherwise create a new ContentElement. Emits 'create_content_element_result'
         with {'success': True, 'content_element_id': id} on success.
         """
-        from application.admin.content.helper import render_content_element_html
+        from application.admin.content.helper import render_content_fields
 
         # helper to safely get values
         def get_val(k, default=None):
@@ -220,17 +152,14 @@ def register_content_mutation_handlers(socketio, app, db):
 
         # Load contenttype if provided
         contenttype_obj = None
-        selected_content = ''
         if contenttype_id:
             try:
                 contenttype_obj = db.session.get(Contenttype, int(contenttype_id))
-                if contenttype_obj:
-                    selected_content = contenttype_obj.html
             except Exception:
                 logger.exception('Error loading contenttype in socket create')
 
         # Build serialized representation: only custom fields, exclude metadata
-        metadata_keys = ('title', 'contenttype_id', 'duration', 'id', 'contentcontainer', 'start_time', 'end_time')
+        metadata_keys = ('title', 'contenttype_id', 'duration', 'id', 'start_time', 'end_time')
         serialized_data = {
             k: v for k, v in (message.items() if isinstance(message, dict) else [])
             if k not in metadata_keys
@@ -241,18 +170,12 @@ def register_content_mutation_handlers(socketio, app, db):
         except Exception:
             serialized = '{}'
 
-        field_handlers = build_field_handlers(contenttype_obj)
-
-        rendered = render_content_element_html(selected_content, serialized, field_handlers or None, db=db) if selected_content else ''
-
-        def _resolve_container(existing_value=None):
-            """Pick the container: explicit value, else keep existing, else maincontent."""
-            explicit = get_val('contentcontainer', '')
-            if explicit:
-                return explicit
-            if existing_value:
-                return existing_value
-            return 'maincontent'
+        # Each field (TagConfig) on the contenttype targets one container;
+        # its transformed value directly becomes that container's rendered
+        # content — keyed by contentcontainer_id for the rendering pipeline.
+        tagconfigs = getattr(contenttype_obj, 'tagconfigs', None) or []
+        rendered_by_container = render_content_fields(tagconfigs, serialized, db=db)
+        rendered = json.dumps(rendered_by_container, ensure_ascii=False)
 
         if edit_id:
             mc = db.session.get(ContentElement, int(edit_id))
@@ -265,7 +188,6 @@ def register_content_mutation_handlers(socketio, app, db):
             mc.end_time = end_time
             mc.serialized_input = serialized
             mc.contenttype_id = contenttype_obj.id if contenttype_obj else None
-            mc.contentcontainer = _resolve_container(mc.contentcontainer)
             db.session.add(mc)
             db.session.commit()
 
@@ -282,7 +204,6 @@ def register_content_mutation_handlers(socketio, app, db):
             end_time=end_time,
             serialized_input=serialized,
             contenttype_id=contenttype_obj.id if contenttype_obj else None,
-            contentcontainer=_resolve_container(),
         )
         content_element.active = True
         db.session.add(content_element)

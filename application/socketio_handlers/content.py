@@ -11,7 +11,8 @@ def register_content_handlers(socketio, app, db):
     """Register all content-related socket.io event handlers."""
     
     from application.models import Screen, Screengroup, ContentElement
-    
+    from application.utils import parse_content_html
+
     # Old endpoints `request_content_list` and `request_content_html` removed.
     # Devices should use the unified `device_request` event below.
 
@@ -52,7 +53,20 @@ def register_content_handlers(socketio, app, db):
                     db.select(ContentElement).where(ContentElement.id.in_(ids))
                 ).scalars().all()
 
-                html_data = {content.id: content.html for content in content_elements}
+                # ContentElement.html is a JSON map of {contentcontainer_id: rendered_html},
+                # one entry per field (TagConfig) on its Contenttype. Pick out the
+                # fragment for the field whose container matches by name.
+                html_data = {}
+                for content in content_elements:
+                    tagconfigs = getattr(content.contenttype, 'tagconfigs', None) or []
+                    rendered_by_container = parse_content_html(content.html, tagconfigs)
+                    html_data[content.id] = ''
+                    for tc in tagconfigs:
+                        cc = tc.contentcontainer
+                        if cc is not None and cc.name == container:
+                            html_data[content.id] = rendered_by_container.get(str(tc.contentcontainer_id), '')
+                            break
+
                 socketio.emit('content_html_response', {
                     'data': html_data,
                     'container': container
@@ -77,17 +91,23 @@ def register_content_handlers(socketio, app, db):
 
                 screen_group_ids = {sg.id for sg in screen.screengroups}
                 if screen_group_ids:
-                    content_elements = db.session.execute(
+                    candidates = db.session.execute(
                         db.select(ContentElement)
                         .join(ContentElement.screengroups)
                         .where(Screengroup.id.in_(screen_group_ids))
                         .where(ContentElement.active == True)
-                        .where(
-                            (ContentElement.contentcontainer == container) |
-                            ((ContentElement.contentcontainer == None) & (container == 'maincontent'))
-                        )
                         .distinct()
                     ).scalars().all()
+                    # A ContentElement has no direct container reference — it's
+                    # eligible for *container* if one of its Contenttype's
+                    # fields (TagConfig) targets a container with that name.
+                    content_elements = [
+                        c for c in candidates
+                        if any(
+                            tc.contentcontainer is not None and tc.contentcontainer.name == container
+                            for tc in (getattr(c.contenttype, 'tagconfigs', None) or [])
+                        )
+                    ]
                 else:
                     content_elements = []
 

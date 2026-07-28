@@ -1,34 +1,22 @@
 /**
- * Container management - handles content containers and their state
+ * Container DOM management — creates/positions/clears the absolutely
+ * positioned overlay divs for whichever containers the current Scene uses.
+ *
+ * Containers are no longer baked into the Design's HTML as `{{ tag }}`
+ * placeholders — they're dynamically created here, positioned via vh/vw
+ * from the Scene payload, and appended to #scene-containers (a full-bleed
+ * overlay layer separate from the Design background so re-rendering a
+ * scene never touches the Design markup).
  */
 
-import type { Container, ContentItem } from "./types.js";
+import type { Scene } from "./types.js";
+import { tickNow } from "./clock.js";
 import { log } from "./logger.js";
-
-// Module-level state: each container has its own cache, timer, and content list.
-const containers: Record<string, Container> = {};
 
 // Optional emitter injected by socket setup so this module does not
 // directly depend on `window.socket`. Call `setSocketEmitter` with
 // a function `(event, payload) => void` (for example `socket.emit`).
 let socketEmitter: ((event: string, payload?: any) => void) | null = null;
-
-// Slideshow callbacks registered by index.ts to avoid a circular import
-// between container-manager ↔ content-display.
-let _startSlideshow: ((containerName: string) => void) | null = null;
-let _armScheduleWatcher: ((containerName: string) => void) | null = null;
-
-/**
- * Register the slideshow entry points from content-display.ts.
- * Must be called from the bundle entry (index.ts) after both modules are loaded.
- */
-export function registerSlideshowCallbacks(
-  startFn: (containerName: string) => void,
-  armFn?: (containerName: string) => void,
-): void {
-  _startSlideshow = startFn;
-  _armScheduleWatcher = armFn || null;
-}
 
 export function setSocketEmitter(
   emitter: (event: string, payload?: any) => void,
@@ -41,155 +29,76 @@ export function getSocketEmitter():
   | null {
   return socketEmitter;
 }
-export function getContainers(): Record<string, Container> {
-  return containers;
+
+// containerId (string) -> its DOM element
+const containerElements: Record<string, HTMLElement> = {};
+
+function getOverlayRoot(): HTMLElement | null {
+  return document.getElementById("scene-containers");
 }
 
-export function getContainer(containerName: string): Container | undefined {
-  return containers[containerName];
-}
+function ensureContainerElement(containerId: string): HTMLElement | null {
+  const existing = containerElements[containerId];
+  if (existing) return existing;
 
-/**
- * Initialize a container
- */
-export function initContainer(containerName: string): void {
-  if (!containers[containerName]) {
-    containers[containerName] = {
-      currentId: null,
-      playlist: [],
-      htmlCache: {},
-      cssCache: {},
-      pendingPlaylist: [],
-      timer: null,
-      lastDisplayedId: null,
-      startTime: null,
-    };
-    log("info", "initContainer", "Initialized container: " + containerName);
-  }
-}
-
-/**
- * Get current slide by ID for a container
- */
-export function getCurrentSlide(containerName: string): ContentItem | null {
-  const container = containers[containerName];
-  if (!container || !container.currentId || container.playlist.length === 0)
+  const root = getOverlayRoot();
+  if (!root) {
+    log("error", "ensureContainerElement", "#scene-containers not found in DOM");
     return null;
-  return (
-    container.playlist.find((item) => item.id === container.currentId) || null
-  );
+  }
+
+  const el = document.createElement("div");
+  el.dataset.containerId = containerId;
+  el.style.position = "absolute";
+  root.appendChild(el);
+  containerElements[containerId] = el;
+  return el;
 }
 
+/** Empty a container's DOM element and its scoped CSS, without removing it from the DOM. */
+function clearContainerElement(containerId: string): void {
+  const el = containerElements[containerId];
+  if (el) el.innerHTML = "";
+  const cssEl = document.getElementById(`content-type-css-${containerId}`);
+  if (cssEl) cssEl.textContent = "";
+}
 
 /**
- * Rebuild container cache from content list and HTML cache
+ * Render *scene*: every container it uses is created/positioned/populated;
+ * any previously-known container not used by this scene goes blank.
  */
-export function rebuildContainerCache(containerName: string): void {
-  const container = containers[containerName];
-  if (
-    !container ||
-    !container.pendingPlaylist ||
-    container.pendingPlaylist.length === 0
-  ) {
-    if (container) {
-      container.playlist = [];
-      container.currentId = null;
-      // Clear any existing timer
-      if (container.timer) {
-        clearTimeout(container.timer);
-        container.timer = null;
-      }
-      // Clear the DOM so deactivated content stops showing
-      try {
-        const el = document.querySelector(
-          `[data-container="${containerName}"]`,
-        );
-        if (el) (el as HTMLElement).innerHTML = "";
-      } catch (e) {}
-    }
-    return;
+export function renderScene(scene: Scene): void {
+  const activeIds = new Set(Object.keys(scene.containers));
+
+  for (const id of Object.keys(containerElements)) {
+    if (!activeIds.has(id)) clearContainerElement(id);
   }
 
-  // Build content list only if all HTML is available
-  let allHtmlAvailable = true;
-  for (let i = 0; i < container.pendingPlaylist.length; i++) {
-    const item = container.pendingPlaylist[i];
-    if (!container.htmlCache[item.id]) {
-      allHtmlAvailable = false;
-      log(
-        "debug",
-        "rebuildContainerCache",
-        "Still missing HTML for ID " + item.id + " in " + containerName,
-      );
-      break;
+  for (const [id, c] of Object.entries(scene.containers)) {
+    const el = ensureContainerElement(id);
+    if (!el) continue;
+
+    el.style.top = `${c.top}vh`;
+    el.style.left = `${c.left}vw`;
+    el.style.width = `${c.width}vw`;
+    el.style.height = `${c.height}vh`;
+    el.innerHTML = c.html || "";
+
+    const cssId = `content-type-css-${id}`;
+    let cssEl = document.getElementById(cssId) as HTMLStyleElement | null;
+    if (!cssEl) {
+      cssEl = document.createElement("style");
+      cssEl.id = cssId;
+      document.head.appendChild(cssEl);
     }
+    cssEl.textContent = c.css || "";
   }
 
-  if (!allHtmlAvailable) {
-    log(
-      "debug",
-      "rebuildContainerCache",
-      "Not all HTML available yet for " + containerName + ", skipping rebuild",
-    );
-    return;
-  }
+  tickNow(); // immediately fill any dh-clock elements in the new HTML
+  log("info", "renderScene", `Rendered scene ${scene.id} across ${activeIds.size} container(s)`);
+}
 
-  log(
-    "info",
-    "rebuildContainerCache",
-    "All HTML available for " + containerName + ", rebuilding content list",
-  );
-
-  container.playlist = container.pendingPlaylist.map((item) => ({
-    id: item.id,
-    title: item.title,
-    duration: item.duration,
-    update_after_show: item.update_after_show,
-    start_time: item.start_time,
-    end_time: item.end_time,
-  }));
-
-  // Push playlist to debug panel (no current item yet — will be set on first display)
-  try {
-    (window as any).debugPanel?.pushPlaylist?.(containerName, container.playlist, container.currentId);
-  } catch (e) {}
-
-  log(
-    "info",
-    "rebuildContainerCache",
-    "Container " +
-      containerName +
-      " now has " +
-      container.playlist.length +
-      " items",
-  );
-
-  // Start slideshow if we have content
-  if (container.playlist.length > 0) {
-    if (typeof _startSlideshow === "function") {
-      try {
-        _startSlideshow(containerName);
-      } catch (e) {
-        log(
-          "error",
-          "rebuildContainerCache",
-          "startSlideshow threw an error:",
-          String(e),
-        );
-      }
-    } else {
-      log(
-        "warn",
-        "rebuildContainerCache",
-        "startSlideshow not registered; call registerSlideshowCallbacks() from the entry module",
-      );
-    }
-    if (typeof _armScheduleWatcher === "function") {
-      try {
-        _armScheduleWatcher(containerName);
-      } catch (e) {
-        log("error", "rebuildContainerCache", "armScheduleWatcher threw:", String(e));
-      }
-    }
-  }
+/** Blank every known container element (e.g. when the rotation has nothing to show). */
+export function clearAllContainers(): void {
+  for (const id of Object.keys(containerElements)) clearContainerElement(id);
 }

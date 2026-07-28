@@ -17,7 +17,8 @@ from application.admin.devices.sockethandlers import register_admin_device_handl
 from application.admin.screens.sockethandlers import register_admin_screens_handlers
 from application.admin.screengroups.sockethandlers import register_admin_screengroups_handlers
 from application.admin.content.sockethandlers import register_admin_content_handlers
-from application.admin.templates.sockethandlers import register_admin_templates_handlers
+from application.admin.designs.sockethandlers import register_admin_designs_handlers
+from application.admin.layouts.sockethandlers import register_admin_layouts_handlers
 from application.admin.contenttypes.sockethandlers import register_admin_contenttypes_handlers
 from application.admin.matrix.sockethandlers import register_admin_matrix_handlers
 from application.admin.settings.sockethandlers import register_admin_settings_handlers
@@ -49,7 +50,8 @@ def register_all_handlers(socketio, app, db):
     register_admin_screens_handlers(socketio, app, db)
     register_admin_screengroups_handlers(socketio, app, db)
     register_admin_content_handlers(socketio, app, db)
-    register_admin_templates_handlers(socketio, app, db)
+    register_admin_designs_handlers(socketio, app, db)
+    register_admin_layouts_handlers(socketio, app, db)
     register_admin_contenttypes_handlers(socketio, app, db)
     register_admin_matrix_handlers(socketio, app, db)
     register_admin_settings_handlers(socketio, app, db)

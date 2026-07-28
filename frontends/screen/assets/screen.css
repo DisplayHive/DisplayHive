@@ -136,9 +136,22 @@ body {
 
 #main-container {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    position: relative;
     overflow: hidden;
+}
+
+/* Design background fills #main-container; scene containers are absolutely
+   positioned overlay divs (vh/vw, set inline by container-manager.ts) on
+   top of it, in their own layer so re-rendering scenes never touches the
+   Design markup. */
+#design-background {
+    position: absolute;
+    inset: 0;
+}
+
+#scene-containers {
+    position: absolute;
+    inset: 0;
 }
 
 /* ── Persistent powered-by badge — bottom-right corner during normal playback.

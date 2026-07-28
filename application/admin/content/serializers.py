@@ -9,23 +9,23 @@ Flask-SQLAlchemy ``db`` instance explicitly.
 import json
 import re
 
-from application.models import ContentElement, Template
+from application.models import ContentElement, Design
 
 
-def extract_template_css(tpl) -> str:
+def extract_design_css(design) -> str:
     """Return all CSS relevant for the preview iframe.
 
-    Combines the standalone `tpl.css` field with every <style> block
-    found inside `tpl.html` so that background colours, font sizes and
-    other styles defined in the full template HTML are applied.
+    Combines the standalone `design.css` field with every <style> block
+    found inside `design.html` so that background colours, font sizes and
+    other styles defined in the full design HTML are applied.
     """
-    if not tpl:
+    if not design:
         return ''
     parts = []
-    if tpl.css:
-        parts.append(tpl.css)
-    if tpl.html:
-        for block in re.findall(r'<style[^>]*>(.*?)</style>', tpl.html, re.DOTALL | re.IGNORECASE):
+    if design.css:
+        parts.append(design.css)
+    if design.html:
+        for block in re.findall(r'<style[^>]*>(.*?)</style>', design.html, re.DOTALL | re.IGNORECASE):
             parts.append(block)
     return '\n'.join(parts)
 
@@ -40,32 +40,13 @@ def fmt_dt(dt) -> str | None:
         return str(dt)
 
 
-def build_containers_for_template(db, template):
-    """Return a sorted list of container dicts for *template*, with content counts."""
-    containers = []
-    for cc in (template.contentcontainers if template else []):
-        count = db.session.execute(
-            db.select(db.func.count()).select_from(ContentElement).where(ContentElement.contentcontainer == cc.name)
-        ).scalar()
-        containers.append({
-            'id': cc.id,
-            'name': cc.name,
-            'title': cc.title or cc.name,
-            'order': cc.order,
-            'contentCount': count,
-            'template_name': getattr(template, 'name', None),
-        })
-    containers.sort(key=lambda x: x['order'])
-    return containers
-
-
 def resolve_preview_css(db):
-    """Fetch preview CSS from the default (or first) template."""
-    tpl = (
-        db.session.execute(db.select(Template).where(Template.isDefault == True)).scalar_one_or_none()
-        or db.session.execute(db.select(Template)).scalars().first()
+    """Fetch preview CSS from the active (or first) Design."""
+    design = (
+        db.session.execute(db.select(Design).where(Design.isDefault == True)).scalar_one_or_none()
+        or db.session.execute(db.select(Design)).scalars().first()
     )
-    return extract_template_css(tpl)
+    return extract_design_css(design)
 
 
 def build_content_dict(content, preview_css=''):
@@ -77,7 +58,6 @@ def build_content_dict(content, preview_css=''):
         'duration': content.duration,
         'start_time': fmt_dt(getattr(content, 'start_time', None)),
         'end_time': fmt_dt(getattr(content, 'end_time', None)),
-        'contentcontainer': content.contentcontainer,
         'contenttypeName': content.contenttype.name if content.contenttype else '',
         'html': content.html or '',
         'preview_css': preview_css,
@@ -92,13 +72,15 @@ def build_content_dict(content, preview_css=''):
                     data[k] = v
         except (json.JSONDecodeError, TypeError):
             pass
-    if content.contenttype and content.contenttype.tagconfigs:
+    tagconfigs = list(getattr(content.contenttype, 'tagconfigs', None) or []) if content.contenttype else []
+    if tagconfigs:
         data['_field_metadata'] = {
             tag.field_name: {
                 'label': tag.field_label or tag.field_name,
                 'order': tag.order,
                 'type': tag.field_handler,
+                'contentcontainer_id': tag.contentcontainer_id,
             }
-            for tag in sorted(content.contenttype.tagconfigs, key=lambda t: t.order)
+            for tag in tagconfigs
         }
     return data

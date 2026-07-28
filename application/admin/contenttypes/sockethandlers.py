@@ -6,7 +6,13 @@ logger = logging.getLogger(__name__)
 
 
 def register_admin_contenttypes_handlers(socketio, app, db):
-    """Register socket handlers for the admin Contenttypes page."""
+    """Register socket handlers for the admin Contenttypes page.
+
+    A Contenttype is bound to exactly one Layout. Each ContentContainer it
+    uses is itself one field (TagConfig) with an assigned field_handler —
+    there is no separate render template; a field's transformed value
+    directly becomes its target container's rendered content.
+    """
     from application.admin.contenttypes.helper import emit_contenttypes_update
     from application.admin.content.helper import rerender_content_element_for_contenttype
     from application.socketio_handlers.auth import require_right, admin_handler, current_admin_user
@@ -17,20 +23,37 @@ def register_admin_contenttypes_handlers(socketio, app, db):
     def _emit_contenttypes(room=None):
         emit_contenttypes_update(socketio, app, db, room=room)
 
+    def _allowed_container_ids(ct):
+        return {c.id for c in (getattr(ct.layout, 'contentcontainers', None) or [])} if ct.layout else set()
+
     def _apply_tagconfigs(ct, tagcfgs):
-        """Synchronise TagConfig rows: upsert provided entries and delete any that are no longer present."""
-        tc_by_id = {t.id: t for t in getattr(ct, 'tagconfigs', []) if t.id is not None}
-        tc_by_name = {t.field_name: t for t in getattr(ct, 'tagconfigs', [])}
+        """Synchronise TagConfig rows on *ct*: upsert provided entries and delete any no longer present.
+
+        Each entry's `contentcontainer_id` (the field's target container) must
+        belong to `ct.layout`, if provided.
+        """
+        allowed_container_ids = _allowed_container_ids(ct)
+        tc_by_id = {t.id: t for t in (ct.tagconfigs or []) if t.id is not None}
+        tc_by_name = {t.field_name: t for t in (ct.tagconfigs or [])}
 
         provided_names: set[str] = set()
 
         for item in (tagcfgs or []):
             try:
                 item_id = item.get('id')
-                name = item.get('name') or ''
-                title = item.get('title')
+                name = item.get('name') or item.get('field_name') or ''
+                title = item.get('title') or item.get('field_label')
                 order = item.get('order')
                 field_handler = item.get('field_handler', 'textklein')
+
+                contentcontainer_id = item.get('contentcontainer_id')
+                try:
+                    contentcontainer_id = int(contentcontainer_id) if contentcontainer_id is not None else None
+                except (ValueError, TypeError):
+                    contentcontainer_id = None
+                if contentcontainer_id is not None and contentcontainer_id not in allowed_container_ids:
+                    # Container doesn't belong to this Contenttype's Layout — drop the link, keep the field.
+                    contentcontainer_id = None
 
                 try:
                     item_id_int = int(item_id) if item_id is not None else None
@@ -40,7 +63,6 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                 if name:
                     provided_names.add(name)
 
-                # Upsert TagConfig
                 target_tc = (
                     tc_by_id.get(item_id_int) if item_id_int else None
                 ) or tc_by_name.get(name)
@@ -54,10 +76,12 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                             pass
                     if field_handler is not None:
                         target_tc.field_handler = field_handler
+                    target_tc.contentcontainer_id = contentcontainer_id
                     db.session.add(target_tc)
                 else:
                     db.session.add(TagConfig(
                         contenttype_id=ct.id,
+                        contentcontainer_id=contentcontainer_id,
                         field_name=name,
                         field_label=title or name,
                         field_handler=field_handler,
@@ -66,7 +90,6 @@ def register_admin_contenttypes_handlers(socketio, app, db):
             except Exception:
                 continue
 
-        # Delete TagConfig rows that are no longer in the provided list
         for tc in list(tc_by_name.values()):
             if tc.field_name not in provided_names:
                 db.session.delete(tc)
@@ -84,19 +107,19 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
     def _serialize_contenttype_detail(ct):
         """Build the full contenttype detail payload (used by both get and update)."""
-        tagconfigs = getattr(ct, 'tagconfigs', []) or []
+        tagconfigs = ct.tagconfigs or []
         return {
             'id': ct.id,
             'name': ct.name,
             'description': ct.description or '',
-            'html': ct.html or '',
-            'css': getattr(ct, 'css', None) or '',
+            'layout_id': ct.layout_id,
             'tagconfigs': [
                 {
                     'id': t.id,
                     'field_name': t.field_name,
                     'field_label': t.field_label,
                     'field_handler': t.field_handler,
+                    'contentcontainer_id': t.contentcontainer_id,
                     'order': t.order,
                 }
                 for t in tagconfigs
@@ -135,8 +158,10 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
         ct.name = data.get('name', ct.name)
         ct.description = data.get('description', ct.description)
-        ct.html = data.get('html', ct.html)
-        ct.css = data.get('css', getattr(ct, 'css', None) or '')
+        if data.get('layout_id') is not None:
+            ct.layout_id = int(data['layout_id'])
+        db.session.add(ct)
+        db.session.flush()
 
         _apply_tagconfigs(ct, data.get('tagconfigs') or [])
 
@@ -164,12 +189,14 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         name = data.get('name')
         if not name:
             return {'ok': False, 'error': 'Name is required'}
+        layout_id = data.get('layout_id')
+        if not layout_id:
+            return {'ok': False, 'error': 'Layout is required'}
 
         ct = Contenttype(
             name=name,
             description=data.get('description') or '',
-            html=data.get('html') or '',
-            css=data.get('css') or '',
+            layout_id=int(layout_id),
         )
         db.session.add(ct)
         db.session.flush()  # get ct.id within the same transaction
@@ -178,7 +205,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
         db.session.commit()
         _emit_contenttypes()
-        return {'ok': True}
+        return {'ok': True, 'id': ct.id}
 
     @socketio.on('displayhive:admin:cts:delete_contenttype')
     @require_right('contenttypes.delete')

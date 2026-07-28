@@ -1,7 +1,7 @@
 """Database models package."""
 
 from .base import db, screengroup_screen, content_element_screengroup
-from .content import ContentElement, Template, Contenttype, ContentContainer, TagConfig, Media, MagicTag, MagicTagValueList, MagicTagValueListEntry, SystemSetting, TelegramUser, AlertSubscription, PretalxApiUrl, PretalxApiCache, PretalxSettings
+from .content import ContentElement, Design, Layout, Contenttype, ContentContainer, TagConfig, Media, MagicTag, MagicTagValueList, MagicTagValueListEntry, SystemSetting, TelegramUser, AlertSubscription, PretalxApiUrl, PretalxApiCache, PretalxSettings
 from .screen import Screen, Screengroup, ScreenLog
 from .device import Device
 from .user import AdminUser
@@ -12,7 +12,8 @@ __all__ = [
     'screengroup_screen',
     'content_element_screengroup',
     'ContentElement',
-    'Template',
+    'Design',
+    'Layout',
     'Contenttype',
     'ContentContainer',
     'TagConfig',

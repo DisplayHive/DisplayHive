@@ -2,7 +2,6 @@ import eventlet
 eventlet.monkey_patch()
 
 import os
-import re
 import json
 import logging
 from flask import Flask, render_template, request, redirect, send_from_directory, send_file, jsonify
@@ -23,7 +22,7 @@ from application.auth import ensure_bootstrap_admin
 from application.permissions import sync_right_definitions, ensure_superadmin_group
 
 # Import database models
-from application.models import db, Template, ContentContainer, Device
+from application.models import db, Design, Device
 
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
@@ -201,16 +200,16 @@ def _reset_devices_online():
     logger.info('Reset Device.is_online for all devices to False on startup')
 
 
-def _enforce_default_template():
+def _enforce_default_design():
     has_default = db.session.execute(
-        db.select(Template).where(Template.isDefault == True)
+        db.select(Design).where(Design.isDefault == True)
     ).scalar()
     if not has_default:
-        t1 = db.session.get(Template, 1)
-        if t1:
-            t1.isDefault = True
+        d1 = db.session.get(Design, 1)
+        if d1:
+            d1.isDefault = True
             db.session.commit()
-            logger.info('No default template found on startup; set Template ID 1 as default')
+            logger.info('No default design found on startup; set Design ID 1 as default')
 
 
 def _prune_screen_logs_startup():
@@ -230,7 +229,7 @@ with app.app_context():
         db.create_all()
 
     _startup_step('reset Device.is_online', _reset_devices_online)
-    _startup_step('enforce default template', _enforce_default_template)
+    _startup_step('enforce default design', _enforce_default_design)
     _startup_step('prune screen_log', _prune_screen_logs_startup)
     _startup_step('ensure bootstrap admin user', lambda: ensure_bootstrap_admin(app, db))
     _startup_step('sync right definitions', lambda: sync_right_definitions(db))
@@ -266,7 +265,12 @@ socketio.start_background_task(_screen_log_retention_loop)
 
 @app.route('/')
 def index():
-    """Serve the screen/kiosk page, resolving the active template and container layout.
+    """Serve the screen/kiosk page with the active Design's HTML/CSS background.
+
+    Design is a single, instance-wide setting (no per-screen override).
+    Containers are no longer baked into the Design's markup — they're
+    created dynamically client-side, positioned via vh/vw, from the
+    `upd_content` socket payload (see application/socketio_handlers/upd_content.py).
 
     Supports an optional ?preview=true&content_id=<id>&container=<name> query string
     so the admin UI can render a single content item for preview without the normal
@@ -275,43 +279,26 @@ def index():
     preview_mode = request.args.get('preview', 'false').lower() == 'true'
     content_id = request.args.get('content_id', type=int)
     preview_container = request.args.get('container', 'maincontent')
-    
-    from application.utils import get_default_template
-    default_template = get_default_template(db)
-    
-    container_names = ['maincontent']  # Always include maincontent
-    if default_template:
-        template_html = default_template.html
-        template_css = default_template.css or ''
-        
-        # Get container names from ContentContainer table
-        contentcontainers = db.session.execute(
-            db.select(ContentContainer).where(ContentContainer.template_id == default_template.id)
-        ).scalars().all()
-        
-        # Only include containers that have assigned contenttypes
-        for container in contentcontainers:
-            if container.contenttypes:  # This container has assigned contenttypes
-                container_names.append(container.name)
-        
+
+    from application.utils import get_default_design
+    design = get_default_design(db)
+
+    if design:
+        design_html = design.html or ''
+        design_css = design.css or ''
+
         # Substitute {{ var_<name> }} placeholders in HTML and CSS.
         try:
             from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
             _tvars = load_magic_tags(db)
-            template_html = substitute_magic_tags(template_html, _tvars)
-            template_css = substitute_magic_tags(template_css, _tvars)
+            design_html = substitute_magic_tags(design_html, _tvars)
+            design_css = substitute_magic_tags(design_css, _tvars)
         except Exception:
             pass
-
-        # Replace Jinja tags {{ tag_name }} with <div data-container="tag_name"></div>
-        # Client-side JS looks up containers by `data-container` attribute, so
-        # render placeholders accordingly to ensure the content-display
-        # functions can find and populate them.
-        template_html = re.sub(r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}', r'<div data-container="\1"></div>', template_html)
     else:
-        template_html = '<div data-container="maincontent"></div>'
-        template_css = ''
-    
+        design_html = ''
+        design_css = ''
+
     try:
         from application.models import SystemSetting as _SS
         _row = db.session.execute(db.select(_SS).where(_SS.key == 'hide_powered_by')).scalar_one_or_none()
@@ -321,9 +308,8 @@ def index():
 
     return render_template('index.html',
                          async_mode=socketio.async_mode,
-                         template_html=template_html,
-                         template_css=template_css,
-                         container_names=container_names,
+                         template_html=design_html,
+                         template_css=design_css,
                          preview_mode=preview_mode,
                          preview_content_id=content_id,
                          preview_container=preview_container,

@@ -31,7 +31,6 @@ export interface Screen {
   timestr?: string
   debug?: boolean
   monitoring_enabled?: boolean
-  template_id?: number | null
   attached_device?: Device | null
 }
 
@@ -45,15 +44,34 @@ export interface Screengroup {
   is_one_screen?: boolean
 }
 
-/** A display template (HTML/CSS layout with named containers). */
-export interface Template {
+/** A Design: the single global screen skin (HTML/CSS). Exactly one is active/default. */
+export interface Design {
   id: number
   name: string
   description?: string
   html?: string
   css?: string
   is_default?: boolean
-  container_count?: number
+}
+
+/** A named, reusable group of positioned ContentContainers. */
+export interface Layout {
+  id: number
+  name: string
+  description?: string
+  container_ids?: number[]
+}
+
+/** A standalone content container: a screen-relative position (vh/vw) and size. */
+export interface ContentContainer {
+  id: number
+  name: string
+  title?: string
+  order?: number
+  top: number
+  left: number
+  width: number
+  height: number
 }
 
 /** A content item (content element) in the system. */

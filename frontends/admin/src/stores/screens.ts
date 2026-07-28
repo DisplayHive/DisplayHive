@@ -26,7 +26,6 @@ export const useScreensStore = defineStore('screens', () => {
     name: string
     width?: string | null
     height?: string | null
-    template_id?: number | null
   }) => {
     emit('displayhive:screens:cts:create_screen', payload)
   }
@@ -36,7 +35,6 @@ export const useScreensStore = defineStore('screens', () => {
     old_name: string
     new_name: string
     screengroup_ids: number[]
-    template_id: number | null
   }) => {
     emit('displayhive:screens:cts:rename_screen', payload)
   }

@@ -1,14 +1,17 @@
 """Socket.IO handler for per-item content refresh requests from screen devices.
 
 Screen devices emit `displayhive:screen:cts:refresh_content` with ``{'id': <int>}``
-after displaying a content element that has ``update_after_show`` set.  The
-handler re-renders the element's HTML (picking a new random image if applicable)
-updates ``ContentElement.html`` in the database, and emits
-``displayhive:screen:stc:content_updated`` with ``{'id': <int>, 'html': <str>}``
-back to the requesting socket only.  On any failure the handler emits nothing so
-the client silently keeps its existing cached HTML.
+after displaying a scene that has ``update_after_show`` set.  The handler
+re-renders every one of the ContentElement's Contenttype's fields (TagConfig)
+(picking a new random image if applicable), updates ``ContentElement.html``
+(a JSON map of ``{contentcontainer_id: rendered_html}``) in the database, and
+emits ``displayhive:screen:stc:content_updated`` with
+``{'id': <int>, 'containers': {contentcontainer_id: html}}`` back to the
+requesting socket only.  On any failure the handler emits nothing so the
+client silently keeps its existing rendered HTML.
 """
 
+import json
 import time
 import logging
 
@@ -87,8 +90,8 @@ def register_refresh_content_handlers(socketio, app, db):
 
         try:
             from application.models import ContentElement, Device, Screen
-            from application.admin.content.helper import render_content_element_html
-            from application.utils.template import build_field_handlers
+            from application.admin.content.helper import render_content_fields
+            from application.utils.template import parse_content_html
 
             dev = db.session.execute(
                 db.select(Device).where(Device.devicekey == devicekey)
@@ -113,28 +116,24 @@ def register_refresh_content_handlers(socketio, app, db):
 
             # Throttle: if rendered less than 60 s ago, return cached HTML without
             # hitting external APIs. The admin manual-save path bypasses this entirely
-            # since it calls render_content_element_html directly, not this handler.
+            # since it calls render_content_fields directly, not this handler.
             elapsed = time.time() - _last_render.get(content_id, 0)
             if elapsed < _REFRESH_THROTTLE_SECONDS:
                 _log(f'Throttled refresh for {content_id} ({elapsed:.0f}s < {_REFRESH_THROTTLE_SECONDS}s), returning cached HTML')
                 if mc.html:
+                    tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
+                    cached = parse_content_html(mc.html, tagconfigs)
                     socketio.emit(
                         'displayhive:screen:stc:content_updated',
-                        {'id': content_id, 'html': mc.html},
+                        {'id': content_id, 'containers': cached},
                         room=sid,
                     )
                 return
 
-            field_handlers = build_field_handlers(mc.contenttype)
+            tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
+            rendered_by_container = render_content_fields(tagconfigs, mc.serialized_input or '{}', db=db)
 
-            new_html = render_content_element_html(
-                mc.contenttype.html if mc.contenttype else '',
-                mc.serialized_input or '{}',
-                field_handlers or None,
-                db=db,
-            )
-
-            mc.html = new_html
+            mc.html = json.dumps(rendered_by_container, ensure_ascii=False)
             db.session.add(mc)
             db.session.commit()
 
@@ -142,7 +141,7 @@ def register_refresh_content_handlers(socketio, app, db):
             _log(f'Re-rendered ContentElement {content_id}, emitting update to {sid}')
             socketio.emit(
                 'displayhive:screen:stc:content_updated',
-                {'id': content_id, 'html': new_html},
+                {'id': content_id, 'containers': rendered_by_container},
                 room=sid,
             )
         except Exception:

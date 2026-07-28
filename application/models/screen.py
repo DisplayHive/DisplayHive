@@ -16,9 +16,6 @@ class Screen(db.Model):
     resolution_height: Mapped[int] = mapped_column(Integer, nullable=True, default=0)
     debug: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
     monitoring_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='1')
-    # Optional override template; NULL means use the system default template
-    template_id: Mapped[int] = mapped_column(Integer, ForeignKey('template.id'), nullable=True, default=None)
-    template: Mapped["Template"] = relationship("Template", back_populates="screens", foreign_keys=[template_id])
     # a Screen can belong to multiple Screengroups
     screengroups: Mapped[list["Screengroup"]] = relationship("Screengroup", secondary=screengroup_screen, back_populates="screens")
     # log entries for this screen — deleted automatically when screen is removed

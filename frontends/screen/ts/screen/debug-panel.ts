@@ -119,14 +119,14 @@ export function initDebugPanel(): void {
       startBtn.textContent = "▶ Start";
       startBtn.style.display = stopped ? "" : "none";
       startBtn.addEventListener("click", () => {
-        try { (window as any).debugPanel?.startSlideshow?.(containerName); } catch (e) {}
+        try { (window as any).debugPanel?.resumeSceneRotation?.(); } catch (e) {}
       });
       const stopBtn = document.createElement("button");
       stopBtn.className = "debug-btn debug-btn-stop";
       stopBtn.textContent = "■ Stop";
       stopBtn.style.display = stopped ? "none" : "";
       stopBtn.addEventListener("click", () => {
-        try { (window as any).debugPanel?.stopSlideshow?.(containerName); } catch (e) {}
+        try { (window as any).debugPanel?.stopSceneRotation?.(); } catch (e) {}
       });
       controls.appendChild(startBtn);
       controls.appendChild(stopBtn);
@@ -156,7 +156,7 @@ export function initDebugPanel(): void {
         row.title = "Click to jump to this item";
         row.addEventListener("click", () => {
           try {
-            (window as any).debugPanel?.jumpToContent?.(containerName, item.id);
+            (window as any).debugPanel?.jumpToScene?.(item.id);
           } catch (e) {}
         });
         list.appendChild(row);

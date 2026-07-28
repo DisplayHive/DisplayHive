@@ -108,7 +108,6 @@ def emit_admin_screen(socketio, app, db, room=None):
                 'debug': bool(entry.debug) if entry.debug is not None else False,
                 'monitoring_enabled': bool(entry.monitoring_enabled) if entry.monitoring_enabled is not None else True,
                 'attached_device': device_info,
-                'template_id': entry.template_id,
             })
 
         logger.debug("Emitting upd_admin_screen with %s screens to %s", len(screens_data), room or 'admins')

@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 def export_database(app, db):
     """Export the entire database to a JSON-serialisable dict."""
     from application.models import (
-        Screen, Screengroup, ContentElement, Template, Contenttype,
+        Screen, Screengroup, ContentElement, Design, Layout, Contenttype,
         ContentContainer, TagConfig, Media, Device, MagicTag,
         MagicTagValueList,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
+    from application.models.content import layout_container
 
     with app.app_context():
         # --- Screens ---
@@ -27,7 +28,6 @@ def export_database(app, db):
                 'resolution_width': s.resolution_width,
                 'resolution_height': s.resolution_height,
                 'debug': bool(s.debug),
-                'template_id': s.template_id,
             })
 
         # --- Screengroups ---
@@ -45,17 +45,30 @@ def export_database(app, db):
         ).fetchall()
         sg_screen_assoc = [{'screen_id': r[0], 'screengroup_id': r[1]} for r in sg_screen_rows]
 
-        # --- Templates ---
-        templates = []
-        for t in db.session.execute(db.select(Template)).scalars().all():
-            templates.append({
-                'id': t.id,
-                'name': t.name,
-                'description': t.description,
-                'html': t.html,
-                'css': t.css,
-                'isDefault': bool(t.isDefault),
+        # --- Designs ---
+        designs = []
+        for d in db.session.execute(db.select(Design)).scalars().all():
+            designs.append({
+                'id': d.id,
+                'name': d.name,
+                'description': d.description,
+                'html': d.html,
+                'css': d.css,
+                'isDefault': bool(d.isDefault),
             })
+
+        # --- Layouts ---
+        layouts = []
+        for lo in db.session.execute(db.select(Layout)).scalars().all():
+            layouts.append({
+                'id': lo.id,
+                'name': lo.name,
+                'description': lo.description,
+            })
+
+        # --- Association: layout_container ---
+        layout_container_rows = db.session.execute(db.select(layout_container)).fetchall()
+        layout_container_assoc = [{'layout_id': r[0], 'contentcontainer_id': r[1]} for r in layout_container_rows]
 
         # --- ContentContainers ---
         containers = []
@@ -63,9 +76,12 @@ def export_database(app, db):
             containers.append({
                 'id': c.id,
                 'name': c.name,
-                'template_id': c.template_id,
                 'order': c.order,
                 'title': c.title,
+                'top': c.top,
+                'left': c.left,
+                'width': c.width,
+                'height': c.height,
             })
 
         # --- Contenttypes ---
@@ -75,8 +91,7 @@ def export_database(app, db):
                 'id': ct.id,
                 'name': ct.name,
                 'description': ct.description,
-                'html': ct.html,
-                'css': ct.css,
+                'layout_id': ct.layout_id,
             })
 
         # --- TagConfigs ---
@@ -85,6 +100,7 @@ def export_database(app, db):
             tagconfigs.append({
                 'id': tc.id,
                 'contenttype_id': tc.contenttype_id,
+                'contentcontainer_id': tc.contentcontainer_id,
                 'field_name': tc.field_name,
                 'field_handler': tc.field_handler,
                 'field_label': tc.field_label,
@@ -104,7 +120,6 @@ def export_database(app, db):
                 'duration': m.duration,
                 'serialized_input': m.serialized_input,
                 'contenttype_id': m.contenttype_id,
-                'contentcontainer': m.contentcontainer,
             })
 
         # --- Association: content_element_screengroup ---
@@ -165,12 +180,14 @@ def export_database(app, db):
             })
 
         return {
-            'export_version': 3,
+            'export_version': 6,
             'exported_at': datetime.now(timezone.utc).isoformat(),
             'screens': screens,
             'screengroups': screengroups,
             'screengroup_screen': sg_screen_assoc,
-            'templates': templates,
+            'designs': designs,
+            'layouts': layouts,
+            'layout_container': layout_container_assoc,
             'contentcontainers': containers,
             'contenttypes': contenttypes,
             'tagconfigs': tagconfigs,
@@ -188,13 +205,30 @@ def import_database(app, db, data: dict) -> dict:
 
     All existing rows are deleted before inserting the imported data.
     Returns a summary dict with counts of imported records.
+
+    Accepts export_version 3 (pre-Design/Layout rearchitecture) on a
+    best-effort basis: each Template becomes a Design, one Layout is
+    generated per Design carrying its old containers, each old Contenttype
+    is assigned to the Layout of the first Design, and every field (TagConfig)
+    targets the first container of that Layout. Re-open the Content Types /
+    Layouts admin pages after importing a v3 export to review/fix these
+    best-effort assignments.
+
+    Also accepts export_version 4 and 5, which stored a separate
+    ContentHandler row per (contenttype, container) — now-removed. v4's
+    TagConfig rows reference a content_handler_id; the handler's
+    contenttype_id/contentcontainer_id are resolved from the export's
+    'content_handlers' list. v5's TagConfig rows already carry
+    contenttype_id/contentcontainer_id directly (only its now-dropped
+    'content_handlers' list is ignored).
     """
     from application.models import (
-        Screen, Screengroup, ContentElement, Template, Contenttype,
+        Screen, Screengroup, ContentElement, Design, Layout, Contenttype,
         ContentContainer, TagConfig, Media, Device, MagicTag,
         MagicTagValueList, MagicTagValueListEntry,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
+    from application.models.content import layout_container
 
     version = data.get('export_version', 1)
     logger.info('Starting import, export_version=%s', version)
@@ -210,15 +244,9 @@ def import_database(app, db, data: dict) -> dict:
                 db.session.rollback()
 
             # Clear all tables in FK-safe order (most dependent first).
-            # Association tables have no dependents, so they go first.
-            # On PostgreSQL FK constraints are always enforced, so the order below
-            # must not leave any referencing rows when a referenced table is deleted:
-            #   screen_log has ON DELETE CASCADE at the DB level → deleted automatically with Screen
-            #   Device (screen_id → screen.id) must go before Screen
-            #   Screen (template_id → template.id) must go before Template
-            #   ContentContainer (template_id → template.id) must go before Template
             db.session.execute(db.delete(content_element_screengroup))
             db.session.execute(db.delete(screengroup_screen))
+            db.session.execute(db.delete(layout_container))
             db.session.execute(db.delete(TagConfig))
             db.session.execute(db.delete(ContentElement))
             db.session.execute(db.delete(Device))
@@ -226,7 +254,8 @@ def import_database(app, db, data: dict) -> dict:
             db.session.execute(db.delete(Screengroup))
             db.session.execute(db.delete(ContentContainer))
             db.session.execute(db.delete(Contenttype))
-            db.session.execute(db.delete(Template))
+            db.session.execute(db.delete(Layout))
+            db.session.execute(db.delete(Design))
             db.session.execute(db.delete(Media))
             db.session.execute(db.delete(MagicTag))
             db.session.execute(db.delete(MagicTagValueListEntry))
@@ -235,20 +264,22 @@ def import_database(app, db, data: dict) -> dict:
 
             # -------------------------------------------------------
             # Insert in FK-safe dependency order:
-            #   Template (referenced by Screen.template_id + ContentContainer.template_id)
-            #   Contenttype (referenced by ContentContainer assoc + TagConfig + ContentElement)
-            #   Screen (template_id → template.id)
-            #   Screengroup → screengroup_screen assoc
+            #   Design
+            #   Layout, layout_container (needs ContentContainer — inserted first)
             #   ContentContainer
-            #   TagConfig
-            #   ContentElement → content_element_screengroup assoc
-            #   Media
-            #   Device (screen_id → screen.id)
+            #   Contenttype (needs Layout)
+            #   TagConfig (needs Contenttype + ContentContainer)
+            #   Screen, Screengroup, screengroup_screen
+            #   ContentElement (needs Contenttype) → content_element_screengroup
+            #   Media, Device
             # -------------------------------------------------------
 
-            # --- Templates (must exist before Screen + ContentContainer) ---
-            for row in data.get('templates', []):
-                t = Template(
+            is_legacy = version < 4
+
+            # --- Designs (v3: 'templates') ---
+            design_rows = data.get('designs') if not is_legacy else data.get('templates', [])
+            for row in (design_rows or []):
+                d = Design(
                     id=row['id'],
                     name=row['name'],
                     description=row.get('description'),
@@ -256,22 +287,108 @@ def import_database(app, db, data: dict) -> dict:
                     css=row.get('css'),
                     isDefault=bool(row.get('isDefault', False)),
                 )
-                db.session.add(t)
+                db.session.add(d)
             db.session.flush()
 
-            # --- Contenttypes (must exist before ContentContainers assoc + TagConfig + ContentElement) ---
-            for row in data.get('contenttypes', []):
+            # --- ContentContainers ---
+            for row in data.get('contentcontainers', []):
+                c = ContentContainer(
+                    id=row['id'],
+                    name=row['name'],
+                    order=row.get('order') or 0,
+                    title=row.get('title'),
+                    top=row.get('top', 0) or 0,
+                    left=row.get('left', 0) or 0,
+                    width=row.get('width', 100) or 100,
+                    height=row.get('height', 100) or 100,
+                )
+                db.session.add(c)
+            db.session.flush()
+
+            # --- Layouts ---
+            default_layout_id = None
+            if is_legacy:
+                # v3 had no Layout concept: generate one Layout per legacy
+                # Template, carrying its old containers (matched via the old
+                # per-container template_id, no longer present on the
+                # container row itself — the export doesn't preserve it
+                # separately, so best-effort: put every container into one
+                # Layout named after the (first / default) Design).
+                default_design = next((r for r in design_rows if r.get('isDefault')), None) or (design_rows[0] if design_rows else None)
+                layout = Layout(name=f"{default_design['name']} (imported)" if default_design else 'Imported Layout')
+                db.session.add(layout)
+                db.session.flush()
+                default_layout_id = layout.id
+                all_containers = db.session.execute(db.select(ContentContainer)).scalars().all()
+                layout.contentcontainers = all_containers
+            else:
+                for row in data.get('layouts', []):
+                    lo = Layout(id=row['id'], name=row['name'], description=row.get('description'))
+                    db.session.add(lo)
+                db.session.flush()
+                for row in data.get('layout_container', []):
+                    db.session.execute(
+                        layout_container.insert().values(
+                            layout_id=row['layout_id'],
+                            contentcontainer_id=row['contentcontainer_id'],
+                        )
+                    )
+                db.session.flush()
+
+            # --- Contenttypes (needs Layout) ---
+            contenttype_rows = data.get('contenttypes', [])
+            for row in contenttype_rows:
                 ct = Contenttype(
                     id=row['id'],
                     name=row['name'],
                     description=row.get('description'),
-                    html=row.get('html') or '',
-                    css=row.get('css'),
+                    layout_id=row.get('layout_id') if not is_legacy else default_layout_id,
                 )
                 db.session.add(ct)
             db.session.flush()
 
-            # --- Screens (template_id → template.id, must come after Template) ---
+            # --- TagConfigs ---
+            # v5+: contenttype_id + contentcontainer_id stored directly (current shape).
+            # v4: resolve via the row's content_handler_id -> that handler's contenttype/container
+            # (the 'content_handlers' list is only present in the export data, never a table).
+            # v3 (legacy): row already has contenttype_id (fields belonged to Contenttype
+            # pre-rearchitecture too); target container defaults to the first container
+            # of the synthesized default Layout.
+            first_container_id = None
+            if is_legacy and default_layout_id is not None:
+                lo = db.session.get(Layout, default_layout_id)
+                ordered = sorted(lo.contentcontainers or [], key=lambda c: (c.order, c.id))
+                first_container_id = ordered[0].id if ordered else None
+
+            content_handler_lookup = {
+                h['id']: (h.get('contenttype_id'), h.get('contentcontainer_id'))
+                for h in data.get('content_handlers', [])
+            } if version == 4 else {}
+
+            for row in data.get('tagconfigs', []):
+                if is_legacy:
+                    contenttype_id = row.get('contenttype_id')
+                    contentcontainer_id = first_container_id
+                elif version == 4:
+                    contenttype_id, contentcontainer_id = content_handler_lookup.get(row.get('content_handler_id'), (None, None))
+                else:
+                    contenttype_id = row.get('contenttype_id')
+                    contentcontainer_id = row.get('contentcontainer_id')
+                tc = TagConfig(
+                    id=row['id'],
+                    contenttype_id=contenttype_id,
+                    contentcontainer_id=contentcontainer_id,
+                    field_name=row['field_name'],
+                    field_handler=row['field_handler'],
+                    field_label=row.get('field_label'),
+                    required=bool(row.get('required', False)),
+                    default_value=row.get('default_value'),
+                    order=row.get('order') or 0,
+                )
+                db.session.add(tc)
+            db.session.flush()
+
+            # --- Screens ---
             for row in data.get('screens', []):
                 s = Screen(
                     id=row['id'],
@@ -281,7 +398,6 @@ def import_database(app, db, data: dict) -> dict:
                     resolution_width=row.get('resolution_width') or 0,
                     resolution_height=row.get('resolution_height') or 0,
                     debug=bool(row.get('debug', False)),
-                    template_id=row.get('template_id'),
                 )
                 db.session.add(s)
             db.session.flush()
@@ -306,33 +422,6 @@ def import_database(app, db, data: dict) -> dict:
                 )
             db.session.flush()
 
-            # --- ContentContainers (needs Template + Contenttype already present for assoc) ---
-            for row in data.get('contentcontainers', []):
-                c = ContentContainer(
-                    id=row['id'],
-                    name=row['name'],
-                    template_id=row['template_id'],
-                    order=row.get('order') or 0,
-                    title=row.get('title'),
-                )
-                db.session.add(c)
-            db.session.flush()
-
-            # --- TagConfigs (needs Contenttype) ---
-            for row in data.get('tagconfigs', []):
-                tc = TagConfig(
-                    id=row['id'],
-                    contenttype_id=row['contenttype_id'],
-                    field_name=row['field_name'],
-                    field_handler=row['field_handler'],
-                    field_label=row.get('field_label'),
-                    required=bool(row.get('required', False)),
-                    default_value=row.get('default_value'),
-                    order=row.get('order') or 0,
-                )
-                db.session.add(tc)
-            db.session.flush()
-
             # --- ContentElement (needs Contenttype) ---
             for row in data.get('content_elements', []):
                 m = ContentElement(
@@ -343,7 +432,6 @@ def import_database(app, db, data: dict) -> dict:
                     duration=row.get('duration') or 10,
                     serialized_input=row.get('serialized_input') or '',
                     contenttype_id=row.get('contenttype_id'),
-                    contentcontainer=row.get('contentcontainer') or 'maincontent',
                 )
                 db.session.add(m)
             db.session.flush()
@@ -419,7 +507,8 @@ def import_database(app, db, data: dict) -> dict:
             db_uri = db.engine.url.render_as_string(hide_password=False)
             if db_uri.startswith('postgresql'):
                 sequences = [
-                    ('template', 'id'),
+                    ('design', 'id'),
+                    ('layout', 'id'),
                     ('contenttype', 'id'),
                     ('screen', 'id'),
                     ('screengroup', 'id'),
@@ -454,8 +543,8 @@ def import_database(app, db, data: dict) -> dict:
                 'counts': {
                     'screens': len(data.get('screens', [])),
                     'screengroups': len(data.get('screengroups', [])),
-                    'templates': len(data.get('templates', [])),
-                    'contenttypes': len(data.get('contenttypes', [])),
+                    'designs': len(design_rows or []),
+                    'contenttypes': len(contenttype_rows or []),
                     'content_elements': len(data.get('content_elements', [])),
                     'media': len(data.get('media', [])),
                     'devices': len(data.get('devices', [])),
