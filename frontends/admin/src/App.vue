@@ -194,7 +194,7 @@ const contentMenuItems = computed(() => [
     : []),
 ])
 
-const adminMenuItems = computed(() => [
+const deviceGroupItems = computed(() => [
   ...(rightsStore.can('device.page')
     ? [
         {
@@ -213,6 +213,9 @@ const adminMenuItems = computed(() => [
         },
       ]
     : []),
+])
+
+const contentStructureGroupItems = computed(() => [
   ...(rightsStore.can('contenttypes.page')
     ? [
         {
@@ -240,6 +243,30 @@ const adminMenuItems = computed(() => [
         },
       ]
     : []),
+])
+
+const integrationsGroupItems = computed(() => [
+  ...(rightsStore.can('importexport.page')
+    ? [
+        {
+          label: 'Im-/Export',
+          icon: 'pi pi-database',
+          command: () => router.push('/importexport'),
+        },
+      ]
+    : []),
+  ...(rightsStore.can('pretalx.page')
+    ? [
+        {
+          label: 'Pretalx',
+          icon: 'pi pi-calendar',
+          command: () => router.push('/pretalx'),
+        },
+      ]
+    : []),
+])
+
+const systemGroupItems = computed(() => [
   ...(rightsStore.can('settings.page')
     ? [
         {
@@ -267,24 +294,9 @@ const adminMenuItems = computed(() => [
         },
       ]
     : []),
-  ...(rightsStore.can('importexport.page')
-    ? [
-        {
-          label: 'Im-/Export',
-          icon: 'pi pi-database',
-          command: () => router.push('/importexport'),
-        },
-      ]
-    : []),
-  ...(rightsStore.can('pretalx.page')
-    ? [
-        {
-          label: 'Pretalx',
-          icon: 'pi pi-calendar',
-          command: () => router.push('/pretalx'),
-        },
-      ]
-    : []),
+])
+
+const usersGroupItems = computed(() => [
   ...(rightsStore.can('users.page') || rightsStore.can('rights.page')
     ? [
         {
@@ -296,21 +308,28 @@ const adminMenuItems = computed(() => [
     : []),
 ])
 
+const adminMenuItems = computed(() => [
+  ...(deviceGroupItems.value.length
+    ? [{ label: 'Devices', icon: 'pi pi-desktop', items: deviceGroupItems.value }]
+    : []),
+  ...(contentStructureGroupItems.value.length
+    ? [{ label: 'Content Structure', icon: 'pi pi-sitemap', items: contentStructureGroupItems.value }]
+    : []),
+  ...(integrationsGroupItems.value.length
+    ? [{ label: 'Integrations', icon: 'pi pi-share-alt', items: integrationsGroupItems.value }]
+    : []),
+  ...(systemGroupItems.value.length
+    ? [{ label: 'System', icon: 'pi pi-server', items: systemGroupItems.value }]
+    : []),
+  ...usersGroupItems.value,
+])
+
 const menuItems = computed(() => [
   {
     label: 'Dashboard',
     icon: 'pi pi-home',
     command: () => router.push('/'),
   },
-  ...(!settingsStore.hideDemoMode && rightsStore.can('importexport.page')
-    ? [
-        {
-          label: 'Demo Mode',
-          icon: 'pi pi-sparkles',
-          command: () => router.push('/demo'),
-        },
-      ]
-    : []),
   ...(contentMenuItems.value.length
     ? [
         {
@@ -403,6 +422,16 @@ const pageTitle = computed(() => {
           >
             <i :class="isConnected ? 'pi pi-wifi' : 'pi pi-exclamation-triangle'"></i>
             {{ isConnected ? 'Connected' : 'Disconnected' }}
+          </span>
+          <span
+            v-if="!settingsStore.hideDemoMode && rightsStore.can('importexport.page')"
+            class="demo-mode-badge"
+            :class="{ active: route.name === 'demo' }"
+            data-testid="demo-mode-badge"
+            @click="router.push('/demo')"
+          >
+            <i class="pi pi-sparkles"></i>
+            Demo Mode
           </span>
         </div>
         <div class="header-controls">
@@ -569,9 +598,32 @@ body {
   color: #ef9a9a;
 }
 
+.demo-mode-badge {
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: white;
+  transition: background-color 0.15s;
+}
+
+.demo-mode-badge i {
+  color: #94a3b8;
+}
+
+.demo-mode-badge:hover,
+.demo-mode-badge.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 .app-menubar {
   background: transparent !important;
   border: none !important;
+  margin-right: 100px;
 }
 
 .header-controls {
@@ -628,9 +680,18 @@ body {
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.app-menubar .p-menubar-submenu {
+.app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-submenu {
   position: fixed !important;
   top: var(--header-height) !important;
+}
+
+/* Nested submenus (e.g. grouped Admin items) must stay anchored to their
+   parent item rather than the header — the rule above only pins the
+   first-level flyout so it isn't clipped below the sticky header. */
+.app-menubar .p-menubar-submenu .p-menubar-submenu {
+  position: absolute !important;
+  left: 100% !important;
+  top: 0 !important;
 }
 
 .app-main {
