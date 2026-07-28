@@ -82,16 +82,19 @@ def register_admin_layouts_handlers(socketio, app, db):
     @require_right('layouts.delete')
     def handle_delete_layout(data=None):
         if not data or not isinstance(data, dict):
-            return
+            return {'ok': False, 'error': 'Invalid payload'}
         layout_id = data.get('id')
         if not layout_id:
-            return
+            return {'ok': False, 'error': 'Missing id'}
         layout = db.session.get(Layout, int(layout_id))
         if not layout:
-            return
+            return {'ok': False, 'error': 'Layout not found'}
+        if layout.contenttypes:
+            return {'ok': False, 'error': f'Layout is used by {len(layout.contenttypes)} content type(s)'}
         db.session.delete(layout)
         db.session.commit()
         _emit_layouts()
+        return {'ok': True}
 
     # --- Content Containers (standalone entities) -------------------------
 
@@ -148,14 +151,22 @@ def register_admin_layouts_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:cts:delete_container')
     @require_right('layouts.delete')
     def handle_delete_container(data=None):
+        from application.models import TagConfig
+
         if not data or not isinstance(data, dict):
-            return
+            return {'ok': False, 'error': 'Invalid payload'}
         container_id = data.get('id')
         if not container_id:
-            return
+            return {'ok': False, 'error': 'Missing id'}
         container = db.session.get(ContentContainer, int(container_id))
         if not container:
-            return
+            return {'ok': False, 'error': 'Container not found'}
+        used_by = db.session.execute(
+            db.select(db.func.count()).select_from(TagConfig).where(TagConfig.contentcontainer_id == container.id)
+        ).scalar_one()
+        if used_by:
+            return {'ok': False, 'error': f'Container is used by {used_by} field(s)'}
         db.session.delete(container)
         db.session.commit()
         _emit_containers()
+        return {'ok': True}

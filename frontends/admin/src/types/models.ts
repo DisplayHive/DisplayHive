@@ -60,6 +60,8 @@ export interface Layout {
   name: string
   description?: string
   container_ids?: number[]
+  /** True if at least one Contenttype is bound to this Layout. */
+  in_use?: boolean
 }
 
 /** A standalone content container: a screen-relative position (vh/vw) and size. */
@@ -72,6 +74,8 @@ export interface ContentContainer {
   left: number
   width: number
   height: number
+  /** True if at least one Contenttype field (TagConfig) renders into it. */
+  in_use?: boolean
 }
 
 /** A content item (content element) in the system. */

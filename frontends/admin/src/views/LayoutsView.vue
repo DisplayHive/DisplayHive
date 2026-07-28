@@ -6,19 +6,16 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
 import type { Layout, ContentContainer } from '../types/models'
 
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
-import InputNumber from 'primevue/inputnumber'
-import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
-import MultiSelect from 'primevue/multiselect'
+import Dropdown from 'primevue/dropdown'
+import LayoutCanvasEditor from '../components/LayoutCanvasEditor.vue'
 
 const toast = useToast()
 const confirm = useConfirm()
-const { on, off, emit } = useSocket()
+const { on, off, emit, emitWithAck } = useSocket()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('layouts.create'))
@@ -29,106 +26,125 @@ const containers = ref<ContentContainer[]>([])
 const layouts = ref<Layout[]>([])
 const loading = ref(true)
 
-const containerOptions = computed(() =>
-  containers.value.map((c) => ({ label: c.title || c.name, value: c.id }))
-)
-
-const containerName = (id: number) => containers.value.find((c) => c.id === id)?.name || `#${id}`
-
-// --- Containers ---------------------------------------------------------
-
-const showContainerDialog = ref(false)
-const isNewContainer = ref(false)
-const containerForm = ref({
-  id: null as number | null,
-  name: '',
-  title: '',
-  order: 0,
-  top: 0,
-  left: 0,
-  width: 100,
-  height: 100,
-})
-
-const openNewContainerDialog = () => {
-  isNewContainer.value = true
-  containerForm.value = { id: null, name: '', title: '', order: 0, top: 0, left: 0, width: 100, height: 100 }
-  showContainerDialog.value = true
-}
-
-const openEditContainerDialog = (c: ContentContainer) => {
-  isNewContainer.value = false
-  containerForm.value = {
-    id: c.id, name: c.name, title: c.title || '', order: c.order || 0,
-    top: c.top, left: c.left, width: c.width, height: c.height,
-  }
-  showContainerDialog.value = true
-}
-
-const saveContainer = () => {
-  const event = isNewContainer.value
-    ? 'displayhive:admin:cts:create_container'
-    : 'displayhive:admin:cts:update_container'
-  emit(event, { ...containerForm.value })
-  toast.add({ severity: 'success', summary: 'Success', detail: isNewContainer.value ? 'Container created' : 'Container updated', life: 3000 })
-  showContainerDialog.value = false
-}
-
-const deleteContainer = (c: ContentContainer) => {
-  confirm.require({
-    message: `Are you sure you want to delete container "${c.title || c.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_container', { id: c.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Container deleted', life: 3000 })
-    },
-  })
-}
-
 // --- Layouts -------------------------------------------------------------
 
-const showLayoutDialog = ref(false)
 const isNewLayout = ref(false)
 const layoutForm = ref({
   id: null as number | null,
   name: '',
   description: '',
-  container_ids: [] as number[],
 })
 
-const openNewLayoutDialog = () => {
-  isNewLayout.value = true
-  layoutForm.value = { id: null, name: '', description: '', container_ids: [] }
-  showLayoutDialog.value = true
-}
+// The live Layout object (kept fresh by the upd_layouts broadcast) that the
+// canvas editor reads/writes its container assignment against. Only
+// available once the Layout has actually been created.
+const editingLayout = computed(() => layouts.value.find((l) => l.id === layoutForm.value.id) || null)
 
-const openEditLayoutDialog = (l: Layout) => {
+// Container position edits (drag/resize/modal) are staged locally inside the
+// canvas editor and only sent to the server on an explicit Save — i.e. never
+// just from switching or starting a new Layout, which discard them instead.
+const canvasEditorRef = ref<InstanceType<typeof LayoutCanvasEditor> | null>(null)
+// Resolves false if the admin cancelled out of the "also affects layout Y"
+// warning — callers should abort whatever they were about to do in that case.
+const flushPendingPositions = async () => (await canvasEditorRef.value?.flushPendingPositions()) !== false
+
+// All Layouts, selectable from the dropdown so the admin can switch which
+// one they're editing at any time.
+const layoutSelectOptions = computed(() => layouts.value.map((l) => ({ label: l.name, value: l.id })))
+
+const onLayoutSelectChange = (id: number | null) => {
+  if (id == null) return
+  const l = layouts.value.find((x) => x.id === id)
+  if (!l) return
+  canvasEditorRef.value?.discardPendingPositions()
   isNewLayout.value = false
-  layoutForm.value = { id: l.id, name: l.name, description: l.description || '', container_ids: l.container_ids || [] }
-  showLayoutDialog.value = true
+  layoutForm.value = { id: l.id, name: l.name, description: l.description || '' }
 }
 
-const saveLayout = () => {
-  const event = isNewLayout.value
-    ? 'displayhive:admin:cts:create_layout'
-    : 'displayhive:admin:cts:update_layout'
-  emit(event, { ...layoutForm.value })
-  toast.add({ severity: 'success', summary: 'Success', detail: isNewLayout.value ? 'Layout created' : 'Layout updated', life: 3000 })
-  showLayoutDialog.value = false
+// "New" — resets the form to a blank, not-yet-created Layout.
+const startNewLayout = () => {
+  canvasEditorRef.value?.discardPendingPositions()
+  isNewLayout.value = true
+  layoutForm.value = { id: null, name: '', description: '' }
 }
 
-const deleteLayout = (l: Layout) => {
+const saveLayout = async () => {
+  if (isNewLayout.value) {
+    const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
+      'displayhive:admin:cts:create_layout',
+      { name: layoutForm.value.name, description: layoutForm.value.description },
+    )
+    if (ack?.ok && ack.id) {
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Layout created — now add its containers below', life: 3000 })
+      isNewLayout.value = false
+      layoutForm.value.id = ack.id
+      refreshData()
+    } else {
+      toast.add({ severity: 'error', summary: 'Save failed', detail: ack?.error || 'Unknown error', life: 4000 })
+    }
+    return
+  }
+  if (!(await flushPendingPositions())) return
+  emit('displayhive:admin:cts:update_layout', {
+    id: layoutForm.value.id, name: layoutForm.value.name, description: layoutForm.value.description,
+  })
+  toast.add({ severity: 'success', summary: 'Success', detail: 'Layout updated', life: 3000 })
+}
+
+// Duplicates the currently-open Layout as a brand new one, keeping its
+// current set of containers (the containers themselves aren't copied —
+// they're shared, standalone entities — the new Layout just references
+// the same ones, exactly like assigning an existing container normally does).
+const saveLayoutAsNew = async () => {
+  if (!layoutForm.value.id) return
+  if (!(await flushPendingPositions())) return
+  const newName = `${layoutForm.value.name} (copy)`
+  const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
+    'displayhive:admin:cts:create_layout',
+    {
+      name: newName,
+      description: layoutForm.value.description,
+      container_ids: editingLayout.value?.container_ids || [],
+    },
+  )
+  if (ack?.ok && ack.id) {
+    toast.add({ severity: 'success', summary: 'Success', detail: `Saved as "${newName}"`, life: 3000 })
+    isNewLayout.value = false
+    layoutForm.value = { id: ack.id, name: newName, description: layoutForm.value.description }
+    refreshData()
+  } else {
+    toast.add({ severity: 'error', summary: 'Save failed', detail: ack?.error || 'Unknown error', life: 4000 })
+  }
+}
+
+const deleteLayout = (l: Layout, onDeleted?: () => void) => {
+  if (l.in_use) {
+    toast.add({ severity: 'warn', summary: 'Cannot delete', detail: 'This layout is used by a Contenttype — reassign it first.', life: 4000 })
+    return
+  }
   confirm.require({
-    message: `Are you sure you want to delete layout "${l.name}"? Contenttypes using it will need to be reassigned.`,
+    message: `Are you sure you want to delete layout "${l.name}"?`,
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_layout', { id: l.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Layout deleted', life: 3000 })
+    accept: async () => {
+      const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:delete_layout', { id: l.id })
+      if (ack?.ok) {
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Layout deleted', life: 3000 })
+        onDeleted?.()
+      } else {
+        toast.add({ severity: 'error', summary: 'Delete failed', detail: ack?.error || 'Unknown error', life: 4000 })
+      }
     },
+  })
+}
+
+const deleteEditingLayout = () => {
+  if (!editingLayout.value) return
+  deleteLayout(editingLayout.value, () => {
+    isNewLayout.value = false
+    layoutForm.value = { id: null, name: '', description: '' }
+    refreshData()
   })
 }
 
@@ -176,143 +192,75 @@ const refreshData = () => {
     <Card>
       <template #title>
         <div class="card-header">
-          <span>Content Containers</span>
-          <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Container" @click="openNewContainerDialog" size="small" />
-            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
-          </div>
+          <span>{{ isNewLayout ? 'New Layout' : editingLayout ? editingLayout.name : 'Layouts' }}</span>
+          <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
         </div>
       </template>
       <template #content>
-        <p class="hint">A container is a screen-relative position (vh/vw) and size, rendered as an overlay on top of the active Design.</p>
-        <DataTable :value="containers" :loading="loading" sortField="order" :sortOrder="1" stripedRows size="small" responsiveLayout="scroll">
-          <Column field="id" header="ID" style="width: 60px" sortable />
-          <Column field="title" header="Title" sortable>
-            <template #body="{ data }">{{ data.title || data.name }}</template>
-          </Column>
-          <Column field="name" header="Name" sortable />
-          <Column header="Position (top / left)" style="width: 160px">
-            <template #body="{ data }">{{ data.top }}vh / {{ data.left }}vw</template>
-          </Column>
-          <Column header="Size (w / h)" style="width: 140px">
-            <template #body="{ data }">{{ data.width }}vw / {{ data.height }}vh</template>
-          </Column>
-          <Column header="Actions" style="width: 120px">
-            <template #body="{ data }">
-              <div class="action-buttons">
-                <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditContainerDialog(data)" size="small" outlined title="Edit" />
-                <Button v-if="canDelete" icon="pi pi-trash" @click="deleteContainer(data)" size="small" severity="danger" outlined title="Delete" />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-      </template>
-    </Card>
-
-    <Card>
-      <template #title>
-        <div class="card-header">
-          <span>Layouts</span>
-          <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Layout" @click="openNewLayoutDialog" size="small" />
-          </div>
-        </div>
-      </template>
-      <template #content>
-        <p class="hint">A Layout groups containers together and scopes which containers a Contenttype's handlers may target — it has no runtime meaning on its own.</p>
-        <DataTable :value="layouts" :loading="loading" sortField="name" :sortOrder="1" stripedRows size="small" responsiveLayout="scroll">
-          <Column field="id" header="ID" style="width: 60px" sortable />
-          <Column field="name" header="Name" sortable />
-          <Column field="description" header="Description" />
-          <Column header="Containers">
-            <template #body="{ data }">
-              <span v-for="(id, i) in data.container_ids" :key="id">
-                {{ containerName(id) }}<span v-if="i < data.container_ids.length - 1">, </span>
-              </span>
-              <span v-if="!data.container_ids?.length" class="hint">none</span>
-            </template>
-          </Column>
-          <Column header="Actions" style="width: 120px">
-            <template #body="{ data }">
-              <div class="action-buttons">
-                <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditLayoutDialog(data)" size="small" outlined title="Edit" />
-                <Button v-if="canDelete" icon="pi pi-trash" @click="deleteLayout(data)" size="small" severity="danger" outlined title="Delete" />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-      </template>
-    </Card>
-
-    <!-- Container Dialog -->
-    <Dialog v-model:visible="showContainerDialog" :header="isNewContainer ? 'New Container' : 'Edit Container'" modal :style="{ width: '500px' }">
-      <div class="dialog-content">
-        <div class="field">
-          <label for="c-name">Name</label>
-          <InputText id="c-name" v-model="containerForm.name" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="c-title">Title</label>
-          <InputText id="c-title" v-model="containerForm.title" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="c-order">Order</label>
-          <InputNumber id="c-order" v-model="containerForm.order" class="w-full" />
-        </div>
-        <div class="position-grid">
+        <div class="layout-picker-row">
           <div class="field">
-            <label for="c-top">Top (vh)</label>
-            <InputNumber id="c-top" v-model="containerForm.top" class="w-full" :min="0" :max="100" />
+            <label for="l-picker">Switch Layout</label>
+            <Dropdown
+              id="l-picker"
+              :model-value="layoutForm.id"
+              :options="layoutSelectOptions"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Select a layout to edit"
+              class="w-full"
+              :loading="loading"
+              @update:model-value="onLayoutSelectChange"
+            />
           </div>
-          <div class="field">
-            <label for="c-left">Left (vw)</label>
-            <InputNumber id="c-left" v-model="containerForm.left" class="w-full" :min="0" :max="100" />
-          </div>
-          <div class="field">
-            <label for="c-width">Width (vw)</label>
-            <InputNumber id="c-width" v-model="containerForm.width" class="w-full" :min="0" :max="100" />
-          </div>
-          <div class="field">
-            <label for="c-height">Height (vh)</label>
-            <InputNumber id="c-height" v-model="containerForm.height" class="w-full" :min="0" :max="100" />
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="showContainerDialog = false" text />
-        <Button label="Save" @click="saveContainer" />
-      </template>
-    </Dialog>
-
-    <!-- Layout Dialog -->
-    <Dialog v-model:visible="showLayoutDialog" :header="isNewLayout ? 'New Layout' : 'Edit Layout'" modal :style="{ width: '500px' }">
-      <div class="dialog-content">
-        <div class="field">
-          <label for="l-name">Name</label>
-          <InputText id="l-name" v-model="layoutForm.name" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="l-description">Description</label>
-          <Textarea id="l-description" v-model="layoutForm.description" rows="2" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="l-containers">Containers</label>
-          <MultiSelect
-            id="l-containers"
-            v-model="layoutForm.container_ids"
-            :options="containerOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select containers"
-            class="w-full"
+          <Button v-if="canCreate" label="New" icon="pi pi-plus" outlined size="small" @click="startNewLayout" />
+          <Button
+            v-if="canCreate"
+            label="Save as New"
+            icon="pi pi-copy"
+            outlined
+            size="small"
+            :disabled="!layoutForm.id"
+            @click="saveLayoutAsNew"
+          />
+          <Button
+            v-if="canDelete"
+            label="Delete Layout"
+            icon="pi pi-trash"
+            severity="danger"
+            outlined
+            size="small"
+            :disabled="!editingLayout || editingLayout.in_use"
+            :title="editingLayout?.in_use ? 'Used by a Contenttype — cannot delete' : ''"
+            @click="deleteEditingLayout"
           />
         </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="showLayoutDialog = false" text />
-        <Button label="Save" @click="saveLayout" />
+
+        <template v-if="isNewLayout || editingLayout">
+          <div class="layout-meta-row">
+            <div class="field">
+              <label for="l-name">Name</label>
+              <InputText id="l-name" v-model="layoutForm.name" class="w-full" />
+            </div>
+            <div class="field">
+              <label for="l-description">Description</label>
+              <Textarea id="l-description" v-model="layoutForm.description" rows="1" class="w-full" />
+            </div>
+            <Button v-if="isNewLayout ? canCreate : canEdit" :label="isNewLayout ? 'Create' : 'Save'" @click="saveLayout" />
+          </div>
+
+          <template v-if="editingLayout">
+            <p class="hint">
+              Drag containers directly on the canvas to move/resize them, draw new ones on empty space,
+              or drag existing containers in from the sidebar. Position changes save when you click
+              Save — assigning, removing and deleting containers still happen immediately.
+            </p>
+            <LayoutCanvasEditor ref="canvasEditorRef" :layout="editingLayout" :containers="containers" :layouts="layouts" />
+          </template>
+          <p v-else class="hint">Save the name above to start adding containers.</p>
+        </template>
+        <p v-else class="hint">Select a Layout above to edit it, or click "New" to create one.</p>
       </template>
-    </Dialog>
+    </Card>
   </div>
 </template>
 
@@ -323,15 +271,46 @@ const refreshData = () => {
   gap: 1rem;
 }
 
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .hint {
   color: #888;
   font-size: 0.8rem;
   margin-bottom: 0.75rem;
 }
 
-.position-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem 1rem;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.layout-meta-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.layout-meta-row .field {
+  flex: 1;
+}
+
+.layout-picker-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--p-surface-border, #ddd);
+}
+
+.layout-picker-row .field {
+  flex: 1;
+  max-width: 350px;
 }
 </style>
