@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -51,13 +51,15 @@ const filterText = ref('')
 
 const layoutOptions = computed(() => layouts.value.map(l => ({ label: l.name, value: l.id })))
 
-// Containers available to the currently-selected Layout in the edit form.
-const containerOptionsForLayout = computed(() => {
+// Containers belonging to the currently-selected Layout in the edit form,
+// in display order — each one gets exactly one field slot.
+const containersForLayout = computed(() => {
   const layout = layouts.value.find(l => l.id === editForm.value.layout_id)
   const ids = new Set(layout?.container_ids || [])
   return containers.value
     .filter(c => ids.has(c.id))
-    .map(c => ({ label: c.title || c.name, value: c.id }))
+    .slice()
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id)
 })
 
 // Field handler options (matches legacy UI and DB schema)
@@ -108,27 +110,37 @@ const loadingContentType = ref(false)
 const loadingContentTypeError = ref('')
 let contentTypeLoadTimer: number | null = null
 
-const addField = () => {
-  editForm.value.tagconfigs.push({
-    id: null, name: '', title: '', field_handler: 'textklein', contentcontainer_id: null,
+// Each container of the selected Layout automatically gets exactly one
+// field slot — there is no manual container picker or add/remove step.
+// Existing field data (name/label/field_handler) is preserved by matching
+// on contentcontainer_id; containers newly in the Layout get a blank field,
+// and fields for containers no longer in the Layout are dropped.
+const syncFieldsToLayoutContainers = () => {
+  const existingByContainer = new Map(
+    editForm.value.tagconfigs
+      .filter(t => t.contentcontainer_id != null)
+      .map(t => [t.contentcontainer_id as number, t])
+  )
+  editForm.value.tagconfigs = containersForLayout.value.map(c => {
+    const existing = existingByContainer.get(c.id)
+    if (existing) return existing
+    return {
+      id: null,
+      name: c.name,
+      title: c.title || c.name,
+      field_handler: 'textklein',
+      contentcontainer_id: c.id,
+    }
   })
 }
 
-// Drag and drop state for reordering the fields list
-const dragIndex = ref<number | null>(null)
-const onTagDragStart = (idx: number) => { dragIndex.value = idx }
-const onTagDragOver = (e: DragEvent) => e.preventDefault()
-const onTagDrop = (idx: number) => {
-  const from = dragIndex.value
-  if (from === null || from === idx) { dragIndex.value = null; return }
-  const tagconfigs = editForm.value.tagconfigs
-  const item = tagconfigs.splice(from, 1)[0]
-  if (item) tagconfigs.splice(idx, 0, item)
-  dragIndex.value = null
-}
+watch(() => editForm.value.layout_id, () => {
+  if (showEditDialog.value) syncFieldsToLayoutContainers()
+})
 
-const removeTagConfig = (idx: number) => {
-  editForm.value.tagconfigs.splice(idx, 1)
+const containerLabelFor = (contentcontainerId: number | null) => {
+  const c = containers.value.find(c => c.id === contentcontainerId)
+  return c ? (c.title || c.name) : '?'
 }
 
 const prepareTagConfigsPayload = () => {
@@ -198,6 +210,9 @@ const handleContentTypeDetail = async (data: any) => {
         id: t.id, name: t.field_name, title: t.field_label || t.field_name,
         field_handler: t.field_handler || 'textklein', contentcontainer_id: t.contentcontainer_id ?? null,
       }))
+    // Ensure every container of the Layout has a slot, even if the Layout
+    // gained containers since this Contenttype's fields were last saved.
+    syncFieldsToLayoutContainers()
 
     loadingContentType.value = false
     loadingContentTypeError.value = ''
@@ -437,41 +452,23 @@ const deleteContentType = (ct: ContentType) => {
           <small class="hint">Scopes which containers this content type's fields may target.</small>
         </div>
 
-        <!-- Fields (TagConfig) — each is one container of the selected Layout,
-             rendered directly from its field_handler's transformed value. -->
+        <!-- Fields (TagConfig) — one per container of the selected Layout,
+             automatically kept in sync with it. Each field's transformed
+             value directly becomes its container's rendered content. -->
         <div class="fields-section">
-          <div class="fields-header">
-            <label>Fields <small>one per container this type populates</small></label>
-            <Button
-              label="Add Field"
-              icon="pi pi-plus"
-              size="small"
-              :disabled="!editForm.layout_id"
-              @click="addField"
-            />
-          </div>
-          <p v-if="!editForm.layout_id" class="hint">Select a Layout above before adding fields.</p>
-          <div v-else-if="!editForm.tagconfigs.length" class="p-text-muted">No fields yet — click "Add Field" to bind a container to a field.</div>
+          <label>Fields <small>one per container of the selected Layout</small></label>
+          <p v-if="!editForm.layout_id" class="hint">Select a Layout above to see its containers.</p>
+          <p v-else-if="!editForm.tagconfigs.length" class="hint">This Layout has no containers yet.</p>
           <div v-else class="tagconfigs-table">
             <div class="tagconfig-header">
-              <div class="tagconfig-col-drag"></div>
-              <div class="tagconfig-col-name">Name</div>
+              <div class="tagconfig-col-container">Container</div>
+              <div class="tagconfig-col-name">Field Name</div>
               <div class="tagconfig-col-title">Label</div>
               <div class="tagconfig-col-type">Field Handler</div>
-              <div class="tagconfig-col-container">Container</div>
-              <div></div>
             </div>
-            <div
-              v-for="(t, tIdx) in editForm.tagconfigs"
-              :key="t.id ?? `new-${tIdx}`"
-              class="tagconfig-row"
-              draggable="true"
-              @dragstart="onTagDragStart(tIdx)"
-              @dragover.prevent="onTagDragOver"
-              @drop="onTagDrop(tIdx)"
-            >
-              <div class="tagconfig-col-drag">
-                <i class="pi pi-bars" style="cursor: grab;"></i>
+            <div v-for="(t, tIdx) in editForm.tagconfigs" :key="t.id ?? `new-${tIdx}`" class="tagconfig-row">
+              <div class="tagconfig-col-container">
+                <Tag :value="containerLabelFor(t.contentcontainer_id)" />
               </div>
               <div class="tagconfig-col-name">
                 <InputText v-model="t.name" class="w-full" size="small" placeholder="field_name" />
@@ -488,20 +485,6 @@ const deleteContentType = (ct: ContentType) => {
                   class="w-full"
                   size="small"
                 />
-              </div>
-              <div class="tagconfig-col-container">
-                <Dropdown
-                  v-model="t.contentcontainer_id"
-                  :options="containerOptionsForLayout"
-                  optionLabel="label"
-                  optionValue="value"
-                  placeholder="Container"
-                  class="w-full"
-                  size="small"
-                />
-              </div>
-              <div>
-                <Button icon="pi pi-trash" severity="danger" text size="small" @click="removeTagConfig(tIdx)" title="Remove field" />
               </div>
             </div>
           </div>
@@ -555,7 +538,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-header {
   display: grid;
-  grid-template-columns: 40px 160px 1fr 180px 200px 40px;
+  grid-template-columns: 160px 160px 1fr 200px;
   gap: 0.5rem;
   padding: 0.5rem;
   background: #f5f5f5;
@@ -566,13 +549,12 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row {
   display: grid;
-  grid-template-columns: 40px 160px 1fr 180px 200px 40px;
+  grid-template-columns: 160px 160px 1fr 200px;
   gap: 0.5rem;
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
   align-items: center;
   transition: background 0.2s;
-  cursor: move;
 }
 
 .tagconfig-row:hover {
@@ -581,13 +563,6 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row:last-child {
   border-bottom: none;
-}
-
-.tagconfig-col-drag {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #999;
 }
 
 .tagconfig-col-name {
@@ -605,22 +580,16 @@ const deleteContentType = (ct: ContentType) => {
 .fields-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
-.fields-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.fields-header label {
+.fields-section > label {
   font-weight: 600;
   font-size: 0.875rem;
 }
 
-.fields-header label small {
+.fields-section > label small {
   font-weight: 400;
   color: #888;
   margin-left: 0.3rem;
