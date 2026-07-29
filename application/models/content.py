@@ -93,6 +93,51 @@ class ContentContainer(db.Model):
     layouts: Mapped[list["Layout"]] = relationship("Layout", secondary=layout_container, back_populates="contentcontainers")
 
 
+class DesignContainerStyle(db.Model):
+    """One CSS property override for a single container, scoped to one Design.
+
+    A generic (property, value) row rather than a dedicated column per CSS
+    property, so new style categories (the "Font" group is the first; more
+    can follow later) don't need a schema migration each time. An empty
+    value means the property is intentionally left unset — it's skipped
+    when generating CSS rather than being rendered as `prop: ;`. Rendered
+    into `.dh-container-<id> { ... }` rules and appended to the owning
+    Design's CSS — see application/admin/designs/helper.py.
+    """
+    __tablename__ = 'design_container_style'
+    __table_args__ = (
+        UniqueConstraint('design_id', 'contentcontainer_id', 'property', name='uq_design_container_style'),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    design_id: Mapped[int] = mapped_column(Integer, ForeignKey('design.id'), nullable=False)
+    contentcontainer_id: Mapped[int] = mapped_column(Integer, ForeignKey('contentcontainer.id'), nullable=False)
+    property: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=True)
+
+
+class DesignGlobalStyle(db.Model):
+    """One CSS property override applied to every container, scoped to one
+    Design — the "global" counterpart to DesignContainerStyle's per-container
+    overrides. Rendered into a single `.dh-container { ... }` rule (every
+    container div carries this shared class alongside its own
+    `.dh-container-<id>`) — see application/admin/designs/helper.py.
+
+    CSS precedence (all three layers share equal-specificity single-class
+    selectors, so source order decides ties): per-container overrides render
+    first, global overrides second, and the Design's own hand-written CSS
+    last — so a plain CSS edit always wins, global styling wins over a
+    per-container tweak, and an unset property just falls through.
+    """
+    __tablename__ = 'design_global_style'
+    __table_args__ = (
+        UniqueConstraint('design_id', 'property', name='uq_design_global_style'),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    design_id: Mapped[int] = mapped_column(Integer, ForeignKey('design.id'), nullable=False)
+    property: Mapped[str] = mapped_column(String(100), nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=True)
+
+
 class Contenttype(db.Model):
     """Content type model defining how content is structured.
 

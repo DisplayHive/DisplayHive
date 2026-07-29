@@ -5,7 +5,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
-import type { Design } from '../types/models'
+import type { Design, ContentContainer } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -16,6 +16,10 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Tag from 'primevue/tag'
+import Panel from 'primevue/panel'
+import Dropdown from 'primevue/dropdown'
+import InputNumber from 'primevue/inputnumber'
+import ColorPicker from 'primevue/colorpicker'
 
 import { Codemirror } from 'vue-codemirror'
 import { html as cmHtml } from '@codemirror/lang-html'
@@ -32,6 +36,199 @@ const lastFocusedEditor = ref<'html' | 'css'>('html')
 
 const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
   e.dataTransfer?.setData('text/plain', `{{ var_${tagName} }}`)
+}
+
+// --- Per-container "Font" style overrides ----------------------------------
+// A generic (property, value) key/value row per container per Design (see
+// DesignContainerStyle on the backend) — starting with this one "Font"
+// group. Blank/"(not set)" means the property is omitted from the generated
+// CSS entirely, not rendered as `prop: ;`.
+
+interface FontOption { label: string; value: string }
+interface FontProperty {
+  key: string
+  label: string
+  /** 'dropdown' (editable Dropdown, default) | 'vh-number' (numeric vh input) | 'color' (ColorPicker) */
+  type?: 'dropdown' | 'vh-number' | 'color'
+  options?: FontOption[]
+}
+
+const NOT_SET: FontOption = { label: '(not set)', value: '' }
+
+const WEB_SAFE_FONTS: FontOption[] = [
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Arial Black', value: '"Arial Black", sans-serif' },
+  { label: 'Verdana', value: 'Verdana, sans-serif' },
+  { label: 'Tahoma', value: 'Tahoma, sans-serif' },
+  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
+  { label: 'Impact', value: 'Impact, sans-serif' },
+  { label: 'Segoe UI', value: '"Segoe UI", sans-serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", serif' },
+  { label: 'Georgia', value: 'Georgia, serif' },
+  { label: 'Garamond', value: 'Garamond, serif' },
+  { label: 'Courier New', value: '"Courier New", monospace' },
+  { label: 'Lucida Console', value: '"Lucida Console", monospace' },
+  { label: 'Monaco', value: 'Monaco, monospace' },
+  { label: 'Brush Script MT', value: '"Brush Script MT", cursive' },
+  { label: 'Comic Sans MS', value: '"Comic Sans MS", cursive' },
+  { label: 'Sans-serif (generic)', value: 'sans-serif' },
+  { label: 'Serif (generic)', value: 'serif' },
+  { label: 'Monospace (generic)', value: 'monospace' },
+  { label: 'Cursive (generic)', value: 'cursive' },
+  { label: 'Fantasy (generic)', value: 'fantasy' },
+  { label: 'System UI (generic)', value: 'system-ui' },
+]
+
+const keywordOptions = (...values: string[]): FontOption[] => values.map((v) => ({ label: v, value: v }))
+
+const FONT_PROPERTIES: FontProperty[] = [
+  { key: 'font-family', label: 'Font Family', options: [NOT_SET, ...WEB_SAFE_FONTS] },
+  { key: 'font-variant', label: 'Font Variant', options: [NOT_SET, ...keywordOptions(
+    'normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps',
+  )] },
+  { key: 'font-weight', label: 'Font Weight', options: [NOT_SET, ...keywordOptions(
+    'normal', 'bold', 'bolder', 'lighter', '100', '200', '300', '400', '500', '600', '700', '800', '900',
+  )] },
+  { key: 'font-stretch', label: 'Font Stretch', options: [NOT_SET, ...keywordOptions(
+    'normal', 'ultra-condensed', 'extra-condensed', 'condensed', 'semi-condensed',
+    'semi-expanded', 'expanded', 'extra-expanded', 'ultra-expanded',
+  )] },
+  { key: 'font-size', label: 'Font Size', type: 'vh-number' },
+  { key: 'line-height', label: 'Line Height', options: [NOT_SET, ...keywordOptions('normal')] },
+  { key: 'font-style', label: 'Font Style', options: [NOT_SET, ...keywordOptions('normal', 'italic', 'oblique')] },
+  { key: 'color', label: 'Color', type: 'color' },
+]
+
+const containers = ref<ContentContainer[]>([])
+// contentcontainer id -> { property: value }
+const containerStyles = ref<Record<number, Record<string, string>>>({})
+
+const handleContainersList = (data: any) => {
+  containers.value = data?.data || []
+}
+
+// A stored value that no longer matches its property's current input type
+// (e.g. "xx-small" for font-size after it changed from a keyword dropdown to
+// a vh number) can't be shown OR cleared by that control — it would just
+// look blank/unset while actually still being sent back unchanged on every
+// autosave. Discarding it here, once, on load turns "invisible stale value"
+// into a real, visible "not set" the moment the Design is opened.
+const isValidForType = (type: FontProperty['type'], value: string): boolean => {
+  if (!value) return true
+  if (type === 'vh-number') return /^-?\d+(\.\d+)?vh$/.test(value)
+  if (type === 'color') return /^#[0-9a-fA-F]{6}$/.test(value)
+  return true
+}
+
+const handleDesignContainerStyles = (data: any) => {
+  if (!data || data.design_id !== editForm.value.id) return
+  const loaded: Record<number, Record<string, string>> = {}
+  for (const [idStr, rawStyles] of Object.entries(data.data || {})) {
+    const styles = { ...(rawStyles as Record<string, string>) }
+    for (const p of FONT_PROPERTIES) {
+      if (styles[p.key] && !isValidForType(p.type, styles[p.key])) {
+        delete styles[p.key]
+      }
+    }
+    loaded[Number(idStr)] = styles
+  }
+  containerStyles.value = loaded
+}
+
+const getStyleValue = (containerId: number, prop: string): string =>
+  containerStyles.value[containerId]?.[prop] ?? ''
+
+const saveDebounce: Record<number, ReturnType<typeof setTimeout>> = {}
+
+const setStyleValue = (containerId: number, prop: string, value: string | undefined) => {
+  const current = { ...(containerStyles.value[containerId] || {}) }
+  current[prop] = value || ''
+  containerStyles.value = { ...containerStyles.value, [containerId]: current }
+
+  if (!editForm.value.id) return
+  if (saveDebounce[containerId]) clearTimeout(saveDebounce[containerId])
+  saveDebounce[containerId] = setTimeout(() => {
+    const styles: Record<string, string> = {}
+    for (const p of FONT_PROPERTIES) styles[p.key] = containerStyles.value[containerId]?.[p.key] || ''
+    emit('displayhive:admin:cts:save_design_container_styles', {
+      design_id: editForm.value.id, contentcontainer_id: containerId, styles,
+    })
+  }, 400)
+}
+
+// font-size: stored as a plain CSS value (e.g. "5vh"); the input only ever
+// deals in the numeric vh amount.
+const getVhNumber = (containerId: number, prop: string): number | null => {
+  const raw = getStyleValue(containerId, prop)
+  if (!raw) return null
+  const n = parseFloat(raw)
+  return isNaN(n) ? null : n
+}
+
+const setVhValue = (containerId: number, prop: string, n: number | null | undefined) => {
+  setStyleValue(containerId, prop, n == null ? '' : `${n}vh`)
+}
+
+// color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
+// CSS value needs the leading "#".
+const getColorHex = (containerId: number, prop: string): string => {
+  const raw = getStyleValue(containerId, prop)
+  return raw ? raw.replace(/^#/, '') : ''
+}
+
+const setColorHex = (containerId: number, prop: string, hex: string | undefined) => {
+  setStyleValue(containerId, prop, hex ? `#${hex}` : '')
+}
+
+// --- Global font styles (applied to every container via `.dh-container`) ---
+// Same (property, value) shape as the per-container ones above, just not
+// keyed by container id. Precedence: per-container overrides < these
+// global ones < the Design's own hand-written CSS (see upd_content.py).
+const globalStyles = ref<Record<string, string>>({})
+
+const handleDesignGlobalStyles = (data: any) => {
+  if (!data || data.design_id !== editForm.value.id) return
+  const styles = { ...(data.data || {}) }
+  for (const p of FONT_PROPERTIES) {
+    if (styles[p.key] && !isValidForType(p.type, styles[p.key])) delete styles[p.key]
+  }
+  globalStyles.value = styles
+}
+
+const getGlobalValue = (prop: string): string => globalStyles.value[prop] ?? ''
+
+let globalSaveDebounce: ReturnType<typeof setTimeout> | null = null
+
+const setGlobalValue = (prop: string, value: string | undefined) => {
+  globalStyles.value = { ...globalStyles.value, [prop]: value || '' }
+
+  if (!editForm.value.id) return
+  if (globalSaveDebounce) clearTimeout(globalSaveDebounce)
+  globalSaveDebounce = setTimeout(() => {
+    const styles: Record<string, string> = {}
+    for (const p of FONT_PROPERTIES) styles[p.key] = globalStyles.value[p.key] || ''
+    emit('displayhive:admin:cts:save_design_global_styles', { design_id: editForm.value.id, styles })
+  }, 400)
+}
+
+const getGlobalVhNumber = (prop: string): number | null => {
+  const raw = getGlobalValue(prop)
+  if (!raw) return null
+  const n = parseFloat(raw)
+  return isNaN(n) ? null : n
+}
+
+const setGlobalVhValue = (prop: string, n: number | null | undefined) => {
+  setGlobalValue(prop, n == null ? '' : `${n}vh`)
+}
+
+const getGlobalColorHex = (prop: string): string => {
+  const raw = getGlobalValue(prop)
+  return raw ? raw.replace(/^#/, '') : ''
+}
+
+const setGlobalColorHex = (prop: string, hex: string | undefined) => {
+  setGlobalValue(prop, hex ? `#${hex}` : '')
 }
 
 const toast = useToast()
@@ -139,13 +336,20 @@ const handleDesignDetail = (data: any) => {
 onMounted(() => {
   on('displayhive:admin:stc:upd_designs', handleDesignsList)
   on('displayhive:admin:stc:design_detail', handleDesignDetail)
+  on('displayhive:admin:stc:upd_containers', handleContainersList)
+  on('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
+  on('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
   refreshData()
+  emit('displayhive:admin:cts:get_containers')
   magicTagsStore.fetch()
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_designs', handleDesignsList)
   off('displayhive:admin:stc:design_detail', handleDesignDetail)
+  off('displayhive:admin:stc:upd_containers', handleContainersList)
+  off('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
+  off('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
 })
 
 const refreshData = () => {
@@ -156,6 +360,8 @@ const refreshData = () => {
 const openNewDialog = () => {
   isNew.value = true
   editForm.value = { id: null, name: '', description: '', html: '', css: '' }
+  containerStyles.value = {}
+  globalStyles.value = {}
   showEditDialog.value = true
 }
 
@@ -168,10 +374,14 @@ const openEditDialog = (design: Design) => {
     html: design.html || '',
     css: design.css || '',
   }
+  containerStyles.value = {}
+  globalStyles.value = {}
   try {
     loadingDesign.value = true
     loadingDesignError.value = ''
     emit('displayhive:admin:cts:get_design', { id: design.id })
+    emit('displayhive:admin:cts:get_design_container_styles', { design_id: design.id })
+    emit('displayhive:admin:cts:get_design_global_styles', { design_id: design.id })
     if (designLoadTimer) clearTimeout(designLoadTimer)
     designLoadTimer = window.setTimeout(() => {
       loadingDesign.value = false
@@ -381,6 +591,110 @@ const deleteDesign = (design: Design) => {
             >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
           </div>
         </div>
+
+        <div v-if="!isNew" class="container-styles-section">
+          <label>Global Styles</label>
+          <small class="hint">
+            Applies to every container via the shared <code>.dh-container</code> class.
+            Beats a per-container override below, but loses to anything in the CSS editor above.
+          </small>
+          <Panel header="Font" toggleable collapsed class="container-style-panel">
+            <div class="font-properties-grid">
+              <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
+                <label>{{ p.label }}</label>
+                <InputNumber
+                  v-if="p.type === 'vh-number'"
+                  :model-value="getGlobalVhNumber(p.key)"
+                  :min="0" :max="50" :step="0.1" :max-fraction-digits="2"
+                  suffix=" vh"
+                  size="small"
+                  class="w-full"
+                  @update:model-value="(v) => setGlobalVhValue(p.key, v)"
+                />
+                <div v-else-if="p.type === 'color'" class="color-field-row">
+                  <ColorPicker
+                    :model-value="getGlobalColorHex(p.key)"
+                    @update:model-value="(v) => setGlobalColorHex(p.key, v)"
+                  />
+                  <span class="color-field-value">{{ getGlobalColorHex(p.key) ? `#${getGlobalColorHex(p.key)}` : '(not set)' }}</span>
+                  <Button
+                    v-if="getGlobalColorHex(p.key)"
+                    icon="pi pi-times" text size="small" title="Clear"
+                    @click="setGlobalColorHex(p.key, '')"
+                  />
+                </div>
+                <Dropdown
+                  v-else
+                  :model-value="getGlobalValue(p.key)"
+                  :options="p.options"
+                  optionLabel="label"
+                  optionValue="value"
+                  editable
+                  size="small"
+                  class="w-full"
+                  @update:model-value="(v) => setGlobalValue(p.key, v)"
+                />
+              </div>
+            </div>
+          </Panel>
+        </div>
+
+        <div v-if="!isNew && containers.length" class="container-styles-section">
+          <label>Per-Container Styles</label>
+          <small class="hint">
+            Style an individual container's overlay by its stable <code>.dh-container-&lt;id&gt;</code> class.
+            Changes save automatically. "(not set)" leaves that CSS property out entirely.
+          </small>
+          <Panel
+            v-for="c in containers"
+            :key="c.id"
+            :header="`${c.title || c.name} #${c.id}`"
+            toggleable
+            collapsed
+            class="container-style-panel"
+          >
+            <details class="font-collapsible">
+              <summary>Font</summary>
+              <div class="font-properties-grid">
+                <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
+                  <label>{{ p.label }}</label>
+                  <InputNumber
+                    v-if="p.type === 'vh-number'"
+                    :model-value="getVhNumber(c.id, p.key)"
+                    :min="0" :max="50" :step="0.1" :max-fraction-digits="2"
+                    suffix=" vh"
+                    size="small"
+                    class="w-full"
+                    @update:model-value="(v) => setVhValue(c.id, p.key, v)"
+                  />
+                  <div v-else-if="p.type === 'color'" class="color-field-row">
+                    <ColorPicker
+                      :model-value="getColorHex(c.id, p.key)"
+                      @update:model-value="(v) => setColorHex(c.id, p.key, v)"
+                    />
+                    <span class="color-field-value">{{ getColorHex(c.id, p.key) ? `#${getColorHex(c.id, p.key)}` : '(not set)' }}</span>
+                    <Button
+                      v-if="getColorHex(c.id, p.key)"
+                      icon="pi pi-times" text size="small" title="Clear"
+                      @click="setColorHex(c.id, p.key, '')"
+                    />
+                  </div>
+                  <Dropdown
+                    v-else
+                    :model-value="getStyleValue(c.id, p.key)"
+                    :options="p.options"
+                    optionLabel="label"
+                    optionValue="value"
+                    editable
+                    size="small"
+                    class="w-full"
+                    @update:model-value="(v) => setStyleValue(c.id, p.key, v)"
+                  />
+                </div>
+              </div>
+            </details>
+          </Panel>
+        </div>
       </div>
       <template #footer>
         <Button label="Cancel" @click="closeDialog" text />
@@ -482,5 +796,58 @@ const deleteDesign = (design: Design) => {
 .var-chip:hover {
   background: #2563ab;
   color: #e0f2fe;
+}
+
+.container-styles-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.container-styles-section > label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.container-style-panel {
+  font-size: 0.875rem;
+}
+
+.font-collapsible {
+  border: 1px dashed var(--p-surface-border, #ddd);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.font-collapsible summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.font-properties-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-top: 0.6rem;
+}
+
+.font-properties-grid .field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.color-field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-field-value {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #666;
 }
 </style>

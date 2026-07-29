@@ -59,10 +59,11 @@ function ensureContainerElement(containerId: string): HTMLElement | null {
 
   const el = document.createElement("div");
   el.dataset.containerId = containerId;
-  // Stable per-container hook for Design CSS — unlike the container's name
-  // (editable any time in the admin), the id never changes, so a Design's
-  // `.dh-container-<id>` rule keeps working across renames.
-  el.classList.add(`dh-container-${containerId}`);
+  // `.dh-container` is shared by every container (a Design's global style
+  // hook); `.dh-container-<id>` is this one's stable per-container hook —
+  // unlike the container's name (editable any time in the admin), the id
+  // never changes, so a Design's rule keeps working across renames.
+  el.classList.add("dh-container", `dh-container-${containerId}`);
   el.style.position = "absolute";
   root.appendChild(el);
   containerElements[containerId] = el;

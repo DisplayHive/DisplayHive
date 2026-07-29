@@ -175,7 +175,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:cts:delete_container')
     @require_right('layouts.delete')
     def handle_delete_container(data=None):
-        from application.models import TagConfig
+        from application.models import TagConfig, DesignContainerStyle
 
         if not data or not isinstance(data, dict):
             return {'ok': False, 'error': 'Invalid payload'}
@@ -190,6 +190,9 @@ def register_admin_layouts_handlers(socketio, app, db):
         ).scalar_one()
         if used_by:
             return {'ok': False, 'error': f'Container is used by {used_by} field(s)'}
+        db.session.execute(
+            db.delete(DesignContainerStyle).where(DesignContainerStyle.contentcontainer_id == container.id)
+        )
         db.session.delete(container)
         db.session.commit()
         _emit_containers()

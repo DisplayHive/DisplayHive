@@ -42,10 +42,30 @@ def _build_payload(db, screen):
     from application.utils.template import get_default_design, parse_content_html
 
     design = get_default_design(db)
+
+    # CSS precedence, low to high (all three are equal-specificity single-class
+    # selectors, so source order breaks the tie): per-container overrides,
+    # then global overrides, then the Design's own hand-written CSS last —
+    # so a plain CSS edit always wins, a global default beats a per-container
+    # tweak, and an unset property just falls through to whatever's beneath it.
+    css_layers = []
+    if design is not None:
+        from application.admin.designs.helper import render_container_style_css, render_global_style_css
+        container_style_css = render_container_style_css(db, design.id)
+        if container_style_css:
+            css_layers.append(container_style_css)
+        global_style_css = render_global_style_css(db, design.id)
+        if global_style_css:
+            css_layers.append(global_style_css)
+    base_css = getattr(design, 'css', '') or ''
+    if base_css:
+        css_layers.append(base_css)
+    css = '\n\n'.join(css_layers)
+
     design_payload = {
         'name': getattr(design, 'name', '') or '',
         'html': getattr(design, 'html', '') or '',
-        'css':  getattr(design, 'css',  '') or '',
+        'css':  css,
     }
 
     # Load magic tags once; applied to Design HTML/CSS and content-handler CSS below.
