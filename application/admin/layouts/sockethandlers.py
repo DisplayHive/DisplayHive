@@ -17,12 +17,23 @@ def register_admin_layouts_handlers(socketio, app, db):
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
     from application.socketio_handlers.auth import require_right
     from application.models import Layout, ContentContainer
+    from application.utils import push_content_list_to_all_screens
 
     def _emit_layouts(room=None):
         emit_layouts_update(socketio, app, db, room=room)
 
     def _emit_containers(room=None):
         emit_containers_update(socketio, app, db, room=room)
+
+    def _push_screens():
+        # Container position/size/default-content and Layout membership can
+        # change what's currently rendered on a screen — push a fresh
+        # upd_content snapshot to everyone rather than waiting for their next
+        # unrelated update or reconnect.
+        try:
+            push_content_list_to_all_screens(socketio, app, db)
+        except Exception:
+            logger.exception('Failed to push content update to screens')
 
     def _resolve_container_ids(container_ids):
         ids = list(dict.fromkeys(
@@ -53,6 +64,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         layout.contentcontainers = _resolve_container_ids(data.get('container_ids'))
         db.session.commit()
         _emit_layouts()
+        _push_screens()
         return {'ok': True, 'id': layout.id}
 
     @socketio.on('displayhive:admin:cts:update_layout')
@@ -76,6 +88,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.add(layout)
         db.session.commit()
         _emit_layouts()
+        _push_screens()
         return {'ok': True}
 
     @socketio.on('displayhive:admin:cts:delete_layout')
@@ -94,6 +107,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.delete(layout)
         db.session.commit()
         _emit_layouts()
+        _push_screens()
         return {'ok': True}
 
     # --- Content Containers (standalone entities) -------------------------
@@ -122,6 +136,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.add(container)
         db.session.commit()
         _emit_containers()
+        _push_screens()
         return {'ok': True, 'id': container.id}
 
     @socketio.on('displayhive:admin:cts:update_container')
@@ -154,6 +169,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.add(container)
         db.session.commit()
         _emit_containers()
+        _push_screens()
         return {'ok': True}
 
     @socketio.on('displayhive:admin:cts:delete_container')
@@ -177,4 +193,5 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.delete(container)
         db.session.commit()
         _emit_containers()
+        _push_screens()
         return {'ok': True}

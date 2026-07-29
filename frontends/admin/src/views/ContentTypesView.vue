@@ -62,18 +62,18 @@ const containersForLayout = computed(() => {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id)
 })
 
-// Field handler options (matches legacy UI and DB schema)
+// Field handler options (matches legacy UI and DB schema), English labels, A→Z
 const fieldHandlerOptions = [
-  { label: 'Text (klein)', value: 'textklein' },
-  { label: 'Text (groß)', value: 'textbig' },
-  { label: 'WYSIWYG', value: 'wysiwyg' },
-  { label: 'Link/URL', value: 'link' },
-  { label: 'Zahl', value: 'numbers' },
-  { label: 'Image', value: 'image' },
-  { label: 'Pfeil (Arrow)', value: 'arrows' },
-  { label: 'pretalx', value: 'pretalx_table' },
-  { label: 'Table', value: 'table' },
+  { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
+  { label: 'Image', value: 'image' },
+  { label: 'Link/URL', value: 'link' },
+  { label: 'Long Text', value: 'textbig' },
+  { label: 'Number', value: 'numbers' },
+  { label: 'Pretalx Table', value: 'pretalx_table' },
+  { label: 'Short Text', value: 'textklein' },
+  { label: 'Table', value: 'table' },
+  { label: 'WYSIWYG', value: 'wysiwyg' },
 ]
 
 // Copy dialog
@@ -112,9 +112,11 @@ let contentTypeLoadTimer: number | null = null
 
 // Each container of the selected Layout automatically gets exactly one
 // field slot — there is no manual container picker or add/remove step.
-// Existing field data (name/label/field_handler) is preserved by matching
-// on contentcontainer_id; containers newly in the Layout get a blank field,
-// and fields for containers no longer in the Layout are dropped.
+// A field's name/label are never its own — they're always the container's
+// current name/title, so renaming a container elsewhere can't leave a field
+// pointing at a stale label. Only the field_handler choice (and id) survives
+// a re-sync; containers newly in the Layout get a blank field, and fields
+// for containers no longer in the Layout are dropped.
 const syncFieldsToLayoutContainers = () => {
   const existingByContainer = new Map(
     editForm.value.tagconfigs
@@ -123,12 +125,11 @@ const syncFieldsToLayoutContainers = () => {
   )
   editForm.value.tagconfigs = containersForLayout.value.map(c => {
     const existing = existingByContainer.get(c.id)
-    if (existing) return existing
     return {
-      id: null,
+      id: existing?.id ?? null,
       name: c.name,
       title: c.title || c.name,
-      field_handler: 'textklein',
+      field_handler: existing?.field_handler ?? 'textklein',
       contentcontainer_id: c.id,
     }
   })
@@ -206,10 +207,16 @@ const handleContentTypeDetail = async (data: any) => {
     editForm.value.tagconfigs = (ct.tagconfigs || [])
       .slice()
       .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      .map((t: any) => ({
-        id: t.id, name: t.field_name, title: t.field_label || t.field_name,
-        field_handler: t.field_handler || 'textklein', contentcontainer_id: t.contentcontainer_id ?? null,
-      }))
+      .map((t: any) => {
+        const c = containers.value.find(x => x.id === t.contentcontainer_id)
+        return {
+          id: t.id,
+          name: c?.name || t.field_name,
+          title: c?.title || c?.name || t.field_label || t.field_name,
+          field_handler: t.field_handler || 'textklein',
+          contentcontainer_id: t.contentcontainer_id ?? null,
+        }
+      })
     // Ensure every container of the Layout has a slot, even if the Layout
     // gained containers since this Contenttype's fields were last saved.
     syncFieldsToLayoutContainers()
@@ -462,19 +469,11 @@ const deleteContentType = (ct: ContentType) => {
           <div v-else class="tagconfigs-table">
             <div class="tagconfig-header">
               <div class="tagconfig-col-container">Container</div>
-              <div class="tagconfig-col-name">Field Name</div>
-              <div class="tagconfig-col-title">Label</div>
               <div class="tagconfig-col-type">Field Handler</div>
             </div>
             <div v-for="(t, tIdx) in editForm.tagconfigs" :key="t.id ?? `new-${tIdx}`" class="tagconfig-row">
               <div class="tagconfig-col-container">
                 <Tag :value="containerLabelFor(t.contentcontainer_id)" />
-              </div>
-              <div class="tagconfig-col-name">
-                <InputText v-model="t.name" class="w-full" size="small" placeholder="field_name" />
-              </div>
-              <div class="tagconfig-col-title">
-                <InputText v-model="t.title" class="w-full" size="small" />
               </div>
               <div class="tagconfig-col-type">
                 <Dropdown
@@ -538,7 +537,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-header {
   display: grid;
-  grid-template-columns: 160px 160px 1fr 200px;
+  grid-template-columns: 200px 1fr;
   gap: 0.5rem;
   padding: 0.5rem;
   background: #f5f5f5;
@@ -549,7 +548,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row {
   display: grid;
-  grid-template-columns: 160px 160px 1fr 200px;
+  grid-template-columns: 200px 1fr;
   gap: 0.5rem;
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
@@ -565,12 +564,6 @@ const deleteContentType = (ct: ContentType) => {
   border-bottom: none;
 }
 
-.tagconfig-col-name {
-  display: flex;
-  align-items: center;
-}
-
-.tagconfig-col-title,
 .tagconfig-col-type,
 .tagconfig-col-container {
   display: flex;

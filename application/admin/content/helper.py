@@ -180,7 +180,14 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     for tc in (tagconfigs or []):
         if tc.contentcontainer_id is None:
             continue
-        rendered_by_container[str(tc.contentcontainer_id)] = str(ctx.get(tc.field_name, '') or '')
+        value = str(ctx.get(tc.field_name, '') or '')
+        # An empty field value (nothing entered for this ContentElement) falls
+        # back to the container's own default_content, the same fallback used
+        # when a scene doesn't target the container at all — a field left
+        # blank shouldn't look any different from a container not being used.
+        if not value and tc.contentcontainer is not None:
+            value = render_container_default(tc.contentcontainer, db=db)
+        rendered_by_container[str(tc.contentcontainer_id)] = value
     return rendered_by_container
 
 

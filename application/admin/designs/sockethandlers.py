@@ -112,6 +112,14 @@ def register_admin_designs_handlers(socketio, app, db):
         if not design:
             return
 
+        was_default = bool(design.isDefault)
         db.session.delete(design)
         db.session.commit()
         _emit_designs()
+
+        if was_default:
+            try:
+                from application.utils import reload_devices_on_all_screens
+                reload_devices_on_all_screens(socketio, db)
+            except Exception:
+                logger.exception('delete_design: failed to reload screens')

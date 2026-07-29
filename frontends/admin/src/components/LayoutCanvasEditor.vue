@@ -455,15 +455,15 @@ const onCanvasDrop = async (e: DragEvent) => {
 // "None" option since a container's default is optional.
 const defaultFieldHandlerOptions = [
   { label: 'None', value: '' },
-  { label: 'Text (klein)', value: 'textklein' },
-  { label: 'Text (groß)', value: 'textbig' },
-  { label: 'WYSIWYG', value: 'wysiwyg' },
-  { label: 'Link/URL', value: 'link' },
-  { label: 'Zahl', value: 'numbers' },
-  { label: 'Image', value: 'image' },
-  { label: 'Pfeil (Arrow)', value: 'arrows' },
-  { label: 'Table', value: 'table' },
+  { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
+  { label: 'Image', value: 'image' },
+  { label: 'Link/URL', value: 'link' },
+  { label: 'Long Text', value: 'textbig' },
+  { label: 'Number', value: 'numbers' },
+  { label: 'Short Text', value: 'textklein' },
+  { label: 'Table', value: 'table' },
+  { label: 'WYSIWYG', value: 'wysiwyg' },
 ]
 
 const showContainerEditModal = ref(false)
@@ -648,7 +648,7 @@ const toggleSelectedLayoutMembership = () => {
             :style="rectStyle(c)"
             @pointerdown="onRectPointerDown($event, c, 'move')"
           >
-            <span class="rect-label">{{ c.title || c.name }}</span>
+            <span class="rect-label">{{ c.title || c.name }} <span class="rect-label-id">#{{ c.id }}</span></span>
             <div class="rect-toolbar">
               <button
                 type="button"
@@ -701,7 +701,7 @@ const toggleSelectedLayoutMembership = () => {
           @dragstart="onSidebarDragStart($event, c)"
         >
           <i class="pi pi-th-large"></i>
-          <span class="sidebar-item-label">{{ c.title || c.name }}</span>
+          <span class="sidebar-item-label">{{ c.title || c.name }} <span class="hint">#{{ c.id }}</span></span>
           <button type="button" class="sidebar-icon-btn" title="Edit container" @click.stop.prevent="openContainerEditModal(c)">
             <i class="pi pi-pencil"></i>
           </button>
@@ -720,7 +720,7 @@ const toggleSelectedLayoutMembership = () => {
     </div>
 
     <!-- Container Edit Modal -->
-    <Dialog v-model:visible="showContainerEditModal" header="Edit Container" modal :style="{ width: '480px' }">
+    <Dialog v-model:visible="showContainerEditModal" :header="`Edit Container #${containerEditForm.id}`" modal :style="{ width: '480px' }">
       <div class="dialog-content">
         <div class="field">
           <label>Name</label>
@@ -967,6 +967,11 @@ const toggleSelectedLayoutMembership = () => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: calc(100% - 6px);
+}
+
+.rect-label-id {
+  font-weight: 400;
+  color: #64748b;
 }
 
 .resize-handle {
