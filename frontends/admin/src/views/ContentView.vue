@@ -84,7 +84,7 @@ const oneScreenGroupIds = computed(() => oneScreenGroups.value.map(g => g.id))
 
 const selectedScreengroupFilter = ref<number>(0)
 const showActiveOnly = ref(false)
-const searchFilters = ref<Record<string, string>>({})
+const searchFilter = ref('')
 
 const allScreengroupOptions = computed(() => {
   const opts = allScreengroups.value
@@ -93,36 +93,24 @@ const allScreengroupOptions = computed(() => {
   return [{ id: 0, name: 'All' }, ...opts]
 })
 
-const contentByType = computed<Record<string, ContentElement[]>>(() => {
-  const result: Record<string, ContentElement[]> = {}
-  for (const ct of contentTypes.value) {
-    const filter = (searchFilters.value[ct.name] || '').toLowerCase()
-    let items = allContent.value.filter(item => item.contenttypeName === ct.name)
-    if (showActiveOnly.value) {
-      items = items.filter(item => item.active)
-    }
-    if (selectedScreengroupFilter.value !== 0) {
-      items = items.filter(item =>
-        (item.screengroups || []).some(sg => sg.id === selectedScreengroupFilter.value)
-      )
-    }
-    if (filter) {
-      items = items.filter(item => {
-        if (item.title?.toLowerCase().includes(filter)) return true
-        return getContentFields(item).some(field => field.value.toLowerCase().includes(filter))
-      })
-    }
-    result[ct.name] = items
+const filteredContent = computed<ContentElement[]>(() => {
+  const filter = searchFilter.value.toLowerCase()
+  let items = allContent.value
+  if (showActiveOnly.value) {
+    items = items.filter(item => item.active)
   }
-  return result
-})
-
-const totalByType = computed<Record<string, number>>(() => {
-  const result: Record<string, number> = {}
-  for (const ct of contentTypes.value) {
-    result[ct.name] = allContent.value.filter(item => item.contenttypeName === ct.name).length
+  if (selectedScreengroupFilter.value !== 0) {
+    items = items.filter(item =>
+      (item.screengroups || []).some(sg => sg.id === selectedScreengroupFilter.value)
+    )
   }
-  return result
+  if (filter) {
+    items = items.filter(item => {
+      if (item.title?.toLowerCase().includes(filter)) return true
+      return getContentFields(item).some(field => field.value.toLowerCase().includes(filter))
+    })
+  }
+  return items
 })
 
 const handleAllContentDetailed = (data: { content: ContentElement[] }) => {
@@ -136,9 +124,6 @@ const handleUnassignedContent = (data: { content: ContentElement[] }) => {
 
 const handleContentTypes = (data: { data?: ContentType[]; contenttypes?: ContentType[] }) => {
   contentTypes.value = data.data || data.contenttypes || []
-  contentTypes.value.forEach(ct => {
-    if (!(ct.name in searchFilters.value)) searchFilters.value[ct.name] = ''
-  })
 }
 
 const handleAllScreengroups = (data: any) => {
@@ -234,10 +219,6 @@ const openCreateWorkflow = () => {
   editorRef.value?.openCreate()
 }
 
-const openCreateForType = (ct: ContentType) => {
-  editorRef.value?.openCreateForType(ct)
-}
-
 const openEditContent = (content: ContentElement) => {
   editorRef.value?.openEdit(content)
 }
@@ -290,42 +271,20 @@ const copyContent = (content: ContentElement) => {
           />
         </div>
 
-        <div class="containers-grid">
-          <Card v-for="ct in contentTypes" :key="ct.id" class="container-card">
-            <template #title>
-              <div class="container-header">
-                <div class="container-header-left">
-                  <span>{{ ct.name }}</span>
-                  <Tag :value="`${(contentByType[ct.name] || []).length} items`" />
-                </div>
-                <Button
-                  v-if="canCreate"
-                  icon="pi pi-plus"
-                  label="Add"
-                  @click="openCreateForType(ct)"
-                  size="small"
-                  severity="success"
-                />
-              </div>
-            </template>
-            <template #content>
-              <ContentTable
-                :items="contentByType[ct.name] || []"
-                :totalItems="totalByType[ct.name] || 0"
-                v-model:search="searchFilters[ct.name]"
-                :oneScreenGroupIds="oneScreenGroupIds"
-                emptyMessage="No content of this type"
-                @edit="openEditContent"
-                @copy="copyContent"
-                @preview="showInPreview"
-                @delete="deleteContent"
-                @toggleActive="toggleActive"
-                @updateDuration="updateDuration"
-                @setDuration="setDuration"
-              />
-            </template>
-          </Card>
-        </div>
+        <ContentTable
+          :items="filteredContent"
+          :totalItems="allContent.length"
+          v-model:search="searchFilter"
+          :oneScreenGroupIds="oneScreenGroupIds"
+          emptyMessage="No content"
+          @edit="openEditContent"
+          @copy="copyContent"
+          @preview="showInPreview"
+          @delete="deleteContent"
+          @toggleActive="toggleActive"
+          @updateDuration="updateDuration"
+          @setDuration="setDuration"
+        />
 
         <Card v-if="unassignedContent.length > 0" class="container-card unassigned-card">
           <template #title>
@@ -396,12 +355,6 @@ const copyContent = (content: ContentElement) => {
   min-width: 200px;
 }
 
-.containers-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 1200px), 1fr));
-  gap: 1.5rem;
-}
-
 .container-card {
   height: fit-content;
 }
@@ -426,10 +379,6 @@ const copyContent = (content: ContentElement) => {
 }
 
 @media (max-width: 768px) {
-  .containers-grid {
-    grid-template-columns: 1fr;
-  }
-
   .container-header {
     flex-wrap: wrap;
     gap: 0.5rem;
