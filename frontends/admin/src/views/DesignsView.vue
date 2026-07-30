@@ -41,6 +41,32 @@ const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
   e.dataTransfer?.setData('text/plain', `{{ var_${tagName} }}`)
 }
 
+// --- Collapsible Panel state ------------------------------------------------
+// PrimeVue's Panel only toggles from its small chevron button, not the
+// header itself — these refs + a click handler on our custom #header slot
+// content make the whole header row clickable instead.
+const backdropCollapsed = ref(true)
+const gradientPanelCollapsed = ref(true)
+const backgroundPanelCollapsed = ref(true)
+const globalStylesCollapsed = ref(true)
+const perContainerSectionCollapsed = ref(true)
+const customHtmlCssCollapsed = ref(true)
+
+const containerPanelCollapsed = ref<Record<number, boolean>>({})
+const isContainerPanelCollapsed = (id: number) => containerPanelCollapsed.value[id] ?? true
+const toggleContainerPanel = (id: number) => {
+  containerPanelCollapsed.value[id] = !isContainerPanelCollapsed(id)
+}
+const resetPanelCollapseState = () => {
+  backdropCollapsed.value = true
+  gradientPanelCollapsed.value = true
+  backgroundPanelCollapsed.value = true
+  globalStylesCollapsed.value = true
+  perContainerSectionCollapsed.value = true
+  customHtmlCssCollapsed.value = true
+  containerPanelCollapsed.value = {}
+}
+
 // --- Per-container "Font" style overrides ----------------------------------
 // A generic (property, value) key/value row per container per Design (see
 // DesignContainerStyle on the backend) — starting with this one "Font"
@@ -557,6 +583,7 @@ const openNewDialog = () => {
   }
   containerStyles.value = {}
   globalStyles.value = {}
+  resetPanelCollapseState()
   showEditDialog.value = true
 }
 
@@ -577,6 +604,7 @@ const openEditDialog = (design: Design) => {
   }
   containerStyles.value = {}
   globalStyles.value = {}
+  resetPanelCollapseState()
   try {
     loadingDesign.value = true
     loadingDesignError.value = ''
@@ -758,54 +786,21 @@ const deleteDesign = (design: Design) => {
           <label for="design-description">Description</label>
           <Textarea id="design-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
-        <div class="code-editors-row">
-          <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">
-            <label>Background HTML</label>
-            <Codemirror
-              ref="htmlEditorRef"
-              v-model="editForm.html"
-              :extensions="cmHtmlExtensions"
-              :style="{ height: '400px' }"
-              :autofocus="false"
-              :indent-with-tab="true"
-              :tab-size="2"
-            />
-            <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
-          </div>
-          <div class="code-editor-field" @focusin="lastFocusedEditor = 'css'">
-            <label>CSS Styles</label>
-            <Codemirror
-              ref="cssEditorRef"
-              v-model="editForm.css"
-              :extensions="cmCssExtensions"
-              :style="{ height: '400px' }"
-              :autofocus="false"
-              :indent-with-tab="true"
-              :tab-size="2"
-            />
-          </div>
-        </div>
-        <div v-if="canMagicTagsPage && magicTagsStore.magicTags.length" class="var-tags-section">
-          <label>Magic Tags</label>
-          <div class="var-chips">
-            <span
-              v-for="v in magicTagsStore.magicTags"
-              :key="v.id"
-              class="var-chip"
-              draggable="true"
-              @dragstart="onMagicTagDragStart($event, v.name)"
-              :title="v.description ? `${v.description}\n\nDrag {{ var_${v.name} }} into the editor` : `Drag {{ var_${v.name} }} into the editor`"
-            >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
-          </div>
-        </div>
-
         <div v-if="!isNew" class="container-styles-section">
-          <label>Backdrop</label>
-          <small class="hint">
-            The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor above, so a manual edit there still wins.
-          </small>
-          <Panel header="Backdrop" toggleable collapsed class="container-style-panel">
-            <Panel header="Gradient" toggleable collapsed class="container-style-panel nested-panel">
+          <Panel v-model:collapsed="backdropCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="backdropCollapsed = !backdropCollapsed">
+                <span class="panel-header-title">Backdrop</span>
+                <small class="panel-header-desc">The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor below, so a manual edit there still wins.</small>
+              </div>
+            </template>
+            <Panel v-model:collapsed="gradientPanelCollapsed" toggleable class="container-style-panel nested-panel">
+              <template #header>
+                <div class="panel-header-clickable" @click="gradientPanelCollapsed = !gradientPanelCollapsed">
+                  <span class="panel-header-title">Gradient</span>
+                  <small class="panel-header-desc">Applied as the body background, stacked in the order picked below (first = frontmost layer).</small>
+                </div>
+              </template>
               <div class="gradient-picker-row">
                 <MultiSelect
                   :model-value="editForm.gradient_ids"
@@ -827,7 +822,13 @@ const deleteDesign = (design: Design) => {
               ></div>
             </Panel>
 
-            <Panel header="Background" toggleable collapsed class="container-style-panel nested-panel">
+            <Panel v-model:collapsed="backgroundPanelCollapsed" toggleable class="container-style-panel nested-panel">
+              <template #header>
+                <div class="panel-header-clickable" @click="backgroundPanelCollapsed = !backgroundPanelCollapsed">
+                  <span class="panel-header-title">Background</span>
+                  <small class="panel-header-desc">Image, color, repeat/size/opacity for the page background — beneath the Gradient layer above.</small>
+                </div>
+              </template>
               <div class="field">
                 <label>Background Image</label>
                 <div class="background-image-row">
@@ -900,12 +901,13 @@ const deleteDesign = (design: Design) => {
         />
 
         <div v-if="!isNew" class="container-styles-section">
-          <label>Global Styles</label>
-          <small class="hint">
-            Applies to every container via the shared <code>.dh-container</code> class.
-            Beats a per-container override below, but loses to anything in the CSS editor above.
-          </small>
-          <Panel header="Font" toggleable collapsed class="container-style-panel">
+          <Panel v-model:collapsed="globalStylesCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="globalStylesCollapsed = !globalStylesCollapsed">
+                <span class="panel-header-title">Global Styles</span>
+                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Beats a per-container override below, but loses to anything in the CSS editor below.</small>
+              </div>
+            </template>
             <div class="font-properties-grid">
               <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
                 <label>{{ p.label }}</label>
@@ -947,22 +949,28 @@ const deleteDesign = (design: Design) => {
         </div>
 
         <div v-if="!isNew && containers.length" class="container-styles-section">
-          <label>Per-Container Styles</label>
-          <small class="hint">
-            Style an individual container's overlay by its stable <code>.dh-container-&lt;id&gt;</code> class.
-            Changes save automatically. "(not set)" leaves that CSS property out entirely.
-          </small>
-          <Panel
-            v-for="c in containers"
-            :key="c.id"
-            :header="`${c.title || c.name} #${c.id}`"
-            toggleable
-            collapsed
-            class="container-style-panel"
-          >
-            <details class="font-collapsible">
-              <summary>Font</summary>
-              <div class="font-properties-grid">
+          <Panel v-model:collapsed="perContainerSectionCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="perContainerSectionCollapsed = !perContainerSectionCollapsed">
+                <span class="panel-header-title">Per-Container Styles</span>
+                <small class="panel-header-desc">Style an individual container's overlay by its stable .dh-container-&lt;id&gt; class. Changes save automatically. "(not set)" leaves that CSS property out entirely.</small>
+              </div>
+            </template>
+            <Panel
+              v-for="c in containers"
+              :key="c.id"
+              :collapsed="isContainerPanelCollapsed(c.id)"
+              toggleable
+              class="container-style-panel nested-panel"
+            >
+              <template #header>
+                <div class="panel-header-clickable" @click="toggleContainerPanel(c.id)">
+                  <span class="panel-header-title">{{ c.title || c.name }} #{{ c.id }}</span>
+                </div>
+              </template>
+              <details class="font-collapsible">
+                <summary>Font</summary>
+                <div class="font-properties-grid">
                 <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
                   <label>{{ p.label }}</label>
                   <InputNumber
@@ -1000,6 +1008,58 @@ const deleteDesign = (design: Design) => {
                 </div>
               </div>
             </details>
+            </Panel>
+          </Panel>
+        </div>
+
+        <div class="container-styles-section">
+          <Panel v-model:collapsed="customHtmlCssCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
+                <span class="panel-header-title">Custom HTML and CSS</span>
+                <small class="panel-header-desc">Hand-written background HTML/CSS — rendered last, so it always wins over every collapsible above.</small>
+              </div>
+            </template>
+            <div class="code-editors-row">
+              <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">
+                <label>Background HTML</label>
+                <Codemirror
+                  ref="htmlEditorRef"
+                  v-model="editForm.html"
+                  :extensions="cmHtmlExtensions"
+                  :style="{ height: '400px' }"
+                  :autofocus="false"
+                  :indent-with-tab="true"
+                  :tab-size="2"
+                />
+                <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
+              </div>
+              <div class="code-editor-field" @focusin="lastFocusedEditor = 'css'">
+                <label>CSS Styles</label>
+                <Codemirror
+                  ref="cssEditorRef"
+                  v-model="editForm.css"
+                  :extensions="cmCssExtensions"
+                  :style="{ height: '400px' }"
+                  :autofocus="false"
+                  :indent-with-tab="true"
+                  :tab-size="2"
+                />
+              </div>
+            </div>
+            <div v-if="canMagicTagsPage && magicTagsStore.magicTags.length" class="var-tags-section">
+              <label>Magic Tags</label>
+              <div class="var-chips">
+                <span
+                  v-for="v in magicTagsStore.magicTags"
+                  :key="v.id"
+                  class="var-chip"
+                  draggable="true"
+                  @dragstart="onMagicTagDragStart($event, v.name)"
+                  :title="v.description ? `${v.description}\n\nDrag {{ var_${v.name} }} into the editor` : `Drag {{ var_${v.name} }} into the editor`"
+                >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
+              </div>
+            </div>
           </Panel>
         </div>
       </div>
@@ -1226,6 +1286,26 @@ const deleteDesign = (design: Design) => {
 
 .container-style-panel {
   font-size: 0.875rem;
+}
+
+.panel-header-clickable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.panel-header-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.panel-header-desc {
+  font-weight: 400;
+  font-size: 0.78rem;
+  color: var(--p-text-muted-color, #777);
 }
 
 .font-collapsible {
