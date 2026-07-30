@@ -124,7 +124,6 @@ def register_admin_layouts_handlers(socketio, app, db):
             return {'ok': False, 'error': 'Invalid payload'}
         container = ContentContainer(
             name=data.get('name', ''),
-            title=data.get('title', ''),
             order=int(data.get('order') or 0),
             top=float(data.get('top') or 0),
             left=float(data.get('left') or 0),
@@ -152,7 +151,6 @@ def register_admin_layouts_handlers(socketio, app, db):
             return {'ok': False, 'error': 'Container not found'}
 
         container.name = data.get('name', container.name)
-        container.title = data.get('title', container.title)
         for field in ('order',):
             if data.get(field) is not None:
                 setattr(container, field, int(data[field]))

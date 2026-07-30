@@ -15,7 +15,6 @@ def _serialize_container(c, used_container_ids: set) -> dict:
     return {
         'id': c.id,
         'name': c.name,
-        'title': c.title or c.name,
         'order': c.order,
         'top': c.top,
         'left': c.left,

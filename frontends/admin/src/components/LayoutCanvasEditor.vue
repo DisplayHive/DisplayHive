@@ -114,7 +114,7 @@ const flushPendingPositions = async (): Promise<boolean> => {
     if (others.length) {
       const c = props.containers.find((x) => x.id === id)
       const names = others.map((l) => l.name).join('", "')
-      affectedLines.push(`"${c?.title || c?.name}" also affects layout${others.length > 1 ? 's' : ''} "${names}"`)
+      affectedLines.push(`"${c?.name}" also affects layout${others.length > 1 ? 's' : ''} "${names}"`)
     }
   }
 
@@ -342,8 +342,7 @@ const createNewContainer = async (pos: { top: number; left: number; width: numbe
     const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
       'displayhive:admin:cts:create_container',
       {
-        name: `container-${n}`,
-        title: `Container ${n}`,
+        name: `Container ${n}`,
         order: n,
         top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height),
       }
@@ -419,7 +418,7 @@ const confirmDeleteContainer = (containerId: number | null) => {
     return
   }
   confirm.require({
-    message: `Delete container "${c.title || c.name}"?`,
+    message: `Delete container "${c.name}"?`,
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
@@ -470,7 +469,7 @@ const showContainerEditModal = ref(false)
 const showImagePickerDialog = ref(false)
 const containerEditForm = reactive({
   id: null as number | null,
-  name: '', title: '',
+  name: '',
   top: 0, left: 0, width: 20, height: 20,
   default_field_handler: '', default_content: '',
 })
@@ -484,7 +483,6 @@ const openContainerEditModal = (c: ContentContainer) => {
   const p = posFor(c)
   containerEditForm.id = c.id
   containerEditForm.name = c.name
-  containerEditForm.title = c.title || ''
   containerEditForm.top = p.top
   containerEditForm.left = p.left
   containerEditForm.width = p.width
@@ -587,14 +585,12 @@ const saveContainerEditModal = () => {
 
   if (
     containerEditForm.name !== c.name ||
-    containerEditForm.title !== (c.title || '') ||
     containerEditForm.default_field_handler !== (c.default_field_handler || '') ||
     containerEditForm.default_content !== (c.default_content || '')
   ) {
     socketEmit('displayhive:admin:cts:update_container', {
       id,
       name: containerEditForm.name,
-      title: containerEditForm.title,
       default_field_handler: containerEditForm.default_field_handler,
       default_content: containerEditForm.default_content,
     })
@@ -648,7 +644,7 @@ const toggleSelectedLayoutMembership = () => {
             :style="rectStyle(c)"
             @pointerdown="onRectPointerDown($event, c, 'move')"
           >
-            <span class="rect-label">{{ c.title || c.name }} <span class="rect-label-id">#{{ c.id }}</span></span>
+            <span class="rect-label">{{ c.name }} <span class="rect-label-id">#{{ c.id }}</span></span>
             <div class="rect-toolbar">
               <button
                 type="button"
@@ -701,7 +697,7 @@ const toggleSelectedLayoutMembership = () => {
           @dragstart="onSidebarDragStart($event, c)"
         >
           <i class="pi pi-th-large"></i>
-          <span class="sidebar-item-label">{{ c.title || c.name }} <span class="hint">#{{ c.id }}</span></span>
+          <span class="sidebar-item-label">{{ c.name }} <span class="hint">#{{ c.id }}</span></span>
           <button type="button" class="sidebar-icon-btn" title="Edit container" @click.stop.prevent="openContainerEditModal(c)">
             <i class="pi pi-pencil"></i>
           </button>
@@ -725,10 +721,6 @@ const toggleSelectedLayoutMembership = () => {
         <div class="field">
           <label>Name</label>
           <InputText v-model="containerEditForm.name" size="small" class="w-full" />
-        </div>
-        <div class="field">
-          <label>Title</label>
-          <InputText v-model="containerEditForm.title" size="small" class="w-full" />
         </div>
         <div class="position-grid">
           <div class="field">

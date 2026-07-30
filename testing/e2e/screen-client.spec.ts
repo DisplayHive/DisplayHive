@@ -269,7 +269,7 @@ async function seedContainer(page: Page, name: string): Promise<number> {
         if (!socket) { reject(new Error('Socket not available')); return }
         const t = setTimeout(() => reject(new Error('Timed out waiting for create_container result')), 10_000)
         socket.emit('displayhive:admin:cts:create_container', {
-          name, title: name, order: 0, top: 0, left: 0, width: 100, height: 100,
+          name, order: 0, top: 0, left: 0, width: 100, height: 100,
         }, (ack: any) => {
           clearTimeout(t)
           resolve(ack?.id ? Number(ack.id) : 0)

@@ -965,7 +965,7 @@ const deleteDesign = (design: Design) => {
             >
               <template #header>
                 <div class="panel-header-clickable" @click="toggleContainerPanel(c.id)">
-                  <span class="panel-header-title">{{ c.title || c.name }} #{{ c.id }}</span>
+                  <span class="panel-header-title">{{ c.name }} #{{ c.id }}</span>
                 </div>
               </template>
               <details class="font-collapsible">

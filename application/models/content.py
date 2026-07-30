@@ -146,7 +146,6 @@ class ContentContainer(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))  # Display/reference name (e.g., 'maincontent', 'sidebar')
     order: Mapped[int] = mapped_column(Integer, default=0)  # Display order in admin lists
-    title: Mapped[str] = mapped_column(String(255), nullable=True)  # Container title/description
     # Position/size on screen, in viewport-relative units.
     top: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vh
     left: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vw

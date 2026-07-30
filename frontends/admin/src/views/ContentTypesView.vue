@@ -113,7 +113,7 @@ let contentTypeLoadTimer: number | null = null
 // Each container of the selected Layout automatically gets exactly one
 // field slot — there is no manual container picker or add/remove step.
 // A field's name/label are never its own — they're always the container's
-// current name/title, so renaming a container elsewhere can't leave a field
+// current name, so renaming a container elsewhere can't leave a field
 // pointing at a stale label. Only the field_handler choice (and id) survives
 // a re-sync; containers newly in the Layout get a blank field, and fields
 // for containers no longer in the Layout are dropped.
@@ -128,7 +128,7 @@ const syncFieldsToLayoutContainers = () => {
     return {
       id: existing?.id ?? null,
       name: c.name,
-      title: c.title || c.name,
+      title: c.name,
       field_handler: existing?.field_handler ?? 'textklein',
       contentcontainer_id: c.id,
     }
@@ -141,7 +141,7 @@ watch(() => editForm.value.layout_id, () => {
 
 const containerLabelFor = (contentcontainerId: number | null) => {
   const c = containers.value.find(c => c.id === contentcontainerId)
-  return c ? (c.title || c.name) : '?'
+  return c ? c.name : '?'
 }
 
 const prepareTagConfigsPayload = () => {
@@ -212,7 +212,7 @@ const handleContentTypeDetail = async (data: any) => {
         return {
           id: t.id,
           name: c?.name || t.field_name,
-          title: c?.title || c?.name || t.field_label || t.field_name,
+          title: c?.name || t.field_label || t.field_name,
           field_handler: t.field_handler || 'textklein',
           contentcontainer_id: t.contentcontainer_id ?? null,
         }

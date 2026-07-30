@@ -105,7 +105,6 @@ export interface Layout {
 export interface ContentContainer {
   id: number
   name: string
-  title?: string
   order?: number
   top: number
   left: number
