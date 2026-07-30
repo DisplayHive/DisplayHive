@@ -196,10 +196,11 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
     reusing the same logic as a regular Contenttype field (TagConfig).
 
     Used both for a ContentContainer's own fallback content and for the
-    admin's live preview of that default while editing it. The 'arrows'
-    handler stores {char, size} as JSON in *content* (mirroring how a
-    regular field keeps its size in a separate `<field>_size` key) — every
-    other handler treats *content* as the field's plain raw value.
+    admin's live preview of that default while editing it. The 'arrows' and
+    'pretalx_table' handlers store their multi-part config as JSON in
+    *content* (mirroring how a regular field keeps that same shape spread
+    across several `<field>__suffix` keys) — every other handler treats
+    *content* as the field's plain raw value.
     """
     if not field_handler or not content:
         return ''
@@ -213,6 +214,28 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
             ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 48)}
         except Exception:
             ctx = {'default': content}
+    elif field_handler == 'pretalx_table':
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            parsed = {}
+        ctx = {
+            'default': parsed.get('url', ''),
+            'default__type': parsed.get('type', 'list'),
+            'default__roomname': parsed.get('roomname', ''),
+            'default__fields': parsed.get('fields', ''),
+            'default__linecount': parsed.get('linecount', 10),
+            'default__author_under_title': parsed.get('author_under_title', False),
+            'default__tracks_by_color': parsed.get('tracks_by_color', False),
+            'default__today_only': parsed.get('today_only', False),
+            'default__separate_days': parsed.get('separate_days', False),
+            'default__day_prefix': parsed.get('day_prefix', ''),
+            'default__empty_text': parsed.get('empty_text', ''),
+            'default__tracklist_columns': parsed.get('tracklist_columns', 'name|Name,color|Color'),
+            'default__tracklist_layout': parsed.get('tracklist_layout', 'list'),
+            'default__tracklist_exclude': parsed.get('tracklist_exclude', ''),
+            'default__invalid_data_text': parsed.get('invalid_data_text', ''),
+        }
     serialized = json.dumps(ctx, ensure_ascii=False)
     rendered = render_content_fields([fake_tc], serialized, db=db)
     return rendered.get('0', '')

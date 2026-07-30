@@ -15,6 +15,8 @@ import Paginator from 'primevue/paginator'
 import DatePicker from 'primevue/datepicker'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
+import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
+import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 
 interface ContentElement {
   id: number
@@ -63,7 +65,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
-const { on, off, emit: socketEmit, emitWithAck: socketEmitWithAck } = useSocket()
+const { on, off, emit: socketEmit } = useSocket()
 
 const showSelectContentTypeDialog = ref(false)
 const showCreateContentDialog = ref(false)
@@ -102,16 +104,6 @@ const pickerSearchText = ref('')
 const pickerLoading = ref(false)
 
 const availableImageTags = ref<string[]>([])
-
-interface PretalxApiUrlOption {
-  id: number
-  name: string
-  url: string
-  is_valid: boolean | null
-  has_cache: boolean
-}
-const pretalxApiUrls = ref<PretalxApiUrlOption[]>([])
-const pretalxRoomsCache = ref<Record<string, string[]>>({})
 
 // --- datetime_format preview ---
 const previewNow = ref(new Date())
@@ -390,50 +382,64 @@ const extractTagConfigs = (html: string) => {
       found.set(raw, { name: raw, title: raw, fieldHandler: 'textklein', description: '', max_length: 255 })
     }
   }
-  tagConfigs.value = Array.from(found.values()).flatMap(tag => {
-    if (tag.fieldHandler === 'pretalx_table') {
-      return [
-        { ...tag, fieldHandler: 'pretalx_url_select', title: tag.title + ' – API Endpoint' },
-        { name: tag.name + '__type', title: 'Type', fieldHandler: 'pretalx_type_select', description: '', max_length: 50 },
-        { name: tag.name + '__roomname', title: 'Room Name filter', fieldHandler: 'pretalx_room_select', description: '', max_length: 255 },
-        { name: tag.name + '__fields', title: 'Fields', fieldHandler: 'pretalx_event_fields', description: '', max_length: 1000 },
-        { name: tag.name + '__linecount', title: 'Line Count', fieldHandler: 'numbers', description: '', max_length: 255 },
-        { name: tag.name + '__author_under_title', title: 'Display Author under Title', fieldHandler: 'checkbox', description: '', max_length: 0 },
-        { name: tag.name + '__tracks_by_color', title: 'Represent tracks by Color', fieldHandler: 'checkbox', description: '', max_length: 0 },
-        { name: tag.name + '__today_only', title: 'Only show today', fieldHandler: 'checkbox', description: '', max_length: 0 },
-        { name: tag.name + '__separate_days', title: 'Separate day tables', fieldHandler: 'checkbox', description: '', max_length: 0 },
-        { name: tag.name + '__day_prefix', title: 'Day Prefix', fieldHandler: 'textklein', description: '', max_length: 50 },
-        { name: tag.name + '__empty_text', title: 'No session running text', fieldHandler: 'textklein', description: '', max_length: 500 },
-        { name: tag.name + '__tracklist_columns', title: 'Tracklist Columns', fieldHandler: 'pretalx_tracklist_columns', description: '', max_length: 100 },
-        { name: tag.name + '__tracklist_layout', title: 'Tracklist Layout', fieldHandler: 'pretalx_tracklist_layout_select', description: '', max_length: 20 },
-        { name: tag.name + '__tracklist_exclude', title: 'Exclude Tracks', fieldHandler: 'textklein', description: 'Comma-separated track names or slugs to exclude', max_length: 500 },
-        { name: tag.name + '__section_styling', title: 'Styling', fieldHandler: 'pretalx_section_styling', description: '', max_length: 0 },
-      ]
-    }
-    return [tag]
-  })
+  tagConfigs.value = Array.from(found.values())
   createForm.value.fields = {}
   tagConfigs.value.forEach(tag => {
     if (tag.fieldHandler === 'numbers') {
       createForm.value.fields[tag.name] = 0
     } else if (tag.fieldHandler === 'checkbox') {
       createForm.value.fields[tag.name] = false
-    } else if (tag.fieldHandler === 'pretalx_type_select') {
-      createForm.value.fields[tag.name] = 'list'
-    } else if (tag.fieldHandler === 'pretalx_tracklist_columns') {
-      createForm.value.fields[tag.name] = 'name|Name,color|Color'
-    } else if (tag.fieldHandler === 'pretalx_tracklist_layout_select') {
-      createForm.value.fields[tag.name] = 'list'
     } else if (tag.fieldHandler === 'datetime_format') {
       createForm.value.fields[tag.name] = 'HH:mm:ss'
     } else if (tag.fieldHandler === 'table') {
       createForm.value.fields[tag.name] = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
-    } else if (tag.fieldHandler === 'pretalx_section_styling') {
-      createForm.value.fields[tag.name.replace(/__section_styling$/, '') + '__invalid_data_text'] = ''
     } else {
       createForm.value.fields[tag.name] = ''
     }
   })
+}
+
+// --- pretalx_table field adapter ------------------------------------------
+// The wire format (ContentElement.serialized_input / the payload sent to
+// create_content_element) is flat, suffix-keyed values on createForm.fields
+// (e.g. `${name}__type`, `${name}__roomname`, ...) — application/admin/
+// content/helper.py's render_content_fields() reads it that shape directly.
+// These two functions are the only place that shape is assembled/read, so
+// the shared PretalxTableFieldEditor component never needs to know about it.
+const getPretalxTableValue = (name: string): PretalxTableValue => ({
+  url: String(createForm.value.fields[name] || ''),
+  type: String(createForm.value.fields[name + '__type'] || 'list'),
+  roomname: String(createForm.value.fields[name + '__roomname'] || ''),
+  fields: String(createForm.value.fields[name + '__fields'] || ''),
+  linecount: Number(createForm.value.fields[name + '__linecount'] ?? 10),
+  author_under_title: !!createForm.value.fields[name + '__author_under_title'],
+  tracks_by_color: !!createForm.value.fields[name + '__tracks_by_color'],
+  today_only: !!createForm.value.fields[name + '__today_only'],
+  separate_days: !!createForm.value.fields[name + '__separate_days'],
+  day_prefix: String(createForm.value.fields[name + '__day_prefix'] || ''),
+  empty_text: String(createForm.value.fields[name + '__empty_text'] || ''),
+  tracklist_columns: String(createForm.value.fields[name + '__tracklist_columns'] || 'name|Name,color|Color'),
+  tracklist_layout: String(createForm.value.fields[name + '__tracklist_layout'] || 'list'),
+  tracklist_exclude: String(createForm.value.fields[name + '__tracklist_exclude'] || ''),
+  invalid_data_text: String(createForm.value.fields[name + '__invalid_data_text'] || ''),
+})
+
+const setPretalxTableValue = (name: string, v: PretalxTableValue) => {
+  createForm.value.fields[name] = v.url
+  createForm.value.fields[name + '__type'] = v.type
+  createForm.value.fields[name + '__roomname'] = v.roomname
+  createForm.value.fields[name + '__fields'] = v.fields
+  createForm.value.fields[name + '__linecount'] = v.linecount
+  createForm.value.fields[name + '__author_under_title'] = v.author_under_title
+  createForm.value.fields[name + '__tracks_by_color'] = v.tracks_by_color
+  createForm.value.fields[name + '__today_only'] = v.today_only
+  createForm.value.fields[name + '__separate_days'] = v.separate_days
+  createForm.value.fields[name + '__day_prefix'] = v.day_prefix
+  createForm.value.fields[name + '__empty_text'] = v.empty_text
+  createForm.value.fields[name + '__tracklist_columns'] = v.tracklist_columns
+  createForm.value.fields[name + '__tracklist_layout'] = v.tracklist_layout
+  createForm.value.fields[name + '__tracklist_exclude'] = v.tracklist_exclude
+  createForm.value.fields[name + '__invalid_data_text'] = v.invalid_data_text
 }
 
 const onEditorLoad = (fieldName: string, event: { instance: any }) => {
@@ -481,61 +487,6 @@ const toggleImageTag = (fieldName: string, tag: string) => {
 
 const clearImageField = (fieldName: string) => {
   setFieldValue(fieldName, '')
-}
-
-const TRACKLIST_COL_OPTIONS = [
-  { label: 'Name',  value: 'name'  },
-  { label: 'Slug',  value: 'slug'  },
-  { label: 'Color', value: 'color' },
-]
-
-const EVENT_FIELD_OPTIONS = [
-  { label: 'Date/Time',   value: 'date'        },
-  { label: 'Title',       value: 'title'       },
-  { label: 'Abstract',    value: 'abstract'    },
-  { label: 'Speaker',     value: 'person'      },
-  { label: 'Track',       value: 'track'       },
-  { label: 'Track Color', value: 'color'       },
-  { label: 'Room',        value: 'room'        },
-  { label: 'Duration',    value: 'duration'    },
-  { label: 'Description', value: 'description' },
-]
-
-const parseTracklistColumns = (fieldName: string): Array<{ key: string; label: string }> => {
-  const val = String(getFieldValue(fieldName) || '')
-  return val.split(',').filter(Boolean).map(part => {
-    const pipe = part.indexOf('|')
-    return pipe === -1
-      ? { key: part.trim(), label: part.trim() }
-      : { key: part.slice(0, pipe).trim(), label: part.slice(pipe + 1).trim() }
-  })
-}
-
-const serializeTracklistColumns = (rows: Array<{ key: string; label: string }>): string =>
-  rows.filter(r => r.key).map(r => `${r.key}|${r.label}`).join(',')
-
-const updateTracklistColumnKey = (fieldName: string, idx: number, key: string) => {
-  const rows = parseTracklistColumns(fieldName)
-  if (rows[idx]) { rows[idx].key = key; if (!rows[idx].label) rows[idx].label = key }
-  setFieldValue(fieldName, serializeTracklistColumns(rows))
-}
-
-const updateTracklistColumnLabel = (fieldName: string, idx: number, label: string) => {
-  const rows = parseTracklistColumns(fieldName)
-  if (rows[idx]) rows[idx].label = label
-  setFieldValue(fieldName, serializeTracklistColumns(rows))
-}
-
-const removeTracklistColumn = (fieldName: string, idx: number) => {
-  const rows = parseTracklistColumns(fieldName)
-  rows.splice(idx, 1)
-  setFieldValue(fieldName, serializeTracklistColumns(rows))
-}
-
-const addTracklistColumn = (fieldName: string) => {
-  const rows = parseTracklistColumns(fieldName)
-  rows.push({ key: 'name', label: 'Name' })
-  setFieldValue(fieldName, serializeTracklistColumns(rows))
 }
 
 // ── Table fieldHandler helpers ───────────────────────────────────────────────────
@@ -611,32 +562,6 @@ const onTableDrop = (fieldName: string, type: 'row' | 'col', toIdx: number) => {
   tableDragState.value = null
 }
 
-const PRETALX_CONDITIONAL_SUFFIXES: Record<string, string[]> = {
-  __roomname:              ['list', 'current', 'coming_up'],
-  __linecount:             ['list'],
-  __fields:                ['list', 'current', 'coming_up'],
-  __author_under_title:    ['list', 'current', 'coming_up'],
-  __tracks_by_color:       ['list', 'current', 'coming_up'],
-  __today_only:            ['list'],
-  __separate_days:         ['list'],
-  __day_prefix:            ['list', 'eventday'],
-  __empty_text:            ['current', 'coming_up'],
-  __tracklist_columns:     ['tracklist'],
-  __tracklist_layout:      ['tracklist'],
-  __tracklist_exclude:     ['tracklist'],
-}
-
-const isPretalxFieldVisible = (tag: { name: string }): boolean => {
-  for (const [suffix, allowedTypes] of Object.entries(PRETALX_CONDITIONAL_SUFFIXES)) {
-    if (tag.name.endsWith(suffix)) {
-      const baseName = tag.name.slice(0, -suffix.length)
-      const type = String(createForm.value.fields[baseName + '__type'] || 'list')
-      return allowedTypes.includes(type)
-    }
-  }
-  return true
-}
-
 const openImagePicker = (fieldName: string) => {
   pickerTargetField.value = fieldName
   pickerSearchText.value = ''
@@ -707,35 +632,15 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     // directly to one of its Layout's containers.
     const serverTagConfigs: any[] = (data.contenttype as any).tagconfigs || []
     if (serverTagConfigs && serverTagConfigs.length > 0) {
-      tagConfigs.value = serverTagConfigs.flatMap((t: any) => {
+      tagConfigs.value = serverTagConfigs.map((t: any) => {
         const fieldHandler = (t.field_handler as string) || 'textklein'
-        const base = {
+        return {
           name: t.field_name || t.name || '',
           title: t.field_label || t.title || (t.field_name || t.name || ''),
           fieldHandler,
           description: (t.description as string) || '',
           max_length: (t.max_length as number) || (fieldHandler === 'textbig' ? 5000 : 255),
         }
-        if (base.fieldHandler === 'pretalx_table') {
-          return [
-            { ...base, fieldHandler: 'pretalx_url_select', title: base.title + ' – API Endpoint' },
-            { name: base.name + '__type', title: 'Type', fieldHandler: 'pretalx_type_select', description: '', max_length: 50 },
-            { name: base.name + '__roomname', title: 'Room Name filter', fieldHandler: 'pretalx_room_select', description: '', max_length: 255 },
-            { name: base.name + '__fields', title: 'Fields', fieldHandler: 'pretalx_event_fields', description: '', max_length: 1000 },
-            { name: base.name + '__linecount', title: 'Line Count', fieldHandler: 'numbers', description: '', max_length: 255 },
-            { name: base.name + '__author_under_title', title: 'Display Author under Title', fieldHandler: 'checkbox', description: '', max_length: 0 },
-            { name: base.name + '__tracks_by_color', title: 'Represent tracks by Color', fieldHandler: 'checkbox', description: '', max_length: 0 },
-            { name: base.name + '__today_only', title: 'Only show today', fieldHandler: 'checkbox', description: '', max_length: 0 },
-            { name: base.name + '__separate_days', title: 'Separate day tables', fieldHandler: 'checkbox', description: '', max_length: 0 },
-            { name: base.name + '__day_prefix', title: 'Day Prefix', fieldHandler: 'textklein', description: '', max_length: 50 },
-            { name: base.name + '__empty_text', title: 'No session running text', fieldHandler: 'textklein', description: '', max_length: 500 },
-            { name: base.name + '__tracklist_columns', title: 'Tracklist Columns', fieldHandler: 'pretalx_tracklist_columns', description: '', max_length: 100 },
-            { name: base.name + '__tracklist_layout', title: 'Tracklist Layout', fieldHandler: 'pretalx_tracklist_layout_select', description: '', max_length: 20 },
-            { name: base.name + '__tracklist_exclude', title: 'Exclude Tracks', fieldHandler: 'textklein', description: 'Comma-separated track names or slugs to exclude', max_length: 500 },
-            { name: base.name + '__section_styling', title: 'Styling', fieldHandler: 'pretalx_section_styling', description: '', max_length: 0 },
-          ]
-        }
-        return [base]
       })
 
       if (!editMode.value) {
@@ -745,14 +650,8 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
             createForm.value.fields[tag.name] = 0
           } else if (tag.fieldHandler === 'checkbox') {
             createForm.value.fields[tag.name] = false
-          } else if (tag.fieldHandler === 'pretalx_type_select') {
-            createForm.value.fields[tag.name] = 'list'
-          } else if (tag.fieldHandler === 'pretalx_url_select') {
-            createForm.value.fields[tag.name] = ''
-          } else if (tag.fieldHandler === 'pretalx_tracklist_columns') {
-            createForm.value.fields[tag.name] = 'name|Name,color|Color'
-          } else if (tag.fieldHandler === 'pretalx_tracklist_layout_select') {
-            createForm.value.fields[tag.name] = 'list'
+          } else if (tag.fieldHandler === 'pretalx_table') {
+            setPretalxTableValue(tag.name, blankPretalxTableValue())
           } else if (tag.fieldHandler === 'arrows') {
             createForm.value.fields[tag.name] = ''
             createForm.value.fields[tag.name + '_size'] = 48
@@ -760,32 +659,19 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
             createForm.value.fields[tag.name] = 'HH:mm:ss'
           } else if (tag.fieldHandler === 'table') {
             createForm.value.fields[tag.name] = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
-          } else if (tag.fieldHandler === 'pretalx_section_styling') {
-            createForm.value.fields[tag.name.replace(/__section_styling$/, '') + '__invalid_data_text'] = ''
           } else {
             createForm.value.fields[tag.name] = ''
           }
         })
       } else {
         tagConfigs.value.forEach(tag => {
-          if (tag.fieldHandler === 'pretalx_section_styling') {
-            const k = tag.name.replace(/__section_styling$/, '') + '__invalid_data_text'
-            if (!(k in createForm.value.fields)) {
-              createForm.value.fields[k] = ''
-            }
-          } else if (!(tag.name in createForm.value.fields)) {
+          if (!(tag.name in createForm.value.fields)) {
             if (tag.fieldHandler === 'numbers') {
               createForm.value.fields[tag.name] = 0
             } else if (tag.fieldHandler === 'checkbox') {
               createForm.value.fields[tag.name] = false
-            } else if (tag.fieldHandler === 'pretalx_type_select') {
-              createForm.value.fields[tag.name] = 'list'
-            } else if (tag.fieldHandler === 'pretalx_url_select') {
-              createForm.value.fields[tag.name] = ''
-            } else if (tag.fieldHandler === 'pretalx_tracklist_columns') {
-              createForm.value.fields[tag.name] = 'name|Name,color|Color'
-            } else if (tag.fieldHandler === 'pretalx_tracklist_layout_select') {
-              createForm.value.fields[tag.name] = 'list'
+            } else if (tag.fieldHandler === 'pretalx_table') {
+              setPretalxTableValue(tag.name, blankPretalxTableValue())
             } else if (tag.fieldHandler === 'arrows') {
               createForm.value.fields[tag.name] = ''
               if (!(tag.name + '_size' in createForm.value.fields)) {
@@ -809,6 +695,14 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
               createForm.value.fields[tag.name] = v
             }
           })
+          // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`,
+          // etc.) aren't their own tagConfigs entry — copy any of those over too.
+          const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
+          for (const k of Object.keys(pending)) {
+            if (!pendingIgnore.has(k) && !tagConfigs.value.some(t => t.name === k)) {
+              createForm.value.fields[k] = pending[k]
+            }
+          }
           // start_time / end_time are not tag fields — apply them explicitly
           const parseIso = (v: string | null | undefined): Date | null => {
             if (!v) return null
@@ -919,55 +813,6 @@ const handleImageTags = (data: { tags: string[] }) => {
   availableImageTags.value = data.tags || []
 }
 
-const handlePretalxUrls = (data: any) => {
-  pretalxApiUrls.value = (data?.urls || []).map((u: any) => ({
-    id: u.id,
-    name: u.name,
-    url: u.url,
-    is_valid: u.is_valid,
-    has_cache: u.has_cache,
-  }))
-}
-
-async function fetchPretalxRooms(urlId: string) {
-  if (!urlId || urlId in pretalxRoomsCache.value) return
-  pretalxRoomsCache.value[urlId] = []
-  try {
-    const ack = await socketEmitWithAck<any>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
-    if (ack?.ok) pretalxRoomsCache.value[urlId] = ack.rooms || []
-  } catch { /* keep empty */ }
-}
-
-function getPretalxRoomsForField(roomFieldName: string): string[] {
-  const baseName = roomFieldName.replace(/__roomname$/, '')
-  const endpointId = String(createForm.value.fields[baseName] || '')
-  return endpointId ? (pretalxRoomsCache.value[endpointId] ?? []) : []
-}
-
-function togglePretalxRoom(fieldName: string, room: string, selected: boolean) {
-  const current = String(getFieldValue(fieldName) || '').split(',').map(r => r.trim()).filter(Boolean)
-  const updated = selected ? [...new Set([...current, room])] : current.filter(r => r !== room)
-  setFieldValue(fieldName, updated.join(','))
-}
-
-function isPretalxRoomSelected(fieldName: string, room: string): boolean {
-  return String(getFieldValue(fieldName) || '').split(',').map(r => r.trim()).includes(room)
-}
-
-watch(
-  () => tagConfigs.value
-    .filter(t => t.fieldHandler === 'pretalx_url_select')
-    .map(t => String(createForm.value.fields[t.name] || ''))
-    .join(','),
-  (urlIdsCsv) => {
-    if (!urlIdsCsv) return
-    for (const urlId of urlIdsCsv.split(',')) {
-      if (urlId) fetchPretalxRooms(urlId)
-    }
-  },
-  { immediate: true }
-)
-
 onMounted(() => {
   on('displayhive:admin:stc:contenttype_detail', handleContentTypeDetail)
   on('displayhive:admin:stc:content_element_detail', handleContentDetail)
@@ -975,9 +820,7 @@ onMounted(() => {
   on('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   on('displayhive:admin:stc:image_tags', handleImageTags)
   on('displayhive:admin:stc:admin_settings', handleAdminSettingsForPreview)
-  on('displayhive:admin:pretalx:stc:urls', handlePretalxUrls)
   socketEmit('displayhive:admin:cts:get_admin_settings')
-  socketEmit('displayhive:admin:pretalx:cts:get_urls')
   previewInterval = setInterval(() => { previewNow.value = new Date() }, 1000)
 })
 
@@ -988,7 +831,6 @@ onUnmounted(() => {
   off('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   off('displayhive:admin:stc:image_tags', handleImageTags)
   off('displayhive:admin:stc:admin_settings', handleAdminSettingsForPreview)
-  off('displayhive:admin:pretalx:stc:urls', handlePretalxUrls)
   if (previewInterval) clearInterval(previewInterval)
 })
 </script>
@@ -1053,24 +895,15 @@ onUnmounted(() => {
 
       <div v-if="tagConfigs.length > 0" class="tag-fields-section">
         <h4>Content Fields</h4>
-        <div v-for="tag in tagConfigs" :key="tag.name" :class="tag.fieldHandler === 'pretalx_section_styling' ? 'pretalx-section-wrapper' : 'field'" v-show="isPretalxFieldVisible(tag)">
-          <label v-if="tag.fieldHandler !== 'pretalx_section_styling'" :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
-          <small v-if="tag.description && tag.fieldHandler !== 'pretalx_section_styling'" class="field-description">{{ tag.description }}</small>
+        <div v-for="tag in tagConfigs" :key="tag.name" class="field">
+          <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
+          <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
 
-          <details v-if="tag.fieldHandler === 'pretalx_section_styling'" class="styling-collapsible">
-            <summary class="styling-summary">Styling <small class="text-muted">(optional)</small></summary>
-            <div class="styling-fields">
-              <div class="field">
-                <label>Invalid API Data Text</label>
-                <InputText
-                  :modelValue="String(getFieldValue(tag.name.replace(/__section_styling$/, '') + '__invalid_data_text') || '')"
-                  @update:modelValue="(v: string | undefined) => setFieldValue(tag.name.replace(/__section_styling$/, '') + '__invalid_data_text', v ?? '')"
-                  placeholder="Uses global Pretalx setting when empty"
-                  class="w-full"
-                />
-              </div>
-            </div>
-          </details>
+          <PretalxTableFieldEditor
+            v-if="tag.fieldHandler === 'pretalx_table'"
+            :model-value="getPretalxTableValue(tag.name)"
+            @update:model-value="(v) => setPretalxTableValue(tag.name, v)"
+          />
 
           <Textarea
             v-else-if="tag.fieldHandler === 'textbig'"
@@ -1205,106 +1038,6 @@ onUnmounted(() => {
                 style="width: 120px"
               />
             </div>
-          </div>
-
-          <Select
-            v-else-if="tag.fieldHandler === 'pretalx_type_select'"
-            :id="`field-${tag.name}`"
-            :modelValue="String(getFieldValue(tag.name) || 'list')"
-            @update:modelValue="(v: string) => setFieldValue(tag.name, v)"
-            :options="[
-              { label: 'List', value: 'list' },
-              { label: 'Current Event', value: 'current' },
-              { label: 'Coming Up', value: 'coming_up' },
-              { label: 'Event Day', value: 'eventday' },
-              { label: 'Tracklist', value: 'tracklist' },
-            ]"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
-
-          <div v-else-if="tag.fieldHandler === 'pretalx_event_fields' || tag.fieldHandler === 'pretalx_tracklist_columns'" class="tracklist-cols-editor">
-            <div class="tracklist-cols-header">
-              <span>Field</span>
-              <span>Header</span>
-              <span></span>
-            </div>
-            <div v-for="(row, idx) in parseTracklistColumns(tag.name)" :key="idx" class="tracklist-cols-row">
-              <Select
-                :modelValue="row.key || null"
-                @update:modelValue="(v: string | null) => updateTracklistColumnKey(tag.name, idx, v ?? '')"
-                :options="tag.fieldHandler === 'pretalx_event_fields' ? EVENT_FIELD_OPTIONS : TRACKLIST_COL_OPTIONS"
-                optionLabel="label"
-                optionValue="value"
-                placeholder="— select —"
-                size="small"
-                class="w-full"
-              />
-              <InputText
-                :modelValue="row.label"
-                @update:modelValue="(v: string | undefined) => updateTracklistColumnLabel(tag.name, idx, v ?? '')"
-                size="small"
-                class="w-full"
-              />
-              <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeTracklistColumn(tag.name, idx)" />
-            </div>
-            <Button
-              :label="tag.fieldHandler === 'pretalx_event_fields' ? 'Add Field' : 'Add Column'"
-              icon="pi pi-plus" size="small" text
-              @click="addTracklistColumn(tag.name)"
-              style="margin-top:0.25rem;"
-            />
-          </div>
-
-          <Select
-            v-else-if="tag.fieldHandler === 'pretalx_tracklist_layout_select'"
-            :id="`field-${tag.name}`"
-            :modelValue="String(getFieldValue(tag.name) || 'list')"
-            @update:modelValue="(v: string) => setFieldValue(tag.name, v)"
-            :options="[
-              { label: 'List (one track per row)', value: 'list' },
-              { label: 'Row (all tracks in one row)', value: 'row' },
-            ]"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
-
-          <Select
-            v-else-if="tag.fieldHandler === 'pretalx_url_select'"
-            :id="`field-${tag.name}`"
-            :modelValue="String(getFieldValue(tag.name) || '')"
-            @update:modelValue="(v: string) => setFieldValue(tag.name, v)"
-            :options="pretalxApiUrls.map(u => ({
-              label: u.name + (u.has_cache ? '' : ' ⚠ no cache'),
-              value: String(u.id),
-            }))"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="— select API endpoint —"
-            emptyMessage="No Pretalx API URLs configured"
-            class="w-full"
-          />
-
-          <div v-else-if="tag.fieldHandler === 'pretalx_room_select'" class="room-select">
-            <template v-if="getPretalxRoomsForField(tag.name).length">
-              <label
-                v-for="room in getPretalxRoomsForField(tag.name)"
-                :key="room"
-                class="room-option"
-              >
-                <Checkbox
-                  :binary="true"
-                  :modelValue="isPretalxRoomSelected(tag.name, room)"
-                  @update:modelValue="(v: boolean) => togglePretalxRoom(tag.name, room, v)"
-                />
-                <span>{{ room }}</span>
-              </label>
-            </template>
-            <span v-else class="field-hint">
-              {{ String(getFieldValue(tag.name.replace(/__roomname$/, '')) || '') ? 'No rooms found in cache' : 'Select an API endpoint first' }}
-            </span>
           </div>
 
           <Checkbox
@@ -1583,28 +1316,6 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-.tracklist-cols-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.tracklist-cols-header,
-.tracklist-cols-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 36px;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.tracklist-cols-header {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-color-secondary, #6b7280);
-  padding: 0 0 0.25rem 0;
-  border-bottom: 1px solid var(--p-inputtext-border-color, #d1d5db);
-}
-
 .table-editor-wrapper {
   display: flex;
   flex-direction: column;
@@ -1687,51 +1398,6 @@ onUnmounted(() => {
   color: #666;
   font-size: 0.75rem;
   margin-top: -0.25rem;
-}
-
-.pretalx-section-wrapper {
-  margin-bottom: 0;
-}
-
-.styling-collapsible {
-  border: 1px solid var(--p-inputtext-border-color, #d1d5db);
-  border-radius: 6px;
-  margin-bottom: 1rem;
-}
-
-.styling-summary {
-  padding: 0.6rem 0.75rem;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
-  list-style: none;
-  user-select: none;
-}
-
-.styling-summary::-webkit-details-marker { display: none; }
-
-.styling-summary::before {
-  content: '▶';
-  display: inline-block;
-  margin-right: 0.5rem;
-  font-size: 0.7rem;
-  transition: transform 0.2s;
-}
-
-details[open] .styling-summary::before {
-  transform: rotate(90deg);
-}
-
-.styling-fields {
-  padding: 0.75rem;
-  border-top: 1px solid var(--p-inputtext-border-color, #d1d5db);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.styling-fields .field {
-  margin: 0;
 }
 
 .scheduling-collapsible {
@@ -2093,21 +1759,6 @@ details[open] .scheduling-summary::before {
   color: var(--p-text-muted-color, #6b7280);
   margin: 0 0 0.35rem;
 }
-
-.room-select {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.35rem;
-}
-
-.room-option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
 
 .token-table {
   width: 100%;

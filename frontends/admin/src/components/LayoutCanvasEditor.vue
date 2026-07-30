@@ -13,6 +13,8 @@ import Dropdown from 'primevue/dropdown'
 import Dialog from 'primevue/dialog'
 import Editor from 'primevue/editor'
 import MediaPickerDialog from './MediaPickerDialog.vue'
+import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
+import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 
 interface MediaItem { id: number; url: string }
 
@@ -460,6 +462,7 @@ const defaultFieldHandlerOptions = [
   { label: 'Link/URL', value: 'link' },
   { label: 'Long Text', value: 'textbig' },
   { label: 'Number', value: 'numbers' },
+  { label: 'Pretalx Table', value: 'pretalx_table' },
   { label: 'Short Text', value: 'textklein' },
   { label: 'Table', value: 'table' },
   { label: 'WYSIWYG', value: 'wysiwyg' },
@@ -505,6 +508,8 @@ const onDefaultHandlerChange = (newHandler: string) => {
     containerEditForm.default_content = JSON.stringify({ char: '', size: 48 })
   } else if (newHandler === 'table') {
     containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
+  } else if (newHandler === 'pretalx_table') {
+    containerEditForm.default_content = JSON.stringify(blankPretalxTableValue())
   } else if (newHandler === 'datetime_format') {
     containerEditForm.default_content = 'HH:mm:ss'
   } else {
@@ -575,6 +580,18 @@ const updateTableCell = (ri: number, ci: number, v: string) => {
   const rows = d.rows.map((r) => [...r])
   if (rows[ri]) rows[ri][ci] = v
   setTableData({ columns: d.columns, rows })
+}
+
+// --- 'pretalx_table' handler: full PretalxTableValue, stored as JSON -------
+const pretalxTableData = computed<PretalxTableValue>(() => {
+  try {
+    return { ...blankPretalxTableValue(), ...JSON.parse(containerEditForm.default_content || '{}') }
+  } catch {
+    return blankPretalxTableValue()
+  }
+})
+const setPretalxTableData = (v: PretalxTableValue) => {
+  containerEditForm.default_content = JSON.stringify(v)
 }
 
 const saveContainerEditModal = () => {
@@ -851,6 +868,13 @@ const toggleSelectedLayoutMembership = () => {
               </tbody>
             </table>
             <Button label="Add Row" icon="pi pi-plus" size="small" text @click="addTableRow" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'pretalx_table'" class="field">
+            <PretalxTableFieldEditor
+              :model-value="pretalxTableData"
+              @update:model-value="setPretalxTableData"
+            />
           </div>
         </template>
 
