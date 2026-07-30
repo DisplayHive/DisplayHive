@@ -16,8 +16,35 @@ def register_admin_layouts_handlers(socketio, app, db):
     """
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
     from application.socketio_handlers.auth import require_right
-    from application.models import Layout, ContentContainer
+    from application.models import Layout, ContentContainer, Contenttype, TagConfig
     from application.utils import push_content_list_to_all_screens
+
+    def _prune_stale_tagconfigs(layout):
+        """Null out TagConfig.contentcontainer_id for any field whose target
+        container is no longer part of *layout* — mirrors the same guard
+        `_apply_tagconfigs` (contenttypes/sockethandlers.py) applies when a
+        Contenttype's fields are saved directly. Without this, removing a
+        container from a Layout here left every bound Contenttype's stale
+        TagConfig pointing at it, and upd_content.py would keep rendering
+        that container's old content even though it's no longer in the
+        Layout — the field is kept, just unlinked from that container.
+        """
+        allowed_ids = {c.id for c in layout.contentcontainers}
+        contenttype_ids = db.session.execute(
+            db.select(Contenttype.id).where(Contenttype.layout_id == layout.id)
+        ).scalars().all()
+        if not contenttype_ids:
+            return
+        stale = db.session.execute(
+            db.select(TagConfig).where(
+                TagConfig.contenttype_id.in_(contenttype_ids),
+                TagConfig.contentcontainer_id.is_not(None),
+                TagConfig.contentcontainer_id.not_in(allowed_ids),
+            )
+        ).scalars().all()
+        for tc in stale:
+            tc.contentcontainer_id = None
+            db.session.add(tc)
 
     def _emit_layouts(room=None):
         emit_layouts_update(socketio, app, db, room=room)
@@ -84,6 +111,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         container_ids = data.get('container_ids')
         if container_ids is not None:
             layout.contentcontainers = _resolve_container_ids(container_ids)
+            _prune_stale_tagconfigs(layout)
 
         db.session.add(layout)
         db.session.commit()

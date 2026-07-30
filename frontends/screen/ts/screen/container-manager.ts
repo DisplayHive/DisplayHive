@@ -9,7 +9,7 @@
  * scene never touches the Design markup).
  */
 
-import type { Scene, ContainerDefault } from "./types.js";
+import type { Scene } from "./types.js";
 import { tickNow } from "./clock.js";
 import { log } from "./logger.js";
 
@@ -32,16 +32,6 @@ export function getSocketEmitter():
 
 // containerId (string) -> its DOM element
 const containerElements: Record<string, HTMLElement> = {};
-
-// containerId (string) -> its configured fallback content, refreshed on
-// every `upd_content` push. Shown whenever the currently active scene
-// doesn't target that container, instead of leaving it blank.
-let containerDefaults: Record<string, ContainerDefault> = {};
-
-/** Replace the known set of container fallback contents (called from upd_content). */
-export function setContainerDefaults(defaults: Record<string, ContainerDefault>): void {
-  containerDefaults = defaults || {};
-}
 
 function getOverlayRoot(): HTMLElement | null {
   return document.getElementById("scene-containers");
@@ -103,28 +93,18 @@ function paintContainerElement(
 }
 
 /**
- * Show *containerId*'s configured fallback content, if any. Returns true if
- * a default was actually rendered (so callers know not to blank it instead).
- */
-function paintContainerDefault(containerId: string): boolean {
-  const def = containerDefaults[containerId];
-  if (!def) return false;
-  paintContainerElement(containerId, def);
-  return true;
-}
-
-/**
- * Render *scene*: every container it uses is created/positioned/populated;
- * any previously-known container not used by this scene falls back to its
- * own configured default content, or goes blank if it has none.
+ * Render *scene*: every container it uses (including any of its own Layout's
+ * containers the server already fell back to a default for) is
+ * created/positioned/populated; any previously-known container NOT used by
+ * this scene goes blank — even if it belongs to a different Layout and has
+ * its own default configured, since that default only applies while a scene
+ * from *its own* Layout is showing (see upd_content.py).
  */
 export function renderScene(scene: Scene): void {
   const activeIds = new Set(Object.keys(scene.containers));
 
-  const knownIds = new Set([...Object.keys(containerElements), ...Object.keys(containerDefaults)]);
-  for (const id of knownIds) {
-    if (activeIds.has(id)) continue;
-    if (!paintContainerDefault(id)) clearContainerElement(id);
+  for (const id of Object.keys(containerElements)) {
+    if (!activeIds.has(id)) clearContainerElement(id);
   }
 
   for (const [id, c] of Object.entries(scene.containers)) {
@@ -135,14 +115,9 @@ export function renderScene(scene: Scene): void {
   log("info", "renderScene", `Rendered scene ${scene.id} across ${activeIds.size} container(s)`);
 }
 
-/**
- * Fall every known container back to its default content (e.g. when the
- * rotation has nothing to show); containers without a configured default
- * just go blank.
- */
+/** Blank every known container (e.g. when the rotation has nothing to show). */
 export function clearAllContainers(): void {
-  const knownIds = new Set([...Object.keys(containerElements), ...Object.keys(containerDefaults)]);
-  for (const id of knownIds) {
-    if (!paintContainerDefault(id)) clearContainerElement(id);
+  for (const id of Object.keys(containerElements)) {
+    clearContainerElement(id);
   }
 }

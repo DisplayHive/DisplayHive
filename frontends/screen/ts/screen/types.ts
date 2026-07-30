@@ -13,20 +13,14 @@ export interface SceneContainer {
   css: string;
 }
 
-/** A container's fallback content, shown when no active scene targets it. */
-export interface ContainerDefault {
-  name: string;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-  html: string;
-}
-
 /**
  * A Scene is one ContentElement's turn in the shared screen-wide rotation.
- * When active, every container in `containers` switches together; any
- * container not present here goes blank while this Scene is showing.
+ * `containers` already includes every container in the scene's own
+ * Contenttype Layout — ones with real field content plus any of that same
+ * Layout's containers falling back to their own default_content server-side
+ * (see upd_content.py). Any container id not present here goes blank while
+ * this Scene is showing, even if it belongs to a different Layout used by
+ * another scene in the rotation.
  */
 export interface Scene {
   id: number;

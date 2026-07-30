@@ -12,15 +12,19 @@ This module exposes:
 Best-effort; callers must not rely on it raising.
 
 Rendering model: a screen has no independent per-container playlists anymore.
-Each ContentElement is a "scene" — when it's showing, every container its
-Contenttype's fields (TagConfig) map to switches together; containers not
-covered by the current scene fall back to their own `default_content`
-(rendered once into `container_defaults`, keyed by container id) if one is
-configured, or stay blank otherwise. The payload's `scenes` array is the
-screen's full shared rotation queue (ordered, deduplicated); the screen
-client (frontends/screen/ts/screen) owns advancing through it by `duration`
-and creating/positioning each scene's container divs from the per-scene
-`containers` map (vh/vw top/left/width/height).
+Each ContentElement is a "scene" — when it's showing, every container in its
+Contenttype's own Layout switches together: containers with a field (TagConfig)
+targeting them show that field's rendered value, and any other container in
+that same Layout falls back to its own `default_content` if one is configured,
+or stays blank otherwise. A container that isn't part of the current scene's
+Layout at all is never shown, even if it has a default and even if some other
+scene in the rotation does use it — defaults are baked directly into each
+scene's own `containers` map (not sent globally) precisely so that switching
+away from a scene can't leave a container from a *different* Layout showing
+through. The payload's `scenes` array is the screen's full shared rotation
+queue (ordered, deduplicated); the screen client (frontends/screen/ts/screen)
+owns advancing through it by `duration` and creating/positioning each scene's
+container divs from the per-scene `containers` map (vh/vw top/left/width/height).
 """
 
 import json
@@ -100,18 +104,29 @@ def _build_payload(db, screen):
             .order_by(ContentElement.id)
         ).unique().scalars().all()
 
-    # Each ContentElement is one "scene": every container its Contenttype's
-    # fields (TagConfig) target must switch together when this scene is showing.
+    # Each ContentElement is one "scene": every container in its Contenttype's
+    # own Layout switches together when this scene is showing — never a
+    # container from some other Layout, even if another scene in the
+    # rotation happens to use it.
+    from application.admin.content.helper import render_container_default
+
     scenes = []
-    all_container_ids: set = set()
     for mc in content_elements:
         tagconfigs = getattr(mc.contenttype, 'tagconfigs', None) or []
         rendered_by_container = parse_content_html(mc.html, tagconfigs)
 
+        # A TagConfig's contentcontainer_id can go stale if a container is
+        # later removed from the Contenttype's Layout elsewhere (editing a
+        # Layout doesn't touch any Contenttype's TagConfig rows) — without
+        # this check, that container would keep rendering this scene's old
+        # content forever even though it's no longer part of the Layout.
+        layout_containers = list(getattr(mc.contenttype.layout, 'contentcontainers', None) or []) if mc.contenttype.layout else []
+        layout_container_ids = {c.id for c in layout_containers}
+
         scene_containers = {}
         for tc in tagconfigs:
             container = tc.contentcontainer
-            if container is None:
+            if container is None or container.id not in layout_container_ids:
                 continue
             scene_containers[str(container.id)] = {
                 'name': container.name,
@@ -120,13 +135,28 @@ def _build_payload(db, screen):
                 'html': rendered_by_container.get(str(tc.contentcontainer_id), ''),
             }
 
+        # Any container that's part of this scene's own Layout but has no
+        # field targeting it at all (no TagConfig, as opposed to an empty
+        # field value — render_content_fields() already handles that case)
+        # falls back to its own default_content, scoped to this scene only.
+        for container in layout_containers:
+            if str(container.id) in scene_containers:
+                continue
+            html = render_container_default(container, db=db)
+            if not html:
+                continue
+            scene_containers[str(container.id)] = {
+                'name': container.name,
+                'top': container.top, 'left': container.left,
+                'width': container.width, 'height': container.height,
+                'html': html,
+            }
+
         if not scene_containers:
             # Nothing to show for this scene (no fields targeting a real
             # container) — skip it rather than occupy a rotation slot with
             # a blank scene.
             continue
-
-        all_container_ids.update(int(cid) for cid in scene_containers)
 
         scene: dict = {
             'id': mc.id,
@@ -152,34 +182,11 @@ def _build_payload(db, screen):
 
         scenes.append(scene)
 
-    # Fallback content for containers that show up in this screen's rotation
-    # but aren't targeted by whichever scene is currently active — rendered
-    # once here (not per-scene) since a container's default doesn't change
-    # from scene to scene.
-    container_defaults = {}
-    if all_container_ids:
-        from application.admin.content.helper import render_container_default
-        from application.models import ContentContainer
-
-        for container in db.session.execute(
-            db.select(ContentContainer).where(ContentContainer.id.in_(all_container_ids))
-        ).scalars().all():
-            html = render_container_default(container, db=db)
-            if not html:
-                continue
-            container_defaults[str(container.id)] = {
-                'name': container.name,
-                'top': container.top, 'left': container.left,
-                'width': container.width, 'height': container.height,
-                'html': html,
-            }
-
     from datetime import datetime as _dt, timezone as _tz
     return {
-        'design':             design_payload,
-        'scenes':             scenes,
-        'container_defaults': container_defaults,
-        'server_time':        _dt.now(_tz.utc).isoformat(),
+        'design':      design_payload,
+        'scenes':      scenes,
+        'server_time': _dt.now(_tz.utc).isoformat(),
     }
 
 

@@ -21,9 +21,8 @@ import type {
   UpdDeviceConfigMessage,
   DeviceConfig,
   Scene,
-  ContainerDefault,
 } from "./types.js";
-import { setSocketEmitter, setContainerDefaults } from "./container-manager.js";
+import { setSocketEmitter } from "./container-manager.js";
 import { startSceneRotation, patchCurrentScene } from "./content-display.js";
 import { applyServerTime, setClockEmitter, startClockTicker } from "./clock.js";
 import { startAdoptionFlow, hideAdoptionOverlay } from "./adopt.js";
@@ -340,18 +339,10 @@ export function setupSocketHandlers(socket: any): void {
 
       const design = msg.design || null;
       const scenes: Scene[] = msg.scenes || [];
-      const containerDefaults: Record<string, ContainerDefault> = msg.container_defaults || {};
 
       log("debug", "socket.on(upd_content)", "Received content snapshot", {
         sceneCount: scenes.length,
       });
-
-      // Must be set before startSceneRotation() below, which synchronously
-      // renders the first active scene and needs these to fall back on.
-      setContainerDefaults(containerDefaults);
-      for (const def of Object.values(containerDefaults)) {
-        if (def.html) preloadIframesInHtml(def.html);
-      }
 
       // Apply the Design background (a single global skin — see
       // #design-background in index.html, kept separate from
