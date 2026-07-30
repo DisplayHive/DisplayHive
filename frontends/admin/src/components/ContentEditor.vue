@@ -489,6 +489,18 @@ const clearImageField = (fieldName: string) => {
   setFieldValue(fieldName, '')
 }
 
+// Fixes the rendered <img>'s height (vh) regardless of its container's own
+// height — blank/0 leaves it scaling to fit the container, as before.
+const getImageSize = (fieldName: string): number | null => {
+  const v = createForm.value.fields[`${fieldName}__size`]
+  const n = Number(v)
+  return v !== '' && v != null && !isNaN(n) && n > 0 ? n : null
+}
+
+const setImageSize = (fieldName: string, v: number | null) => {
+  createForm.value.fields[`${fieldName}__size`] = v ?? ''
+}
+
 // ── Table fieldHandler helpers ───────────────────────────────────────────────────
 
 interface TableData { columns: string[]; rows: string[][] }
@@ -987,6 +999,19 @@ onUnmounted(() => {
                 </small>
               </div>
             </template>
+
+            <div class="image-size-row">
+              <label :for="`field-${tag.name}-size`" class="image-size-label">Size (vh)</label>
+              <InputNumber
+                :id="`field-${tag.name}-size`"
+                :modelValue="getImageSize(tag.name)"
+                @update:modelValue="(v: number | null) => setImageSize(tag.name, v)"
+                :min="0" :max="100" :step="0.5" :max-fraction-digits="2"
+                suffix=" vh"
+                placeholder="auto"
+                style="width: 140px"
+              />
+            </div>
           </div>
 
           <!-- Arrow picker -->
@@ -1644,6 +1669,19 @@ details[open] .scheduling-summary::before {
 }
 
 .arrow-size-label {
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
+  white-space: nowrap;
+}
+
+.image-size-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.image-size-label {
   font-size: 0.875rem;
   color: var(--p-text-color, #334155);
   white-space: nowrap;

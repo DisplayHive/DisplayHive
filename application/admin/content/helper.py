@@ -92,7 +92,16 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if parsed_scheme not in ('', 'http', 'https', 'data'):
                 ctx[field_name] = ''
             elif url:
-                ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="max-width:100%;height:auto;" />')
+                # An explicit size (vh) fixes the image's height so it stays
+                # consistent regardless of its container's own height; left
+                # unset, it just scales to fit the container as before.
+                size = ctx.get(f'{field_name}__size')
+                try:
+                    size = float(size)
+                except (TypeError, ValueError):
+                    size = 0
+                style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+                ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="{style}" />')
         elif ftype == 'arrows' and field_name in ctx and ctx[field_name]:
             char = _html_escape(str(ctx[field_name]).strip())
             size_key = f'{field_name}_size'
@@ -208,7 +217,17 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
 
     fake_tc = TagConfig(field_name='default', field_handler=field_handler, contentcontainer_id=0)
     ctx = {'default': content}
-    if field_handler == 'arrows':
+    if field_handler == 'image':
+        # Back-compat: a container's default_content used to be just the raw
+        # URL string (no size); only switch to the {url, size} shape when the
+        # stored value actually parses as one.
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict) and 'url' in parsed:
+            ctx = {'default': parsed.get('url', ''), 'default__size': parsed.get('size') or 0}
+    elif field_handler == 'arrows':
         try:
             parsed = json.loads(content)
             ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 48)}

@@ -477,8 +477,27 @@ const containerEditForm = reactive({
   default_field_handler: '', default_content: '',
 })
 
+// --- 'image' handler: {url, size}, packed as JSON into default_content —
+// back-compat: existing containers stored the raw URL string directly (no
+// size), so a plain non-JSON value is read as that URL with size unset.
+const parseImageData = (): { url: string; size: number | null } => {
+  const raw = containerEditForm.default_content || ''
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && 'url' in parsed) {
+      return { url: parsed.url || '', size: parsed.size || null }
+    }
+  } catch { /* not JSON — legacy plain URL string */ }
+  return { url: raw, size: null }
+}
+const imageUrl = computed(() => parseImageData().url)
+const imageSize = computed(() => parseImageData().size)
+const setImageData = (data: { url: string; size: number | null }) => {
+  containerEditForm.default_content = JSON.stringify(data)
+}
+
 const onDefaultImagePicked = (item: MediaItem) => {
-  containerEditForm.default_content = item.url
+  setImageData({ url: item.url, size: imageSize.value })
 }
 
 const openContainerEditModal = (c: ContentContainer) => {
@@ -506,6 +525,8 @@ const onDefaultHandlerChange = (newHandler: string) => {
   containerEditForm.default_field_handler = newHandler
   if (newHandler === 'arrows') {
     containerEditForm.default_content = JSON.stringify({ char: '', size: 48 })
+  } else if (newHandler === 'image') {
+    containerEditForm.default_content = JSON.stringify({ url: '', size: null })
   } else if (newHandler === 'table') {
     containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
   } else if (newHandler === 'pretalx_table') {
@@ -805,16 +826,27 @@ const toggleSelectedLayoutMembership = () => {
 
           <div v-else-if="containerEditForm.default_field_handler === 'image'" class="field image-field-wrapper">
             <label>Default Content</label>
-            <div v-if="containerEditForm.default_content" class="image-field-preview">
-              <img :src="containerEditForm.default_content" class="image-field-thumb" alt="selected" />
+            <div v-if="imageUrl" class="image-field-preview">
+              <img :src="imageUrl" class="image-field-thumb" alt="selected" />
               <div class="image-field-actions">
                 <Button icon="pi pi-pencil" size="small" label="Change" outlined @click="showImagePickerDialog = true" />
-                <Button icon="pi pi-times" size="small" severity="danger" outlined @click="containerEditForm.default_content = ''" />
+                <Button icon="pi pi-times" size="small" severity="danger" outlined @click="setImageData({ url: '', size: imageSize })" />
               </div>
             </div>
             <div v-else class="image-field-empty" @click="showImagePickerDialog = true">
               <i class="pi pi-image" style="font-size: 2rem; color: #94a3b8" />
               <span>Click to select an image</span>
+            </div>
+            <div class="image-size-row">
+              <label class="image-size-label">Size (vh)</label>
+              <InputNumber
+                :model-value="imageSize"
+                @update:model-value="(v) => setImageData({ url: imageUrl, size: v })"
+                :min="0" :max="100" :step="0.5" :max-fraction-digits="2"
+                suffix=" vh"
+                placeholder="auto"
+                style="width: 140px"
+              />
             </div>
           </div>
 
@@ -1300,6 +1332,19 @@ const toggleSelectedLayoutMembership = () => {
 }
 
 .arrow-size-label {
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
+  white-space: nowrap;
+}
+
+.image-size-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.image-size-label {
   font-size: 0.875rem;
   color: var(--p-text-color, #334155);
   white-space: nowrap;
