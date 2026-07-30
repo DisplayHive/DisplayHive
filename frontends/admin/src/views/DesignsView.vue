@@ -5,7 +5,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
-import type { Design, ContentContainer } from '../types/models'
+import type { Design, ContentContainer, Gradient, GradientStop } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -18,8 +18,10 @@ import Card from 'primevue/card'
 import Tag from 'primevue/tag'
 import Panel from 'primevue/panel'
 import Dropdown from 'primevue/dropdown'
+import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
 import ColorPicker from 'primevue/colorpicker'
+import Checkbox from 'primevue/checkbox'
 
 import { Codemirror } from 'vue-codemirror'
 import { html as cmHtml } from '@codemirror/lang-html'
@@ -231,6 +233,156 @@ const setGlobalColorHex = (prop: string, hex: string | undefined) => {
   setGlobalValue(prop, hex ? `#${hex}` : '')
 }
 
+// --- Gradients: a reusable library. A Design can apply several, stacked as
+// layered `background-image` values (rendered ahead of the Design's own
+// hand-written CSS — see upd_content.py — so a manual CSS edit still wins).
+const gradients = ref<Gradient[]>([])
+
+const handleGradientsList = (data: any) => {
+  gradients.value = data?.data || []
+}
+
+const handleDesignGradients = (data: any) => {
+  if (!data || data.design_id !== editForm.value.id) return
+  editForm.value.gradient_ids = data.gradient_ids || []
+}
+
+const selectedGradients = computed(() =>
+  editForm.value.gradient_ids
+    .map((id) => gradients.value.find((g) => g.id === id))
+    .filter((g): g is Gradient => !!g)
+)
+
+type GradientLike = { type: string; repeating: boolean; angle: number; shape: string; size: string; position_x: number; position_y: number; stops: GradientStop[] }
+
+// Mirrors gradient_css_value()'s alpha handling server-side: a stop's
+// opacity (0-100, default 100/opaque) becomes an 8-digit hex alpha channel
+// so a fully opaque top layer doesn't always hide gradients listed after it.
+const stopColorWithAlpha = (s: GradientStop): string => {
+  const opacity = s.opacity ?? 100
+  if (opacity >= 100 || !s.color.startsWith('#') || s.color.length !== 7) return s.color
+  const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255)
+  return `${s.color}${alpha.toString(16).padStart(2, '0')}`
+}
+
+const gradientCssValue = (g: GradientLike): string => {
+  if (!g.stops || g.stops.length < 2) return ''
+  const stopStr = g.stops.map((s) => `${stopColorWithAlpha(s)} ${s.position}%`).join(', ')
+  const prefix = g.repeating ? 'repeating-' : ''
+  const x = g.position_x ?? 50
+  const y = g.position_y ?? 50
+
+  if (g.type === 'radial') {
+    const shapeSize = [g.shape, g.size].filter(Boolean).join(' ')
+    const head = `${shapeSize} at ${x}% ${y}%`.trim()
+    return `${prefix}radial-gradient(${head}, ${stopStr})`
+  }
+  if (g.type === 'conic') {
+    return `${prefix}conic-gradient(from ${g.angle}deg at ${x}% ${y}%, ${stopStr})`
+  }
+  return `${prefix}linear-gradient(${g.angle}deg, ${stopStr})`
+}
+
+// Stacks every selected gradient's CSS into one combined preview value.
+const combinedGradientCss = (list: Gradient[]): string =>
+  list.map((g) => gradientCssValue(g)).filter(Boolean).join(', ')
+
+const setDesignGradients = (gradientIds: number[] | undefined) => {
+  editForm.value.gradient_ids = gradientIds || []
+  if (!editForm.value.id) return
+  emit('displayhive:admin:cts:set_design_gradients', { design_id: editForm.value.id, gradient_ids: editForm.value.gradient_ids })
+}
+
+// Manage (list) dialog
+const showGradientManageDialog = ref(false)
+
+// Create/edit dialog
+const GRADIENT_SHAPE_OPTIONS = [
+  { label: '(default: ellipse)', value: '' },
+  { label: 'Circle', value: 'circle' },
+  { label: 'Ellipse', value: 'ellipse' },
+]
+const GRADIENT_SIZE_OPTIONS = [
+  { label: '(default: farthest-corner)', value: '' },
+  { label: 'Closest Side', value: 'closest-side' },
+  { label: 'Closest Corner', value: 'closest-corner' },
+  { label: 'Farthest Side', value: 'farthest-side' },
+  { label: 'Farthest Corner', value: 'farthest-corner' },
+]
+
+const showGradientEditDialog = ref(false)
+const isNewGradient = ref(false)
+const blankGradientForm = () => ({
+  id: null as number | null,
+  name: 'New Gradient',
+  type: 'linear' as 'linear' | 'radial' | 'conic',
+  repeating: false,
+  angle: 180,
+  shape: '',
+  size: '',
+  position_x: 50,
+  position_y: 50,
+  stops: [
+    { color: 'ffffff', position: 0, opacity: 100 },
+    { color: '000000', position: 100, opacity: 100 },
+  ] as GradientStop[],
+})
+const gradientEditForm = ref(blankGradientForm())
+
+const openNewGradientDialog = () => {
+  isNewGradient.value = true
+  gradientEditForm.value = blankGradientForm()
+  showGradientEditDialog.value = true
+}
+
+const openEditGradientDialog = (g: Gradient) => {
+  isNewGradient.value = false
+  gradientEditForm.value = {
+    id: g.id, name: g.name, type: g.type, repeating: g.repeating, angle: g.angle,
+    shape: g.shape || '', size: g.size || '', position_x: g.position_x, position_y: g.position_y,
+    stops: g.stops.map((s) => ({ ...s, color: s.color.replace(/^#/, ''), opacity: s.opacity ?? 100 })),
+  }
+  showGradientEditDialog.value = true
+}
+
+const addGradientStop = () => {
+  gradientEditForm.value.stops.push({ color: '888888', position: 50, opacity: 100 })
+}
+
+const removeGradientStop = (idx: number) => {
+  if (gradientEditForm.value.stops.length <= 2) return
+  gradientEditForm.value.stops.splice(idx, 1)
+}
+
+const gradientEditPreview = computed(() => gradientCssValue({
+  ...gradientEditForm.value,
+  stops: gradientEditForm.value.stops.map((s) => ({ ...s, color: `#${s.color}` })),
+}))
+
+const saveGradientEdit = () => {
+  const payload = {
+    ...gradientEditForm.value,
+    stops: gradientEditForm.value.stops.map((s) => ({ ...s, color: `#${s.color}` })),
+  }
+  const event = isNewGradient.value ? 'displayhive:admin:cts:create_gradient' : 'displayhive:admin:cts:update_gradient'
+  emit(event, payload)
+  toast.add({ severity: 'success', summary: 'Success', detail: isNewGradient.value ? 'Gradient created' : 'Gradient updated', life: 3000 })
+  showGradientEditDialog.value = false
+}
+
+const deleteGradient = (g: Gradient) => {
+  confirm.require({
+    message: `Delete gradient "${g.name}"?`,
+    header: 'Confirm Delete',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      emit('displayhive:admin:cts:delete_gradient', { id: g.id })
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Gradient deleted', life: 3000 })
+    },
+  })
+}
+
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit } = useSocket()
@@ -274,6 +426,7 @@ const editForm = ref({
   description: '',
   html: '',
   css: '',
+  gradient_ids: [] as number[],
 })
 
 // Loading state for when we request full design detail (html/css)
@@ -339,8 +492,11 @@ onMounted(() => {
   on('displayhive:admin:stc:upd_containers', handleContainersList)
   on('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   on('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
+  on('displayhive:admin:stc:upd_gradients', handleGradientsList)
+  on('displayhive:admin:stc:design_gradients', handleDesignGradients)
   refreshData()
   emit('displayhive:admin:cts:get_containers')
+  emit('displayhive:admin:cts:get_gradients')
   magicTagsStore.fetch()
 })
 
@@ -350,6 +506,8 @@ onUnmounted(() => {
   off('displayhive:admin:stc:upd_containers', handleContainersList)
   off('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   off('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
+  off('displayhive:admin:stc:upd_gradients', handleGradientsList)
+  off('displayhive:admin:stc:design_gradients', handleDesignGradients)
 })
 
 const refreshData = () => {
@@ -359,7 +517,7 @@ const refreshData = () => {
 
 const openNewDialog = () => {
   isNew.value = true
-  editForm.value = { id: null, name: '', description: '', html: '', css: '' }
+  editForm.value = { id: null, name: '', description: '', html: '', css: '', gradient_ids: [] }
   containerStyles.value = {}
   globalStyles.value = {}
   showEditDialog.value = true
@@ -373,6 +531,7 @@ const openEditDialog = (design: Design) => {
     description: design.description || '',
     html: design.html || '',
     css: design.css || '',
+    gradient_ids: [],
   }
   containerStyles.value = {}
   globalStyles.value = {}
@@ -382,6 +541,7 @@ const openEditDialog = (design: Design) => {
     emit('displayhive:admin:cts:get_design', { id: design.id })
     emit('displayhive:admin:cts:get_design_container_styles', { design_id: design.id })
     emit('displayhive:admin:cts:get_design_global_styles', { design_id: design.id })
+    emit('displayhive:admin:cts:get_design_gradients', { design_id: design.id })
     if (designLoadTimer) clearTimeout(designLoadTimer)
     designLoadTimer = window.setTimeout(() => {
       loadingDesign.value = false
@@ -593,6 +753,34 @@ const deleteDesign = (design: Design) => {
         </div>
 
         <div v-if="!isNew" class="container-styles-section">
+          <label>Gradients</label>
+          <small class="hint">
+            Applied as the body background, stacked in the order picked below (first = frontmost layer) — rendered ahead of the CSS editor above, so a manual edit there still wins.
+          </small>
+          <Panel header="Gradients" toggleable collapsed class="container-style-panel">
+            <div class="gradient-picker-row">
+              <MultiSelect
+                :model-value="editForm.gradient_ids"
+                :options="gradients"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="None"
+                size="small"
+                class="w-full"
+                display="chip"
+                @update:model-value="setDesignGradients"
+              />
+              <Button label="Manage Gradients" icon="pi pi-palette" outlined size="small" @click="showGradientManageDialog = true" />
+            </div>
+            <div
+              v-if="selectedGradients.length"
+              class="gradient-preview-box"
+              :style="{ backgroundImage: combinedGradientCss(selectedGradients) }"
+            ></div>
+          </Panel>
+        </div>
+
+        <div v-if="!isNew" class="container-styles-section">
           <label>Global Styles</label>
           <small class="hint">
             Applies to every container via the shared <code>.dh-container</code> class.
@@ -700,6 +888,113 @@ const deleteDesign = (design: Design) => {
         <Button label="Cancel" @click="closeDialog" text />
         <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveDesign(true)" :disabled="loadingDesign" />
         <Button label="Save" @click="saveDesign()" :disabled="loadingDesign" />
+      </template>
+    </Dialog>
+
+    <!-- Manage Gradients Dialog -->
+    <Dialog v-model:visible="showGradientManageDialog" header="Manage Gradients" modal :style="{ width: '600px' }">
+      <div class="gradient-manage-header">
+        <Button v-if="canCreate" label="New Gradient" icon="pi pi-plus" size="small" @click="openNewGradientDialog" />
+      </div>
+      <div v-if="!gradients.length" class="hint">No gradients yet.</div>
+      <div v-else class="gradient-list">
+        <div v-for="g in gradients" :key="g.id" class="gradient-list-item">
+          <div class="gradient-list-swatch" :style="{ backgroundImage: gradientCssValue(g) }"></div>
+          <div class="gradient-list-label">{{ g.name }} <small class="hint">({{ g.type }})</small></div>
+          <div class="action-buttons">
+            <Button v-if="canEdit" icon="pi pi-pencil" size="small" outlined title="Edit" @click="openEditGradientDialog(g)" />
+            <Button v-if="canDelete" icon="pi pi-trash" size="small" severity="danger" outlined title="Delete" @click="deleteGradient(g)" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Close" @click="showGradientManageDialog = false" />
+      </template>
+    </Dialog>
+
+    <!-- Edit Gradient Dialog -->
+    <Dialog
+      v-model:visible="showGradientEditDialog"
+      :header="isNewGradient ? 'New Gradient' : 'Edit Gradient'"
+      modal
+      :style="{ width: '500px' }"
+    >
+      <div class="dialog-content">
+        <div class="field">
+          <label>Name</label>
+          <InputText v-model="gradientEditForm.name" size="small" class="w-full" />
+        </div>
+        <div class="position-grid">
+          <div class="field">
+            <label>Type</label>
+            <Dropdown
+              v-model="gradientEditForm.type"
+              :options="[{ label: 'Linear', value: 'linear' }, { label: 'Radial', value: 'radial' }, { label: 'Conic', value: 'conic' }]"
+              optionLabel="label"
+              optionValue="value"
+              size="small"
+              class="w-full"
+            />
+          </div>
+          <div class="field repeating-field">
+            <label>&nbsp;</label>
+            <div class="repeating-checkbox-row">
+              <Checkbox v-model="gradientEditForm.repeating" binary inputId="gradient-repeating" />
+              <label for="gradient-repeating">Repeating</label>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="gradientEditForm.type !== 'radial'" class="field">
+          <label>{{ gradientEditForm.type === 'conic' ? 'Start Angle (deg)' : 'Angle (deg)' }}</label>
+          <InputNumber v-model="gradientEditForm.angle" :min="0" :max="360" size="small" class="w-full" />
+        </div>
+
+        <div v-if="gradientEditForm.type === 'radial'" class="position-grid">
+          <div class="field">
+            <label>Shape</label>
+            <Dropdown v-model="gradientEditForm.shape" :options="GRADIENT_SHAPE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <Dropdown v-model="gradientEditForm.size" :options="GRADIENT_SIZE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
+          </div>
+        </div>
+
+        <div v-if="gradientEditForm.type !== 'linear'" class="position-grid">
+          <div class="field">
+            <label>Position X (%)</label>
+            <InputNumber v-model="gradientEditForm.position_x" :min="0" :max="100" size="small" class="w-full" />
+          </div>
+          <div class="field">
+            <label>Position Y (%)</label>
+            <InputNumber v-model="gradientEditForm.position_y" :min="0" :max="100" size="small" class="w-full" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Color Stops</label>
+          <div v-for="(stop, idx) in gradientEditForm.stops" :key="idx" class="gradient-stop-row">
+            <ColorPicker v-model="stop.color" />
+            <InputNumber v-model="stop.position" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Position" />
+            <InputNumber v-model="stop.opacity" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Opacity" />
+            <Button
+              icon="pi pi-trash" text size="small" severity="danger" title="Remove stop"
+              :disabled="gradientEditForm.stops.length <= 2"
+              @click="removeGradientStop(idx)"
+            />
+          </div>
+          <Button label="Add Stop" icon="pi pi-plus" text size="small" @click="addGradientStop" />
+        </div>
+
+        <div class="field">
+          <label>Preview</label>
+          <div class="gradient-preview-box" :style="{ backgroundImage: gradientEditPreview }"></div>
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" @click="showGradientEditDialog = false" text />
+        <Button label="Save" @click="saveGradientEdit" />
       </template>
     </Dialog>
   </div>
@@ -849,5 +1144,78 @@ const deleteDesign = (design: Design) => {
   font-family: monospace;
   font-size: 0.8rem;
   color: #666;
+}
+
+.position-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+}
+
+.gradient-picker-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.gradient-preview-box {
+  margin-top: 0.6rem;
+  height: 60px;
+  border-radius: 6px;
+  border: 1px solid var(--p-surface-border, #ddd);
+  background-size: cover;
+}
+
+.gradient-manage-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.gradient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gradient-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--p-surface-border, #ddd);
+  border-radius: 6px;
+}
+
+.gradient-list-swatch {
+  width: 48px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--p-surface-border, #ddd);
+  flex-shrink: 0;
+  background-size: cover;
+}
+
+.gradient-list-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.gradient-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.repeating-field {
+  justify-content: flex-end;
+}
+
+.repeating-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.25rem;
 }
 </style>

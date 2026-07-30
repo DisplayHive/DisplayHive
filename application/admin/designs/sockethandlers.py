@@ -15,7 +15,7 @@ def register_admin_designs_handlers(socketio, app, db):
     """
     from application.admin.designs.helper import emit_designs_update
     from application.socketio_handlers.auth import require_right
-    from application.models import Design, DesignContainerStyle, DesignGlobalStyle
+    from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
     def _emit_designs(room=None):
         """Broadcast the current designs list."""
@@ -217,6 +217,174 @@ def register_admin_designs_handlers(socketio, app, db):
                     design_id=design_id, contentcontainer_id=contentcontainer_id,
                     property=prop, value=value,
                 ))
+
+        db.session.commit()
+        _push_screens_if_active(design)
+        return {'ok': True}
+
+    # --- Gradients (reusable library, applied as a Design's body background) ---
+
+    GRADIENT_TYPES = ('linear', 'radial', 'conic')
+
+    def _serialize_gradient(g):
+        import json
+        try:
+            stops = json.loads(g.stops or '[]')
+        except Exception:
+            stops = []
+        return {
+            'id': g.id, 'name': g.name, 'type': g.type, 'repeating': bool(g.repeating),
+            'angle': g.angle, 'shape': g.shape or '', 'size': g.size or '',
+            'position_x': g.position_x, 'position_y': g.position_y, 'stops': stops,
+        }
+
+    def _emit_gradients(room=None):
+        gradients = db.session.execute(db.select(Gradient).order_by(Gradient.name)).scalars().all()
+        socketio.emit(
+            'displayhive:admin:stc:upd_gradients',
+            {'data': [_serialize_gradient(g) for g in gradients]},
+            room=room or 'admins',
+        )
+
+    def _apply_gradient_fields(gradient, data):
+        gradient.name = data.get('name', gradient.name)
+        if data.get('type') in GRADIENT_TYPES:
+            gradient.type = data['type']
+        if 'repeating' in data:
+            gradient.repeating = bool(data['repeating'])
+        if data.get('angle') is not None:
+            gradient.angle = int(data['angle'])
+        if 'shape' in data:
+            gradient.shape = data.get('shape') or None
+        if 'size' in data:
+            gradient.size = data.get('size') or None
+        if data.get('position_x') is not None:
+            gradient.position_x = float(data['position_x'])
+        if data.get('position_y') is not None:
+            gradient.position_y = float(data['position_y'])
+        if data.get('stops') is not None:
+            import json
+            gradient.stops = json.dumps(data['stops'])
+
+    @socketio.on('displayhive:admin:cts:get_gradients')
+    @require_right('designs.page')
+    def get_gradients(message=None):
+        _emit_gradients(room=request.sid)
+
+    @socketio.on('displayhive:admin:cts:create_gradient')
+    @require_right('designs.create')
+    def handle_create_gradient(data=None):
+        if not data or not isinstance(data, dict):
+            return {'ok': False, 'error': 'Invalid payload'}
+        gradient = Gradient(name=data.get('name') or 'Gradient')
+        _apply_gradient_fields(gradient, data)
+        db.session.add(gradient)
+        db.session.commit()
+        _emit_gradients()
+        return {'ok': True, 'id': gradient.id}
+
+    @socketio.on('displayhive:admin:cts:update_gradient')
+    @require_right('designs.edit')
+    def handle_update_gradient(data=None):
+        if not data or not isinstance(data, dict):
+            return {'ok': False, 'error': 'Invalid payload'}
+        gradient_id = data.get('id')
+        if not gradient_id:
+            return {'ok': False, 'error': 'Missing id'}
+        gradient = db.session.get(Gradient, int(gradient_id))
+        if not gradient:
+            return {'ok': False, 'error': 'Gradient not found'}
+
+        _apply_gradient_fields(gradient, data)
+        db.session.add(gradient)
+        db.session.commit()
+        _emit_gradients()
+
+        # Push to screens for every Design currently using this gradient,
+        # if any of them happens to be the active one.
+        from application.models import DesignGradient
+        design_ids = db.session.execute(
+            db.select(DesignGradient.design_id).where(DesignGradient.gradient_id == gradient.id).distinct()
+        ).scalars().all()
+        for design in db.session.execute(db.select(Design).where(Design.id.in_(design_ids))).scalars().all():
+            _push_screens_if_active(design)
+        return {'ok': True}
+
+    @socketio.on('displayhive:admin:cts:delete_gradient')
+    @require_right('designs.delete')
+    def handle_delete_gradient(data=None):
+        from application.models import DesignGradient
+
+        if not data or not isinstance(data, dict):
+            return {'ok': False, 'error': 'Invalid payload'}
+        gradient_id = data.get('id')
+        if not gradient_id:
+            return {'ok': False, 'error': 'Missing id'}
+        gradient = db.session.get(Gradient, int(gradient_id))
+        if not gradient:
+            return {'ok': False, 'error': 'Gradient not found'}
+
+        used_by = db.session.execute(
+            db.select(db.func.count()).select_from(DesignGradient).where(DesignGradient.gradient_id == gradient.id)
+        ).scalar_one()
+        if used_by:
+            return {'ok': False, 'error': f'Gradient is used by {used_by} design(s)'}
+
+        db.session.delete(gradient)
+        db.session.commit()
+        _emit_gradients()
+        return {'ok': True}
+
+    @socketio.on('displayhive:admin:cts:get_design_gradients')
+    @require_right('designs.page')
+    def get_design_gradients(message=None):
+        """Emit the ordered list of Gradient ids applied to one Design."""
+        from application.models import DesignGradient
+
+        if not message or not isinstance(message, dict):
+            return
+        design_id = message.get('design_id') or message.get('id')
+        if not design_id:
+            return
+        design_id = int(design_id)
+
+        gradient_ids = db.session.execute(
+            db.select(DesignGradient.gradient_id)
+            .where(DesignGradient.design_id == design_id)
+            .order_by(DesignGradient.order, DesignGradient.id)
+        ).scalars().all()
+
+        socketio.emit(
+            'displayhive:admin:stc:design_gradients',
+            {'design_id': design_id, 'gradient_ids': list(gradient_ids)},
+            room=request.sid,
+        )
+
+    @socketio.on('displayhive:admin:cts:set_design_gradients')
+    @require_right('designs.edit')
+    def handle_set_design_gradients(data=None):
+        """Replace the full, ordered set of Gradients applied to one Design.
+
+        Payload: {design_id, gradient_ids: [id, ...]} — list order becomes
+        the background-image stacking order (first = frontmost layer).
+        """
+        from application.models import DesignGradient
+
+        if not data or not isinstance(data, dict):
+            return {'ok': False, 'error': 'Invalid payload'}
+        design_id = data.get('design_id')
+        gradient_ids = data.get('gradient_ids')
+        if not design_id or not isinstance(gradient_ids, list):
+            return {'ok': False, 'error': 'Missing design_id or gradient_ids'}
+
+        design = db.session.get(Design, int(design_id))
+        if not design:
+            return {'ok': False, 'error': 'Design not found'}
+
+        design_id = int(design_id)
+        db.session.execute(db.delete(DesignGradient).where(DesignGradient.design_id == design_id))
+        for order, gradient_id in enumerate(gradient_ids):
+            db.session.add(DesignGradient(design_id=design_id, gradient_id=int(gradient_id), order=order))
 
         db.session.commit()
         _push_screens_if_active(design)

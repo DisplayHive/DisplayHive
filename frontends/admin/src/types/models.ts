@@ -54,6 +54,36 @@ export interface Design {
   is_default?: boolean
 }
 
+/** One color stop in a Gradient, position in percent (0-100). */
+export interface GradientStop {
+  color: string
+  position: number
+  /** Percent (0-100, default 100/opaque). Lets stacked gradient layers show through to layers listed after them. */
+  opacity?: number
+}
+
+/**
+ * A reusable, named CSS gradient — a Design can apply several, stacked as
+ * layered `background-image` values. Covers the three widely-supported
+ * gradient functions and their `repeating-` variants.
+ */
+export interface Gradient {
+  id: number
+  name: string
+  type: 'linear' | 'radial' | 'conic'
+  repeating: boolean
+  /** Direction (linear) or start angle (conic), in degrees. Unused for radial. */
+  angle: number
+  /** Radial only: 'circle' | 'ellipse' (blank = CSS default). */
+  shape: string
+  /** Radial only: e.g. 'closest-side' (blank = CSS default). */
+  size: string
+  /** Percent (0-100); radial/conic `at <x> <y>` origin. */
+  position_x: number
+  position_y: number
+  stops: GradientStop[]
+}
+
 /** A named, reusable group of positioned ContentContainers. */
 export interface Layout {
   id: number

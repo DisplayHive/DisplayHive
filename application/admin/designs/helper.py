@@ -89,3 +89,83 @@ def render_global_style_css(db, design_id: int) -> str:
 
     decls = '\n'.join(f'  {prop}: {value};' for prop, value in props)
     return f'.dh-container {{\n{decls}\n}}'
+
+
+def gradient_css_value(gradient) -> str:
+    """Return this Gradient's CSS function value, covering the three
+    widely-supported gradient functions and their `repeating-` variants:
+
+      linear-gradient(<angle>deg, <stops>)
+      radial-gradient(<shape> <size> at <x>% <y>%, <stops>)
+      conic-gradient(from <angle>deg at <x>% <y>%, <stops>)
+
+    `shape`/`size` are blank-safe (CSS just uses its own default — ellipse
+    farthest-corner — when omitted). Each stop's `opacity` (0-100, defaults
+    to 100/opaque) becomes an 8-digit hex alpha channel — without it, a
+    gradient with no transparent stops always completely hides any gradient
+    layers listed after it, since CSS stacks background-image layers with
+    the first-listed one on top. Returns '' if the gradient has fewer than
+    two stops (a gradient needs at least two) or an unknown type.
+    """
+    import json
+
+    if not gradient or not gradient.stops:
+        return ''
+    try:
+        stops = json.loads(gradient.stops)
+    except Exception:
+        return ''
+    if not isinstance(stops, list) or len(stops) < 2:
+        return ''
+
+    def _stop_color(s):
+        color = str(s.get('color', '#000000'))
+        opacity = s.get('opacity', 100)
+        try:
+            opacity = float(opacity)
+        except (TypeError, ValueError):
+            opacity = 100
+        if opacity >= 100 or not color.startswith('#') or len(color) != 7:
+            return color
+        alpha = round(max(0, min(100, opacity)) / 100 * 255)
+        return f'{color}{alpha:02x}'
+
+    stop_str = ', '.join(f"{_stop_color(s)} {s.get('position', 0)}%" for s in stops)
+    prefix = 'repeating-' if gradient.repeating else ''
+    gtype = gradient.type or 'linear'
+    x = gradient.position_x if gradient.position_x is not None else 50
+    y = gradient.position_y if gradient.position_y is not None else 50
+
+    if gtype == 'linear':
+        return f'{prefix}linear-gradient({int(gradient.angle or 0)}deg, {stop_str})'
+
+    if gtype == 'radial':
+        shape_size = ' '.join(p for p in (gradient.shape or '', gradient.size or '') if p)
+        head = f'{shape_size} at {x}% {y}%'.strip()
+        return f'{prefix}radial-gradient({head}, {stop_str})'
+
+    if gtype == 'conic':
+        return f'{prefix}conic-gradient(from {int(gradient.angle or 0)}deg at {x}% {y}%, {stop_str})'
+
+    return ''
+
+
+def render_gradient_css(db, design_id: int) -> str:
+    """Assemble the `body { background-image: ...; }` rule from every
+    Gradient applied to this Design, stacked as comma-separated layers in
+    their configured order (lower DesignGradient.order = listed first, i.e.
+    the frontmost layer). Returns '' if the Design has no gradients applied.
+    """
+    from application.models import DesignGradient, Gradient
+
+    rows = db.session.execute(
+        db.select(Gradient)
+        .join(DesignGradient, DesignGradient.gradient_id == Gradient.id)
+        .where(DesignGradient.design_id == design_id)
+        .order_by(DesignGradient.order, DesignGradient.id)
+    ).scalars().all()
+
+    values = [v for v in (gradient_css_value(g) for g in rows) if v]
+    if not values:
+        return ''
+    return 'body {\n  background-image: ' + ', '.join(values) + ';\n}'

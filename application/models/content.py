@@ -51,6 +51,63 @@ class Design(db.Model):
     html: Mapped[str] = mapped_column(Text)
     css: Mapped[str] = mapped_column(Text, nullable=True)
     isDefault: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    # Ordered, many-to-many: a Design can stack several Gradients as layered
+    # `background-image` values (CSS supports comma-separated layers) —
+    # see DesignGradient.order and application/admin/designs/helper.py.
+    design_gradients: Mapped[list["DesignGradient"]] = relationship(
+        "DesignGradient", back_populates="design", order_by="DesignGradient.order",
+        cascade="all, delete-orphan",
+    )
+
+
+class Gradient(db.Model):
+    """A reusable, named CSS gradient, applied as one layer of a Design's
+    body background — reusable across Designs, edited via its own dialog on
+    the Design page. Covers the three widely-supported CSS gradient
+    functions (linear/radial/conic) and their `repeating-` variants.
+
+    `stops` is a JSON-encoded list of ``{"color": "#rrggbb", "position": 0-100}``
+    objects (at least two, ordered by position) — kept as one field rather
+    than a child table since a gradient's stops are always edited/read as a
+    whole, never queried individually.
+
+    `angle` means different things per type: the direction for linear, the
+    starting angle (`from <angle>`) for conic, and is unused for radial.
+    `shape`/`size` are radial-only (e.g. 'circle'/'closest-side' — CSS
+    keywords, blank means the CSS default). `position_x`/`position_y` (0-100,
+    i.e. percent) place the `at <x> <y>` origin for radial/conic gradients.
+    """
+    __tablename__ = 'gradient'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    type: Mapped[str] = mapped_column(String(20), default='linear', nullable=False)  # 'linear' | 'radial' | 'conic'
+    repeating: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    angle: Mapped[int] = mapped_column(Integer, default=180, nullable=False)  # degrees; linear direction / conic start
+    shape: Mapped[str] = mapped_column(String(20), nullable=True)  # 'circle' | 'ellipse' (radial only)
+    size: Mapped[str] = mapped_column(String(30), nullable=True)  # e.g. 'closest-side' (radial only)
+    position_x: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)  # percent; radial/conic
+    position_y: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)  # percent; radial/conic
+    stops: Mapped[str] = mapped_column(Text, default='[]', nullable=False)
+
+
+class DesignGradient(db.Model):
+    """Ordered association between a Design and one Gradient it applies.
+
+    `order` controls background-image stacking order (lower = listed first,
+    i.e. the frontmost layer — later/higher layers only show through where
+    an earlier layer's stops are transparent).
+    """
+    __tablename__ = 'design_gradient'
+    __table_args__ = (
+        UniqueConstraint('design_id', 'gradient_id', name='uq_design_gradient'),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    design_id: Mapped[int] = mapped_column(Integer, ForeignKey('design.id'), nullable=False)
+    gradient_id: Mapped[int] = mapped_column(Integer, ForeignKey('gradient.id'), nullable=False)
+    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    design: Mapped["Design"] = relationship("Design", back_populates="design_gradients")
+    gradient: Mapped["Gradient"] = relationship("Gradient")
 
 
 class Layout(db.Model):
