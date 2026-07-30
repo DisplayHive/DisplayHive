@@ -150,22 +150,59 @@ def gradient_css_value(gradient) -> str:
     return ''
 
 
-def render_gradient_css(db, design_id: int) -> str:
-    """Assemble the `body { background-image: ...; }` rule from every
-    Gradient applied to this Design, stacked as comma-separated layers in
-    their configured order (lower DesignGradient.order = listed first, i.e.
-    the frontmost layer). Returns '' if the Design has no gradients applied.
+def render_backdrop_css(db, design) -> str:
+    """Assemble the single `body { ... }` rule for a Design's Backdrop:
+    background-color, plus a background-image stack of every applied
+    Gradient (in their configured order, frontmost first) followed by the
+    Backdrop's own background image as the bottommost layer.
+
+    All three pieces (color, gradients, image) must be combined into one
+    `body` rule rather than emitted as separate rules — CSS only keeps the
+    *last* `background-image` declaration for a given selector, so a
+    separate gradient rule and a separate image rule at equal specificity
+    would make the later one silently discard the earlier one instead of
+    layering. Returns '' if the Design has nothing configured at all.
     """
     from application.models import DesignGradient, Gradient
 
     rows = db.session.execute(
         db.select(Gradient)
         .join(DesignGradient, DesignGradient.gradient_id == Gradient.id)
-        .where(DesignGradient.design_id == design_id)
+        .where(DesignGradient.design_id == design.id)
         .order_by(DesignGradient.order, DesignGradient.id)
     ).scalars().all()
 
-    values = [v for v in (gradient_css_value(g) for g in rows) if v]
-    if not values:
+    layers = [v for v in (gradient_css_value(g) for g in rows) if v]
+
+    color = (getattr(design, 'background_color', '') or '').strip()
+
+    image_url = (getattr(design, 'background_image_url', '') or '').strip()
+    if image_url:
+        # CSS has no native opacity for just a background-image, so a value
+        # below 100 is faked with a translucent overlay of background_color
+        # (black if unset) layered directly on top of the image — 0% opacity
+        # fully hides it behind that overlay, 100% adds no overlay at all.
+        opacity = getattr(design, 'background_opacity', None)
+        opacity = 100 if opacity is None else opacity
+        if opacity < 100:
+            blend = color if color.startswith('#') and len(color) == 7 else '#000000'
+            alpha = round(max(0, min(100, 100 - opacity)) / 100 * 255)
+            overlay_color = f'{blend}{alpha:02x}'
+            layers.append(f'linear-gradient({overlay_color}, {overlay_color})')
+        layers.append(f'url("{image_url}")')
+
+    decls = []
+    if color:
+        decls.append(f'  background-color: {color};')
+    repeat = (getattr(design, 'background_repeat', '') or '').strip()
+    if repeat:
+        decls.append(f'  background-repeat: {repeat};')
+    size = (getattr(design, 'background_size', '') or '').strip()
+    if size:
+        decls.append(f'  background-size: {size};')
+    if layers:
+        decls.append('  background-image: ' + ', '.join(layers) + ';')
+
+    if not decls:
         return ''
-    return 'body {\n  background-image: ' + ', '.join(values) + ';\n}'
+    return 'body {\n' + '\n'.join(decls) + '\n}'

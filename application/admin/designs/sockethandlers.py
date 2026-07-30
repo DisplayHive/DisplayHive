@@ -58,6 +58,11 @@ def register_admin_designs_handlers(socketio, app, db):
                 'description': design.description or '',
                 'html': design.html or '',
                 'css': design.css or '',
+                'background_color': design.background_color or '',
+                'background_image_url': design.background_image_url or '',
+                'background_repeat': design.background_repeat or '',
+                'background_size': design.background_size or '',
+                'background_opacity': design.background_opacity if design.background_opacity is not None else 100,
                 'is_default': bool(getattr(design, 'isDefault', False)),
             }
         }
@@ -75,6 +80,11 @@ def register_admin_designs_handlers(socketio, app, db):
             description=data.get('description', ''),
             html=data.get('html', ''),
             css=data.get('css', ''),
+            background_color=data.get('background_color') or None,
+            background_image_url=data.get('background_image_url') or None,
+            background_repeat=data.get('background_repeat') or None,
+            background_size=data.get('background_size') or None,
+            background_opacity=data.get('background_opacity'),
         )
         db.session.add(design)
         db.session.commit()
@@ -98,6 +108,16 @@ def register_admin_designs_handlers(socketio, app, db):
         design.description = data.get('description', design.description)
         design.html = data.get('html', design.html)
         design.css = data.get('css', design.css)
+        if 'background_color' in data:
+            design.background_color = data.get('background_color') or None
+        if 'background_image_url' in data:
+            design.background_image_url = data.get('background_image_url') or None
+        if 'background_repeat' in data:
+            design.background_repeat = data.get('background_repeat') or None
+        if 'background_size' in data:
+            design.background_size = data.get('background_size') or None
+        if 'background_opacity' in data:
+            design.background_opacity = data.get('background_opacity')
 
         db.session.add(design)
         db.session.commit()

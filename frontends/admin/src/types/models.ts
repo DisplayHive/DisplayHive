@@ -51,6 +51,13 @@ export interface Design {
   description?: string
   html?: string
   css?: string
+  /** Backdrop: body background-color, a background image URL (beneath any Gradients), and how that image tiles/scales/fades. */
+  background_color?: string
+  background_image_url?: string
+  background_repeat?: string
+  background_size?: string
+  /** Percent (0-100, default 100/fully visible) — faked via a color overlay, see render_backdrop_css(). */
+  background_opacity?: number
   is_default?: boolean
 }
 

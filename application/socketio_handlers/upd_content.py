@@ -45,22 +45,22 @@ def _build_payload(db, screen):
 
     # CSS precedence, low to high (all layers are equal-specificity single-
     # class/element selectors, so source order breaks the tie): per-container
-    # overrides, then global overrides, then the gradient background, then
-    # the Design's own hand-written CSS last — so a plain CSS edit always
-    # wins, a global default beats a per-container tweak, and an unset
-    # property just falls through to whatever's beneath it.
+    # overrides, then global overrides, then the Backdrop (gradients/image/
+    # color), then the Design's own hand-written CSS last — so a plain CSS
+    # edit always wins, a global default beats a per-container tweak, and an
+    # unset property just falls through to whatever's beneath it.
     css_layers = []
     if design is not None:
-        from application.admin.designs.helper import render_container_style_css, render_global_style_css, render_gradient_css
+        from application.admin.designs.helper import render_container_style_css, render_global_style_css, render_backdrop_css
         container_style_css = render_container_style_css(db, design.id)
         if container_style_css:
             css_layers.append(container_style_css)
         global_style_css = render_global_style_css(db, design.id)
         if global_style_css:
             css_layers.append(global_style_css)
-        gradient_css = render_gradient_css(db, design.id)
-        if gradient_css:
-            css_layers.append(gradient_css)
+        backdrop_css = render_backdrop_css(db, design)
+        if backdrop_css:
+            css_layers.append(backdrop_css)
     base_css = getattr(design, 'css', '') or ''
     if base_css:
         css_layers.append(base_css)

@@ -22,6 +22,7 @@ import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
 import ColorPicker from 'primevue/colorpicker'
 import Checkbox from 'primevue/checkbox'
+import MediaPickerDialog from '../components/MediaPickerDialog.vue'
 
 import { Codemirror } from 'vue-codemirror'
 import { html as cmHtml } from '@codemirror/lang-html'
@@ -426,8 +427,35 @@ const editForm = ref({
   description: '',
   html: '',
   css: '',
+  background_color: '' as string,
+  background_image_url: '' as string,
+  background_repeat: '' as string,
+  background_size: '' as string,
+  background_opacity: 100 as number,
   gradient_ids: [] as number[],
 })
+
+const BACKGROUND_REPEAT_OPTIONS: FontOption[] = [
+  { label: '(default: repeat)', value: '' },
+  ...keywordOptions('repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round'),
+]
+const BACKGROUND_SIZE_OPTIONS: FontOption[] = [
+  { label: '(default: auto)', value: '' },
+  ...keywordOptions('auto', 'cover', 'contain'),
+]
+
+// color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
+// CSS value needs the leading "#" — same conversion as the per-container/
+// global font color fields above.
+const getBackdropColorHex = (): string => editForm.value.background_color.replace(/^#/, '')
+const setBackdropColorHex = (hex: string | undefined) => {
+  editForm.value.background_color = hex ? `#${hex}` : ''
+}
+
+const showBackgroundImagePicker = ref(false)
+const setBackgroundImage = (url: string) => {
+  editForm.value.background_image_url = url
+}
 
 // Loading state for when we request full design detail (html/css)
 const loadingDesign = ref(false)
@@ -474,6 +502,11 @@ const handleDesignDetail = (data: any) => {
     if (showEditDialog.value && editForm.value.id === id) {
       editForm.value.html = design.html || ''
       editForm.value.css = design.css || ''
+      editForm.value.background_color = design.background_color || ''
+      editForm.value.background_image_url = design.background_image_url || ''
+      editForm.value.background_repeat = design.background_repeat || ''
+      editForm.value.background_size = design.background_size || ''
+      editForm.value.background_opacity = design.background_opacity ?? 100
       loadingDesign.value = false
       loadingDesignError.value = ''
       if (designLoadTimer) {
@@ -517,7 +550,11 @@ const refreshData = () => {
 
 const openNewDialog = () => {
   isNew.value = true
-  editForm.value = { id: null, name: '', description: '', html: '', css: '', gradient_ids: [] }
+  editForm.value = {
+    id: null, name: '', description: '', html: '', css: '',
+    background_color: '', background_image_url: '', background_repeat: '', background_size: '', background_opacity: 100,
+    gradient_ids: [],
+  }
   containerStyles.value = {}
   globalStyles.value = {}
   showEditDialog.value = true
@@ -531,6 +568,11 @@ const openEditDialog = (design: Design) => {
     description: design.description || '',
     html: design.html || '',
     css: design.css || '',
+    background_color: design.background_color || '',
+    background_image_url: design.background_image_url || '',
+    background_repeat: design.background_repeat || '',
+    background_size: design.background_size || '',
+    background_opacity: design.background_opacity ?? 100,
     gradient_ids: [],
   }
   containerStyles.value = {}
@@ -574,6 +616,11 @@ const saveDesign = async (keepOpen = false) => {
     description: editForm.value.description,
     html: editForm.value.html,
     css: editForm.value.css,
+    background_color: editForm.value.background_color,
+    background_image_url: editForm.value.background_image_url,
+    background_repeat: editForm.value.background_repeat,
+    background_size: editForm.value.background_size,
+    background_opacity: editForm.value.background_opacity,
   })
 
   toast.add({
@@ -753,32 +800,104 @@ const deleteDesign = (design: Design) => {
         </div>
 
         <div v-if="!isNew" class="container-styles-section">
-          <label>Gradients</label>
+          <label>Backdrop</label>
           <small class="hint">
-            Applied as the body background, stacked in the order picked below (first = frontmost layer) — rendered ahead of the CSS editor above, so a manual edit there still wins.
+            The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor above, so a manual edit there still wins.
           </small>
-          <Panel header="Gradients" toggleable collapsed class="container-style-panel">
-            <div class="gradient-picker-row">
-              <MultiSelect
-                :model-value="editForm.gradient_ids"
-                :options="gradients"
-                optionLabel="name"
-                optionValue="id"
-                placeholder="None"
-                size="small"
-                class="w-full"
-                display="chip"
-                @update:model-value="setDesignGradients"
-              />
-              <Button label="Manage Gradients" icon="pi pi-palette" outlined size="small" @click="showGradientManageDialog = true" />
-            </div>
-            <div
-              v-if="selectedGradients.length"
-              class="gradient-preview-box"
-              :style="{ backgroundImage: combinedGradientCss(selectedGradients) }"
-            ></div>
+          <Panel header="Backdrop" toggleable collapsed class="container-style-panel">
+            <Panel header="Gradient" toggleable collapsed class="container-style-panel nested-panel">
+              <div class="gradient-picker-row">
+                <MultiSelect
+                  :model-value="editForm.gradient_ids"
+                  :options="gradients"
+                  optionLabel="name"
+                  optionValue="id"
+                  placeholder="None"
+                  size="small"
+                  class="w-full"
+                  display="chip"
+                  @update:model-value="setDesignGradients"
+                />
+                <Button label="Manage Gradients" icon="pi pi-palette" outlined size="small" @click="showGradientManageDialog = true" />
+              </div>
+              <div
+                v-if="selectedGradients.length"
+                class="gradient-preview-box"
+                :style="{ backgroundImage: combinedGradientCss(selectedGradients) }"
+              ></div>
+            </Panel>
+
+            <Panel header="Background" toggleable collapsed class="container-style-panel nested-panel">
+              <div class="field">
+                <label>Background Image</label>
+                <div class="background-image-row">
+                  <div
+                    v-if="editForm.background_image_url"
+                    class="background-image-preview"
+                    :style="{ backgroundImage: `url(${editForm.background_image_url})` }"
+                  ></div>
+                  <Button label="Select Image" icon="pi pi-image" outlined size="small" @click="showBackgroundImagePicker = true" />
+                  <Button
+                    v-if="editForm.background_image_url"
+                    icon="pi pi-times" label="Clear" text size="small"
+                    @click="setBackgroundImage('')"
+                  />
+                </div>
+              </div>
+              <div v-if="editForm.background_image_url" class="font-properties-grid">
+                <div class="field">
+                  <label>Repeat</label>
+                  <Dropdown
+                    v-model="editForm.background_repeat"
+                    :options="BACKGROUND_REPEAT_OPTIONS"
+                    optionLabel="label"
+                    optionValue="value"
+                    editable
+                    size="small"
+                    class="w-full"
+                  />
+                </div>
+                <div class="field">
+                  <label>Size</label>
+                  <Dropdown
+                    v-model="editForm.background_size"
+                    :options="BACKGROUND_SIZE_OPTIONS"
+                    optionLabel="label"
+                    optionValue="value"
+                    editable
+                    size="small"
+                    class="w-full"
+                  />
+                </div>
+                <div class="field">
+                  <label>Opacity</label>
+                  <InputNumber
+                    v-model="editForm.background_opacity"
+                    :min="0" :max="100" suffix=" %" size="small" class="w-full"
+                  />
+                </div>
+              </div>
+              <div class="field">
+                <label>Background Color</label>
+                <div class="color-field-row">
+                  <ColorPicker :model-value="getBackdropColorHex()" @update:model-value="(v) => setBackdropColorHex(v)" />
+                  <span class="color-field-value">{{ editForm.background_color ? editForm.background_color : '(not set)' }}</span>
+                  <Button
+                    v-if="editForm.background_color"
+                    icon="pi pi-times" text size="small" title="Clear"
+                    @click="editForm.background_color = ''"
+                  />
+                </div>
+              </div>
+            </Panel>
           </Panel>
         </div>
+
+        <MediaPickerDialog
+          v-model:visible="showBackgroundImagePicker"
+          :selected-url="editForm.background_image_url"
+          @select="(item) => setBackgroundImage(item.url)"
+        />
 
         <div v-if="!isNew" class="container-styles-section">
           <label>Global Styles</label>
@@ -1164,6 +1283,25 @@ const deleteDesign = (design: Design) => {
   border-radius: 6px;
   border: 1px solid var(--p-surface-border, #ddd);
   background-size: cover;
+}
+
+.nested-panel {
+  margin-top: 0.75rem;
+}
+
+.background-image-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.background-image-preview {
+  width: 60px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--p-surface-border, #ddd);
+  background-size: cover;
+  background-position: center;
 }
 
 .gradient-manage-header {

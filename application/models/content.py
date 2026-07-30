@@ -51,6 +51,18 @@ class Design(db.Model):
     html: Mapped[str] = mapped_column(Text)
     css: Mapped[str] = mapped_column(Text, nullable=True)
     isDefault: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    # Backdrop: plain body background-color, plus an image URL rendered as
+    # the bottommost `background-image` layer, beneath any Gradients.
+    background_color: Mapped[str] = mapped_column(String(20), nullable=True)
+    background_image_url: Mapped[str] = mapped_column(Text, nullable=True)
+    background_repeat: Mapped[str] = mapped_column(String(20), nullable=True)
+    background_size: Mapped[str] = mapped_column(String(30), nullable=True)
+    # Percent (0-100, default 100/fully visible). CSS has no native opacity
+    # for just a background-image (unlike `opacity` on the element, which
+    # would also fade the content containers on top of it), so < 100 is
+    # faked with a translucent overlay of background_color (or black)
+    # layered directly on top of the image — see render_backdrop_css().
+    background_opacity: Mapped[int] = mapped_column(Integer, nullable=True)
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.
