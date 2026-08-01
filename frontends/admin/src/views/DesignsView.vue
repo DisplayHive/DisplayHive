@@ -485,6 +485,20 @@ const onSelectEffect = (key: string) => {
   editForm.value.background_effect = key
   const def = key ? getEffectDefinition(key) : undefined
   editForm.value.background_effect_settings = def ? defaultSettingsFor(def) : {}
+  selectedPresetLabel.value = ''
+}
+
+const selectedPresetLabel = ref('')
+
+const onSelectPreset = (label: string) => {
+  const def = selectedEffectDef.value
+  const preset = def?.presets?.find((p) => p.label === label)
+  if (!def || !preset) return
+  editForm.value.background_effect_settings = {
+    ...defaultSettingsFor(def),
+    ...preset.values,
+  } as Record<string, number | string | string[]>
+  selectedPresetLabel.value = label
 }
 
 const getEffectParamNumber = (param: EffectParam): number => {
@@ -1018,6 +1032,17 @@ const deleteDesign = (design: Design) => {
                 size="small"
                 class="w-full"
                 @update:model-value="onSelectEffect"
+              />
+            </div>
+            <div class="field" v-if="selectedEffectDef?.presets?.length">
+              <label>Preset</label>
+              <Dropdown
+                :model-value="selectedPresetLabel"
+                :options="selectedEffectDef.presets.map((p) => p.label)"
+                placeholder="Custom"
+                size="small"
+                class="w-full"
+                @update:model-value="onSelectPreset"
               />
             </div>
             <template v-if="selectedEffectDef">
