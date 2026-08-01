@@ -20,6 +20,7 @@
     "@codemirror/lang-html": "^6.4.11",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@primeuix/themes": "^2.0.3",
+    "beautiful-backgrounds": "^1.0.0",
     "codemirror": "^6.0.2",
     "html5-qrcode": "^2.3.8",
     "pinia": "^3.0.4",

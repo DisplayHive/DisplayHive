@@ -76,6 +76,27 @@ def _build_payload(db, screen):
         'css':  css,
     }
 
+    # Animated canvas background effect: not representable as CSS (see
+    # Design.background_effect comment), so it's handed to the screen client
+    # as data — effect key + its opaque settings object — rather than baked
+    # into `css` above. Malformed settings JSON degrades to an empty object
+    # rather than breaking the whole upd_content push.
+    effect_key = (getattr(design, 'background_effect', '') or '').strip()
+    if effect_key:
+        effect_settings = {}
+        raw_settings = getattr(design, 'background_effect_settings', '') or ''
+        if raw_settings:
+            try:
+                effect_settings = json.loads(raw_settings)
+            except Exception:
+                effect_settings = {}
+        design_payload['background_effect'] = {
+            'name': effect_key,
+            'settings': effect_settings,
+        }
+    else:
+        design_payload['background_effect'] = None
+
     # Load magic tags once; applied to Design HTML/CSS and content-handler CSS below.
     _tvars: dict = {}
     try:

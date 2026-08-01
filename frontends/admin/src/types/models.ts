@@ -58,6 +58,10 @@ export interface Design {
   background_size?: string
   /** Percent (0-100, default 100/fully visible) — faked via a color overlay, see render_backdrop_css(). */
   background_opacity?: number
+  /** Animated canvas background effect (beautiful-backgrounds), registry key or '' for none — see utils/backgroundEffects.ts. Not part of the Backdrop CSS; delivered to the screen client as data. */
+  background_effect?: string
+  /** JSON-encoded settings object for background_effect, opaque here — parsed/edited via the registry's per-effect param list. */
+  background_effect_settings?: string
   is_default?: boolean
 }
 

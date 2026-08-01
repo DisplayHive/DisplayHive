@@ -29,6 +29,7 @@ import { startAdoptionFlow, hideAdoptionOverlay } from "./adopt.js";
 import { setDeviceKey, clearAdoptionToken } from "./storage";
 import { preloadIframesInHtml } from "./preload-iframes.js";
 import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
+import { applyBackgroundEffect } from "./background-effects.js";
 
 // Track if device is deactivated (prevents hiding overlay on reconnect)
 let _isDeactivated = false;
@@ -362,6 +363,9 @@ export function setupSocketHandlers(socket: any): void {
           const styleEl = document.getElementById("template-css");
           if (styleEl) styleEl.textContent = design.css;
         }
+        applyBackgroundEffect(design.background_effect || null).catch((err) => {
+          log("error", "socket.on(upd_content)", "Failed to apply background effect", err);
+        });
       }
 
       // Preload any iframes embedded in scene HTML so they're warm by the

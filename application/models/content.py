@@ -63,6 +63,16 @@ class Design(db.Model):
     # faked with a translucent overlay of background_color (or black)
     # layered directly on top of the image — see render_backdrop_css().
     background_opacity: Mapped[int] = mapped_column(Integer, nullable=True)
+    # Animated canvas background effect (beautiful-backgrounds web component),
+    # rendered behind the Backdrop/gradients/image by the screen client — not
+    # representable as CSS, so unlike the Backdrop it's delivered as data
+    # (effect key + settings) rather than assembled into the Design's CSS.
+    # `background_effect` is a registry key (e.g. 'star-trail') or null/blank
+    # for none; `background_effect_settings` is a JSON object of that
+    # effect's own parameters, opaque to the backend — see
+    # frontends/screen/ts/screen/background-effects.ts for the registry.
+    background_effect: Mapped[str] = mapped_column(String(50), nullable=True)
+    background_effect_settings: Mapped[str] = mapped_column(Text, nullable=True)
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.

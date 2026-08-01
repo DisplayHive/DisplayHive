@@ -65,6 +65,11 @@
 </div>
 
 <div id="main-container">
+   <!-- Animated canvas background effect (beautiful-backgrounds custom element),
+        managed entirely by background-effects.ts. Kept as its own layer, behind
+        #design-background, so replacing the Design's HTML on update never tears
+        down and restarts the running animation. -->
+   <div id="design-effect-background"></div>
    <!-- Design background: the active Design's HTML/CSS skin, rendered once.
         Kept separate from #scene-containers so re-rendering scenes never touches it. -->
    <div id="design-background">{{ template_html|safe }}</div>

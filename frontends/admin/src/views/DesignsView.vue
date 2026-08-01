@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
 import type { Design, ContentContainer, Gradient, GradientStop } from '../types/models'
+import {
+  BACKGROUND_EFFECTS,
+  getEffectDefinition,
+  defaultSettingsFor,
+  applyEffectAttributes,
+  type EffectParam,
+} from '../utils/backgroundEffects'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -48,6 +55,7 @@ const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
 const backdropCollapsed = ref(true)
 const gradientPanelCollapsed = ref(true)
 const backgroundPanelCollapsed = ref(true)
+const effectPanelCollapsed = ref(true)
 const globalStylesCollapsed = ref(true)
 const perContainerSectionCollapsed = ref(true)
 const customHtmlCssCollapsed = ref(true)
@@ -61,6 +69,7 @@ const resetPanelCollapseState = () => {
   backdropCollapsed.value = true
   gradientPanelCollapsed.value = true
   backgroundPanelCollapsed.value = true
+  effectPanelCollapsed.value = true
   globalStylesCollapsed.value = true
   perContainerSectionCollapsed.value = true
   customHtmlCssCollapsed.value = true
@@ -460,8 +469,82 @@ const editForm = ref({
   background_repeat: '' as string,
   background_size: '' as string,
   background_opacity: 100 as number,
+  background_effect: '' as string,
+  background_effect_settings: {} as Record<string, number | string | string[]>,
   gradient_ids: [] as number[],
 })
+
+// --- Background Effect: animated canvas backgrounds (beautiful-backgrounds) ---
+const EFFECT_OPTIONS = [{ label: 'None', value: '' }, ...BACKGROUND_EFFECTS.map((e) => ({ label: e.label, value: e.key }))]
+
+const selectedEffectDef = computed(() =>
+  editForm.value.background_effect ? getEffectDefinition(editForm.value.background_effect) : undefined,
+)
+
+const onSelectEffect = (key: string) => {
+  editForm.value.background_effect = key
+  const def = key ? getEffectDefinition(key) : undefined
+  editForm.value.background_effect_settings = def ? defaultSettingsFor(def) : {}
+}
+
+const getEffectParamNumber = (param: EffectParam): number => {
+  const v = editForm.value.background_effect_settings[param.key] ?? param.default
+  return typeof v === 'number' ? v : Number(v) || 0
+}
+const getEffectParamText = (param: EffectParam): string => {
+  const v = editForm.value.background_effect_settings[param.key] ?? param.default
+  return Array.isArray(v) ? v.join(', ') : String(v ?? '')
+}
+const setEffectParamValue = (param: EffectParam, value: string | number | null | undefined) => {
+  if (param.type === 'colorArray') {
+    editForm.value.background_effect_settings[param.key] = String(value ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  } else if (param.type === 'number') {
+    editForm.value.background_effect_settings[param.key] = Number(value ?? 0)
+  } else {
+    editForm.value.background_effect_settings[param.key] = String(value ?? '')
+  }
+}
+
+// Live preview: mounted imperatively (not as a Vue-compiled tag) so no
+// isCustomElement compiler config is needed — mirrors how the screen client
+// itself manages these elements (frontends/screen/ts/screen/background-effects.ts).
+const effectPreviewEl = ref<HTMLDivElement | null>(null)
+let effectPreviewLoaded = false
+
+const renderEffectPreview = async () => {
+  const container = effectPreviewEl.value
+  if (!container) return
+  const def = selectedEffectDef.value
+  if (!def) {
+    container.replaceChildren()
+    return
+  }
+  if (!effectPreviewLoaded) {
+    await import('beautiful-backgrounds')
+    effectPreviewLoaded = true
+  }
+  let el = container.firstElementChild as HTMLElement | null
+  if (!el || el.tagName.toLowerCase() !== def.tag) {
+    el = document.createElement(def.tag)
+    el.style.display = 'block'
+    el.style.width = '100%'
+    el.style.height = '100%'
+    container.replaceChildren(el)
+  }
+  applyEffectAttributes(el, def, editForm.value.background_effect_settings)
+}
+
+watch(
+  () => [editForm.value.background_effect, editForm.value.background_effect_settings, effectPanelCollapsed.value] as const,
+  () => {
+    if (!showEditDialog.value || effectPanelCollapsed.value) return
+    nextTick(renderEffectPreview)
+  },
+  { deep: true },
+)
 
 const BACKGROUND_REPEAT_OPTIONS: FontOption[] = [
   { label: '(default: repeat)', value: '' },
@@ -535,6 +618,14 @@ const handleDesignDetail = (data: any) => {
       editForm.value.background_repeat = design.background_repeat || ''
       editForm.value.background_size = design.background_size || ''
       editForm.value.background_opacity = design.background_opacity ?? 100
+      editForm.value.background_effect = design.background_effect || ''
+      try {
+        editForm.value.background_effect_settings = design.background_effect_settings
+          ? JSON.parse(design.background_effect_settings)
+          : {}
+      } catch {
+        editForm.value.background_effect_settings = {}
+      }
       loadingDesign.value = false
       loadingDesignError.value = ''
       if (designLoadTimer) {
@@ -581,6 +672,7 @@ const openNewDialog = () => {
   editForm.value = {
     id: null, name: '', description: '', html: '', css: '',
     background_color: '', background_image_url: '', background_repeat: '', background_size: '', background_opacity: 100,
+    background_effect: '', background_effect_settings: {},
     gradient_ids: [],
   }
   containerStyles.value = {}
@@ -602,6 +694,8 @@ const openEditDialog = (design: Design) => {
     background_repeat: design.background_repeat || '',
     background_size: design.background_size || '',
     background_opacity: design.background_opacity ?? 100,
+    background_effect: design.background_effect || '',
+    background_effect_settings: {},
     gradient_ids: [],
   }
   containerStyles.value = {}
@@ -651,6 +745,10 @@ const saveDesign = async (keepOpen = false) => {
     background_repeat: editForm.value.background_repeat,
     background_size: editForm.value.background_size,
     background_opacity: editForm.value.background_opacity,
+    background_effect: editForm.value.background_effect,
+    background_effect_settings: editForm.value.background_effect
+      ? JSON.stringify(editForm.value.background_effect_settings)
+      : '',
   })
 
   toast.add({
@@ -901,6 +999,56 @@ const deleteDesign = (design: Design) => {
           :selected-url="editForm.background_image_url"
           @select="(item) => setBackgroundImage(item.url)"
         />
+
+        <div v-if="!isNew" class="container-styles-section">
+          <Panel v-model:collapsed="effectPanelCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="effectPanelCollapsed = !effectPanelCollapsed">
+                <span class="panel-header-title">Background Effect</span>
+                <small class="panel-header-desc">An animated canvas effect rendered behind the Backdrop. Runs continuously on the screen client — test on real display hardware before relying on it, it has a real CPU/GPU cost.</small>
+              </div>
+            </template>
+            <div class="field">
+              <label>Effect</label>
+              <Dropdown
+                :model-value="editForm.background_effect"
+                :options="EFFECT_OPTIONS"
+                optionLabel="label"
+                optionValue="value"
+                size="small"
+                class="w-full"
+                @update:model-value="onSelectEffect"
+              />
+            </div>
+            <template v-if="selectedEffectDef">
+              <div class="gradient-preview-box effect-preview-box" ref="effectPreviewEl"></div>
+              <div class="font-properties-grid">
+                <div v-for="p in selectedEffectDef.params" :key="p.key" class="field">
+                  <label>{{ p.label }}</label>
+                  <InputNumber
+                    v-if="p.type === 'number'"
+                    :model-value="getEffectParamNumber(p)"
+                    :step="p.step ?? 1"
+                    :min="p.min"
+                    :max="p.max"
+                    :max-fraction-digits="6"
+                    size="small"
+                    class="w-full"
+                    @update:model-value="(v) => setEffectParamValue(p, v)"
+                  />
+                  <InputText
+                    v-else
+                    :model-value="getEffectParamText(p)"
+                    size="small"
+                    class="w-full"
+                    :placeholder="p.type === 'colorArray' ? 'e.g. #ff0000, #00ff00' : ''"
+                    @update:model-value="(v) => setEffectParamValue(p, v)"
+                  />
+                </div>
+              </div>
+            </template>
+          </Panel>
+        </div>
 
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="globalStylesCollapsed" toggleable class="container-style-panel">
@@ -1365,6 +1513,12 @@ const deleteDesign = (design: Design) => {
   border-radius: 6px;
   border: 1px solid var(--p-surface-border, #ddd);
   background-size: cover;
+}
+
+.effect-preview-box {
+  height: 220px;
+  overflow: hidden;
+  background: #000;
 }
 
 .nested-panel {

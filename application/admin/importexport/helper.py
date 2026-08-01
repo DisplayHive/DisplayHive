@@ -62,6 +62,8 @@ def export_database(app, db):
                 'background_repeat': d.background_repeat,
                 'background_size': d.background_size,
                 'background_opacity': d.background_opacity,
+                'background_effect': d.background_effect,
+                'background_effect_settings': d.background_effect_settings,
             })
 
         # --- Gradients ---
@@ -235,7 +237,7 @@ def export_database(app, db):
             })
 
         return {
-            'export_version': 7,
+            'export_version': 8,
             'exported_at': datetime.now(timezone.utc).isoformat(),
             'screens': screens,
             'screengroups': screengroups,
@@ -356,6 +358,8 @@ def import_database(app, db, data: dict) -> dict:
                     background_repeat=row.get('background_repeat'),
                     background_size=row.get('background_size'),
                     background_opacity=row.get('background_opacity'),
+                    background_effect=row.get('background_effect'),
+                    background_effect_settings=row.get('background_effect_settings'),
                 )
                 db.session.add(d)
             db.session.flush()
