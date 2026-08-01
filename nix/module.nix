@@ -80,13 +80,19 @@ let
       export HOME=/root
       export npm_config_cache=/root/.npm
 
+      # Always run non-interactively over SSH (accept new host keys, never
+      # prompt) so anonymous/keyless ssh:// checkouts don't hang waiting for
+      # a TTY that a systemd service doesn't have. Only add -i when a key
+      # was actually configured. Harmless (unused) for HTTPS repos.
+      ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
       if [ -n "$ssh_key_file" ]; then
         if [ ! -r "$ssh_key_file" ]; then
           echo "[displayhive-deploy/$instance] ERROR: SSH key '$ssh_key_file' not readable" >&2
           exit 1
         fi
-        export GIT_SSH_COMMAND="ssh -i $ssh_key_file -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+        ssh_opts="-i $ssh_key_file $ssh_opts"
       fi
+      export GIT_SSH_COMMAND="ssh $ssh_opts"
 
       export GIT_CONFIG_COUNT=1
       export GIT_CONFIG_KEY_0="safe.directory"
@@ -94,6 +100,9 @@ let
 
       if [ -d "$source_dir/.git" ]; then
         echo "[displayhive-deploy/$instance] Pulling $git_branch from origin"
+        # gitRepository may have changed since the initial clone (repo moved,
+        # renamed, migrated hosts) — keep origin pointed at the configured URL.
+        git -C "$source_dir" remote set-url origin "$git_url"
         # The initial clone below is single-branch, so origin's fetch refspec
         # only tracks the branch it was cloned with. If gitBranch was since
         # changed, that branch isn't fetchable yet — add it explicitly so a
@@ -134,16 +143,22 @@ let
     text = ''
       instance="$1"
       source_dir="$2"
-      git_branch="$3"
-      ssh_key_file="$4"
+      git_url="$3"
+      git_branch="$4"
+      ssh_key_file="$5"
       service_user="displayhive-$instance"
 
       export HOME=/root
       export npm_config_cache=/root/.npm
 
+      # See the boot-time deploy script for why this is unconditional: it
+      # keeps anonymous/keyless ssh:// checkouts from hanging on a host-key
+      # prompt with no TTY to answer it.
+      ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
       if [ -n "$ssh_key_file" ]; then
-        export GIT_SSH_COMMAND="ssh -i $ssh_key_file -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+        ssh_opts="-i $ssh_key_file $ssh_opts"
       fi
+      export GIT_SSH_COMMAND="ssh $ssh_opts"
 
       export GIT_CONFIG_COUNT=1
       export GIT_CONFIG_KEY_0="safe.directory"
@@ -153,6 +168,10 @@ let
         echo "[displayhive-webhook/$instance] ERROR: $source_dir is not a git repo — run the boot deploy first" >&2
         exit 1
       fi
+
+      # gitRepository may have changed since the initial clone — keep origin
+      # pointed at the configured URL.
+      git -C "$source_dir" remote set-url origin "$git_url"
 
       # Snapshot frontend tree hashes before pulling so we can skip
       # expensive npm steps when nothing relevant changed.
@@ -231,8 +250,9 @@ let
     BRANCH      = sys.argv[4]          # branch to watch; "" = any branch
     DEPLOY_BIN  = sys.argv[5]
     SOURCE_DIR  = sys.argv[6]
-    GIT_BRANCH  = sys.argv[7]
-    SSH_KEY     = sys.argv[8] if len(sys.argv) > 8 else ""
+    GIT_URL     = sys.argv[7]
+    GIT_BRANCH  = sys.argv[8]
+    SSH_KEY     = sys.argv[9] if len(sys.argv) > 9 else ""
 
     # Resolve webhook secret at runtime so secretFile works with agenix/sops-nix.
     _secret_file = os.environ.get("DISPLAYHIVE_WEBHOOK_SECRET_FILE", "")
@@ -253,7 +273,7 @@ let
             return
         try:
             subprocess.run(
-                [DEPLOY_BIN, INSTANCE, SOURCE_DIR, GIT_BRANCH, SSH_KEY],
+                [DEPLOY_BIN, INSTANCE, SOURCE_DIR, GIT_URL, GIT_BRANCH, SSH_KEY],
                 check=True,
             )
         except subprocess.CalledProcessError as exc:
@@ -326,7 +346,7 @@ let
         + " ${icfg.sourceDirectory}"
         + " ${icfg.gitRepository}"
         + " ${icfg.gitBranch}"
-        + " ${icfg.gitSshKeyFile}";
+        + (if icfg.gitSshKeyFile == "" then " \"\"" else " ${icfg.gitSshKeyFile}");
     };
   };
 
@@ -356,6 +376,7 @@ let
           + (if wcfg.branch == "" then " \"\"" else " ${wcfg.branch}")
           + " ${webhookDeployScript}/bin/displayhive-webhook-deploy"
           + " ${icfg.sourceDirectory}"
+          + (if icfg.gitRepository == "" then " \"\"" else " ${icfg.gitRepository}")
           + " ${icfg.gitBranch}"
           + (if icfg.gitSshKeyFile == "" then " \"\"" else " ${icfg.gitSshKeyFile}");
         Restart    = "on-failure";
@@ -414,7 +435,10 @@ let
         default = "";
         description = ''
           Absolute path to an SSH private key for private repositories.
-          Leave empty for public HTTPS repositories.
+          Leave empty for public HTTPS repositories, or for an ssh:// repository
+          the server exposes for anonymous/keyless read access — the deploy
+          scripts always pass BatchMode + accept-new host-key options, so a
+          keyless ssh:// checkout won't hang waiting for a host-key prompt.
           Manage with agenix or sops-nix (owner: root, mode: 0400).
         '';
       };

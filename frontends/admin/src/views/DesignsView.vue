@@ -155,7 +155,8 @@ const handleDesignContainerStyles = (data: any) => {
   for (const [idStr, rawStyles] of Object.entries(data.data || {})) {
     const styles = { ...(rawStyles as Record<string, string>) }
     for (const p of FONT_PROPERTIES) {
-      if (styles[p.key] && !isValidForType(p.type, styles[p.key])) {
+      const v = styles[p.key]
+      if (v && !isValidForType(p.type, v)) {
         delete styles[p.key]
       }
     }
@@ -217,9 +218,10 @@ const globalStyles = ref<Record<string, string>>({})
 
 const handleDesignGlobalStyles = (data: any) => {
   if (!data || data.design_id !== editForm.value.id) return
-  const styles = { ...(data.data || {}) }
+  const styles: Record<string, string> = { ...(data.data || {}) }
   for (const p of FONT_PROPERTIES) {
-    if (styles[p.key] && !isValidForType(p.type, styles[p.key])) delete styles[p.key]
+    const v = styles[p.key]
+    if (v && !isValidForType(p.type, v)) delete styles[p.key]
   }
   globalStyles.value = styles
 }
@@ -941,7 +943,7 @@ const deleteDesign = (design: Design) => {
                   editable
                   size="small"
                   class="w-full"
-                  @update:model-value="(v) => setGlobalValue(p.key, v)"
+                  @update:model-value="(v: string | undefined) => setGlobalValue(p.key, v)"
                 />
               </div>
             </div>
@@ -1003,7 +1005,7 @@ const deleteDesign = (design: Design) => {
                     editable
                     size="small"
                     class="w-full"
-                    @update:model-value="(v) => setStyleValue(c.id, p.key, v)"
+                    @update:model-value="(v: string | undefined) => setStyleValue(c.id, p.key, v)"
                   />
                 </div>
               </div>
