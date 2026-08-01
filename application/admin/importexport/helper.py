@@ -14,7 +14,9 @@ def export_database(app, db):
         MagicTagValueList,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
-    from application.models.content import layout_container
+    from application.models.content import (
+        layout_container, Gradient, DesignGradient, DesignContainerStyle, DesignGlobalStyle,
+    )
 
     with app.app_context():
         # --- Screens ---
@@ -55,6 +57,58 @@ def export_database(app, db):
                 'html': d.html,
                 'css': d.css,
                 'isDefault': bool(d.isDefault),
+                'background_color': d.background_color,
+                'background_image_url': d.background_image_url,
+                'background_repeat': d.background_repeat,
+                'background_size': d.background_size,
+                'background_opacity': d.background_opacity,
+            })
+
+        # --- Gradients ---
+        gradients = []
+        for g in db.session.execute(db.select(Gradient)).scalars().all():
+            gradients.append({
+                'id': g.id,
+                'name': g.name,
+                'type': g.type,
+                'repeating': bool(g.repeating),
+                'angle': g.angle,
+                'shape': g.shape,
+                'size': g.size,
+                'position_x': g.position_x,
+                'position_y': g.position_y,
+                'stops': g.stops,
+            })
+
+        # --- DesignGradients (ordered association) ---
+        design_gradients = []
+        for dg in db.session.execute(db.select(DesignGradient)).scalars().all():
+            design_gradients.append({
+                'id': dg.id,
+                'design_id': dg.design_id,
+                'gradient_id': dg.gradient_id,
+                'order': dg.order,
+            })
+
+        # --- DesignContainerStyles ---
+        design_container_styles = []
+        for dcs in db.session.execute(db.select(DesignContainerStyle)).scalars().all():
+            design_container_styles.append({
+                'id': dcs.id,
+                'design_id': dcs.design_id,
+                'contentcontainer_id': dcs.contentcontainer_id,
+                'property': dcs.property,
+                'value': dcs.value,
+            })
+
+        # --- DesignGlobalStyles ---
+        design_global_styles = []
+        for dgs in db.session.execute(db.select(DesignGlobalStyle)).scalars().all():
+            design_global_styles.append({
+                'id': dgs.id,
+                'design_id': dgs.design_id,
+                'property': dgs.property,
+                'value': dgs.value,
             })
 
         # --- Layouts ---
@@ -81,6 +135,8 @@ def export_database(app, db):
                 'left': c.left,
                 'width': c.width,
                 'height': c.height,
+                'default_field_handler': c.default_field_handler,
+                'default_content': c.default_content,
             })
 
         # --- Contenttypes ---
@@ -179,12 +235,16 @@ def export_database(app, db):
             })
 
         return {
-            'export_version': 6,
+            'export_version': 7,
             'exported_at': datetime.now(timezone.utc).isoformat(),
             'screens': screens,
             'screengroups': screengroups,
             'screengroup_screen': sg_screen_assoc,
             'designs': designs,
+            'gradients': gradients,
+            'design_gradients': design_gradients,
+            'design_container_styles': design_container_styles,
+            'design_global_styles': design_global_styles,
             'layouts': layouts,
             'layout_container': layout_container_assoc,
             'contentcontainers': containers,
@@ -227,7 +287,9 @@ def import_database(app, db, data: dict) -> dict:
         MagicTagValueList, MagicTagValueListEntry,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
-    from application.models.content import layout_container
+    from application.models.content import (
+        layout_container, Gradient, DesignGradient, DesignContainerStyle, DesignGlobalStyle,
+    )
 
     version = data.get('export_version', 1)
     logger.info('Starting import, export_version=%s', version)
@@ -251,10 +313,14 @@ def import_database(app, db, data: dict) -> dict:
             db.session.execute(db.delete(Device))
             db.session.execute(db.delete(Screen))
             db.session.execute(db.delete(Screengroup))
+            db.session.execute(db.delete(DesignContainerStyle))
+            db.session.execute(db.delete(DesignGlobalStyle))
             db.session.execute(db.delete(ContentContainer))
             db.session.execute(db.delete(Contenttype))
             db.session.execute(db.delete(Layout))
+            db.session.execute(db.delete(DesignGradient))
             db.session.execute(db.delete(Design))
+            db.session.execute(db.delete(Gradient))
             db.session.execute(db.delete(Media))
             db.session.execute(db.delete(MagicTag))
             db.session.execute(db.delete(MagicTagValueListEntry))
@@ -285,8 +351,41 @@ def import_database(app, db, data: dict) -> dict:
                     html=row.get('html') or '',
                     css=row.get('css'),
                     isDefault=bool(row.get('isDefault', False)),
+                    background_color=row.get('background_color'),
+                    background_image_url=row.get('background_image_url'),
+                    background_repeat=row.get('background_repeat'),
+                    background_size=row.get('background_size'),
+                    background_opacity=row.get('background_opacity'),
                 )
                 db.session.add(d)
+            db.session.flush()
+
+            # --- Gradients (needs to exist before DesignGradient references it) ---
+            for row in data.get('gradients', []):
+                g = Gradient(
+                    id=row['id'],
+                    name=row['name'],
+                    type=row.get('type') or 'linear',
+                    repeating=bool(row.get('repeating', False)),
+                    angle=row.get('angle', 180) or 180,
+                    shape=row.get('shape'),
+                    size=row.get('size'),
+                    position_x=row.get('position_x', 50.0) or 50.0,
+                    position_y=row.get('position_y', 50.0) or 50.0,
+                    stops=row.get('stops') or '[]',
+                )
+                db.session.add(g)
+            db.session.flush()
+
+            # --- DesignGradients (needs Design + Gradient) ---
+            for row in data.get('design_gradients', []):
+                dg = DesignGradient(
+                    id=row['id'],
+                    design_id=row['design_id'],
+                    gradient_id=row['gradient_id'],
+                    order=row.get('order') or 0,
+                )
+                db.session.add(dg)
             db.session.flush()
 
             # --- ContentContainers ---
@@ -299,8 +398,33 @@ def import_database(app, db, data: dict) -> dict:
                     left=row.get('left', 0) or 0,
                     width=row.get('width', 100) or 100,
                     height=row.get('height', 100) or 100,
+                    default_field_handler=row.get('default_field_handler'),
+                    default_content=row.get('default_content'),
                 )
                 db.session.add(c)
+            db.session.flush()
+
+            # --- DesignContainerStyles (needs Design + ContentContainer) ---
+            for row in data.get('design_container_styles', []):
+                dcs = DesignContainerStyle(
+                    id=row['id'],
+                    design_id=row['design_id'],
+                    contentcontainer_id=row['contentcontainer_id'],
+                    property=row['property'],
+                    value=row.get('value'),
+                )
+                db.session.add(dcs)
+            db.session.flush()
+
+            # --- DesignGlobalStyles (needs Design) ---
+            for row in data.get('design_global_styles', []):
+                dgs = DesignGlobalStyle(
+                    id=row['id'],
+                    design_id=row['design_id'],
+                    property=row['property'],
+                    value=row.get('value'),
+                )
+                db.session.add(dgs)
             db.session.flush()
 
             # --- Layouts ---
@@ -506,6 +630,10 @@ def import_database(app, db, data: dict) -> dict:
             if db_uri.startswith('postgresql'):
                 sequences = [
                     ('design', 'id'),
+                    ('gradient', 'id'),
+                    ('design_gradient', 'id'),
+                    ('design_container_style', 'id'),
+                    ('design_global_style', 'id'),
                     ('layout', 'id'),
                     ('contenttype', 'id'),
                     ('screen', 'id'),
@@ -542,6 +670,7 @@ def import_database(app, db, data: dict) -> dict:
                     'screens': len(data.get('screens', [])),
                     'screengroups': len(data.get('screengroups', [])),
                     'designs': len(design_rows or []),
+                    'gradients': len(data.get('gradients', [])),
                     'contenttypes': len(contenttype_rows or []),
                     'content_elements': len(data.get('content_elements', [])),
                     'media': len(data.get('media', [])),
