@@ -212,6 +212,89 @@ def gradient_css_value(gradient, design=None) -> str:
     return ''
 
 
+def build_design_payload(db) -> dict:
+    """Assemble the same `{name, html, css, background_effect}` shape pushed
+    to screens as `upd_content`'s `design` field — the currently active/
+    default Design's HTML, its fully-layered CSS (global/container styles,
+    Backdrop, then its own hand-written CSS last), and its animated
+    background effect (if any), with magic tags substituted into html/css.
+
+    Also used by the admin Layout editor to preview the active Design behind
+    the container-positioning canvas — see
+    application/admin/layouts/sockethandlers.py's get_design_preview.
+    """
+    from application.utils.template import get_default_design
+
+    design = get_default_design(db)
+
+    # CSS precedence, low to high (all layers are equal-specificity single-
+    # class/element selectors, so source order breaks the tie): global
+    # overrides, then per-container overrides, then the Backdrop (gradients/
+    # image/color), then the Design's own hand-written CSS last — so a plain
+    # CSS edit always wins, a per-container tweak beats a global default, and
+    # an unset property just falls through to whatever's beneath it.
+    css_layers = []
+    if design is not None:
+        global_style_css = render_global_style_css(db, design)
+        if global_style_css:
+            css_layers.append(global_style_css)
+        container_style_css = render_container_style_css(db, design)
+        if container_style_css:
+            css_layers.append(container_style_css)
+        backdrop_css = render_backdrop_css(db, design)
+        if backdrop_css:
+            css_layers.append(backdrop_css)
+    base_css = getattr(design, 'css', '') or ''
+    if base_css:
+        css_layers.append(base_css)
+    css = '\n\n'.join(css_layers)
+
+    design_payload = {
+        'name': getattr(design, 'name', '') or '',
+        'html': getattr(design, 'html', '') or '',
+        'css': css,
+    }
+
+    # Animated canvas background effect: not representable as CSS (see
+    # Design.background_effect comment), so it's handed to the caller as
+    # data — effect key + its opaque settings object — rather than baked
+    # into `css` above. Malformed settings JSON degrades to an empty object
+    # rather than breaking the whole payload.
+    effect_key = (getattr(design, 'background_effect', '') or '').strip()
+    if effect_key:
+        effect_settings = {}
+        raw_settings = getattr(design, 'background_effect_settings', '') or ''
+        if raw_settings:
+            try:
+                effect_settings = json.loads(raw_settings)
+            except Exception:
+                effect_settings = {}
+        if effect_settings:
+            effect_settings = resolve_default_colors_deep(effect_settings, design)
+        design_payload['background_effect'] = {
+            'name': effect_key,
+            'settings': effect_settings,
+        }
+    else:
+        design_payload['background_effect'] = None
+
+    # Load magic tags once; applied to Design HTML/CSS.
+    _tvars: dict = {}
+    try:
+        from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
+        _tvars = load_magic_tags(db)
+    except Exception:
+        pass
+
+    if _tvars:
+        if design_payload['html']:
+            design_payload['html'] = substitute_magic_tags(design_payload['html'], _tvars)
+        if design_payload['css']:
+            design_payload['css'] = substitute_magic_tags(design_payload['css'], _tvars)
+
+    return design_payload
+
+
 def render_backdrop_css(db, design) -> str:
     """Assemble the single `body { ... }` rule for a Design's Backdrop:
     background-color, plus a background-image stack of every applied

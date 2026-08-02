@@ -80,6 +80,20 @@ def register_admin_layouts_handlers(socketio, app, db):
     def get_admin_layouts(message=None):
         _emit_layouts(room=request.sid)
 
+    @socketio.on('displayhive:admin:cts:get_design_preview')
+    @require_right('layouts.page')
+    def get_design_preview(message=None):
+        """Emit the active Design's {name, html, css} — same shape/CSS
+        layering `upd_content` pushes to real screens — so the Layout editor
+        can render it behind the container-positioning canvas. Read-only:
+        gated by `layouts.page` (not a Designs right), same as get_containers
+        above, since this is just a backdrop for placing containers, not
+        Design editing.
+        """
+        from application.admin.designs.helper import build_design_payload
+        payload = build_design_payload(db)
+        socketio.emit('displayhive:admin:stc:design_preview', payload, room=request.sid)
+
     @socketio.on('displayhive:admin:cts:create_layout')
     @require_right('layouts.create')
     def handle_create_layout(data=None):

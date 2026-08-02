@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, watch } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -15,6 +15,25 @@ import Editor from 'primevue/editor'
 import MediaPickerDialog from './MediaPickerDialog.vue'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
+import { getEffectDefinition } from '../utils/backgroundEffects'
+// `?raw` inlines the pre-built bundle's source as a string at build time.
+// It has to run *inside* the preview iframe's own document (own
+// customElements registry), so it can't just be imported/evaluated in this
+// page's JS realm — but it also can't be loaded via `<script src="...">`:
+// module scripts always fetch with CORS semantics, and the iframe is
+// `sandbox="allow-scripts"` *without* `allow-same-origin` (intentionally,
+// so a Design's own arbitrary HTML/CSS can't reach this page's cookies/
+// storage), which gives it an opaque `Origin: null` — the static asset
+// server has no matching CORS header for that, so the browser silently
+// blocks the fetch. Inlining the source as literal script *content*
+// sidesteps the network fetch (and CORS) entirely.
+import bbScriptSource from 'beautiful-backgrounds?raw'
+// A `</script` appearing verbatim inside that source (e.g. in a minified
+// string literal) would prematurely close our injected <script> tag when
+// the HTML parser scans for it — inserting a backslash breaks that literal
+// match for the parser while remaining valid (harmless) JS if it happens to
+// land inside a string/regex in the source itself.
+const bbScriptSourceSafe = bbScriptSource.replace(/<\/script/gi, '<\\/script')
 
 interface MediaItem { id: number; url: string }
 
@@ -48,12 +67,81 @@ const props = defineProps<{
   layouts: Layout[]
 }>()
 
-const { emit: socketEmit, emitWithAck } = useSocket()
+const { emit: socketEmit, emitWithAck, on, off } = useSocket()
 const confirm = useConfirm()
 const toast = useToast()
 
 const canvasEl = ref<HTMLElement | null>(null)
 const selectedId = ref<number | null>(null)
+
+// --- Design preview: the active Design, rendered behind the canvas so
+// containers can be positioned against how the screen will actually look.
+// Same {name, html, css, background_effect} shape/CSS-layering as what
+// upd_content pushes to real screens (see
+// application/admin/designs/helper.py's build_design_payload) — rendered in
+// an iframe (not injected inline) so a Design's own hand-written
+// `body {...}` CSS and arbitrary HTML can't leak into or clash with this
+// page's own styles.
+interface DesignPreview {
+  name: string
+  html: string
+  css: string
+  background_effect: { name: string; settings: Record<string, unknown> } | null
+}
+const designPreview = ref<DesignPreview | null>(null)
+
+// Attribute-value escaping for the effect's custom-element tag below — the
+// settings values come from the backend (design's stored JSON), not from
+// this page's own trusted template literals, so they need escaping same as
+// any other data interpolated into an HTML string.
+const escapeAttr = (v: string): string =>
+  v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+
+// The effect canvas sits between the Backdrop (body's own background-color/
+// image/gradients) and the Design's own HTML — same stacking as the real
+// screen's #design-effect-background / #design-background (see
+// frontends/screen/templates/index.html) — which is only achievable by
+// rendering it inside the *same* document as the backdrop CSS, hence
+// building it into this srcdoc rather than as a separate layer in the
+// parent page (an iframe's own background-color would otherwise fully
+// hide anything layered behind it from outside).
+const effectFragment = computed(() => {
+  const effect = designPreview.value?.background_effect
+  if (!effect) return ''
+  const def = getEffectDefinition(effect.name)
+  if (!def) return ''
+  const attrs = def.params
+    .map((p) => {
+      const value = effect.settings[p.key] ?? p.default
+      const attrValue = Array.isArray(value) ? value.join(',') : String(value)
+      return `${p.key}="${escapeAttr(attrValue)}"`
+    })
+    .join(' ')
+  return (
+    `<div id="design-effect-background" style="position:absolute;inset:0;overflow:hidden;">` +
+    `<${def.tag} style="display:block;width:100%;height:100%;" ${attrs}></${def.tag}></div>` +
+    `<script type="module">${bbScriptSourceSafe}<\/script>`
+  )
+})
+
+const designPreviewSrcdoc = computed(() => {
+  const p = designPreview.value
+  if (!p) return ''
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div></body></html>`
+})
+
+const handleDesignPreview = (data: DesignPreview) => {
+  designPreview.value = data
+}
+
+onMounted(() => {
+  on('displayhive:admin:stc:design_preview', handleDesignPreview)
+  socketEmit('displayhive:admin:cts:get_design_preview')
+})
+
+onUnmounted(() => {
+  off('displayhive:admin:stc:design_preview', handleDesignPreview)
+})
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
 const round1 = (v: number) => Math.round(v * 10) / 10
@@ -674,6 +762,13 @@ const toggleSelectedLayoutMembership = () => {
           @dragover.prevent
           @drop.prevent="onCanvasDrop"
         >
+          <iframe
+            v-if="designPreviewSrcdoc"
+            class="editor-design-preview"
+            :srcdoc="designPreviewSrcdoc"
+            title="Active Design preview"
+            sandbox="allow-scripts"
+          ></iframe>
           <div
             v-for="c in placedContainers"
             :key="c.id"
@@ -975,6 +1070,18 @@ const toggleSelectedLayoutMembership = () => {
   overflow: hidden;
   touch-action: none;
   cursor: crosshair;
+}
+
+.editor-design-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  /* Let clicks/drags fall through to the canvas underneath — the iframe is
+     a separate document, so without this it would swallow the pointer
+     events that drive drawing/moving/resizing containers. */
+  pointer-events: none;
 }
 
 .editor-rect {

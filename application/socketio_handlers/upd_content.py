@@ -43,76 +43,10 @@ def _build_payload(db, screen):
     Returns the payload dict, or None if building fails.
     """
     from application.models import ContentElement, Screengroup
-    from application.utils.template import get_default_design, parse_content_html
+    from application.utils.template import parse_content_html
+    from application.admin.designs.helper import build_design_payload
 
-    design = get_default_design(db)
-
-    # CSS precedence, low to high (all layers are equal-specificity single-
-    # class/element selectors, so source order breaks the tie): global
-    # overrides, then per-container overrides, then the Backdrop (gradients/
-    # image/color), then the Design's own hand-written CSS last — so a plain
-    # CSS edit always wins, a per-container tweak beats a global default, and
-    # an unset property just falls through to whatever's beneath it.
-    css_layers = []
-    if design is not None:
-        from application.admin.designs.helper import render_container_style_css, render_global_style_css, render_backdrop_css
-        global_style_css = render_global_style_css(db, design)
-        if global_style_css:
-            css_layers.append(global_style_css)
-        container_style_css = render_container_style_css(db, design)
-        if container_style_css:
-            css_layers.append(container_style_css)
-        backdrop_css = render_backdrop_css(db, design)
-        if backdrop_css:
-            css_layers.append(backdrop_css)
-    base_css = getattr(design, 'css', '') or ''
-    if base_css:
-        css_layers.append(base_css)
-    css = '\n\n'.join(css_layers)
-
-    design_payload = {
-        'name': getattr(design, 'name', '') or '',
-        'html': getattr(design, 'html', '') or '',
-        'css':  css,
-    }
-
-    # Animated canvas background effect: not representable as CSS (see
-    # Design.background_effect comment), so it's handed to the screen client
-    # as data — effect key + its opaque settings object — rather than baked
-    # into `css` above. Malformed settings JSON degrades to an empty object
-    # rather than breaking the whole upd_content push.
-    effect_key = (getattr(design, 'background_effect', '') or '').strip()
-    if effect_key:
-        effect_settings = {}
-        raw_settings = getattr(design, 'background_effect_settings', '') or ''
-        if raw_settings:
-            try:
-                effect_settings = json.loads(raw_settings)
-            except Exception:
-                effect_settings = {}
-        if effect_settings:
-            from application.admin.designs.helper import resolve_default_colors_deep
-            effect_settings = resolve_default_colors_deep(effect_settings, design)
-        design_payload['background_effect'] = {
-            'name': effect_key,
-            'settings': effect_settings,
-        }
-    else:
-        design_payload['background_effect'] = None
-
-    # Load magic tags once; applied to Design HTML/CSS and content-handler CSS below.
-    _tvars: dict = {}
-    try:
-        from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-        _tvars = load_magic_tags(db)
-    except Exception:
-        pass
-
-    if _tvars:
-        if design_payload['html']:
-            design_payload['html'] = substitute_magic_tags(design_payload['html'], _tvars)
-        if design_payload['css']:
-            design_payload['css'] = substitute_magic_tags(design_payload['css'], _tvars)
+    design_payload = build_design_payload(db)
 
     screen_group_ids = set()
     if screen and hasattr(screen, 'screengroups'):
