@@ -7,15 +7,22 @@ FROM node:22-bookworm-slim AS frontend
 WORKDIR /build
 
 # Admin SPA (Vue 3 + PrimeVue) — install deps first for better layer caching.
+# scripts/ is also copied here (not just package.json/-lock.json): `npm ci`
+# runs the "postinstall" script (scripts/copy-icons.mjs, populates the icon
+# field handler's assets from the icon-library packages), which needs to
+# exist before install runs, not just once the rest of the source lands.
 COPY frontends/admin/package.json frontends/admin/package-lock.json frontends/admin/
+COPY frontends/admin/scripts/ frontends/admin/scripts/
 RUN npm --prefix frontends/admin ci
 COPY frontends/admin/ frontends/admin/
 # build-only skips vue-tsc type-checking (a CI concern, not a runtime one),
 # keeping image builds from failing on non-fatal type errors.
 RUN npm --prefix frontends/admin run build-only
 
-# Screen client (TypeScript, no framework).
+# Screen client (TypeScript, no framework). Same scripts/-before-ci reasoning
+# as the admin frontend above.
 COPY frontends/screen/package.json frontends/screen/package-lock.json frontends/screen/
+COPY frontends/screen/scripts/ frontends/screen/scripts/
 RUN npm --prefix frontends/screen ci
 COPY frontends/screen/ frontends/screen/
 RUN npm --prefix frontends/screen run build
