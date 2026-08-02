@@ -138,6 +138,17 @@ const FONT_PROPERTIES: FontProperty[] = [
   { key: 'line-height', label: 'Line Height', options: [NOT_SET, ...keywordOptions('normal')] },
   { key: 'font-style', label: 'Font Style', options: [NOT_SET, ...keywordOptions('normal', 'italic', 'oblique')] },
   { key: 'color', label: 'Color', type: 'color' },
+  // Alignment: text-align always applies (block or flex); the other three
+  // only take effect once `display` is switched to flex/grid — harmless
+  // no-ops otherwise, so they're safe to leave "(not set)" by default.
+  { key: 'text-align', label: 'Text Align', options: [NOT_SET, ...keywordOptions('left', 'center', 'right', 'justify')] },
+  { key: 'display', label: 'Display (for content alignment)', options: [NOT_SET, ...keywordOptions('flex', 'grid', 'block')] },
+  { key: 'justify-content', label: 'Justify Content (horizontal)', options: [NOT_SET, ...keywordOptions(
+    'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly',
+  )] },
+  { key: 'align-items', label: 'Align Items (vertical)', options: [NOT_SET, ...keywordOptions(
+    'flex-start', 'center', 'flex-end', 'stretch', 'baseline',
+  )] },
 ]
 
 const containers = ref<ContentContainer[]>([])
@@ -232,8 +243,8 @@ const setColorRef = (containerId: number, prop: string, ref: string) => {
 
 // --- Global font styles (applied to every container via `.dh-container`) ---
 // Same (property, value) shape as the per-container ones above, just not
-// keyed by container id. Precedence: per-container overrides < these
-// global ones < the Design's own hand-written CSS (see upd_content.py).
+// keyed by container id. Precedence: these global ones < per-container
+// overrides < the Design's own hand-written CSS (see upd_content.py).
 const globalStyles = ref<Record<string, string>>({})
 
 const handleDesignGlobalStyles = (data: any) => {
@@ -1221,7 +1232,7 @@ const deleteDesign = (design: Design) => {
             <template #header>
               <div class="panel-header-clickable" @click="globalStylesCollapsed = !globalStylesCollapsed">
                 <span class="panel-header-title">Global Styles</span>
-                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Beats a per-container override below, but loses to anything in the CSS editor below.</small>
+                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to a per-container override below, and to anything in the CSS editor below.</small>
               </div>
             </template>
             <div class="font-properties-grid">

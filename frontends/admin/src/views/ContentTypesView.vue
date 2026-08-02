@@ -63,7 +63,12 @@ const containersForLayout = computed(() => {
 })
 
 // Field handler options (matches legacy UI and DB schema), English labels, A→Z
+// (except 'None', kept first — it means "no input for this field in the
+// ContentElement editor; always fall through to the container's own
+// default_content", same value/meaning as ContentContainer.default_field_handler's
+// own 'None' option in LayoutCanvasEditor.vue).
 const fieldHandlerOptions = [
+  { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
   { label: 'Image', value: 'image' },
@@ -213,7 +218,7 @@ const handleContentTypeDetail = async (data: any) => {
           id: t.id,
           name: c?.name || t.field_name,
           title: c?.name || t.field_label || t.field_name,
-          field_handler: t.field_handler || 'textklein',
+          field_handler: t.field_handler ?? 'textklein',
           contentcontainer_id: t.contentcontainer_id ?? null,
         }
       })

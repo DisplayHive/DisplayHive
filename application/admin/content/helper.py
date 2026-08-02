@@ -105,13 +105,13 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
         elif ftype == 'arrows' and field_name in ctx and ctx[field_name]:
             char = _html_escape(str(ctx[field_name]).strip())
             size_key = f'{field_name}_size'
-            size = ctx.get(size_key, 48)
+            size = ctx.get(size_key, 5)
             try:
-                size = int(size)
+                size = float(size)
             except Exception:
-                size = 48
+                size = 5
             if char:
-                ctx[field_name] = Markup(f'<span style="font-size:{size}px;line-height:1;">{char}</span>')
+                ctx[field_name] = Markup(f'<span style="font-size:{size}vh;line-height:1;">{char}</span>')
         elif ftype == 'datetime_format':
             fmt_str = str(ctx.get(field_name, 'HH:mm:ss')).strip()
             tz_name = 'UTC'
@@ -184,6 +184,12 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             ctx[field_name] = Markup(escaped.replace('\n', '<br>'))
         elif ftype == 'table':
             ctx[field_name] = Markup(_render_table(ctx.get(field_name, '')))
+        elif ftype == '':
+            # 'None': this field has no input in the ContentElement editor —
+            # always fall through to the container's own default_content
+            # below, even if a value happens to still be stored from before
+            # the field's handler was switched to 'None'.
+            ctx[field_name] = ''
 
     rendered_by_container: dict = {}
     for tc in (tagconfigs or []):
@@ -230,7 +236,7 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
     elif field_handler == 'arrows':
         try:
             parsed = json.loads(content)
-            ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 48)}
+            ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 5)}
         except Exception:
             ctx = {'default': content}
     elif field_handler == 'pretalx_table':

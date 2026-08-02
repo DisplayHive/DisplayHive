@@ -645,7 +645,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     const serverTagConfigs: any[] = (data.contenttype as any).tagconfigs || []
     if (serverTagConfigs && serverTagConfigs.length > 0) {
       tagConfigs.value = serverTagConfigs.map((t: any) => {
-        const fieldHandler = (t.field_handler as string) || 'textklein'
+        const fieldHandler = (t.field_handler as string) ?? 'textklein'
         return {
           name: t.field_name || t.name || '',
           title: t.field_label || t.title || (t.field_name || t.name || ''),
@@ -666,14 +666,16 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
             setPretalxTableValue(tag.name, blankPretalxTableValue())
           } else if (tag.fieldHandler === 'arrows') {
             createForm.value.fields[tag.name] = ''
-            createForm.value.fields[tag.name + '_size'] = 48
+            createForm.value.fields[tag.name + '_size'] = 5
           } else if (tag.fieldHandler === 'datetime_format') {
             createForm.value.fields[tag.name] = 'HH:mm:ss'
           } else if (tag.fieldHandler === 'table') {
             createForm.value.fields[tag.name] = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
-          } else {
+          } else if (tag.fieldHandler !== '') {
             createForm.value.fields[tag.name] = ''
           }
+          // fieldHandler === '' ("None"): no input in the editor, nothing to seed —
+          // always falls through to the container's own default_content.
         })
       } else {
         tagConfigs.value.forEach(tag => {
@@ -687,13 +689,13 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
             } else if (tag.fieldHandler === 'arrows') {
               createForm.value.fields[tag.name] = ''
               if (!(tag.name + '_size' in createForm.value.fields)) {
-                createForm.value.fields[tag.name + '_size'] = 48
+                createForm.value.fields[tag.name + '_size'] = 5
               }
             } else if (tag.fieldHandler === 'datetime_format') {
               createForm.value.fields[tag.name] = 'HH:mm:ss'
             } else if (tag.fieldHandler === 'table') {
               createForm.value.fields[tag.name] = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
-            } else {
+            } else if (tag.fieldHandler !== '') {
               createForm.value.fields[tag.name] = ''
             }
           }
@@ -907,7 +909,7 @@ onUnmounted(() => {
 
       <div v-if="tagConfigs.length > 0" class="tag-fields-section">
         <h4>Content Fields</h4>
-        <div v-for="tag in tagConfigs" :key="tag.name" class="field">
+        <div v-for="tag in tagConfigs" v-show="tag.fieldHandler !== ''" :key="tag.name" class="field">
           <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
           <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
 
@@ -1052,14 +1054,15 @@ onUnmounted(() => {
               <Button icon="pi pi-times" size="small" text @click="setFieldValue(tag.name, '')" title="Clear" />
             </div>
             <div class="arrow-size-row">
-              <label :for="`field-${tag.name}-size`" class="arrow-size-label">Größe (px)</label>
+              <label :for="`field-${tag.name}-size`" class="arrow-size-label">Größe (vh)</label>
               <InputNumber
                 :id="`field-${tag.name}-size`"
-                :modelValue="Number(getFieldValue(tag.name + '_size')) || 48"
-                @update:modelValue="(v: number | null) => setFieldValue(tag.name + '_size', v ?? 48)"
-                :min="8"
-                :max="512"
-                suffix=" px"
+                :modelValue="Number(getFieldValue(tag.name + '_size')) || 5"
+                @update:modelValue="(v: number | null) => setFieldValue(tag.name + '_size', v ?? 5)"
+                :min="0.1"
+                :max="50"
+                :step="0.1"
+                suffix=" vh"
                 style="width: 120px"
               />
             </div>

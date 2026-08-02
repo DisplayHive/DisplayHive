@@ -524,7 +524,7 @@ const closeContainerEditModal = () => {
 const onDefaultHandlerChange = (newHandler: string) => {
   containerEditForm.default_field_handler = newHandler
   if (newHandler === 'arrows') {
-    containerEditForm.default_content = JSON.stringify({ char: '', size: 48 })
+    containerEditForm.default_content = JSON.stringify({ char: '', size: 5 })
   } else if (newHandler === 'image') {
     containerEditForm.default_content = JSON.stringify({ url: '', size: null })
   } else if (newHandler === 'table') {
@@ -544,19 +544,19 @@ const arrowChar = computed({
     try { return JSON.parse(containerEditForm.default_content || '{}').char || '' } catch { return '' }
   },
   set: (v: string) => {
-    let size = 48
-    try { size = JSON.parse(containerEditForm.default_content || '{}').size ?? 48 } catch { /* keep default */ }
+    let size = 5
+    try { size = JSON.parse(containerEditForm.default_content || '{}').size ?? 5 } catch { /* keep default */ }
     containerEditForm.default_content = JSON.stringify({ char: v, size })
   },
 })
 const arrowSize = computed({
   get: () => {
-    try { return JSON.parse(containerEditForm.default_content || '{}').size ?? 48 } catch { return 48 }
+    try { return JSON.parse(containerEditForm.default_content || '{}').size ?? 5 } catch { return 5 }
   },
   set: (v: number | null) => {
     let char = ''
     try { char = JSON.parse(containerEditForm.default_content || '{}').char || '' } catch { /* keep default */ }
-    containerEditForm.default_content = JSON.stringify({ char, size: v ?? 48 })
+    containerEditForm.default_content = JSON.stringify({ char, size: v ?? 5 })
   },
 })
 
@@ -867,8 +867,8 @@ const toggleSelectedLayoutMembership = () => {
               <Button icon="pi pi-times" size="small" text @click="arrowChar = ''" title="Clear" />
             </div>
             <div class="arrow-size-row">
-              <label class="arrow-size-label">Größe (px)</label>
-              <InputNumber v-model="arrowSize" :min="8" :max="512" suffix=" px" style="width: 120px" />
+              <label class="arrow-size-label">Größe (vh)</label>
+              <InputNumber v-model="arrowSize" :min="0.1" :max="50" :step="0.1" suffix=" vh" style="width: 120px" />
             </div>
           </div>
 

@@ -48,20 +48,20 @@ def _build_payload(db, screen):
     design = get_default_design(db)
 
     # CSS precedence, low to high (all layers are equal-specificity single-
-    # class/element selectors, so source order breaks the tie): per-container
-    # overrides, then global overrides, then the Backdrop (gradients/image/
-    # color), then the Design's own hand-written CSS last — so a plain CSS
-    # edit always wins, a global default beats a per-container tweak, and an
-    # unset property just falls through to whatever's beneath it.
+    # class/element selectors, so source order breaks the tie): global
+    # overrides, then per-container overrides, then the Backdrop (gradients/
+    # image/color), then the Design's own hand-written CSS last — so a plain
+    # CSS edit always wins, a per-container tweak beats a global default, and
+    # an unset property just falls through to whatever's beneath it.
     css_layers = []
     if design is not None:
         from application.admin.designs.helper import render_container_style_css, render_global_style_css, render_backdrop_css
-        container_style_css = render_container_style_css(db, design)
-        if container_style_css:
-            css_layers.append(container_style_css)
         global_style_css = render_global_style_css(db, design)
         if global_style_css:
             css_layers.append(global_style_css)
+        container_style_css = render_container_style_css(db, design)
+        if container_style_css:
+            css_layers.append(container_style_css)
         backdrop_css = render_backdrop_css(db, design)
         if backdrop_css:
             css_layers.append(backdrop_css)
