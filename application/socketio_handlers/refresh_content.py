@@ -91,7 +91,7 @@ def register_refresh_content_handlers(socketio, app, db):
         try:
             from application.models import ContentElement, Device, Screen
             from application.admin.content.helper import render_content_fields
-            from application.utils.template import parse_content_html
+            from application.utils.design import parse_content_html
 
             dev = db.session.execute(
                 db.select(Device).where(Device.devicekey == devicekey)

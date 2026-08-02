@@ -43,7 +43,7 @@ def _build_payload(db, screen):
     Returns the payload dict, or None if building fails.
     """
     from application.models import ContentElement, Screengroup
-    from application.utils.template import parse_content_html
+    from application.utils.design import parse_content_html
     from application.admin.designs.helper import build_design_payload
 
     design_payload = build_design_payload(db)

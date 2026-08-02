@@ -97,7 +97,7 @@ const confirmImport = (pkg: DemoPackage) => {
   </div>
   <div v-else class="demo-mode-view">
     <Message severity="warn" :closable="false" class="intro-message">
-      Importing a demo package overwrites all existing content, screens, templates and media —
+      Importing a demo package overwrites all existing content, screens, designs and media —
       everything except your user accounts.
     </Message>
 

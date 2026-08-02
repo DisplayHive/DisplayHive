@@ -101,7 +101,7 @@ def register_admin_media_handlers(socketio, app, db):
 
     def _build_media_list_payload():
         """Build a structured list of all media items for the Vue SPA."""
-        from application.utils.template import media_file_urls
+        from application.utils.design import media_file_urls
         all_media = db.session.execute(
             db.select(Media).order_by(Media.created_at.desc())
         ).scalars().all()

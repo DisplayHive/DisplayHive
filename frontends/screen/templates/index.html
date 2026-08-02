@@ -16,16 +16,16 @@
     </style>
     <link rel="stylesheet" href="/screen/assets/screen.css?v={{ config.ASSET_VERSION }}">
 
-    <style id="template-css"></style>
+    <style id="design-css"></style>
     <script>
-        // Inject templated CSS at runtime to avoid editor CSS parsing errors
+        // Inject the Design's CSS at runtime to avoid editor CSS parsing errors
         (function(){
             try {
-                const css = `{{ template_css | safe }}`;
-                const el = document.getElementById('template-css');
+                const css = `{{ design_css | safe }}`;
+                const el = document.getElementById('design-css');
                 if (el) el.textContent = css;
             } catch (e) {
-                console.warn('Failed to inject template CSS', e);
+                console.warn('Failed to inject design CSS', e);
             }
         })();
     </script>
@@ -72,7 +72,7 @@
    <div id="design-effect-background"></div>
    <!-- Design background: the active Design's HTML/CSS skin, rendered once.
         Kept separate from #scene-containers so re-rendering scenes never touches it. -->
-   <div id="design-background">{{ template_html|safe }}</div>
+   <div id="design-background">{{ design_html|safe }}</div>
    <!-- Scene containers: absolutely-positioned (vh/vw) overlay divs created
         dynamically per the current scene — see container-manager.ts. -->
    <div id="scene-containers"></div>

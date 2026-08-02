@@ -6,7 +6,7 @@ callers can import them from a single place.
 
 from .matrix import get_zuweisungen_matrix_data, emit_zuweisungen_matrix_update
 from .content import push_content_list_to_all_screens, push_content_to_screen
-from .template import (
+from .design import (
     get_default_design,
     media_file_urls,
     parse_content_html,

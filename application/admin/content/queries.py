@@ -3,7 +3,7 @@ content listings. Split out of the former monolithic ``sockethandlers`` module.
 
 Container listing/CRUD lives in the Layouts admin domain
 (``application/admin/layouts``) now that containers are standalone entities
-scoped to a Layout rather than owned by a Design/Template.
+scoped to a Layout rather than owned by a Design.
 """
 
 import json
@@ -18,7 +18,7 @@ from application.admin.content.serializers import (
 )
 from application.models import ContentElement
 from application.models.content import Media
-from application.utils.template import media_file_urls
+from application.utils.design import media_file_urls
 
 logger = logging.getLogger(__name__)
 

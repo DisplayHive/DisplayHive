@@ -5,7 +5,7 @@ rearchitecture store ``html`` as a single rendered string. The current
 rendering pipeline expects a JSON map of ``{contentcontainer_id: rendered_html}``
 (one entry per ContentHandler on the element's Contenttype). The screen
 renderer already tolerates the old format at read time (see
-``application.utils.template.parse_content_html``), but re-rendering once
+``application.utils.design.parse_content_html``), but re-rendering once
 here brings the stored data itself up to date — which also refreshes any
 magic-tag substitutions, pretalx tables, or random-image picks that were
 frozen at original creation time.

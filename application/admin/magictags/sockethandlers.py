@@ -14,7 +14,7 @@ def register_admin_magictags_handlers(socketio, app, db):
     def _push_to_screens():
         """Re-push content to every screen so magic tag substitutions refresh.
 
-        Magic tags are global and not tied to a specific screen/template, so
+        Magic tags are global and not tied to a specific screen/design, so
         there's no narrower set of "screens using this tag" to target - any
         screen could have a container referencing it.
         """

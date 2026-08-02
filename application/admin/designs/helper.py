@@ -223,7 +223,7 @@ def build_design_payload(db) -> dict:
     the container-positioning canvas — see
     application/admin/layouts/sockethandlers.py's get_design_preview.
     """
-    from application.utils.template import get_default_design
+    from application.utils.design import get_default_design
 
     design = get_default_design(db)
 

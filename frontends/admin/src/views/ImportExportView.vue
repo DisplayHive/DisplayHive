@@ -120,7 +120,7 @@ const onFileSelected = async (event: Event) => {
       </template>
       <template #content>
         <p class="description">
-          Export the entire database (screens, content, devices, templates, …) together with all
+          Export the entire database (screens, content, devices, designs, …) together with all
           media files as a single ZIP archive. The archive contains <code>db.json</code> (database
           snapshot) and a <code>media/</code> folder with the actual files.
         </p>

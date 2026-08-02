@@ -308,8 +308,8 @@ def index():
 
     return render_template('index.html',
                          async_mode=socketio.async_mode,
-                         template_html=design_html,
-                         template_css=design_css,
+                         design_html=design_html,
+                         design_css=design_css,
                          preview_mode=preview_mode,
                          preview_content_id=content_id,
                          preview_container=preview_container,

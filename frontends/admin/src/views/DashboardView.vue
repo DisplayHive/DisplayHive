@@ -413,8 +413,8 @@ const debugWarn = computed(() => screensInDebug.value > 0)
           <span><strong>Testing &amp; Bug Reports</strong> — run it, break it, tell us. Real-world usage is the best test suite there is.</span>
         </li>
         <li>
-          <i class="pi pi-palette help-list-icon help-list-icon--template"></i>
-          <span><strong>Default Templates &amp; Content Types</strong> — a handful of ready-to-use layouts would make getting started much easier for everyone.</span>
+          <i class="pi pi-palette help-list-icon help-list-icon--design"></i>
+          <span><strong>Default Designs &amp; Content Types</strong> — a handful of ready-to-use layouts would make getting started much easier for everyone.</span>
         </li>
         <li>
           <i class="pi pi-desktop help-list-icon help-list-icon--sample"></i>
@@ -747,7 +747,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 }
 
 .help-list-icon--test     { color: #ef4444; }
-.help-list-icon--template { color: #8b5cf6; }
+.help-list-icon--design { color: #8b5cf6; }
 .help-list-icon--sample   { color: #06b6d4; }
 .help-list-icon--security { color: #f97316; }
 

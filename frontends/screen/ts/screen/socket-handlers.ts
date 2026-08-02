@@ -360,7 +360,7 @@ export function setupSocketHandlers(socket: any): void {
           if (backgroundEl) backgroundEl.innerHTML = design.html;
         }
         if (typeof design.css === "string") {
-          const styleEl = document.getElementById("template-css");
+          const styleEl = document.getElementById("design-css");
           if (styleEl) styleEl.textContent = design.css;
         }
         applyBackgroundEffect(design.background_effect || null).catch((err) => {

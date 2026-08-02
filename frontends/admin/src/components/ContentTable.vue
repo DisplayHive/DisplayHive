@@ -156,7 +156,7 @@ const getContentFields = (content: any): ContentField[] => {
   if (!content) return []
   const ignore = new Set([
     'id', 'title', 'active', 'duration', 'start_time', 'end_time',
-    'contenttypeName', 'screengroups', 'contenttype_id', 'template', 'html', 'preview_css', '_field_metadata',
+    'contenttypeName', 'screengroups', 'contenttype_id', 'html', 'preview_css', '_field_metadata',
   ])
   const fields: ContentField[] = []
   const metadata = content._field_metadata || {}

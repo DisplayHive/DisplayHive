@@ -316,7 +316,7 @@ const openEdit = async (content: ContentElement) => {
   originalScreengroupIds.value = [...sgIds]
 
   createForm.value.fields = {}
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
+  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
   for (const key of Object.keys(content)) {
     if (!ignore.has(key)) {
       const value = (content as any)[key]
@@ -711,7 +711,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           })
           // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`,
           // etc.) aren't their own tagConfigs entry — copy any of those over too.
-          const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
+          const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
           for (const k of Object.keys(pending)) {
             if (!pendingIgnore.has(k) && !tagConfigs.value.some(t => t.name === k)) {
               createForm.value.fields[k] = pending[k]
@@ -764,7 +764,7 @@ const handleContentDetail = (data: { content: any }) => {
     }
   })
 
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', 'template', '_field_metadata'])
+  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
   for (const k of Object.keys(data.content)) {
     if (!ignore.has(k) && !(tagConfigs.value.some(t => t.name === k))) {
       createForm.value.fields[k] = data.content[k]
