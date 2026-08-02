@@ -217,12 +217,49 @@ body {
     z-index: 9999;
 }
 
+/* Collapsed: shrink the whole bar down to just the handle poking out on its
+   left edge — everything else that used to fill the 300px width is hidden
+   rather than left to wrap/overflow inside a 40px strip. */
 #debug-panel.collapsed {
-    width: 40px;
+    width: 0;
+    border-left: none;
 }
 
-#debug-panel.collapsed .debug-content {
+#debug-panel.collapsed #debug-toggle,
+#debug-panel.collapsed .debug-content,
+#debug-panel.collapsed #debug-powered-by,
+#debug-panel.collapsed #debug-commit {
     display: none;
+}
+
+/* Handle: a small tab hanging off the panel's left edge — `#debug-panel` is
+   `position: fixed`, so it's already this handle's containing block, and
+   being a child of it means it's hidden right along with the whole panel
+   whenever debug mode itself is off (see applyDebugState() in
+   socket-handlers.ts, which toggles #debug-panel's own display). */
+#debug-collapse-handle {
+    position: absolute;
+    top: 50%;
+    left: -22px;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #444;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+}
+
+#debug-collapse-handle:hover {
+    background: #333;
 }
 
 #debug-toggle {

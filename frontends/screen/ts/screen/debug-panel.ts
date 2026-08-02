@@ -18,16 +18,20 @@ function ready(fn: () => void): void {
 export function initDebugPanel(): void {
   ready(() => {
     try {
+      const debugPanel = document.getElementById("debug-panel");
       const debugToggle = document.getElementById("debug-toggle");
-      const debugContent = document.querySelector(
-        ".debug-content",
-      ) as HTMLElement | null;
-      if (debugToggle && debugContent) {
-        debugToggle.addEventListener("click", () => {
-          debugContent.style.display =
-            debugContent.style.display === "none" ? "" : "none";
-        });
-      }
+      const collapseHandle = document.getElementById("debug-collapse-handle");
+
+      // Both the header ("⚙ Debug Panel") and the handle on the panel's left
+      // edge drive the same `collapsed` class on #debug-panel, so they can
+      // never disagree about the panel's state.
+      const toggleCollapsed = () => {
+        if (!debugPanel) return;
+        const collapsed = debugPanel.classList.toggle("collapsed");
+        if (collapseHandle) collapseHandle.textContent = collapsed ? "›" : "‹";
+      };
+      debugToggle?.addEventListener("click", toggleCollapsed);
+      collapseHandle?.addEventListener("click", toggleCollapsed);
 
       const commitEl = document.getElementById("debug-commit");
       if (commitEl) commitEl.textContent = `Commit: ${__GIT_COMMIT__}`;
