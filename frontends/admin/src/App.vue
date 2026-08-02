@@ -255,15 +255,6 @@ const contentStructureGroupItems = computed(() => [
 ])
 
 const integrationsGroupItems = computed(() => [
-  ...(rightsStore.can('importexport.page')
-    ? [
-        {
-          label: 'Im-/Export',
-          icon: 'pi pi-database',
-          command: () => router.push('/importexport'),
-        },
-      ]
-    : []),
   ...(rightsStore.can('pretalx.page')
     ? [
         {
@@ -276,6 +267,15 @@ const integrationsGroupItems = computed(() => [
 ])
 
 const systemGroupItems = computed(() => [
+  ...(rightsStore.can('importexport.page')
+    ? [
+        {
+          label: 'Im-/Export',
+          icon: 'pi pi-database',
+          command: () => router.push('/importexport'),
+        },
+      ]
+    : []),
   ...(rightsStore.can('settings.page')
     ? [
         {
