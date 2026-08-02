@@ -3,12 +3,56 @@
 Provides helper to emit the designs list payload to admin clients.
 """
 
+import json
 import logging
 from typing import Optional
 
 from application.models import Design
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_COLOR_PREFIX = '@default:'
+
+
+def _design_default_colors(design) -> list:
+    """Parse *design*'s default_colors JSON, [] on any failure."""
+    try:
+        colors = json.loads(getattr(design, 'default_colors', '') or '[]')
+        return colors if isinstance(colors, list) else []
+    except Exception:
+        return []
+
+
+def resolve_default_color(design, value):
+    """Resolve a possibly-referencing color *value* against *design*'s
+    palette (see Design.default_colors). A reference looks like
+    "@default:<id>" — anything else (a literal color, blank, None) passes
+    through unchanged. An id that no longer exists in the palette (the
+    color was deleted) resolves to '' (treated as unset), same as a blank
+    literal value.
+    """
+    if not isinstance(value, str) or not value.startswith(DEFAULT_COLOR_PREFIX):
+        return value
+    color_id = value[len(DEFAULT_COLOR_PREFIX):]
+    for c in _design_default_colors(design):
+        if isinstance(c, dict) and c.get('id') == color_id:
+            return c.get('hex') or ''
+    return ''
+
+
+def resolve_default_colors_deep(value, design):
+    """Recursively resolve "@default:<id>" references anywhere inside
+    *value* (a background_effect_settings-shaped structure: a dict of
+    scalars/lists of strings) against *design*'s palette. Non-string,
+    non-list-of-string values pass through untouched.
+    """
+    if isinstance(value, dict):
+        return {k: resolve_default_colors_deep(v, design) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_default_colors_deep(v, design) for v in value]
+    if isinstance(value, str):
+        return resolve_default_color(design, value)
+    return value
 
 
 def emit_designs_update(socketio, app, db, room: Optional[str] = None):
@@ -34,25 +78,27 @@ def emit_designs_update(socketio, app, db, room: Optional[str] = None):
         logger.exception("Error emitting designs update")
 
 
-def render_container_style_css(db, design_id: int) -> str:
+def render_container_style_css(db, design) -> str:
     """Assemble `.dh-container-<id> { ... }` rules from this Design's stored
     per-container style overrides (DesignContainerStyle).
 
     Properties with a blank/whitespace-only value are skipped entirely
     (not rendered as `prop: ;`) — that's how a property is "unset" here.
-    Returns '' if the Design has no overrides at all.
+    A value referencing a default color (see resolve_default_color) is
+    resolved against *design*'s palette before rendering. Returns '' if
+    the Design has no overrides at all.
     """
     from application.models import DesignContainerStyle
 
     rows = db.session.execute(
         db.select(DesignContainerStyle)
-        .where(DesignContainerStyle.design_id == design_id)
+        .where(DesignContainerStyle.design_id == design.id)
         .order_by(DesignContainerStyle.contentcontainer_id, DesignContainerStyle.id)
     ).scalars().all()
 
     by_container: dict = {}
     for row in rows:
-        value = (row.value or '').strip()
+        value = resolve_default_color(design, (row.value or '').strip())
         if not value:
             continue
         by_container.setdefault(row.contentcontainer_id, []).append((row.property, value))
@@ -67,23 +113,28 @@ def render_container_style_css(db, design_id: int) -> str:
     return '\n\n'.join(blocks)
 
 
-def render_global_style_css(db, design_id: int) -> str:
+def render_global_style_css(db, design) -> str:
     """Assemble a single `.dh-container { ... }` rule from this Design's
     stored global style overrides (DesignGlobalStyle) — every container div
     carries this shared class, so it applies everywhere at once.
 
-    Same blank-value-means-unset behavior as render_container_style_css().
-    Returns '' if the Design has no global overrides at all.
+    Same blank-value-means-unset and default-color-reference-resolution
+    behavior as render_container_style_css(). Returns '' if the Design has
+    no global overrides at all.
     """
     from application.models import DesignGlobalStyle
 
     rows = db.session.execute(
         db.select(DesignGlobalStyle)
-        .where(DesignGlobalStyle.design_id == design_id)
+        .where(DesignGlobalStyle.design_id == design.id)
         .order_by(DesignGlobalStyle.id)
     ).scalars().all()
 
-    props = [(row.property, (row.value or '').strip()) for row in rows if (row.value or '').strip()]
+    props = []
+    for row in rows:
+        value = resolve_default_color(design, (row.value or '').strip())
+        if value:
+            props.append((row.property, value))
     if not props:
         return ''
 
@@ -91,7 +142,7 @@ def render_global_style_css(db, design_id: int) -> str:
     return f'.dh-container {{\n{decls}\n}}'
 
 
-def gradient_css_value(gradient) -> str:
+def gradient_css_value(gradient, design=None) -> str:
     """Return this Gradient's CSS function value, covering the three
     widely-supported gradient functions and their `repeating-` variants:
 
@@ -106,6 +157,12 @@ def gradient_css_value(gradient) -> str:
     layers listed after it, since CSS stacks background-image layers with
     the first-listed one on top. Returns '' if the gradient has fewer than
     two stops (a gradient needs at least two) or an unknown type.
+
+    A stop's `color` may be a fallback next to a `ref: {design_id, color_id}`
+    pointing at a Default Color — since a Gradient is shared across Designs,
+    that live link only applies when rendering for the same Design it was
+    picked in (`ref.design_id == design.id`); any other Design (or if the
+    referenced color was since deleted) uses the stored `color` fallback.
     """
     import json
 
@@ -120,6 +177,11 @@ def gradient_css_value(gradient) -> str:
 
     def _stop_color(s):
         color = str(s.get('color', '#000000'))
+        ref = s.get('ref')
+        if design is not None and isinstance(ref, dict) and ref.get('design_id') == design.id:
+            resolved = resolve_default_color(design, f"{DEFAULT_COLOR_PREFIX}{ref.get('color_id')}")
+            if resolved:
+                color = resolved
         opacity = s.get('opacity', 100)
         try:
             opacity = float(opacity)
@@ -172,9 +234,9 @@ def render_backdrop_css(db, design) -> str:
         .order_by(DesignGradient.order, DesignGradient.id)
     ).scalars().all()
 
-    layers = [v for v in (gradient_css_value(g) for g in rows) if v]
+    layers = [v for v in (gradient_css_value(g, design) for g in rows) if v]
 
-    color = (getattr(design, 'background_color', '') or '').strip()
+    color = resolve_default_color(design, (getattr(design, 'background_color', '') or '').strip())
 
     image_url = (getattr(design, 'background_image_url', '') or '').strip()
     if image_url:

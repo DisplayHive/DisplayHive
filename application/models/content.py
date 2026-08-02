@@ -73,6 +73,11 @@ class Design(db.Model):
     # frontends/screen/ts/screen/background-effects.ts for the registry.
     background_effect: Mapped[str] = mapped_column(String(50), nullable=True)
     background_effect_settings: Mapped[str] = mapped_column(Text, nullable=True)
+    # Named color palette scoped to this Design, offered as quick-pick swatches
+    # everywhere else in this Design's editor a color is chosen (backdrop,
+    # global/per-container font color, gradient stops, effect color params).
+    # JSON-encoded list of {"name": ..., "hex": "#rrggbb"} objects, opaque here.
+    default_colors: Mapped[str] = mapped_column(Text, nullable=True)
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.

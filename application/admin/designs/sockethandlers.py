@@ -65,6 +65,7 @@ def register_admin_designs_handlers(socketio, app, db):
                 'background_opacity': design.background_opacity if design.background_opacity is not None else 100,
                 'background_effect': design.background_effect or '',
                 'background_effect_settings': design.background_effect_settings or '',
+                'default_colors': design.default_colors or '',
                 'is_default': bool(getattr(design, 'isDefault', False)),
             }
         }
@@ -89,6 +90,7 @@ def register_admin_designs_handlers(socketio, app, db):
             background_opacity=data.get('background_opacity'),
             background_effect=data.get('background_effect') or None,
             background_effect_settings=data.get('background_effect_settings') or None,
+            default_colors=data.get('default_colors') or None,
         )
         db.session.add(design)
         db.session.commit()
@@ -126,6 +128,8 @@ def register_admin_designs_handlers(socketio, app, db):
             design.background_effect = data.get('background_effect') or None
         if 'background_effect_settings' in data:
             design.background_effect_settings = data.get('background_effect_settings') or None
+        if 'default_colors' in data:
+            design.default_colors = data.get('default_colors') or None
 
         db.session.add(design)
         db.session.commit()

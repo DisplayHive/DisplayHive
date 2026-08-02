@@ -62,15 +62,28 @@ export interface Design {
   background_effect?: string
   /** JSON-encoded settings object for background_effect, opaque here — parsed/edited via the registry's per-effect param list. */
   background_effect_settings?: string
+  /** JSON-encoded list of {name, hex} — a named color palette scoped to this Design, offered as quick-pick swatches by every other color field in its editor. */
+  default_colors?: string
   is_default?: boolean
+}
+
+/** One named swatch in a Design's default color palette. */
+export interface DefaultColor {
+  /** Stable id (independent of `name`, which can be renamed) — referenced by other color fields as "@default:<id>". */
+  id: string
+  name: string
+  hex: string
 }
 
 /** One color stop in a Gradient, position in percent (0-100). */
 export interface GradientStop {
+  /** Bare hex (no '#'), matching PrimeVue ColorPicker's convention. Also the fallback used when `ref` doesn't resolve (a different Design than the one it was picked in, or a since-deleted color). */
   color: string
   position: number
   /** Percent (0-100, default 100/opaque). Lets stacked gradient layers show through to layers listed after them. */
   opacity?: number
+  /** If set, `color` is a last-picked fallback and the live value should come from that Design's default_colors instead, when currently editing/rendering that same Design (a Gradient is shared across Designs, so this only applies there). */
+  ref?: { design_id: number; color_id: string }
 }
 
 /**

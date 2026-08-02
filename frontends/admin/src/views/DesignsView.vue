@@ -5,7 +5,8 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
-import type { Design, ContentContainer, Gradient, GradientStop } from '../types/models'
+import type { Design, ContentContainer, Gradient, GradientStop, DefaultColor } from '../types/models'
+import ColorPalettePicker from '../components/ColorPalettePicker.vue'
 import {
   BACKGROUND_EFFECTS,
   getEffectDefinition,
@@ -52,6 +53,7 @@ const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
 // PrimeVue's Panel only toggles from its small chevron button, not the
 // header itself — these refs + a click handler on our custom #header slot
 // content make the whole header row clickable instead.
+const defaultColorsCollapsed = ref(true)
 const backdropCollapsed = ref(true)
 const gradientPanelCollapsed = ref(true)
 const backgroundPanelCollapsed = ref(true)
@@ -66,6 +68,7 @@ const toggleContainerPanel = (id: number) => {
   containerPanelCollapsed.value[id] = !isContainerPanelCollapsed(id)
 }
 const resetPanelCollapseState = () => {
+  defaultColorsCollapsed.value = true
   backdropCollapsed.value = true
   gradientPanelCollapsed.value = true
   backgroundPanelCollapsed.value = true
@@ -209,14 +212,22 @@ const setVhValue = (containerId: number, prop: string, n: number | null | undefi
 }
 
 // color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
-// CSS value needs the leading "#".
+// CSS value needs the leading "#" — unless it's a "@default:<id>" reference
+// (see resolveColorRef below), in which case the ColorPicker just shows
+// that reference's *current* resolved hex.
 const getColorHex = (containerId: number, prop: string): string => {
   const raw = getStyleValue(containerId, prop)
-  return raw ? raw.replace(/^#/, '') : ''
+  return raw ? resolveColorRef(raw).replace(/^#/, '') : ''
 }
 
+// Manual ColorPicker interaction always stores a literal — this is how a
+// field detaches from a default-color reference it may have held before.
 const setColorHex = (containerId: number, prop: string, hex: string | undefined) => {
   setStyleValue(containerId, prop, hex ? `#${hex}` : '')
+}
+
+const setColorRef = (containerId: number, prop: string, ref: string) => {
+  setStyleValue(containerId, prop, ref)
 }
 
 // --- Global font styles (applied to every container via `.dh-container`) ---
@@ -264,11 +275,15 @@ const setGlobalVhValue = (prop: string, n: number | null | undefined) => {
 
 const getGlobalColorHex = (prop: string): string => {
   const raw = getGlobalValue(prop)
-  return raw ? raw.replace(/^#/, '') : ''
+  return raw ? resolveColorRef(raw).replace(/^#/, '') : ''
 }
 
 const setGlobalColorHex = (prop: string, hex: string | undefined) => {
   setGlobalValue(prop, hex ? `#${hex}` : '')
+}
+
+const setGlobalColorRef = (prop: string, ref: string) => {
+  setGlobalValue(prop, ref)
 }
 
 // --- Gradients: a reusable library. A Design can apply several, stacked as
@@ -297,10 +312,11 @@ type GradientLike = { type: string; repeating: boolean; angle: number; shape: st
 // opacity (0-100, default 100/opaque) becomes an 8-digit hex alpha channel
 // so a fully opaque top layer doesn't always hide gradients listed after it.
 const stopColorWithAlpha = (s: GradientStop): string => {
+  const color = `#${resolveStopColorHex(s)}`
   const opacity = s.opacity ?? 100
-  if (opacity >= 100 || !s.color.startsWith('#') || s.color.length !== 7) return s.color
+  if (opacity >= 100 || !color.startsWith('#') || color.length !== 7) return color
   const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255)
-  return `${s.color}${alpha.toString(16).padStart(2, '0')}`
+  return `${color}${alpha.toString(16).padStart(2, '0')}`
 }
 
 const gradientCssValue = (g: GradientLike): string => {
@@ -392,10 +408,24 @@ const removeGradientStop = (idx: number) => {
   gradientEditForm.value.stops.splice(idx, 1)
 }
 
-const gradientEditPreview = computed(() => gradientCssValue({
-  ...gradientEditForm.value,
-  stops: gradientEditForm.value.stops.map((s) => ({ ...s, color: `#${s.color}` })),
-}))
+// A stop's `ref` only resolves while editing the same Design it was picked
+// in — a Gradient is a shared library entity, so `stop.color` (the fallback
+// captured at pick time) is what's used everywhere else. Mirrors
+// gradient_css_value()'s _stop_color() server-side.
+const resolveStopColorHex = (stop: GradientStop): string => {
+  if (stop.ref && stop.ref.design_id === editForm.value.id) {
+    const c = editForm.value.default_colors.find((c) => c.id === stop.ref!.color_id)
+    if (c) return c.hex.replace(/^#/, '')
+  }
+  return stop.color
+}
+
+const setStopColorRef = (stop: GradientStop, color: DefaultColor) => {
+  stop.color = color.hex.replace(/^#/, '')
+  stop.ref = editForm.value.id ? { design_id: editForm.value.id, color_id: color.id } : undefined
+}
+
+const gradientEditPreview = computed(() => gradientCssValue(gradientEditForm.value))
 
 const saveGradientEdit = () => {
   const payload = {
@@ -471,6 +501,7 @@ const editForm = ref({
   background_opacity: 100 as number,
   background_effect: '' as string,
   background_effect_settings: {} as Record<string, number | string | string[]>,
+  default_colors: [] as DefaultColor[],
   gradient_ids: [] as number[],
 })
 
@@ -499,6 +530,74 @@ const onSelectPreset = (label: string) => {
     ...preset.values,
   } as Record<string, number | string | string[]>
   selectedPresetLabel.value = label
+}
+
+// --- Default Colors: a named palette scoped to this Design, offered as
+// quick-pick swatches by every other color field below (ColorPalettePicker).
+// Picking one stores a "@default:<id>" *reference*, not a copy of the hex —
+// so editing the palette entry later updates every field that picked it,
+// here and (once saved) on the actual screens — see resolve_default_color()
+// in application/admin/designs/helper.py for the backend side of this.
+const DEFAULT_COLOR_PREFIX = '@default:'
+const colorRefFor = (id: string) => `${DEFAULT_COLOR_PREFIX}${id}`
+const isColorRef = (v: string | undefined | null): boolean => !!v && v.startsWith(DEFAULT_COLOR_PREFIX)
+const resolveColorRef = (v: string | undefined | null): string => {
+  if (!isColorRef(v)) return v || ''
+  const id = (v as string).slice(DEFAULT_COLOR_PREFIX.length)
+  return editForm.value.default_colors.find((c) => c.id === id)?.hex || ''
+}
+// For the "(not set)"-style readouts: show the palette entry's name for a
+// reference, the literal value otherwise.
+const colorDisplayLabel = (v: string | undefined | null): string => {
+  if (!v) return '(not set)'
+  if (!isColorRef(v)) return v
+  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
+  const c = editForm.value.default_colors.find((c) => c.id === id)
+  return c ? `🎨 ${c.name || c.hex}` : '(deleted default color)'
+}
+
+const newColorId = (): string =>
+  crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+const addDefaultColor = () => {
+  editForm.value.default_colors = [
+    ...editForm.value.default_colors,
+    { id: newColorId(), name: '', hex: '#ffffff' },
+  ]
+}
+const removeDefaultColor = (idx: number) => {
+  editForm.value.default_colors = editForm.value.default_colors.filter((_, i) => i !== idx)
+}
+const getDefaultColorHex = (idx: number): string =>
+  (editForm.value.default_colors[idx]?.hex || '').replace(/^#/, '')
+const setDefaultColorHex = (idx: number, hex: string | undefined) => {
+  const entry = editForm.value.default_colors[idx]
+  if (entry) entry.hex = hex ? `#${hex}` : ''
+}
+
+// Appends a swatch's reference to a comma-separated colorArray param's text
+// value (the raw, unresolved tokens — this field's plain-text editing is
+// intentionally low-level, see the param's placeholder in the template).
+const appendColorToParam = (param: EffectParam, color: DefaultColor) => {
+  const current = getEffectParamText(param)
+  const ref = colorRefFor(color.id)
+  setEffectParamValue(param, current ? `${current}, ${ref}` : ref)
+}
+
+// The live effect preview (<bb-neon-rails> etc.) is a plain web component
+// that only understands real CSS colors — resolve any "@default:<id>"
+// tokens to their current hex before handing settings to it. Mirrors
+// resolve_default_colors_deep() server-side (application/admin/designs/helper.py).
+const resolveEffectSettingsRefs = (
+  settings: Record<string, number | string | string[]>,
+): Record<string, number | string | string[]> => {
+  const out: Record<string, number | string | string[]> = {}
+  for (const [k, v] of Object.entries(settings)) {
+    if (Array.isArray(v)) out[k] = v.map((x) => (isColorRef(x) ? resolveColorRef(x) : x))
+    else if (typeof v === 'string' && isColorRef(v)) out[k] = resolveColorRef(v)
+    else out[k] = v
+  }
+  return out
 }
 
 const getEffectParamNumber = (param: EffectParam): number => {
@@ -548,7 +647,7 @@ const renderEffectPreview = async () => {
     el.style.height = '100%'
     container.replaceChildren(el)
   }
-  applyEffectAttributes(el, def, editForm.value.background_effect_settings)
+  applyEffectAttributes(el, def, resolveEffectSettingsRefs(editForm.value.background_effect_settings))
 }
 
 watch(
@@ -572,9 +671,12 @@ const BACKGROUND_SIZE_OPTIONS: FontOption[] = [
 // color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
 // CSS value needs the leading "#" — same conversion as the per-container/
 // global font color fields above.
-const getBackdropColorHex = (): string => editForm.value.background_color.replace(/^#/, '')
+const getBackdropColorHex = (): string => resolveColorRef(editForm.value.background_color).replace(/^#/, '')
 const setBackdropColorHex = (hex: string | undefined) => {
   editForm.value.background_color = hex ? `#${hex}` : ''
+}
+const setBackdropColorRef = (ref: string) => {
+  editForm.value.background_color = ref
 }
 
 const showBackgroundImagePicker = ref(false)
@@ -640,6 +742,14 @@ const handleDesignDetail = (data: any) => {
       } catch {
         editForm.value.background_effect_settings = {}
       }
+      try {
+        const parsed = design.default_colors ? JSON.parse(design.default_colors) : []
+        editForm.value.default_colors = Array.isArray(parsed)
+          ? parsed.map((c: Partial<DefaultColor>) => ({ id: c.id || newColorId(), name: c.name || '', hex: c.hex || '' }))
+          : []
+      } catch {
+        editForm.value.default_colors = []
+      }
       loadingDesign.value = false
       loadingDesignError.value = ''
       if (designLoadTimer) {
@@ -687,6 +797,7 @@ const openNewDialog = () => {
     id: null, name: '', description: '', html: '', css: '',
     background_color: '', background_image_url: '', background_repeat: '', background_size: '', background_opacity: 100,
     background_effect: '', background_effect_settings: {},
+    default_colors: [],
     gradient_ids: [],
   }
   containerStyles.value = {}
@@ -710,6 +821,7 @@ const openEditDialog = (design: Design) => {
     background_opacity: design.background_opacity ?? 100,
     background_effect: design.background_effect || '',
     background_effect_settings: {},
+    default_colors: [],
     gradient_ids: [],
   }
   containerStyles.value = {}
@@ -763,6 +875,7 @@ const saveDesign = async (keepOpen = false) => {
     background_effect_settings: editForm.value.background_effect
       ? JSON.stringify(editForm.value.background_effect_settings)
       : '',
+    default_colors: JSON.stringify(editForm.value.default_colors.filter((c) => c.name.trim() && c.hex.trim())),
   })
 
   toast.add({
@@ -901,6 +1014,24 @@ const deleteDesign = (design: Design) => {
           <Textarea id="design-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
         <div v-if="!isNew" class="container-styles-section">
+          <Panel v-model:collapsed="defaultColorsCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
+                <span class="panel-header-title">Default Colors</span>
+                <small class="panel-header-desc">A named palette for this Design — pick the palette icon next to any color field below to reuse one of these.</small>
+              </div>
+            </template>
+            <div v-for="(c, idx) in editForm.default_colors" :key="c.id" class="default-color-row">
+              <ColorPicker :model-value="getDefaultColorHex(idx)" @update:model-value="(v) => setDefaultColorHex(idx, v)" />
+              <InputText v-model="c.name" placeholder="Name" size="small" class="w-full" />
+              <span class="color-field-value">{{ c.hex || '(not set)' }}</span>
+              <Button icon="pi pi-trash" text size="small" severity="danger" title="Remove" @click="removeDefaultColor(idx)" />
+            </div>
+            <Button label="Add Color" icon="pi pi-plus" text size="small" @click="addDefaultColor" />
+          </Panel>
+        </div>
+
+        <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="backdropCollapsed" toggleable class="container-style-panel">
             <template #header>
               <div class="panel-header-clickable" @click="backdropCollapsed = !backdropCollapsed">
@@ -996,7 +1127,8 @@ const deleteDesign = (design: Design) => {
                 <label>Background Color</label>
                 <div class="color-field-row">
                   <ColorPicker :model-value="getBackdropColorHex()" @update:model-value="(v) => setBackdropColorHex(v)" />
-                  <span class="color-field-value">{{ editForm.background_color ? editForm.background_color : '(not set)' }}</span>
+                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setBackdropColorRef(colorRefFor(c.id))" />
+                  <span class="color-field-value">{{ colorDisplayLabel(editForm.background_color) }}</span>
                   <Button
                     v-if="editForm.background_color"
                     icon="pi pi-times" text size="small" title="Clear"
@@ -1061,12 +1193,21 @@ const deleteDesign = (design: Design) => {
                     class="w-full"
                     @update:model-value="(v) => setEffectParamValue(p, v)"
                   />
+                  <div v-else-if="p.type === 'colorArray'" class="color-field-row">
+                    <InputText
+                      :model-value="getEffectParamText(p)"
+                      size="small"
+                      class="w-full"
+                      placeholder="e.g. #ff0000, #00ff00"
+                      @update:model-value="(v) => setEffectParamValue(p, v)"
+                    />
+                    <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => appendColorToParam(p, c)" />
+                  </div>
                   <InputText
                     v-else
                     :model-value="getEffectParamText(p)"
                     size="small"
                     class="w-full"
-                    :placeholder="p.type === 'colorArray' ? 'e.g. #ff0000, #00ff00' : ''"
                     @update:model-value="(v) => setEffectParamValue(p, v)"
                   />
                 </div>
@@ -1100,7 +1241,8 @@ const deleteDesign = (design: Design) => {
                     :model-value="getGlobalColorHex(p.key)"
                     @update:model-value="(v) => setGlobalColorHex(p.key, v)"
                   />
-                  <span class="color-field-value">{{ getGlobalColorHex(p.key) ? `#${getGlobalColorHex(p.key)}` : '(not set)' }}</span>
+                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setGlobalColorRef(p.key, colorRefFor(c.id))" />
+                  <span class="color-field-value">{{ colorDisplayLabel(getGlobalValue(p.key)) }}</span>
                   <Button
                     v-if="getGlobalColorHex(p.key)"
                     icon="pi pi-times" text size="small" title="Clear"
@@ -1162,7 +1304,8 @@ const deleteDesign = (design: Design) => {
                       :model-value="getColorHex(c.id, p.key)"
                       @update:model-value="(v) => setColorHex(c.id, p.key, v)"
                     />
-                    <span class="color-field-value">{{ getColorHex(c.id, p.key) ? `#${getColorHex(c.id, p.key)}` : '(not set)' }}</span>
+                    <ColorPalettePicker :palette="editForm.default_colors" @select="(color) => setColorRef(c.id, p.key, colorRefFor(color.id))" />
+                    <span class="color-field-value">{{ colorDisplayLabel(getStyleValue(c.id, p.key)) }}</span>
                     <Button
                       v-if="getColorHex(c.id, p.key)"
                       icon="pi pi-times" text size="small" title="Clear"
@@ -1329,7 +1472,11 @@ const deleteDesign = (design: Design) => {
         <div class="field">
           <label>Color Stops</label>
           <div v-for="(stop, idx) in gradientEditForm.stops" :key="idx" class="gradient-stop-row">
-            <ColorPicker v-model="stop.color" />
+            <ColorPicker
+              :model-value="resolveStopColorHex(stop)"
+              @update:model-value="(v) => { stop.color = v || ''; stop.ref = undefined }"
+            />
+            <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setStopColorRef(stop, c)" />
             <InputNumber v-model="stop.position" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Position" />
             <InputNumber v-model="stop.opacity" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Opacity" />
             <Button
@@ -1601,6 +1748,13 @@ const deleteDesign = (design: Design) => {
 }
 
 .gradient-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.default-color-row {
   display: flex;
   align-items: center;
   gap: 0.6rem;

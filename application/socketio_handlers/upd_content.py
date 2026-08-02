@@ -56,10 +56,10 @@ def _build_payload(db, screen):
     css_layers = []
     if design is not None:
         from application.admin.designs.helper import render_container_style_css, render_global_style_css, render_backdrop_css
-        container_style_css = render_container_style_css(db, design.id)
+        container_style_css = render_container_style_css(db, design)
         if container_style_css:
             css_layers.append(container_style_css)
-        global_style_css = render_global_style_css(db, design.id)
+        global_style_css = render_global_style_css(db, design)
         if global_style_css:
             css_layers.append(global_style_css)
         backdrop_css = render_backdrop_css(db, design)
@@ -90,6 +90,9 @@ def _build_payload(db, screen):
                 effect_settings = json.loads(raw_settings)
             except Exception:
                 effect_settings = {}
+        if effect_settings:
+            from application.admin.designs.helper import resolve_default_colors_deep
+            effect_settings = resolve_default_colors_deep(effect_settings, design)
         design_payload['background_effect'] = {
             'name': effect_key,
             'settings': effect_settings,
