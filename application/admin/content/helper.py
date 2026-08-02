@@ -102,6 +102,29 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                     size = 0
                 style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
                 ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="{style}" />')
+        elif ftype == 'icon' and field_name in ctx and ctx[field_name]:
+            # The value is "<library>/<icon-name>" — the backend has no
+            # access to the icon SVGs themselves (they ship as npm packages
+            # bundled into the frontends, not backend-readable files), so it
+            # emits a placeholder the screen client resolves to real markup
+            # client-side. See frontends/screen/ts/screen/icon-resolver.ts.
+            raw = str(ctx[field_name]).strip()
+            if '/' in raw:
+                library, name = raw.split('/', 1)
+                size = ctx.get(f'{field_name}__size')
+                try:
+                    size = float(size)
+                except (TypeError, ValueError):
+                    size = 0
+                size = size if size > 0 else 5
+                ctx[field_name] = Markup(
+                    f'<div class="dh-icon"'
+                    f' data-dh-icon-library="{_html_escape(library)}"'
+                    f' data-dh-icon-name="{_html_escape(name)}"'
+                    f' style="height:{size}vh;display:inline-block;"></div>'
+                )
+            else:
+                ctx[field_name] = ''
         elif ftype == 'arrows' and field_name in ctx and ctx[field_name]:
             char = _html_escape(str(ctx[field_name]).strip())
             size_key = f'{field_name}_size'
@@ -211,11 +234,11 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
     reusing the same logic as a regular Contenttype field (TagConfig).
 
     Used both for a ContentContainer's own fallback content and for the
-    admin's live preview of that default while editing it. The 'arrows' and
-    'pretalx_table' handlers store their multi-part config as JSON in
-    *content* (mirroring how a regular field keeps that same shape spread
-    across several `<field>__suffix` keys) — every other handler treats
-    *content* as the field's plain raw value.
+    admin's live preview of that default while editing it. The 'arrows',
+    'icon' and 'pretalx_table' handlers store their multi-part config as
+    JSON in *content* (mirroring how a regular field keeps that same shape
+    spread across several `<field>__suffix` keys) — every other handler
+    treats *content* as the field's plain raw value.
     """
     if not field_handler or not content:
         return ''
@@ -233,6 +256,13 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
             parsed = None
         if isinstance(parsed, dict) and 'url' in parsed:
             ctx = {'default': parsed.get('url', ''), 'default__size': parsed.get('size') or 0}
+    elif field_handler == 'icon':
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict) and 'icon' in parsed:
+            ctx = {'default': parsed.get('icon', ''), 'default__size': parsed.get('size') or 0}
     elif field_handler == 'arrows':
         try:
             parsed = json.loads(content)

@@ -15,6 +15,8 @@ import Editor from 'primevue/editor'
 import MediaPickerDialog from './MediaPickerDialog.vue'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
+import IconPickerField from './IconPickerField.vue'
+import type { IconPickerValue } from '../utils/iconLibraries'
 import { getEffectDefinition } from '../utils/backgroundEffects'
 // `?raw` inlines the pre-built bundle's source as a string at build time.
 // It has to run *inside* the preview iframe's own document (own
@@ -546,6 +548,7 @@ const defaultFieldHandlerOptions = [
   { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
+  { label: 'Icon', value: 'icon' },
   { label: 'Image', value: 'image' },
   { label: 'Link/URL', value: 'link' },
   { label: 'Long Text', value: 'textbig' },
@@ -588,6 +591,20 @@ const onDefaultImagePicked = (item: MediaItem) => {
   setImageData({ url: item.url, size: imageSize.value })
 }
 
+// --- 'icon' handler: {icon, size}, packed as JSON into default_content ----
+const iconValue = computed<IconPickerValue>(() => {
+  try {
+    const parsed = JSON.parse(containerEditForm.default_content || '{}')
+    if (parsed && typeof parsed === 'object' && 'icon' in parsed) {
+      return { icon: parsed.icon || '', size: parsed.size ?? 5 }
+    }
+  } catch { /* not JSON yet */ }
+  return { icon: '', size: 5 }
+})
+const setIconData = (v: IconPickerValue) => {
+  containerEditForm.default_content = JSON.stringify(v)
+}
+
 const openContainerEditModal = (c: ContentContainer) => {
   selectedId.value = c.id
   const p = posFor(c)
@@ -615,6 +632,8 @@ const onDefaultHandlerChange = (newHandler: string) => {
     containerEditForm.default_content = JSON.stringify({ char: '', size: 5 })
   } else if (newHandler === 'image') {
     containerEditForm.default_content = JSON.stringify({ url: '', size: null })
+  } else if (newHandler === 'icon') {
+    containerEditForm.default_content = JSON.stringify({ icon: '', size: 5 })
   } else if (newHandler === 'table') {
     containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
   } else if (newHandler === 'pretalx_table') {
@@ -943,6 +962,11 @@ const toggleSelectedLayoutMembership = () => {
                 style="width: 140px"
               />
             </div>
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'icon'" class="field">
+            <label>Default Content</label>
+            <IconPickerField :model-value="iconValue" @update:model-value="setIconData" />
           </div>
 
           <div v-else-if="containerEditForm.default_field_handler === 'arrows'" class="field arrow-picker-wrapper">

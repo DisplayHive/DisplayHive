@@ -71,6 +71,7 @@ const fieldHandlerOptions = [
   { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
+  { label: 'Icon', value: 'icon' },
   { label: 'Image', value: 'image' },
   { label: 'Link/URL', value: 'link' },
   { label: 'Long Text', value: 'textbig' },

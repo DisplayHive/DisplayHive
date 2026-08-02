@@ -17,6 +17,8 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
+import IconPickerField from './IconPickerField.vue'
+import type { IconPickerValue } from '../utils/iconLibraries'
 
 interface ContentElement {
   id: number
@@ -442,6 +444,17 @@ const setPretalxTableValue = (name: string, v: PretalxTableValue) => {
   createForm.value.fields[name + '__invalid_data_text'] = v.invalid_data_text
 }
 
+// --- icon field adapter ----------------------------------------------------
+const getIconValue = (name: string): IconPickerValue => ({
+  icon: String(createForm.value.fields[name] ?? ''),
+  size: Number(createForm.value.fields[name + '__size']) || 5,
+})
+
+const setIconValue = (name: string, v: IconPickerValue) => {
+  createForm.value.fields[name] = v.icon
+  createForm.value.fields[name + '__size'] = v.size
+}
+
 const onEditorLoad = (fieldName: string, event: { instance: any }) => {
   const quill = event.instance
   const html = String(createForm.value.fields[fieldName] || '')
@@ -667,6 +680,9 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           } else if (tag.fieldHandler === 'arrows') {
             createForm.value.fields[tag.name] = ''
             createForm.value.fields[tag.name + '_size'] = 5
+          } else if (tag.fieldHandler === 'icon') {
+            createForm.value.fields[tag.name] = ''
+            createForm.value.fields[tag.name + '__size'] = 5
           } else if (tag.fieldHandler === 'datetime_format') {
             createForm.value.fields[tag.name] = 'HH:mm:ss'
           } else if (tag.fieldHandler === 'table') {
@@ -690,6 +706,11 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
               createForm.value.fields[tag.name] = ''
               if (!(tag.name + '_size' in createForm.value.fields)) {
                 createForm.value.fields[tag.name + '_size'] = 5
+              }
+            } else if (tag.fieldHandler === 'icon') {
+              createForm.value.fields[tag.name] = ''
+              if (!(tag.name + '__size' in createForm.value.fields)) {
+                createForm.value.fields[tag.name + '__size'] = 5
               }
             } else if (tag.fieldHandler === 'datetime_format') {
               createForm.value.fields[tag.name] = 'HH:mm:ss'
@@ -917,6 +938,12 @@ onUnmounted(() => {
             v-if="tag.fieldHandler === 'pretalx_table'"
             :model-value="getPretalxTableValue(tag.name)"
             @update:model-value="(v) => setPretalxTableValue(tag.name, v)"
+          />
+
+          <IconPickerField
+            v-else-if="tag.fieldHandler === 'icon'"
+            :model-value="getIconValue(tag.name)"
+            @update:model-value="(v) => setIconValue(tag.name, v)"
           />
 
           <Textarea

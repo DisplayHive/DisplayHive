@@ -11,6 +11,7 @@
 
 import type { Scene } from "./types.js";
 import { tickNow } from "./clock.js";
+import { resolveIcons } from "./icon-resolver.js";
 import { log } from "./logger.js";
 
 // Optional emitter injected by socket setup so this module does not
@@ -112,6 +113,7 @@ export function renderScene(scene: Scene): void {
   }
 
   tickNow(); // immediately fill any dh-clock elements in the new HTML
+  void resolveIcons(); // async: fill any dh-icon placeholders in the new HTML
   log("info", "renderScene", `Rendered scene ${scene.id} across ${activeIds.size} container(s)`);
 }
 
