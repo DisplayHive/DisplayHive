@@ -32,7 +32,7 @@ def register_lifecycle_handlers(socketio, app, db):
             from application.socketio_handlers.auth import clear_admin_session
             clear_admin_session(sid)
         except Exception:
-            pass
+            logger.debug('Failed to clear admin session for sid=%s on disconnect', sid, exc_info=True)
 
         # Find and remove connected_devices entry for this SID
         disconnected_devicekey = None
@@ -65,7 +65,7 @@ def register_lifecycle_handlers(socketio, app, db):
                             # already removed from connected_devices mapping above
                             return
                 except Exception:
-                    pass
+                    logger.debug('Failed to read impersonate flag on disconnect for devicekey=%s', disconnected_devicekey, exc_info=True)
                 from application.models import Device
                 dev = db.session.execute(
                     db.select(Device).where(Device.devicekey == disconnected_devicekey)

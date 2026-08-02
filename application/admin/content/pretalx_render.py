@@ -293,7 +293,7 @@ def _render_pretalx_table(data: dict, roomname: str, linecount, fields_config: s
             from datetime import datetime
             _sim_now = datetime.fromisoformat(sim_datetime.strip())
         except Exception:
-            pass
+            logger.debug('Invalid sim_datetime %r, ignoring simulation override', sim_datetime, exc_info=True)
 
     # Parse Field|Name column definitions
     columns = []
@@ -411,7 +411,7 @@ def _render_pretalx_table(data: dict, roomname: str, linecount, fields_config: s
         try:
             conf_start = _date_type.fromisoformat(start_str) if start_str else None
         except Exception:
-            pass
+            logger.debug('Invalid conference start date %r, day headings will omit weekday/date', start_str, exc_info=True)
 
         row_lines = 2 if author_mode else 1
         remaining = linecount if linecount > 0 else None  # None = unlimited

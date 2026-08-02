@@ -20,6 +20,10 @@ class Screen(db.Model):
     screengroups: Mapped[list["Screengroup"]] = relationship("Screengroup", secondary=screengroup_screen, back_populates="screens")
     # log entries for this screen — deleted automatically when screen is removed
     logs: Mapped[list["ScreenLog"]] = relationship("ScreenLog", back_populates="screen", cascade="all, delete-orphan", passive_deletes=True)
+    # Devices currently assigned to this screen. No cascade here on purpose:
+    # deleting a Screen with devices still assigned is blocked in the admin
+    # handler rather than silently orphaning/deleting those Device rows.
+    devices: Mapped[list["Device"]] = relationship("Device", back_populates="screen")
 
 
 class ScreenLog(db.Model):
@@ -38,7 +42,6 @@ class ScreenLog(db.Model):
 
 class Screengroup(db.Model):
     """Group of screens that can be assigned the same content."""
-    __table_args__ = {'extend_existing': True}
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     is_one_screen: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')

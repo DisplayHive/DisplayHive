@@ -124,7 +124,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                     if tz_row and tz_row.value:
                         tz_name = tz_row.value
                 except Exception:
-                    pass
+                    logger.debug('render_content_fields: failed to load timezone setting, defaulting to UTC', exc_info=True)
             ctx[field_name] = Markup(
                 f'<div class="dh-clock"'
                 f' data-dh-clock="{_html_escape(fmt_str)}"'
@@ -150,7 +150,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                         _ps_end_of_day  = _ps.end_of_day  or _ps_end_of_day
                         _ps_sim_dt      = _ps.sim_datetime or ''
             except Exception:
-                pass
+                logger.debug('render_content_fields: failed to load pretalx settings, using defaults', exc_info=True)
             _el_invalid = str(ctx.get(f'{field_name}__invalid_data_text', '')).strip()
             if _el_invalid:
                 _ps_invalid = _el_invalid

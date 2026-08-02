@@ -128,7 +128,7 @@ def register_device_connection_handlers(socketio, app, db):
             try:
                 emit_screengroups_update(socketio, app, db, room=sid_info)
             except Exception:
-                pass
+                logger.debug('Failed to send initial screengroups update to admin sid=%s', sid_info, exc_info=True)
 
             # Report security-sensitive config state (insecure defaults, debug mode, etc.)
             try:
@@ -143,7 +143,7 @@ def register_device_connection_handlers(socketio, app, db):
                     room=sid_info,
                 )
             except Exception:
-                pass
+                logger.debug('Failed to send security_status to admin sid=%s', sid_info, exc_info=True)
             return  # Accept connection for admin
 
         elif devicekey:

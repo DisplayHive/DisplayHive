@@ -342,10 +342,17 @@ const deleteContentType = (ct: ContentType) => {
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_contenttype', { id: ct.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Content type deleted', life: 3000 })
-      refreshData()
+    accept: async () => {
+      const ack = await emitWithAck<{ ok: boolean; error?: string }>(
+        'displayhive:admin:cts:delete_contenttype',
+        { id: ct.id },
+      )
+      if (ack.ok) {
+        toast.add({ severity: 'success', summary: 'Success', detail: 'Content type deleted', life: 3000 })
+        refreshData()
+      } else {
+        toast.add({ severity: 'error', summary: 'Error', detail: ack.error || 'Failed to delete content type', life: 5000 })
+      }
     },
   })
 }

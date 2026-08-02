@@ -23,7 +23,6 @@ from application.admin.contenttypes.sockethandlers import register_admin_content
 from application.admin.matrix.sockethandlers import register_admin_matrix_handlers
 from application.admin.settings.sockethandlers import register_admin_settings_handlers
 from application.admin.media.sockethandlers import register_admin_media_handlers
-from application.admin.importexport.sockethandlers import register_admin_importexport_handlers
 from application.admin.magictags.sockethandlers import register_admin_magictags_handlers
 from application.admin.alerting.sockethandlers import register_admin_alerting_handlers
 from application.admin.pretalx.sockethandlers import register_admin_pretalx_handlers
@@ -56,7 +55,6 @@ def register_all_handlers(socketio, app, db):
     register_admin_matrix_handlers(socketio, app, db)
     register_admin_settings_handlers(socketio, app, db)
     register_admin_media_handlers(socketio, app, db)
-    register_admin_importexport_handlers(socketio, app, db)
     register_admin_magictags_handlers(socketio, app, db)
     register_admin_alerting_handlers(socketio, app, db)
     register_admin_pretalx_handlers(socketio, app, db)

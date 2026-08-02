@@ -136,7 +136,7 @@ def _build_payload(db, screen):
             ):
                 scene['update_after_show'] = True
         except Exception:
-            pass
+            logger.debug('Failed to parse serialized_input for content_element id=%s', mc.id, exc_info=True)
 
         scenes.append(scene)
 

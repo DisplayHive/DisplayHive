@@ -35,7 +35,7 @@ class ContentElement(db.Model):
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     end_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Foreign key to Contenttype
-    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True)
+    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True, index=True)
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="content_elements")
     # many-to-many: a ContentElement can be assigned to many Screengroups
@@ -174,6 +174,8 @@ class ContentContainer(db.Model):
     default_content: Mapped[str] = mapped_column(Text, nullable=True)
     # Many-to-many relationship to Layout
     layouts: Mapped[list["Layout"]] = relationship("Layout", secondary=layout_container, back_populates="contentcontainers")
+    # TagConfigs (fields) targeting this container
+    tagconfigs: Mapped[list["TagConfig"]] = relationship("TagConfig", back_populates="contentcontainer")
 
 
 class DesignContainerStyle(db.Model):
@@ -250,8 +252,8 @@ class TagConfig(db.Model):
     """
     __tablename__ = 'tagconfig'
     id: Mapped[int] = mapped_column(primary_key=True)
-    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True)
-    contentcontainer_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contentcontainer.id'), nullable=True)
+    contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True, index=True)
+    contentcontainer_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contentcontainer.id'), nullable=True, index=True)
     field_name: Mapped[str] = mapped_column(String(255))  # e.g., 'title', 'text', 'image_url'
     field_handler: Mapped[str] = mapped_column(String(50))   # e.g., 'text', 'textarea', 'number', 'url'
     field_label: Mapped[str] = mapped_column(String(255), nullable=True)  # Display label
@@ -260,7 +262,7 @@ class TagConfig(db.Model):
     order: Mapped[int] = mapped_column(Integer, default=0)  # Display order
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="tagconfigs")
-    contentcontainer: Mapped["ContentContainer"] = relationship("ContentContainer")
+    contentcontainer: Mapped["ContentContainer"] = relationship("ContentContainer", back_populates="tagconfigs")
 
 
 class MagicTagValueList(db.Model):

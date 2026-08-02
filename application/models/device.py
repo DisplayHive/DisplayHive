@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db
 
 
@@ -20,9 +20,10 @@ class Device(db.Model):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     last_connected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    screen_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('screen.id'), nullable=True)
+    screen_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('screen.id'), nullable=True, index=True)
     max_resolution_width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     max_resolution_height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    screen: Mapped[Optional["Screen"]] = relationship("Screen", back_populates="devices")
 
     def __repr__(self):
         return f"<Device {self.devicekey}>"

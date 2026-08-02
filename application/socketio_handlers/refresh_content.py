@@ -76,7 +76,7 @@ def register_refresh_content_handlers(socketio, app, db):
                     devicekey = k
                     break
         except Exception:
-            pass
+            logger.debug('Failed to resolve devicekey for sid=%s from connected_devices', sid, exc_info=True)
         if not devicekey and getattr(request, 'args', None):
             # Impersonation sessions aren't tracked in connected_devices but do
             # carry their devicekey in the handshake args.

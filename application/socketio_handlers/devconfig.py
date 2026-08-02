@@ -28,7 +28,7 @@ def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional
                 devicekey = getattr(device, 'devicekey', None)
                 device_id  = getattr(device, 'id', None)
             except Exception:
-                pass
+                logger.debug('send_upd_deviceconfig: failed to read attrs off passed-in device object', exc_info=True)
         if not devicekey and room and room.startswith('device_'):
             devicekey = room.split('device_', 1)[1]
         if not devicekey and to and isinstance(to, str) and to.startswith('device_'):

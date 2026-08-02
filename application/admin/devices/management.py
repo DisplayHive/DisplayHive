@@ -44,7 +44,7 @@ def register_device_management_handlers(socketio, app, db):
                 if v.get('sid') == sid:
                     return k
         except Exception:
-            pass
+            logger.debug('Failed to resolve devicekey for sid=%s from connected_devices', sid, exc_info=True)
         if getattr(request, 'args', None):
             try:
                 return request.args.get('devicekey')
@@ -59,7 +59,7 @@ def register_device_management_handlers(socketio, app, db):
                 imp = request.args.get('impersonate')
                 return bool(imp and str(imp).lower() in ('1', 'true', 'yes', 'on'))
         except Exception:
-            pass
+            logger.debug('Failed to read impersonate flag from request args', exc_info=True)
         return False
 
     def _emit_admin_screen_safe(room=None):
@@ -112,7 +112,7 @@ def register_device_management_handlers(socketio, app, db):
             try:
                 dev.last_connected_at = datetime.now(timezone.utc)
             except Exception:
-                pass
+                logger.debug('Ping: failed to set last_connected_at for devicekey=%s', devicekey, exc_info=True)
 
             db.session.commit()
 
@@ -178,13 +178,13 @@ def register_device_management_handlers(socketio, app, db):
             try:
                 device.is_active = bool(data.get('is_active'))
             except Exception:
-                pass
+                logger.debug('update_device: failed to set is_active for device_id=%s', device_id, exc_info=True)
         deactivated = was_active and not bool(getattr(device, 'is_active', True))
         if deactivated:
             try:
                 device.is_online = False
             except Exception:
-                pass
+                logger.debug('update_device: failed to set is_online for device_id=%s', device_id, exc_info=True)
         db.session.commit()
 
         if deactivated:
@@ -321,7 +321,7 @@ def register_device_management_handlers(socketio, app, db):
         try:
             db.session.refresh(device)
         except Exception:
-            pass
+            logger.debug('find_device: failed to refresh device id=%s after commit', device.id, exc_info=True)
         logger.info('find_device: device id=%s find=%s', device.id, device.find)
 
         try:

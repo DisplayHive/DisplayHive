@@ -79,6 +79,14 @@ def register_admin_screens_handlers(socketio, app, db):
         if not screen:
             return {'success': False, 'error': 'Screen not found'}
 
+        assigned_device_count = db.session.execute(
+            db.select(db.func.count()).select_from(Device).where(Device.screen_id == screen.id)
+        ).scalar_one()
+        if assigned_device_count:
+            error = f'Screen is used by {assigned_device_count} device(s) — unassign them first'
+            socketio.emit('displayhive:screens:stc:screen_deleted', {'success': False, 'error': error}, room=request.sid)
+            return {'success': False, 'error': error}
+
         screen_name = screen.name
         one_sg = db.session.execute(
             db.select(Screengroup).where(Screengroup.name == screen_name).where(Screengroup.is_one_screen == True)
@@ -91,6 +99,7 @@ def register_admin_screens_handlers(socketio, app, db):
 
         emit_admin_screen(socketio, app, db, room='admins')
         emit_screengroups_update(socketio, app, db, room='admins')
+        socketio.emit('displayhive:screens:stc:screen_deleted', {'success': True}, room=request.sid)
         return {'success': True}
 
     @socketio.on('displayhive:admin:cts:get_admin_screen')

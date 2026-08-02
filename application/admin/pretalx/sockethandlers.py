@@ -182,7 +182,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
             json_data = resp.json()
             success = True
         except Exception:
-            pass
+            logger.debug('Pretalx fetch failed for url_id=%s target=%s', url_id, fetch_target, exc_info=True)
 
         with app.app_context():
             try:
@@ -334,7 +334,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
             json_data = resp.json()
             is_valid = True
         except Exception:
-            pass
+            logger.debug('Initial validation fetch failed for new pretalx url=%s', url, exc_info=True)
 
         now = datetime.now(timezone.utc)
         obj = PretalxApiUrl(

@@ -87,14 +87,24 @@ const handleScreengroupsData = (data: { all_screengroups: any[]; current_screeng
   }
 }
 
+const handleScreenDeleted = (data: { success: boolean; error?: string }) => {
+  if (data.success) {
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen deleted', life: 3000 })
+  } else {
+    toast.add({ severity: 'error', summary: 'Error', detail: data.error || 'Failed to delete screen', life: 5000 })
+  }
+}
+
 onMounted(() => {
   on('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
+  on('displayhive:screens:stc:screen_deleted', handleScreenDeleted)
   screensStore.fetch()
   screengroupsStore.fetch()
 })
 
 onUnmounted(() => {
   off('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
+  off('displayhive:screens:stc:screen_deleted', handleScreenDeleted)
 })
 
 const refreshScreens = () => screensStore.fetch()

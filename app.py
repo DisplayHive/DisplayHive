@@ -98,6 +98,21 @@ if _trusted_proxies > 0:
 # Initialize database
 db.init_app(app)
 
+# SQLite does not enforce foreign-key constraints per connection unless this
+# pragma is set — without it, every ForeignKey(..., ondelete=...) declared on
+# the models is inert on SQLite (only enforced on PostgreSQL). Enable it here
+# so FK-constrained deletes fail loudly (IntegrityError) instead of silently
+# leaving orphaned rows, matching PostgreSQL's default behavior.
+if app.config['SQLITE_IN_USE']:
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    @event.listens_for(Engine, 'connect')
+    def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute('PRAGMA foreign_keys=ON')
+        cursor.close()
+
 # Resolve the set of allowed CORS origins once and share it between flask_cors
 # (HTTP /api/*) and Socket.IO below. Defaults to local dev origins only — set
 # CORS_ALLOWED_ORIGINS (comma-separated) in production. Use "*" only if you

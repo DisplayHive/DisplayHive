@@ -10,6 +10,7 @@ import json
 import logging
 
 from flask import request
+from sqlalchemy.orm import joinedload, selectinload
 
 from application.admin.content.serializers import (
     resolve_preview_css,
@@ -61,23 +62,6 @@ def register_content_query_handlers(socketio, app, db):
         tag_set = {t.strip() for m in all_media for t in (m.tags or '').split(',') if t.strip()}
         socketio.emit('displayhive:admin:stc:image_tags', {'tags': sorted(tag_set)}, room=request.sid)
 
-    @socketio.on('displayhive:admin:cts:get_images_by_tags')
-    @admin_handler
-    def handle_get_images_by_tags(data=None):
-        """Return image URLs (and metadata) for media items that match any of the provided tags."""
-        sid = request.sid
-        tags = (data or {}).get('tags', [])
-        if not tags:
-            socketio.emit('displayhive:admin:stc:images_by_tags', {'images': [], 'tags': tags}, room=sid)
-            return
-        all_media = db.session.execute(db.select(Media)).scalars().all()
-        matched = []
-        for m in all_media:
-            media_tags = {t.strip() for t in (m.tags or '').split(',') if t.strip()}
-            if any(t in media_tags for t in tags):
-                matched.append(_media_entry(m))
-        socketio.emit('displayhive:admin:stc:images_by_tags', {'images': matched, 'tags': tags}, room=sid)
-
     def _emit_content_list(event, extra, content_items):
         """Serialize content items with preview CSS and emit them under *event*."""
         preview_css = resolve_preview_css(db)
@@ -94,7 +78,9 @@ def register_content_query_handlers(socketio, app, db):
         content is no longer organized by container.
         """
         content_items = db.session.execute(
-            db.select(ContentElement).order_by(ContentElement.title)
+            db.select(ContentElement)
+            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
+            .order_by(ContentElement.title)
         ).scalars().all()
 
         content_list = _emit_content_list(
@@ -118,6 +104,7 @@ def register_content_query_handlers(socketio, app, db):
             db.select(ContentElement)
             .join(ContentElement.screengroups)
             .where(Screengroup.id == screengroup_id)
+            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
             .order_by(ContentElement.title)
         ).unique().scalars().all()
 
@@ -182,7 +169,9 @@ def register_content_query_handlers(socketio, app, db):
     def handle_get_unassigned_content(data=None):
         """Get all content that is unassigned (has no screengroups)."""
         all_content = db.session.execute(
-            db.select(ContentElement).order_by(ContentElement.title)
+            db.select(ContentElement)
+            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
+            .order_by(ContentElement.title)
         ).scalars().all()
 
         unassigned = [ce for ce in all_content if not ce.screengroups]

@@ -1,8 +1,6 @@
 """Per-page admin media socket handlers (migrated from socketio_handlers/media.py)."""
 
 import os
-import re
-import shutil
 import logging
 from datetime import datetime, timezone
 
@@ -10,19 +8,6 @@ from flask_socketio import emit
 from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
-
-
-def _is_within(base, target):
-    """Return True if *target* resolves to *base* itself or a path inside it.
-
-    Compares against ``base + os.sep`` so a sibling that merely shares a name
-    prefix (e.g. ``.../media_previews`` vs ``.../media``) is not mistaken for a
-    path inside *base* — the trailing-separator boundary a bare ``startswith``
-    check misses.
-    """
-    base_real = os.path.realpath(base)
-    target_real = os.path.realpath(target)
-    return target_real == base_real or target_real.startswith(base_real + os.sep)
 
 
 def register_admin_media_handlers(socketio, app, db):
@@ -39,29 +24,6 @@ def register_admin_media_handlers(socketio, app, db):
     def allowed_file(filename):
         """Return True if *filename* has an allowed extension."""
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-    def get_folder_tree(base_path, current_path=''):
-        """Recursively build folder tree structure."""
-        folders = []
-        full_path = os.path.join(base_path, current_path) if current_path else base_path
-
-        if not os.path.exists(full_path):
-            return folders
-
-        try:
-            for item in sorted(os.listdir(full_path)):
-                item_path = os.path.join(full_path, item)
-                if os.path.isdir(item_path):
-                    relative_path = os.path.join(current_path, item) if current_path else item
-                    folders.append({
-                        'name': item,
-                        'path': relative_path,
-                        'children': get_folder_tree(base_path, relative_path)
-                    })
-        except PermissionError:
-            pass
-
-        return folders
 
     def create_preview(source_path, preview_path, is_video=False):
         """Create a preview/thumbnail for media file."""
@@ -91,13 +53,6 @@ def register_admin_media_handlers(socketio, app, db):
                 img.save(preview_path, 'JPEG', quality=85)
         except Exception:
             logger.exception('Error creating preview for %s', source_path)
-
-    def delete_folder_recursive(media_folder_path, preview_folder_path):
-        """Recursively delete folder and all contents from both media and preview directories."""
-        if os.path.exists(media_folder_path):
-            shutil.rmtree(media_folder_path)
-        if os.path.exists(preview_folder_path):
-            shutil.rmtree(preview_folder_path)
 
     def _build_media_list_payload():
         """Build a structured list of all media items for the Vue SPA."""
@@ -129,31 +84,11 @@ def register_admin_media_handlers(socketio, app, db):
         except Exception:
             logger.exception('Failed to push media list')
 
-    def _build_folders_payload():
-        """Build a flat list of folder dicts for the Vue SPA."""
-        folder_tree = get_folder_tree(MEDIA_FOLDER)
-        folders = []
-
-        def _flatten(nodes, prefix=''):
-            """Recursively flatten the nested folder tree into a flat list of path dicts."""
-            for node in nodes:
-                path = node.get('path', '')
-                folders.append({'name': node.get('name', path), 'path': path})
-                _flatten(node.get('children', []), path)
-        _flatten(folder_tree)
-        return folders
-
     @socketio.on('displayhive:media:cts:get_media')
     @require_right('media.page')
     def handle_get_media(data=None):
         """Namespaced: return structured media list to the requesting client."""
         emit('displayhive:media:stc:media_list', {'media': _build_media_list_payload()})
-
-    @socketio.on('displayhive:media:cts:get_folders')
-    @require_right('media.page')
-    def handle_get_folders(data=None):
-        """Namespaced: return folder list to the requesting client."""
-        emit('displayhive:media:stc:folders_list', {'folders': _build_folders_payload()})
 
     @socketio.on('displayhive:media:cts:upload')
     @require_right('media.upload')
@@ -344,132 +279,3 @@ def register_admin_media_handlers(socketio, app, db):
 
         # Push refreshed media list
         _push_media_list()
-
-    @socketio.on('displayhive:media:cts:folder_create')
-    @require_right('media.upload')
-    def media_folder_create(message):
-        """Create new folder."""
-        parent_folder = message.get('parent', '')
-        folder_name = message.get('name', '').strip()
-
-        if not folder_name:
-            emit('media_error', {'error': 'Folder name required'})
-            return
-
-        # Sanitize folder name (no path separators or special chars)
-        folder_name = re.sub(r'[^\w\s-]', '', folder_name).strip()
-        folder_name = re.sub(r'[-\s]+', '-', folder_name)
-
-        if not folder_name:
-            emit('media_error', {'error': 'Invalid folder name'})
-            return
-
-        new_folder_path = os.path.join(parent_folder, folder_name) if parent_folder else folder_name
-
-        # Prevent path traversal attacks
-        if not _is_within(MEDIA_FOLDER, os.path.join(MEDIA_FOLDER, new_folder_path)):
-            emit('media_error', {'error': 'Invalid folder path'})
-            return
-
-        # Create in both media and preview directories
-        os.makedirs(os.path.join(MEDIA_FOLDER, new_folder_path), exist_ok=True)
-        os.makedirs(os.path.join(PREVIEW_FOLDER, new_folder_path), exist_ok=True)
-
-        emit('media_folder_created', {
-            'success': True,
-            'path': new_folder_path,
-            'folder_tree': get_folder_tree(MEDIA_FOLDER),
-        })
-
-    @socketio.on('displayhive:media:cts:folder_delete')
-    @require_right('media.delete')
-    def media_folder_delete(message):
-        """Delete folder and all contents."""
-        folder_path = message.get('folder', '')
-
-        if not folder_path:
-            emit('media_error', {'error': 'Cannot delete root folder'})
-            return
-
-        media_folder_path = os.path.join(MEDIA_FOLDER, folder_path)
-        if not _is_within(MEDIA_FOLDER, media_folder_path):
-            emit('media_error', {'error': 'Invalid folder path'})
-            return
-
-        preview_folder_path = os.path.join(PREVIEW_FOLDER, folder_path)
-
-        delete_folder_recursive(media_folder_path, preview_folder_path)
-
-        # Delete database entries
-        media_items = db.session.execute(
-            db.select(Media).where(Media.folder_path.like(f"{folder_path}%"))
-        ).scalars().all()
-
-        for item in media_items:
-            db.session.delete(item)
-        db.session.commit()
-
-        emit('media_folder_deleted', {
-            'success': True,
-            'folder_tree': get_folder_tree(MEDIA_FOLDER),
-        })
-
-    @socketio.on('displayhive:media:cts:folder_rename')
-    @require_right('media.rename')
-    def media_folder_rename(message):
-        """Rename folder."""
-        old_path = message.get('old_path', '')
-        new_name = message.get('new_name', '').strip()
-
-        if not old_path or not new_name:
-            emit('media_error', {'error': 'Invalid parameters'})
-            return
-
-        # Guard against path traversal in the source path
-        if not _is_within(MEDIA_FOLDER, os.path.join(MEDIA_FOLDER, old_path)):
-            emit('media_error', {'error': 'Invalid folder path'})
-            return
-
-        # Sanitize new name
-        new_name = re.sub(r'[^\w\s-]', '', new_name).strip()
-        new_name = re.sub(r'[-\s]+', '-', new_name)
-
-        # Calculate new path
-        parent = os.path.dirname(old_path)
-        new_path = os.path.join(parent, new_name) if parent else new_name
-
-        # Guard the destination too, so a crafted parent/name can't escape.
-        if not _is_within(MEDIA_FOLDER, os.path.join(MEDIA_FOLDER, new_path)):
-            emit('media_error', {'error': 'Invalid folder path'})
-            return
-
-        # Rename in both directories
-        old_media = os.path.join(MEDIA_FOLDER, old_path)
-        new_media = os.path.join(MEDIA_FOLDER, new_path)
-        old_preview = os.path.join(PREVIEW_FOLDER, old_path)
-        new_preview = os.path.join(PREVIEW_FOLDER, new_path)
-
-        if os.path.exists(old_media):
-            shutil.move(old_media, new_media)
-        if os.path.exists(old_preview):
-            shutil.move(old_preview, new_preview)
-
-        # Update database entries
-        media_items = db.session.execute(
-            db.select(Media).where(Media.folder_path.like(f"{old_path}%"))
-        ).scalars().all()
-
-        for item in media_items:
-            if item.folder_path == old_path:
-                item.folder_path = new_path
-            elif item.folder_path.startswith(old_path + '/'):
-                item.folder_path = new_path + item.folder_path[len(old_path):]
-
-        db.session.commit()
-
-        emit('media_folder_renamed', {
-            'success': True,
-            'new_path': new_path,
-            'old_path': old_path,
-            'folder_tree': get_folder_tree(MEDIA_FOLDER),
-        })

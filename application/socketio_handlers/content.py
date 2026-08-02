@@ -133,7 +133,7 @@ def register_content_handlers(socketio, app, db):
                         from .logger import get_logger_status
                         logger_active = get_logger_status()
                     except Exception:
-                        pass
+                        logger.debug('Failed to read logger status', exc_info=True)
                     if logger_active:
                         socketio.emit('logger_active', {}, room=request.sid)
                     else:
@@ -155,7 +155,7 @@ def register_content_handlers(socketio, app, db):
                     from .logger import get_logger_status
                     logger_active = get_logger_status()
                 except Exception:
-                    pass
+                    logger.debug('Failed to read logger status', exc_info=True)
                 if logger_active:
                     socketio.emit('logger_active', {}, room=request.sid)
                 else:

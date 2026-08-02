@@ -21,7 +21,7 @@ def parse_content_html(raw, handlers) -> dict:
         if isinstance(parsed, dict):
             return parsed
     except Exception:
-        pass
+        logger.debug('parse_content_html: raw is not a JSON object, treating as legacy string', exc_info=True)
     return {str(h.contentcontainer_id): (raw or '') for h in (handlers or [])}
 
 

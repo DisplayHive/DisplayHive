@@ -211,13 +211,22 @@ def register_admin_contenttypes_handlers(socketio, app, db):
     @require_right('contenttypes.delete')
     def handle_delete_contenttype(data=None):
         if not data or not isinstance(data, dict):
-            return
+            return {'ok': False, 'error': 'Invalid payload'}
         ct_id = data.get('id')
         if not ct_id:
-            return
+            return {'ok': False, 'error': 'Missing id'}
         ct = db.session.get(Contenttype, int(ct_id))
         if not ct:
-            return
+            return {'ok': False, 'error': 'Content type not found'}
+
+        from application.models import ContentElement
+        used_by = db.session.execute(
+            db.select(db.func.count()).select_from(ContentElement).where(ContentElement.contenttype_id == ct.id)
+        ).scalar_one()
+        if used_by:
+            return {'ok': False, 'error': f'Content type is used by {used_by} content item(s)'}
+
         db.session.delete(ct)
         db.session.commit()
         _emit_contenttypes()
+        return {'ok': True}

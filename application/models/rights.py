@@ -42,7 +42,7 @@ class Group(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    parent_group_id: Mapped[Optional[int]] = mapped_column(ForeignKey('group.id'), nullable=True)
+    parent_group_id: Mapped[Optional[int]] = mapped_column(ForeignKey('group.id'), nullable=True, index=True)
     # The single well-known "always allow everything" group. Exactly one such
     # group is expected to exist (seeded on first run); it cannot be deleted
     # and its is_superadmin flag cannot be unset via the admin UI.

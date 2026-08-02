@@ -284,7 +284,7 @@ def build_design_payload(db) -> dict:
         from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
         _tvars = load_magic_tags(db)
     except Exception:
-        pass
+        logger.debug('Failed to load magic tags for design payload', exc_info=True)
 
     if _tvars:
         if design_payload['html']:
