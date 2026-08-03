@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+import { useScreensStore } from '../stores/screens'
 
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -58,7 +60,7 @@ interface MediaItem {
 
 const props = defineProps<{
   contentTypes: ContentType[]
-  allScreengroups: Array<{ id: number; name: string }>
+  allScreengroups: Array<{ id: number; name: string; screen_ids: number[] }>
   oneScreenGroups: Array<{ id: number; name: string; screen_ids: number[] }>
 }>()
 
@@ -67,6 +69,8 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const confirm = useConfirm()
+const screensStore = useScreensStore()
 const { on, off, emit: socketEmit } = useSocket()
 
 const showSelectContentTypeDialog = ref(false)
@@ -93,6 +97,26 @@ const tagConfigs = ref<TagConfig[]>([])
 
 const formScreengroupIds = ref<number[]>([])
 const originalScreengroupIds = ref<number[]>([])
+
+// Screens this content element is currently live on (via its *saved*
+// screengroup memberships — originalScreengroupIds, not the in-progress
+// formScreengroupIds edit), so any edit here (even one that doesn't touch
+// the screengroup checkboxes at all) is flagged as affecting them.
+const affectedScreenNames = computed<string[]>(() => {
+  const screenIds = new Set<number>()
+  for (const sgId of originalScreengroupIds.value) {
+    const oneScreen = props.oneScreenGroups.find(g => g.id === sgId)
+    if (oneScreen) oneScreen.screen_ids.forEach(id => screenIds.add(id))
+    const group = props.allScreengroups.find(g => g.id === sgId)
+    if (group) group.screen_ids.forEach(id => screenIds.add(id))
+  }
+  return screensStore.screens
+    .filter(s => screenIds.has(s.id))
+    .map(s => s.name)
+    .sort((a, b) => a.localeCompare(b))
+})
+const affectsMultipleScreens = computed(() => editMode.value && affectedScreenNames.value.length > 1)
+
 const sgSearchText = ref('')
 const screenSearchText = ref('')
 const sgPage = ref(0)
@@ -609,6 +633,21 @@ const submitCreateContent = (keepOpen = false) => {
     return
   }
 
+  if (affectsMultipleScreens.value) {
+    confirm.require({
+      message: `This change affects ${affectedScreenNames.value.length} screens. Proceed?`,
+      header: 'Confirm Change',
+      icon: 'pi pi-exclamation-triangle',
+      acceptClass: 'p-button-warning',
+      accept: () => doSubmitCreateContent(),
+    })
+    return
+  }
+
+  doSubmitCreateContent()
+}
+
+const doSubmitCreateContent = () => {
   const fmtDt = (d: Date | null | undefined): string | null => {
     if (!d) return null
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -913,6 +952,19 @@ onUnmounted(() => {
       <p>Loading content type...</p>
     </div>
     <div v-else class="dialog-content">
+      <div v-if="affectsMultipleScreens" class="multi-screen-warning">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <p>
+            This content element is shown on multiple screens via direct assignment or a group.
+            If you edit it you will affect the following screens:
+          </p>
+          <div class="multi-screen-warning-list">
+            <Tag v-for="name in affectedScreenNames" :key="name" :value="name" severity="warn" />
+          </div>
+        </div>
+      </div>
+
       <div class="field">
         <label for="create-title">Title *</label>
         <InputText id="create-title" v-model="createForm.title" class="w-full" />
@@ -1347,6 +1399,36 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.multi-screen-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.multi-screen-warning > i {
+  font-size: 2.5rem;
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.multi-screen-warning p {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #78350f;
+}
+
+.multi-screen-warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .duration-unit-label {
   font-size: 0.875rem;
   color: var(--p-text-muted-color, #888);

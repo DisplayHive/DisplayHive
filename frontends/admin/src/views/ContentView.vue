@@ -6,11 +6,13 @@ import { useConfirm } from 'primevue/useconfirm'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
 import Select from 'primevue/select'
+import SelectButton from 'primevue/selectbutton'
+import ToggleSwitch from 'primevue/toggleswitch'
 import ContentTable from '../components/ContentTable.vue'
 import ContentEditor from '../components/ContentEditor.vue'
 import { useRightsStore } from '../stores/rights'
+import { useScreensStore } from '../stores/screens'
 
 interface ContentElement {
   id: number
@@ -71,6 +73,7 @@ const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit, emitWithAck } = useSocket()
 const rightsStore = useRightsStore()
+const screensStore = useScreensStore()
 const canCreate = computed(() => rightsStore.can('content.create'))
 
 const contentTypes = ref<ContentType[]>([])
@@ -78,31 +81,73 @@ const allContent = ref<ContentElement[]>([])
 const unassignedContent = ref<ContentElement[]>([])
 const loading = ref(true)
 
-const allScreengroups = ref<Array<{ id: number; name: string }>>([])
-const oneScreenGroups = ref<Array<{ id: number; name: string; screen_ids: number[] }>>([])
+interface ScreengroupOption { id: number; name: string; screen_ids: number[] }
+const allScreengroups = ref<ScreengroupOption[]>([])
+const oneScreenGroups = ref<ScreengroupOption[]>([])
 const oneScreenGroupIds = computed(() => oneScreenGroups.value.map(g => g.id))
 
-const selectedScreengroupFilter = ref<number>(0)
-const showActiveOnly = ref(false)
-const searchFilter = ref('')
+// --- New filter system: exactly one of these three modes is active at a time. ---
+type FilterMode = 'screen' | 'group' | 'abandoned'
+const filterModeOptions: Array<{ label: string; value: FilterMode }> = [
+  { label: 'By Screen', value: 'screen' },
+  { label: 'By Group', value: 'group' },
+  { label: 'Abandoned', value: 'abandoned' },
+]
+const filterMode = ref<FilterMode>('group')
 
-const allScreengroupOptions = computed(() => {
+// Option 1: By Screen
+const selectedScreenId = ref<number | null>(null)
+const showInheritedFromGroups = ref(false)
+const screenOptions = computed(() =>
+  screensStore.screens.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
+)
+
+// Option 2: By Group ('0' = "None" — show everything in some group, not narrowed to one)
+const selectedGroupId = ref<number>(0)
+const groupOptions = computed(() => {
   const opts = allScreengroups.value
     .map(sg => ({ id: sg.id, name: sg.name }))
     .sort((a, b) => a.name.localeCompare(b.name))
-  return [{ id: 0, name: 'All' }, ...opts]
+  return [{ id: 0, name: 'None' }, ...opts]
 })
+
+// Shared across all three modes.
+const hideDisabled = ref(false)
+const searchFilter = ref('')
 
 const filteredContent = computed<ContentElement[]>(() => {
   const filter = searchFilter.value.toLowerCase()
-  let items = allContent.value
-  if (showActiveOnly.value) {
-    items = items.filter(item => item.active)
+  let items: ContentElement[]
+
+  if (filterMode.value === 'screen') {
+    if (selectedScreenId.value == null) {
+      items = []
+    } else {
+      const screenId = selectedScreenId.value
+      const groupIds = new Set<number>()
+      const ownGroup = oneScreenGroups.value.find(g => g.screen_ids.includes(screenId))
+      if (ownGroup) groupIds.add(ownGroup.id)
+      if (showInheritedFromGroups.value) {
+        for (const g of allScreengroups.value) {
+          if (g.screen_ids.includes(screenId)) groupIds.add(g.id)
+        }
+      }
+      items = allContent.value.filter(item => (item.screengroups || []).some(sg => groupIds.has(sg.id)))
+    }
+  } else if (filterMode.value === 'group') {
+    if (selectedGroupId.value === 0) {
+      const groupIds = new Set(allScreengroups.value.map(g => g.id))
+      items = allContent.value.filter(item => (item.screengroups || []).some(sg => groupIds.has(sg.id)))
+    } else {
+      const groupId = selectedGroupId.value
+      items = allContent.value.filter(item => (item.screengroups || []).some(sg => sg.id === groupId))
+    }
+  } else {
+    items = unassignedContent.value
   }
-  if (selectedScreengroupFilter.value !== 0) {
-    items = items.filter(item =>
-      (item.screengroups || []).some(sg => sg.id === selectedScreengroupFilter.value)
-    )
+
+  if (hideDisabled.value) {
+    items = items.filter(item => item.active)
   }
   if (filter) {
     items = items.filter(item => {
@@ -128,16 +173,17 @@ const handleContentTypes = (data: { data?: ContentType[]; contenttypes?: Content
 
 const handleAllScreengroups = (data: any) => {
   const arr = data?.screengroups || data?.data || []
+  const toOption = (sg: any): ScreengroupOption => ({
+    id: Number(sg.id),
+    name: sg.attributes?.name || sg.name || '',
+    screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
+  })
   allScreengroups.value = arr
     .filter((sg: any) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-    .map((sg: any) => ({ id: sg.id, name: sg.attributes?.name || sg.name || '' }))
+    .map(toOption)
   oneScreenGroups.value = arr
     .filter((sg: any) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-    .map((sg: any) => ({
-      id: Number(sg.id),
-      name: sg.attributes?.name || sg.name || '',
-      screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
-    }))
+    .map(toOption)
 }
 
 onMounted(() => {
@@ -149,6 +195,7 @@ onMounted(() => {
   refreshData()
   emit('displayhive:admin:cts:get_contenttypes')
   emit('displayhive:admin:cts:get_screengroups')
+  screensStore.fetch()
 })
 
 onUnmounted(() => {
@@ -251,24 +298,45 @@ const copyContent = (content: ContentElement) => {
         </div>
       </template>
       <template #content>
-        <div class="filter-bar">
-          <label class="filter-label">Filter by Screen Group</label>
-          <Select
-            v-model="selectedScreengroupFilter"
-            :options="allScreengroupOptions"
-            optionLabel="name"
-            optionValue="id"
-            placeholder="All"
-            class="screengroup-filter-select"
+        <div class="filter-bar filter-bar--modes">
+          <SelectButton
+            v-model="filterMode"
+            :options="filterModeOptions"
+            optionLabel="label"
+            optionValue="value"
+            :allowEmpty="false"
           />
-          <Button
-            :label="showActiveOnly ? 'Active only' : 'All states'"
-            :icon="showActiveOnly ? 'pi pi-check-circle' : 'pi pi-circle'"
-            :severity="showActiveOnly ? 'success' : 'secondary'"
-            size="small"
-            outlined
-            @click="showActiveOnly = !showActiveOnly"
-          />
+
+          <template v-if="filterMode === 'screen'">
+            <Select
+              v-model="selectedScreenId"
+              :options="screenOptions"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="Select a screen"
+              class="screengroup-filter-select"
+            />
+            <div class="filter-toggle">
+              <label for="show-inherited-groups">Also show inherited from Groups</label>
+              <ToggleSwitch id="show-inherited-groups" v-model="showInheritedFromGroups" />
+            </div>
+          </template>
+
+          <template v-else-if="filterMode === 'group'">
+            <Select
+              v-model="selectedGroupId"
+              :options="groupOptions"
+              optionLabel="name"
+              optionValue="id"
+              placeholder="None"
+              class="screengroup-filter-select"
+            />
+          </template>
+
+          <div class="filter-toggle">
+            <label for="hide-disabled-content">Hide disabled</label>
+            <ToggleSwitch id="hide-disabled-content" v-model="hideDisabled" />
+          </div>
         </div>
 
         <ContentTable
@@ -276,7 +344,7 @@ const copyContent = (content: ContentElement) => {
           :totalItems="allContent.length"
           v-model:search="searchFilter"
           :oneScreenGroupIds="oneScreenGroupIds"
-          emptyMessage="No content"
+          :emptyMessage="filterMode === 'screen' && selectedScreenId == null ? 'Select a screen to see its content' : 'No content'"
           @edit="openEditContent"
           @copy="copyContent"
           @preview="showInPreview"
@@ -285,31 +353,6 @@ const copyContent = (content: ContentElement) => {
           @updateDuration="updateDuration"
           @setDuration="setDuration"
         />
-
-        <Card v-if="unassignedContent.length > 0" class="container-card unassigned-card">
-          <template #title>
-            <div class="container-header">
-              <div class="container-header-left">
-                <span>Unassigned Content</span>
-                <Tag :value="`${unassignedContent.length} items`" severity="warning" />
-              </div>
-            </div>
-          </template>
-          <template #content>
-            <ContentTable
-              :items="unassignedContent"
-              :oneScreenGroupIds="oneScreenGroupIds"
-              emptyMessage="No unassigned content"
-              @edit="openEditContent"
-              @copy="copyContent"
-              @preview="showInPreview"
-              @delete="deleteContent"
-              @toggleActive="toggleActive"
-              @updateDuration="updateDuration"
-              @setDuration="setDuration"
-            />
-          </template>
-        </Card>
       </template>
     </Card>
   </div>
@@ -344,44 +387,24 @@ const copyContent = (content: ContentElement) => {
   margin-bottom: 1rem;
 }
 
-.filter-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
-  white-space: nowrap;
-}
-
 .screengroup-filter-select {
   min-width: 200px;
 }
 
-.container-card {
-  height: fit-content;
+.filter-bar--modes {
+  flex-wrap: wrap;
 }
 
-.unassigned-card {
-  border: 2px solid #f59e0b;
-  background: #fffbeb;
-  margin-top: 1.5rem;
-}
-
-.container-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.container-header-left {
+.filter-toggle {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-@media (max-width: 768px) {
-  .container-header {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
+.filter-toggle label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
 }
 </style>
