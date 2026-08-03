@@ -34,6 +34,22 @@ export function getSocketEmitter():
 // containerId (string) -> its DOM element
 const containerElements: Record<string, HTMLElement> = {};
 
+// containerId (string) -> the values it was last painted with. The server
+// resends every container of every active scene on every upd_content push
+// (no diffing on its end — see upd_content.py), so this cache is what lets
+// renderScene() skip touching the DOM (and thus avoid the visible flicker
+// from innerHTML replacement — images reloading, videos restarting, etc.)
+// for containers whose content hasn't actually changed since last time.
+interface PaintedContainer {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  html: string;
+  css: string;
+}
+const lastPainted: Record<string, PaintedContainer> = {};
+
 function getOverlayRoot(): HTMLElement | null {
   return document.getElementById("scene-containers");
 }
@@ -63,34 +79,60 @@ function ensureContainerElement(containerId: string): HTMLElement | null {
 
 /** Empty a container's DOM element and its scoped CSS, without removing it from the DOM. */
 function clearContainerElement(containerId: string): void {
+  if (!(containerId in lastPainted)) return; // already blank — nothing to do
   const el = containerElements[containerId];
   if (el) el.innerHTML = "";
   const cssEl = document.getElementById(`content-type-css-${containerId}`);
   if (cssEl) cssEl.textContent = "";
+  delete lastPainted[containerId];
 }
 
-/** Populate a container's DOM element with the given fragment (scene content or a default). */
+/**
+ * Populate a container's DOM element with the given fragment (scene content
+ * or a default). Only actually touches the DOM for whatever changed since
+ * this container was last painted (position/size vs. content vs. CSS are
+ * compared independently) — returns true if its content (html) was
+ * (re)written, so the caller knows whether to re-resolve icon placeholders
+ * etc. inside it.
+ */
 function paintContainerElement(
   containerId: string,
   c: { top: number; left: number; width: number; height: number; html: string; css?: string },
-): void {
+): boolean {
   const el = ensureContainerElement(containerId);
-  if (!el) return;
+  if (!el) return false;
 
-  el.style.top = `${c.top}vh`;
-  el.style.left = `${c.left}vw`;
-  el.style.width = `${c.width}vw`;
-  el.style.height = `${c.height}vh`;
-  el.innerHTML = c.html || "";
+  const css = c.css || "";
+  const html = c.html || "";
+  const prev = lastPainted[containerId];
+  const positionChanged = !prev || prev.top !== c.top || prev.left !== c.left || prev.width !== c.width || prev.height !== c.height;
+  const contentChanged = !prev || prev.html !== html;
+  const cssChanged = !prev || prev.css !== css;
 
-  const cssId = `content-type-css-${containerId}`;
-  let cssEl = document.getElementById(cssId) as HTMLStyleElement | null;
-  if (!cssEl) {
-    cssEl = document.createElement("style");
-    cssEl.id = cssId;
-    document.head.appendChild(cssEl);
+  if (positionChanged) {
+    el.style.top = `${c.top}vh`;
+    el.style.left = `${c.left}vw`;
+    el.style.width = `${c.width}vw`;
+    el.style.height = `${c.height}vh`;
   }
-  cssEl.textContent = c.css || "";
+
+  if (contentChanged) {
+    el.innerHTML = html;
+  }
+
+  if (cssChanged) {
+    const cssId = `content-type-css-${containerId}`;
+    let cssEl = document.getElementById(cssId) as HTMLStyleElement | null;
+    if (!cssEl) {
+      cssEl = document.createElement("style");
+      cssEl.id = cssId;
+      document.head.appendChild(cssEl);
+    }
+    cssEl.textContent = css;
+  }
+
+  lastPainted[containerId] = { top: c.top, left: c.left, width: c.width, height: c.height, html, css };
+  return contentChanged;
 }
 
 /**
@@ -108,13 +150,24 @@ export function renderScene(scene: Scene): void {
     if (!activeIds.has(id)) clearContainerElement(id);
   }
 
+  const changedIds: string[] = [];
   for (const [id, c] of Object.entries(scene.containers)) {
-    paintContainerElement(id, c);
+    if (paintContainerElement(id, c)) changedIds.push(id);
   }
 
   tickNow(); // immediately fill any dh-clock elements in the new HTML
-  void resolveIcons(); // async: fill any dh-icon placeholders in the new HTML
-  log("info", "renderScene", `Rendered scene ${scene.id} across ${activeIds.size} container(s)`);
+  // Only re-resolve icon placeholders inside containers whose content
+  // actually changed — resolveIcons() re-fetches+reinjects unconditionally
+  // for whatever it's given, so scoping this avoids needlessly reloading an
+  // icon that was already showing correctly.
+  for (const id of changedIds) {
+    const el = containerElements[id];
+    if (el) void resolveIcons(el);
+  }
+  log(
+    "info", "renderScene",
+    `Rendered scene ${scene.id} across ${activeIds.size} container(s), ${changedIds.length} changed`,
+  );
 }
 
 /** Blank every known container (e.g. when the rotation has nothing to show). */

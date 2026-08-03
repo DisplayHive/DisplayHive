@@ -170,20 +170,44 @@ export function patchCurrentScene(sceneId: number, containerHtml: Record<string,
 
 /**
  * (Re)start the shared rotation from a freshly-received scenes array
- * (called on every `upd_content` push). Starts from the first currently
- * active scene; if none are active, retries after 60 s.
+ * (called on every `upd_content` push — which resends the full scene list
+ * from scratch on ANY change anywhere, not just a change to what's currently
+ * showing; see upd_content.py). If the scene currently on screen is still
+ * present and active in the new list, it is left running undisturbed —
+ * neither its timer nor its rendering are touched — and the rotation simply
+ * continues to whichever scene naturally comes next once its own duration
+ * elapses (via advanceScene()'s existing position-based walk through
+ * `scenes`, which by then is already the fresh list). Only when the current
+ * scene has actually disappeared or gone inactive (or nothing is showing
+ * yet) does this jump straight to the first active scene.
  */
 export function startSceneRotation(newScenes: Scene[]): void {
   scenes = newScenes;
-  clearAdvanceTimer();
-  stopped = false;
 
   if (scenes.length === 0) {
+    clearAdvanceTimer();
+    stopped = false;
     log("info", "startSceneRotation", "No scenes to show");
     currentSceneId = null;
     clearAllContainers();
     return;
   }
+
+  if (!stopped && currentSceneId !== null) {
+    const stillCurrent = scenes.find((s) => s.id === currentSceneId);
+    if (stillCurrent && isSceneActive(stillCurrent)) {
+      log(
+        "debug", "startSceneRotation",
+        `Current scene ${currentSceneId} still present and active in the new playlist — continuing without interrupting it`,
+      );
+      _lastActiveIds = activeIdsKey();
+      armScheduleWatcher();
+      return;
+    }
+  }
+
+  clearAdvanceTimer();
+  stopped = false;
 
   const firstActive = scenes.find(isSceneActive);
   if (!firstActive) {
