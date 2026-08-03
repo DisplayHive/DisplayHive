@@ -3,6 +3,18 @@ import type { Auth, DeviceConfig } from "./types";
 declare const __GIT_COMMIT__: string;
 
 declare global {
+  // Minimal hand-rolled Vite client types — this project doesn't pull in
+  // the full `vite/client` type package, so only what's actually used
+  // (import.meta.env.BASE_URL, read in icon-libraries.ts to resolve /icons/
+  // paths correctly under this bundle's configured `base`) is declared here.
+  interface ImportMetaEnv {
+    readonly BASE_URL: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+
   interface Window {
     auth?: Auth;
     socket?: SocketIOClient.Socket | any;

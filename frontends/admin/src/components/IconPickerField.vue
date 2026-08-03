@@ -12,7 +12,7 @@
  * selected "<library>/<name>" value and its height.
  */
 import { ref, computed, onMounted, watch } from 'vue'
-import { ICON_LIBRARIES, loadIcon, type IconLibrary, type IconPickerValue } from '../utils/iconLibraries'
+import { ICON_LIBRARIES, getIconManifest, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
 
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -45,8 +45,11 @@ const toggleAll = () => {
 
 const searchText = ref('')
 
+// {library id: sorted icon names[]} — fetched once from /icons/manifest.json.
+const manifest = ref<Record<string, string[]>>({})
+
 interface IconMatch {
-  library: IconLibrary
+  library: IconLibraryMeta
   name: string
 }
 
@@ -55,7 +58,7 @@ const filteredIcons = computed<IconMatch[]>(() => {
   const results: IconMatch[] = []
   for (const library of ICON_LIBRARIES) {
     if (!activeLibraries.value.has(library.id)) continue
-    for (const name of library.names) {
+    for (const name of manifest.value[library.id] || []) {
       if (query && !name.includes(query)) continue
       results.push({ library, name })
       if (results.length >= 50) return results
@@ -92,6 +95,7 @@ const selectedName = computed(() => props.modelValue.icon.slice(selectedLibraryI
 const selectedLibrary = computed(() => ICON_LIBRARIES.find((l) => l.id === selectedLibraryId.value))
 
 onMounted(() => {
+  getIconManifest().then((m) => { manifest.value = m })
   if (props.modelValue.icon) void ensurePreview(selectedLibraryId.value, selectedName.value)
 })
 

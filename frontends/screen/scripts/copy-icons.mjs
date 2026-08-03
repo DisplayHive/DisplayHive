@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 /**
- * Copies each icon library's raw SVGs from node_modules into
- * ts/generated-icons/, a project-owned folder ts/screen/icon-libraries.ts
- * can glob with Vite's import.meta.glob.
+ * Copies each icon library's raw SVGs from node_modules into public/icons/
+ * so ts/screen/icon-libraries.ts can resolve icons via plain runtime
+ * fetch() calls instead of bundling them.
  *
- * This has to be a copy step, not a direct glob into node_modules: Vite's
- * glob scanner hard-excludes node_modules from every import.meta.glob call
- * regardless of the pattern given, so an earlier version that globbed
- * node_modules paths directly silently resolved to zero icons for every
- * library. Runs automatically via the "postinstall" script in package.json.
+ * This has to write into public/ specifically (Vite copies that directory
+ * byte-for-byte with zero per-file processing), not a ts/ folder Vite would
+ * import.meta.glob over: an earlier version globbed ~18,000 SVGs across the
+ * 9 libraries directly, which made Rollup statically analyze every one of
+ * them at build time and reliably OOM-crashed the Vite build in memory-
+ * constrained deploy environments. Runs automatically via the
+ * "postinstall" script in package.json.
  *
- * Keep the library list here in sync with the glob patterns in
- * ts/screen/icon-libraries.ts, and with frontends/admin's copy of this
- * script (the two frontends share no code today, so this is duplicated).
+ * Keep the library list here in sync with ts/screen/icon-libraries.ts and
+ * this script's counterpart in frontends/admin/scripts/copy-icons.mjs (the
+ * two frontends share no code today, so this is duplicated).
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, copyFileSync } from 'node:fs'
 import { join, extname, basename } from 'node:path'
@@ -21,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 const scriptDir = fileURLToPath(new URL('.', import.meta.url))
 const packageRoot = join(scriptDir, '..')
 const nodeModules = join(packageRoot, 'node_modules')
-const destRoot = join(packageRoot, 'ts', 'generated-icons')
+const destRoot = join(packageRoot, 'public', 'icons')
 
 function walkSvgFiles(dir) {
   const out = []
@@ -53,15 +55,13 @@ function copyLibrary(id, srcCandidates, extractName) {
   const destDir = join(destRoot, id)
   mkdirSync(destDir, { recursive: true })
   const seen = new Set()
-  let count = 0
   for (const file of walkSvgFiles(srcDir)) {
     const name = extractName(basename(file, '.svg'))
     if (!name || seen.has(name)) continue
     seen.add(name)
     copyFileSync(file, join(destDir, `${name}.svg`))
-    count++
   }
-  console.log(`[copy-icons] ${id}: copied ${count} icon(s) from ${srcDir}`)
+  console.log(`[copy-icons] ${id}: copied ${seen.size} icon(s) from ${srcDir}`)
 }
 
 rmSync(destRoot, { recursive: true, force: true })

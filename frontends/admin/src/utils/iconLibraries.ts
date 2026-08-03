@@ -1,14 +1,19 @@
 /**
  * Registry of the icon libraries selectable by the 'icon' field handler.
  *
- * Each library's icon set is loaded via Vite's `import.meta.glob`, which
- * resolves to a static map of file path -> lazy import() function at build
- * time. Enumerating names (the map's keys) is free; fetching an icon's raw
- * SVG text only happens when its loader is actually invoked (`load()`),
- * so browsing/searching never pulls in more than the handful of SVGs
- * actually shown or selected. This mirrors the same pattern used in
- * frontends/screen/ts/screen/icon-libraries.ts for the final screen render
- * — kept as two separate copies since the two frontends share no code today.
+ * Icon SVGs are served as plain static files under /icons/ (populated by
+ * scripts/copy-icons.mjs into public/icons/, which Vite copies byte-for-
+ * byte with no per-file processing) and resolved at runtime via fetch() —
+ * NOT via `import.meta.glob`. An earlier version globbed all ~18,000 SVGs
+ * across these 9 libraries directly, which made Rollup statically analyze
+ * every single one at build time and reliably OOM-crashed the Vite build in
+ * memory-constrained deploy environments. Enumerating names for search
+ * comes from public/icons/manifest.json (also written by copy-icons.mjs),
+ * fetched once and cached. Mirrors frontends/screen/ts/screen/
+ * icon-libraries.ts's resolution approach for the final screen render (that
+ * copy doesn't need a manifest, since it only ever resolves one already-
+ * known library+name, never enumerates) — kept as two separate copies since
+ * the two frontends share no code today.
  */
 
 export interface IconPickerValue {
@@ -18,49 +23,12 @@ export interface IconPickerValue {
   size: number
 }
 
-type GlobRecord = Record<string, () => Promise<string>>
-
-export interface IconLibrary {
+export interface IconLibraryMeta {
   id: string
   label: string
   license: string
   homepage: string
   licenseText: string
-  names: string[]
-  load: (name: string) => Promise<string>
-}
-
-const basename = (path: string) => path.split('/').pop() || path
-const stripExt = (s: string) => s.replace(/\.svg$/i, '')
-
-function buildLibrary(
-  id: string,
-  label: string,
-  license: string,
-  homepage: string,
-  licenseText: string,
-  files: GlobRecord,
-  extractName: (path: string) => string | null,
-): IconLibrary {
-  const byName = new Map<string, () => Promise<string>>()
-  for (const [path, loader] of Object.entries(files)) {
-    const name = extractName(path)
-    if (name && !byName.has(name)) byName.set(name, loader)
-  }
-  const names = Array.from(byName.keys()).sort()
-  return {
-    id,
-    label,
-    license,
-    homepage,
-    licenseText,
-    names,
-    load: async (name: string) => {
-      const loader = byName.get(name)
-      if (!loader) throw new Error(`Unknown icon: ${id}/${name}`)
-      return loader()
-    },
-  }
 }
 
 // --- Standard license texts (boilerplate, filled in with each library's own copyright line) ---
@@ -125,48 +93,53 @@ The full license text (including all terms, definitions, and the appendix for
 applying the License to your own work) is available at:
 http://www.apache.org/licenses/LICENSE-2.0`
 
-// --- Per-library glob calls. Vite requires the glob pattern to be a static
-// string literal at each call site, so these cannot be built in a loop. ---
-
-// These glob a project-owned folder (src/assets/icons/), NOT node_modules
-// directly — Vite's glob scanner hard-excludes node_modules from every
-// import.meta.glob call regardless of the pattern given. scripts/copy-
-// icons.mjs (run via the "postinstall" script) populates this folder from
-// each library's npm package, already normalized to lowercase-kebab-case
-// filenames, so no further name extraction is needed here.
-const lucideFiles = import.meta.glob('/src/assets/icons/lucide/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const heroiconsFiles = import.meta.glob('/src/assets/icons/heroicons/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const phosphorFiles = import.meta.glob('/src/assets/icons/phosphor/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const tablerFiles = import.meta.glob('/src/assets/icons/tabler/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const featherFiles = import.meta.glob('/src/assets/icons/feather/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const materialSymbolsFiles = import.meta.glob('/src/assets/icons/material-symbols/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const bootstrapFiles = import.meta.glob('/src/assets/icons/bootstrap-icons/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const iconoirFiles = import.meta.glob('/src/assets/icons/iconoir/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-const remixFiles = import.meta.glob('/src/assets/icons/remixicon/*.svg', { query: '?raw', import: 'default' }) as GlobRecord
-
-const byBasename = (p: string) => stripExt(basename(p))
-
-export const ICON_LIBRARIES: IconLibrary[] = [
-  buildLibrary('lucide', 'Lucide', 'ISC', 'https://lucide.dev', ISC_TEMPLATE('Copyright (c) Lucide Contributors 2022'), lucideFiles, byBasename),
-  buildLibrary('heroicons', 'Heroicons', 'MIT', 'https://heroicons.com', MIT_TEMPLATE('Copyright (c) Tailwind Labs, Inc.'), heroiconsFiles, byBasename),
-  buildLibrary('phosphor', 'Phosphor Icons', 'MIT', 'https://phosphoricons.com', MIT_TEMPLATE('Copyright (c) 2023 Phosphor Icons'), phosphorFiles, byBasename),
-  buildLibrary('tabler', 'Tabler Icons', 'MIT', 'https://tabler.io/icons', MIT_TEMPLATE('Copyright (c) 2020-2024 Paweł Kuna'), tablerFiles, byBasename),
-  buildLibrary('feather', 'Feather', 'MIT', 'https://feathericons.com', MIT_TEMPLATE('Copyright (c) 2013-2023 Cole Bemis'), featherFiles, byBasename),
-  buildLibrary('material-symbols', 'Material Symbols', 'Apache-2.0', 'https://fonts.google.com/icons', APACHE_2_TEMPLATE('Copyright (c) Google Inc.'), materialSymbolsFiles, byBasename),
-  buildLibrary('bootstrap-icons', 'Bootstrap Icons', 'MIT', 'https://icons.getbootstrap.com', MIT_TEMPLATE('Copyright (c) 2019-2024 The Bootstrap Authors'), bootstrapFiles, byBasename),
-  buildLibrary('iconoir', 'Iconoir', 'MIT', 'https://iconoir.com', MIT_TEMPLATE('Copyright (c) 2021 Luca Burgio'), iconoirFiles, byBasename),
-  buildLibrary('remixicon', 'Remix Icon', 'Apache-2.0', 'https://remixicon.com', APACHE_2_TEMPLATE('Copyright (c) 2024 Remix Design'), remixFiles, byBasename),
+export const ICON_LIBRARIES: IconLibraryMeta[] = [
+  { id: 'lucide', label: 'Lucide', license: 'ISC', homepage: 'https://lucide.dev', licenseText: ISC_TEMPLATE('Copyright (c) Lucide Contributors 2022') },
+  { id: 'heroicons', label: 'Heroicons', license: 'MIT', homepage: 'https://heroicons.com', licenseText: MIT_TEMPLATE('Copyright (c) Tailwind Labs, Inc.') },
+  { id: 'phosphor', label: 'Phosphor Icons', license: 'MIT', homepage: 'https://phosphoricons.com', licenseText: MIT_TEMPLATE('Copyright (c) 2023 Phosphor Icons') },
+  { id: 'tabler', label: 'Tabler Icons', license: 'MIT', homepage: 'https://tabler.io/icons', licenseText: MIT_TEMPLATE('Copyright (c) 2020-2024 Paweł Kuna') },
+  { id: 'feather', label: 'Feather', license: 'MIT', homepage: 'https://feathericons.com', licenseText: MIT_TEMPLATE('Copyright (c) 2013-2023 Cole Bemis') },
+  { id: 'material-symbols', label: 'Material Symbols', license: 'Apache-2.0', homepage: 'https://fonts.google.com/icons', licenseText: APACHE_2_TEMPLATE('Copyright (c) Google Inc.') },
+  { id: 'bootstrap-icons', label: 'Bootstrap Icons', license: 'MIT', homepage: 'https://icons.getbootstrap.com', licenseText: MIT_TEMPLATE('Copyright (c) 2019-2024 The Bootstrap Authors') },
+  { id: 'iconoir', label: 'Iconoir', license: 'MIT', homepage: 'https://iconoir.com', licenseText: MIT_TEMPLATE('Copyright (c) 2021 Luca Burgio') },
+  { id: 'remixicon', label: 'Remix Icon', license: 'Apache-2.0', homepage: 'https://remixicon.com', licenseText: APACHE_2_TEMPLATE('Copyright (c) 2024 Remix Design') },
 ]
 
-export function getIconLibrary(id: string): IconLibrary | undefined {
+export function getIconLibraryMeta(id: string): IconLibraryMeta | undefined {
   return ICON_LIBRARIES.find((l) => l.id === id)
 }
 
+type Manifest = Record<string, string[]>
+
+let manifestPromise: Promise<Manifest> | null = null
+
+// Vite's `base` config (this app is served at /admin/, not site root — see
+// vite.config.ts's `base: '/admin/'`) is exposed as import.meta.env.BASE_URL
+// (always trailing-slash-terminated) — icon files land under it too, since
+// they're copied into the same build output root as everything else in
+// public/, so a hardcoded leading "/icons/..." would 404 in production.
+const iconsBaseUrl = `${import.meta.env.BASE_URL}icons/`
+
+/** Fetches (and caches) icons/manifest.json — {library id: sorted icon names[]}. */
+function loadManifest(): Promise<Manifest> {
+  if (!manifestPromise) {
+    manifestPromise = fetch(`${iconsBaseUrl}manifest.json`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .catch(() => ({}))
+  }
+  return manifestPromise
+}
+
+/** All libraries' icon names, keyed by library id. Fetched once, cached thereafter. */
+export async function getIconManifest(): Promise<Manifest> {
+  return loadManifest()
+}
+
 export async function loadIcon(libraryId: string, name: string): Promise<string | null> {
-  const lib = getIconLibrary(libraryId)
-  if (!lib) return null
   try {
-    return await lib.load(name)
+    const res = await fetch(`${iconsBaseUrl}${libraryId}/${name}.svg`)
+    if (!res.ok) return null
+    return await res.text()
   } catch {
     return null
   }
