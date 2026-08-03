@@ -1,6 +1,6 @@
 /**
  * Shared value shape for the `pretalx_table` field handler — used by
- * PretalxTableFieldEditor.vue and its two callers (ContentEditor.vue,
+ * PretalxTableFieldEditor.vue and its two callers (ContentEditView.vue,
  * LayoutCanvasEditor.vue). Kept in a plain module (not the component file)
  * because `<script setup>` SFCs can't have runtime (non-type) exports.
  */

@@ -303,6 +303,54 @@ def render_container_default(container, db=None) -> str:
     return render_default_value(container.default_field_handler, container.default_content, db=db)
 
 
+def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None) -> dict:
+    """Combine already-rendered per-container HTML (keyed by
+    contentcontainer_id, e.g. from render_content_fields/parse_content_html)
+    with each container's own Layout position, falling back to the
+    container's own default_content when nothing rendered targets it.
+
+    Looking a container up by id in *rendered_by_container* (rather than
+    iterating fields/TagConfigs first) means a stale TagConfig — one whose
+    contentcontainer_id no longer belongs to *layout_containers* because the
+    Layout was edited independently of the Contenttype — is automatically
+    excluded: its rendered value just sits under a key nothing here ever
+    looks up. Shared by build_scene_containers (already-saved content) and
+    the preview_content_element handler (in-progress/unsaved content) so
+    there's one implementation of "resolve a scene's positioned containers",
+    matching what real screen delivery does in
+    application/socketio_handlers/upd_content.py's _build_payload.
+
+    Returns {contentcontainer_id_str: {top, left, width, height, html}}.
+    """
+    containers = {}
+    for c in (layout_containers or []):
+        html = rendered_by_container.get(str(c.id)) or render_container_default(c, db=db)
+        if not html:
+            continue
+        containers[str(c.id)] = {
+            'top': c.top, 'left': c.left, 'width': c.width, 'height': c.height, 'html': html,
+        }
+    return containers
+
+
+def build_scene_containers(contenttype, content_html: str, db=None) -> dict:
+    """Combine a saved ContentElement's already-rendered per-field HTML
+    (its `html` column) with its Contenttype's Layout container positions —
+    see combine_layout_containers. Reused by admin previews (Content list,
+    Content edit page) so they show exactly what's actually live on screens
+    rather than a separately-approximated render.
+
+    Returns {contentcontainer_id_str: {top, left, width, height, html}}.
+    """
+    from application.utils.design import parse_content_html
+
+    if not contenttype or not contenttype.layout:
+        return {}
+
+    rendered_by_container = parse_content_html(content_html, contenttype.tagconfigs or [])
+    return combine_layout_containers(contenttype.layout.contentcontainers, rendered_by_container, db=db)
+
+
 def rerender_content_element_for_contenttype(db, contenttype_id: int) -> list[int]:
     """Re-render all ContentElement rows that use a given Contenttype.
 

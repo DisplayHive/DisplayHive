@@ -13,15 +13,25 @@ from flask import request
 from sqlalchemy.orm import joinedload, selectinload
 
 from application.admin.content.serializers import (
-    resolve_preview_css,
     build_content_dict,
     fmt_dt,
 )
-from application.models import ContentElement
+from application.models import ContentElement, Contenttype, Layout
 from application.models.content import Media
 from application.utils.design import media_file_urls
 
 logger = logging.getLogger(__name__)
+
+# Eager-load everything build_content_dict()/build_scene_containers() need
+# per row (Contenttype -> its TagConfigs, and Contenttype -> Layout -> its
+# ContentContainers) so rendering the preview payload for a list of content
+# items doesn't N+1 — reused across every query below that feeds
+# _emit_content_list().
+_CONTENT_ELEMENT_LIST_OPTIONS = (
+    joinedload(ContentElement.contenttype).selectinload(Contenttype.tagconfigs),
+    joinedload(ContentElement.contenttype).joinedload(Contenttype.layout).selectinload(Layout.contentcontainers),
+    selectinload(ContentElement.screengroups),
+)
 
 
 def register_content_query_handlers(socketio, app, db):
@@ -63,9 +73,12 @@ def register_content_query_handlers(socketio, app, db):
         socketio.emit('displayhive:admin:stc:image_tags', {'tags': sorted(tag_set)}, room=request.sid)
 
     def _emit_content_list(event, extra, content_items):
-        """Serialize content items with preview CSS and emit them under *event*."""
-        preview_css = resolve_preview_css(db)
-        content_list = [build_content_dict(c, preview_css) for c in content_items]
+        """Serialize content items (each with a Layout-positioned preview)
+        and emit them under *event*. The Design skin is the same for every
+        row, so it's built once here rather than per item."""
+        from application.admin.designs.helper import build_design_payload
+        design_payload = build_design_payload(db)
+        content_list = [build_content_dict(c, design_payload, db=db) for c in content_items]
         socketio.emit(event, {**extra, 'content': content_list}, room=request.sid)
         return content_list
 
@@ -79,7 +92,7 @@ def register_content_query_handlers(socketio, app, db):
         """
         content_items = db.session.execute(
             db.select(ContentElement)
-            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
+            .options(*_CONTENT_ELEMENT_LIST_OPTIONS)
             .order_by(ContentElement.title)
         ).scalars().all()
 
@@ -104,7 +117,7 @@ def register_content_query_handlers(socketio, app, db):
             db.select(ContentElement)
             .join(ContentElement.screengroups)
             .where(Screengroup.id == screengroup_id)
-            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
+            .options(*_CONTENT_ELEMENT_LIST_OPTIONS)
             .order_by(ContentElement.title)
         ).unique().scalars().all()
 
@@ -135,6 +148,7 @@ def register_content_query_handlers(socketio, app, db):
             'start_time': fmt_dt(getattr(content_element, 'start_time', None)),
             'end_time': fmt_dt(getattr(content_element, 'end_time', None)),
             'contenttype_id': content_element.contenttype_id,
+            'screengroups': [{'id': sg.id, 'name': sg.name} for sg in content_element.screengroups],
         }
 
         # Parse serialized_input JSON (authoritative source for custom fields)
@@ -164,13 +178,46 @@ def register_content_query_handlers(socketio, app, db):
         socketio.emit('displayhive:admin:stc:content_element_detail', {'content': content_data}, room=sid)
         logger.debug('Sent detail for content_element %s to %s', content_element_id, sid)
 
+    @socketio.on('displayhive:admin:cts:preview_content_element')
+    @require_right('content.page')
+    def handle_preview_content_element(data=None):
+        """Render *data*'s in-progress field values into their Contenttype's
+        Layout, without persisting anything — powers the Content edit page's
+        live preview pane. *data* = {contenttype_id, <field_name>: value, ...},
+        the same shape create_content_element accepts.
+        """
+        from application.admin.content.helper import render_content_fields, combine_layout_containers
+        from application.admin.designs.helper import build_design_payload
+
+        sid = request.sid
+        data = data or {}
+        contenttype_id = data.get('contenttype_id')
+        if not contenttype_id:
+            return
+
+        contenttype = db.session.get(Contenttype, int(contenttype_id))
+        if not contenttype or not contenttype.layout:
+            return
+
+        serialized = json.dumps(
+            {k: v for k, v in data.items() if k != 'contenttype_id'}, ensure_ascii=False,
+        )
+        rendered_by_container = render_content_fields(contenttype.tagconfigs, serialized, db=db)
+        containers = combine_layout_containers(contenttype.layout.contentcontainers, rendered_by_container, db=db)
+
+        socketio.emit(
+            'displayhive:admin:stc:content_element_preview',
+            {'design': build_design_payload(db), 'containers': containers},
+            room=sid,
+        )
+
     @socketio.on('displayhive:admin:cts:get_unassigned_content')
     @require_right('content.page')
     def handle_get_unassigned_content(data=None):
         """Get all content that is unassigned (has no screengroups)."""
         all_content = db.session.execute(
             db.select(ContentElement)
-            .options(joinedload(ContentElement.contenttype), selectinload(ContentElement.screengroups))
+            .options(*_CONTENT_ELEMENT_LIST_OPTIONS)
             .order_by(ContentElement.title)
         ).scalars().all()
 

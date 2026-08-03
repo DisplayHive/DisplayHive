@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Config editor for the `icon` field handler — shared by ContentEditor.vue
+ * Config editor for the `icon` field handler — shared by ContentEditView.vue
  * (a Contenttype field's live value) and LayoutCanvasEditor.vue (a
  * container's default_content), following the same modelValue pattern as
  * PretalxTableFieldEditor.vue so this multi-part picker UI (library

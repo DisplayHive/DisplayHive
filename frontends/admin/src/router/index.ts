@@ -19,6 +19,21 @@ const router = createRouter({
       component: () => import('../views/ContentView.vue'),
     },
     {
+      path: '/content/new',
+      name: 'content-new',
+      component: () => import('../views/ContentEditView.vue'),
+    },
+    {
+      path: '/content/:id/edit',
+      name: 'content-edit',
+      component: () => import('../views/ContentEditView.vue'),
+    },
+    {
+      path: '/content/:id/copy',
+      name: 'content-copy',
+      component: () => import('../views/ContentEditView.vue'),
+    },
+    {
       path: '/contenttypes',
       name: 'contenttypes',
       component: () => import('../views/ContentTypesView.vue'),

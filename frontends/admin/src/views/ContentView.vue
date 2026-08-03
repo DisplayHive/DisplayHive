@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -10,7 +11,6 @@ import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import ContentTable from '../components/ContentTable.vue'
-import ContentEditor from '../components/ContentEditor.vue'
 import { useRightsStore } from '../stores/rights'
 import { useScreensStore } from '../stores/screens'
 
@@ -32,15 +32,9 @@ interface ContentField {
   order: number
 }
 
-interface ContentType {
-  id: number
-  name: string
-  description?: string
-}
-
 const getContentFields = (content: any): ContentField[] => {
   if (!content) return []
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'contenttypeName', 'screengroups', 'contenttype_id', 'html', 'preview_css', '_field_metadata'])
+  const ignore = new Set(['id', 'title', 'active', 'duration', 'contenttypeName', 'screengroups', 'contenttype_id', 'design', 'containers', '_field_metadata'])
   const fields: ContentField[] = []
   const metadata = content._field_metadata || {}
 
@@ -69,6 +63,7 @@ const getContentFields = (content: any): ContentField[] => {
   return fields.sort((a, b) => a.order - b.order)
 }
 
+const router = useRouter()
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit, emitWithAck } = useSocket()
@@ -76,7 +71,6 @@ const rightsStore = useRightsStore()
 const screensStore = useScreensStore()
 const canCreate = computed(() => rightsStore.can('content.create'))
 
-const contentTypes = ref<ContentType[]>([])
 const allContent = ref<ContentElement[]>([])
 const unassignedContent = ref<ContentElement[]>([])
 const loading = ref(true)
@@ -167,10 +161,6 @@ const handleUnassignedContent = (data: { content: ContentElement[] }) => {
   unassignedContent.value = data.content || []
 }
 
-const handleContentTypes = (data: { data?: ContentType[]; contenttypes?: ContentType[] }) => {
-  contentTypes.value = data.data || data.contenttypes || []
-}
-
 const handleAllScreengroups = (data: any) => {
   const arr = data?.screengroups || data?.data || []
   const toOption = (sg: any): ScreengroupOption => ({
@@ -189,11 +179,9 @@ const handleAllScreengroups = (data: any) => {
 onMounted(() => {
   on('displayhive:admin:stc:all_content_detailed', handleAllContentDetailed)
   on('displayhive:admin:stc:unassigned_content', handleUnassignedContent)
-  on('displayhive:admin:stc:upd_contenttypes', handleContentTypes)
   on('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
 
   refreshData()
-  emit('displayhive:admin:cts:get_contenttypes')
   emit('displayhive:admin:cts:get_screengroups')
   screensStore.fetch()
 })
@@ -201,7 +189,6 @@ onMounted(() => {
 onUnmounted(() => {
   off('displayhive:admin:stc:all_content_detailed', handleAllContentDetailed)
   off('displayhive:admin:stc:unassigned_content', handleUnassignedContent)
-  off('displayhive:admin:stc:upd_contenttypes', handleContentTypes)
   off('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
 })
 
@@ -260,18 +247,16 @@ const deleteContent = (content: ContentElement) => {
   })
 }
 
-const editorRef = ref<InstanceType<typeof ContentEditor>>()
-
 const openCreateWorkflow = () => {
-  editorRef.value?.openCreate()
+  router.push({ name: 'content-new' })
 }
 
 const openEditContent = (content: ContentElement) => {
-  editorRef.value?.openEdit(content)
+  router.push({ name: 'content-edit', params: { id: content.id } })
 }
 
 const copyContent = (content: ContentElement) => {
-  editorRef.value?.openCopy(content)
+  router.push({ name: 'content-copy', params: { id: content.id } })
 }
 </script>
 
@@ -356,14 +341,6 @@ const copyContent = (content: ContentElement) => {
       </template>
     </Card>
   </div>
-
-  <ContentEditor
-    ref="editorRef"
-    :contentTypes="contentTypes"
-    :allScreengroups="allScreengroups"
-    :oneScreenGroups="oneScreenGroups"
-    @saved="refreshData"
-  />
 </template>
 
 <style scoped>

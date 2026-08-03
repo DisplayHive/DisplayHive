@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Full config editor for the `pretalx_table` field handler — shared by
- * ContentEditor.vue (a Contenttype field's live value) and
+ * ContentEditView.vue (a Contenttype field's live value) and
  * LayoutCanvasEditor.vue (a container's default_content) so this fairly
  * involved multi-part config isn't duplicated across both editors.
  *

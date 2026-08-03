@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -8,6 +8,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useRightsStore } from '../stores/rights'
+import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 
 const rightsStore = useRightsStore()
 const canEdit = computed(() => rightsStore.can('content.edit'))
@@ -77,86 +78,19 @@ const hasBackendContent = computed(() =>
 // Row expansion state — keyed by row data object
 const expandedRows = ref<ContentElement[]>([])
 
-// Disconnect observers for wrappers that left the DOM when a row collapsed
-watch(expandedRows, () => {
-  for (const [el, ro] of previewObservers) {
-    if (!el.isConnected) {
-      ro.disconnect()
-      previewObservers.delete(el)
-    }
-  }
-})
-
-onUnmounted(() => {
-  for (const ro of previewObservers.values()) ro.disconnect()
-  previewObservers.clear()
-})
-
-// Scale the 1920px iframe down to fill its wrapper.
-// Uses ResizeObserver so the scale is computed after the wrapper is laid out.
-const previewObservers = new Map<HTMLElement, ResizeObserver>()
-const scalePreviewFrame = (wrapper: HTMLElement | null) => {
-  if (!wrapper) return
-  const apply = () => {
-    const scale = wrapper.clientWidth / 1920
-    if (scale > 0) wrapper.style.setProperty('--preview-scale', String(scale))
-  }
-  if (!previewObservers.has(wrapper)) {
-    const ro = new ResizeObserver(apply)
-    ro.observe(wrapper)
-    previewObservers.set(wrapper, ro)
-  }
-  apply()
-}
-
-/** ContentElement.html is a JSON map of {contentcontainer_id: rendered_html} — one
- * fragment per field (TagConfig) on the Contenttype. Concatenate them for a rough
- * combined preview (a full multi-container render isn't meaningful outside its Layout). */
-const combinedHtml = (raw: string): string => {
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object') {
-      return Object.values(parsed).join('\n')
-    }
-  } catch {
-    // Not JSON — fall back to treating it as a raw HTML string (e.g. legacy data).
-  }
-  return raw
-}
-
-const buildSrcdoc = (data: ContentElement): string => {
-  const css = data.preview_css || ''
-  const html = combinedHtml(data.html || '')
-  // Strip sourceMappingURL comments from injected CSS — srcdoc iframes use
-  // "about:srcdoc" as base URL so relative map paths can never resolve,
-  // which causes a noisy DevTools warning.
-  const safeCss = css.replace(/\/\*#\s*sourceMappingURL=[^*]*\*\//g, '')
-  return `<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=1920">
-<style>
-/* Base reset — template CSS overrides these */
-html, body {
-  margin: 0; padding: 0;
-  width: 1920px; height: 1080px;
-  overflow: hidden;
-}
-${safeCss}
-</style>
-</head>
-<body>
-${html}
-</body>
-</html>`
-}
+// data.design/data.containers are the same Layout-positioned + Design-
+// skinned shape the Content edit page's live preview uses (see
+// application/admin/content/helper.py's build_scene_containers) — reuse the
+// same srcdoc builder rather than the old unpositioned fragment-concatenation
+// approach, which never reflected what a scene actually looks like on screen.
+const buildSrcdoc = (data: ContentElement): string =>
+  buildDesignPreviewSrcdoc(data.design as DesignPreviewPayload, data.containers as Record<string, PreviewContainer>)
 
 const getContentFields = (content: any): ContentField[] => {
   if (!content) return []
   const ignore = new Set([
     'id', 'title', 'active', 'duration', 'start_time', 'end_time',
-    'contenttypeName', 'screengroups', 'contenttype_id', 'html', 'preview_css', '_field_metadata',
+    'contenttypeName', 'screengroups', 'contenttype_id', 'design', 'containers', '_field_metadata',
   ])
   const fields: ContentField[] = []
   const metadata = content._field_metadata || {}
@@ -333,17 +267,10 @@ const getContentFields = (content: any): ContentField[] => {
               <span class="field-value">{{ field.value }}</span>
             </div>
           </div>
-          <div v-if="data.html" class="expansion-preview">
+          <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
             <span class="expansion-label">Preview</span>
-            <div class="preview-frame-wrapper" :ref="(el) => scalePreviewFrame(el as HTMLElement | null)">
-              <iframe
-                :srcdoc="buildSrcdoc(data)"
-                sandbox="allow-same-origin"
-                class="preview-frame"
-                width="1920"
-                height="1080"
-                scrolling="no"
-              />
+            <div class="preview-frame-wrapper">
+              <iframe :srcdoc="buildSrcdoc(data)" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
             </div>
           </div>
         </div>
@@ -509,19 +436,17 @@ const getContentFields = (content: any): ContentField[] => {
   overflow: hidden;
   background: #000;
   width: 100%;
+  max-width: 640px;
   aspect-ratio: 16 / 9;
   position: relative;
 }
 
 .preview-frame {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 1920px;
-  height: 1080px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border: none;
   display: block;
-  transform-origin: top left;
-  transform: scale(var(--preview-scale, 0.25));
 }
 </style>

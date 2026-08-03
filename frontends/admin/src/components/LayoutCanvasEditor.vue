@@ -42,7 +42,7 @@ const bbScriptSourceSafe = bbScriptSource.replace(/<\/script/gi, '<\\/script')
 
 interface MediaItem { id: number; url: string }
 
-// Same arrow set as ContentEditor.vue's field picker.
+// Same arrow set as ContentEditView.vue's field picker.
 const ARROW_OPTIONS = [
   { char: '←', label: 'Left' },
   { char: '→', label: 'Right' },
@@ -1567,7 +1567,7 @@ const toggleSelectedLayoutMembership = () => {
   display: table-cell;
 }
 
-/* Image field — mirrors ContentEditor.vue's image field widget */
+/* Image field — mirrors ContentEditView.vue's image field widget */
 .image-field-wrapper {
   width: 100%;
 }
@@ -1611,7 +1611,7 @@ const toggleSelectedLayoutMembership = () => {
   gap: 0.4rem;
 }
 
-/* Arrow picker — mirrors ContentEditor.vue's arrow field widget */
+/* Arrow picker — mirrors ContentEditView.vue's arrow field widget */
 .arrow-picker-wrapper {
   width: 100%;
 }

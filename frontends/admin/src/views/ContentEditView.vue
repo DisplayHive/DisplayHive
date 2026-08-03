@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -17,10 +18,11 @@ import Paginator from 'primevue/paginator'
 import DatePicker from 'primevue/datepicker'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
-import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
+import PretalxTableFieldEditor from '../components/PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
-import IconPickerField from './IconPickerField.vue'
+import IconPickerField from '../components/IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
+import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 
 interface ContentElement {
   id: number
@@ -58,20 +60,44 @@ interface MediaItem {
   tags: string[]
 }
 
-const props = defineProps<{
-  contentTypes: ContentType[]
-  allScreengroups: Array<{ id: number; name: string; screen_ids: number[] }>
-  oneScreenGroups: Array<{ id: number; name: string; screen_ids: number[] }>
-}>()
+interface ScreengroupOption { id: number; name: string; screen_ids: number[] }
 
-const emit = defineEmits<{
-  saved: []
-}>()
+const router = useRouter()
+const route = useRoute()
+const goBack = () => router.push({ name: 'content' })
 
 const toast = useToast()
 const confirm = useConfirm()
 const screensStore = useScreensStore()
 const { on, off, emit: socketEmit } = useSocket()
+
+// Fetched locally now (this used to receive contentTypes/allScreengroups/
+// oneScreenGroups as props from ContentView.vue, back when this was a modal
+// it opened) — a routed page only gets an id from the URL, so it fetches
+// everything it needs itself, the same way ContentView.vue does for its own
+// filter system.
+const contentTypes = ref<ContentType[]>([])
+const allScreengroups = ref<ScreengroupOption[]>([])
+const oneScreenGroups = ref<ScreengroupOption[]>([])
+
+const handleContentTypesList = (data: { data?: ContentType[]; contenttypes?: ContentType[] }) => {
+  contentTypes.value = data.data || data.contenttypes || []
+}
+
+const handleAllScreengroups = (data: any) => {
+  const arr = data?.screengroups || data?.data || []
+  const toOption = (sg: any): ScreengroupOption => ({
+    id: Number(sg.id),
+    name: sg.attributes?.name || sg.name || '',
+    screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
+  })
+  allScreengroups.value = arr
+    .filter((sg: any) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .map(toOption)
+  oneScreenGroups.value = arr
+    .filter((sg: any) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .map(toOption)
+}
 
 const showSelectContentTypeDialog = ref(false)
 const showCreateContentDialog = ref(false)
@@ -105,9 +131,9 @@ const originalScreengroupIds = ref<number[]>([])
 const affectedScreenNames = computed<string[]>(() => {
   const screenIds = new Set<number>()
   for (const sgId of originalScreengroupIds.value) {
-    const oneScreen = props.oneScreenGroups.find(g => g.id === sgId)
+    const oneScreen = oneScreenGroups.value.find(g => g.id === sgId)
     if (oneScreen) oneScreen.screen_ids.forEach(id => screenIds.add(id))
-    const group = props.allScreengroups.find(g => g.id === sgId)
+    const group = allScreengroups.value.find(g => g.id === sgId)
     if (group) group.screen_ids.forEach(id => screenIds.add(id))
   }
   return screensStore.screens
@@ -116,6 +142,41 @@ const affectedScreenNames = computed<string[]>(() => {
     .sort((a, b) => a.localeCompare(b))
 })
 const affectsMultipleScreens = computed(() => editMode.value && affectedScreenNames.value.length > 1)
+
+// --- Live preview: renders the in-progress (possibly unsaved) form fields
+// through the Contenttype's actual Layout + the active Design, debounced so
+// it doesn't fire a server round trip on every keystroke. srcdoc assembly
+// itself lives in utils/designPreview.ts, shared with ContentTable.vue's
+// row-expansion preview for already-saved content. ---
+interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer> }
+const previewData = ref<PreviewData | null>(null)
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+
+const handleContentPreview = (data: PreviewData) => {
+  previewData.value = data
+}
+
+const requestPreview = () => {
+  if (!createForm.value.contenttype_id) {
+    previewData.value = null
+    return
+  }
+  socketEmit('displayhive:admin:cts:preview_content_element', {
+    contenttype_id: createForm.value.contenttype_id,
+    ...createForm.value.fields,
+  })
+}
+
+watch(
+  () => [createForm.value.contenttype_id, createForm.value.fields],
+  () => {
+    if (previewTimer) clearTimeout(previewTimer)
+    previewTimer = setTimeout(requestPreview, 500)
+  },
+  { deep: true },
+)
+
+const previewSrcdoc = computed(() => buildDesignPreviewSrcdoc(previewData.value?.design, previewData.value?.containers))
 
 const sgSearchText = ref('')
 const screenSearchText = ref('')
@@ -242,14 +303,14 @@ const durationSeconds = computed({
 
 const filteredScreengroups = computed(() => {
   const q = sgSearchText.value.toLowerCase()
-  if (!q) return props.allScreengroups
-  return props.allScreengroups.filter(sg => sg.name.toLowerCase().includes(q))
+  if (!q) return allScreengroups.value
+  return allScreengroups.value.filter(sg => sg.name.toLowerCase().includes(q))
 })
 
 const filteredOneScreenGroups = computed(() => {
   const q = screenSearchText.value.toLowerCase()
-  if (!q) return props.oneScreenGroups
-  return props.oneScreenGroups.filter(sg => sg.name.toLowerCase().includes(q))
+  if (!q) return oneScreenGroups.value
+  return oneScreenGroups.value.filter(sg => sg.name.toLowerCase().includes(q))
 })
 
 const pagedScreengroups = computed(() => {
@@ -277,6 +338,12 @@ const pickerFiltered = computed(() => {
 watch(sgSearchText, () => { sgPage.value = 0 })
 watch(screenSearchText, () => { screenPage.value = 0 })
 
+const parseIsoDate = (v: string | null | undefined): Date | null => {
+  if (!v) return null
+  const d = new Date(v)
+  return isNaN(d.getTime()) ? null : d
+}
+
 const resetCreateForm = () => {
   createForm.value = {
     id: null,
@@ -299,93 +366,58 @@ const resetCreateForm = () => {
   screenSearchText.value = ''
   sgPage.value = 0
   screenPage.value = 0
+  showSelectContentTypeDialog.value = false
+  showCreateContentDialog.value = false
+  previewData.value = null
+  if (previewTimer) clearTimeout(previewTimer)
 }
 
-const openCreate = () => {
+// Whether the currently-loading content element should be saved as a new
+// copy (createForm.value.id nulled, title prefixed) once its detail arrives
+// — set by initFromRoute for the 'content-copy' route, consumed in
+// handleContentDetail.
+const pendingIsCopy = ref(false)
+
+/**
+ * Route-driven equivalent of the old openCreate/openEdit/openCopy trio this
+ * page used to expose to its parent for a `<Dialog>` to call into — now the
+ * URL itself is the source of truth for what's being edited, so this runs
+ * on mount and again whenever the route changes (Vue Router reuses this
+ * component instance rather than remounting it if only the params differ).
+ */
+const initFromRoute = () => {
   resetCreateForm()
-  formScreengroupIds.value = []
-  originalScreengroupIds.value = []
-  showSelectContentTypeDialog.value = true
-}
 
-/** Skip the "select content type" step — used when creating from a specific Contenttype's group. */
-const openCreateForType = (ct: ContentType) => {
-  resetCreateForm()
-  formScreengroupIds.value = []
-  originalScreengroupIds.value = []
-  selectContentType(ct)
-}
+  if (route.name === 'content-new') {
+    editMode.value = false
+    pendingIsCopy.value = false
 
-const openCreateForScreen = (sgId: number) => {
-  resetCreateForm()
-  formScreengroupIds.value = [sgId]
-  originalScreengroupIds.value = [sgId]
-  showSelectContentTypeDialog.value = true
-}
+    const screengroupId = route.query.screengroup_id ? Number(route.query.screengroup_id) : null
+    if (screengroupId) {
+      formScreengroupIds.value = [screengroupId]
+      originalScreengroupIds.value = [screengroupId]
+    }
 
-const openEdit = async (content: ContentElement) => {
-  editMode.value = true
-
-  const contentType = props.contentTypes.find(ct => ct.name === content.contenttypeName)
-  if (!contentType) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Content type not found', life: 3000 })
+    const contenttypeId = route.query.contenttype_id ? Number(route.query.contenttype_id) : null
+    const preselected = contenttypeId ? contentTypes.value.find(ct => ct.id === contenttypeId) : null
+    if (preselected) {
+      selectContentType(preselected)
+    } else {
+      showSelectContentTypeDialog.value = true
+    }
     return
   }
 
-  createForm.value.id = content.id
-  createForm.value.title = content.title
-  createForm.value.duration = content.duration
-  createForm.value.contenttype_id = contentType.id
-
-  const sgIds = (content.screengroups || []).map(sg => sg.id)
-  formScreengroupIds.value = [...sgIds]
-  originalScreengroupIds.value = [...sgIds]
-
-  createForm.value.fields = {}
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
-  for (const key of Object.keys(content)) {
-    if (!ignore.has(key)) {
-      const value = (content as any)[key]
-      createForm.value.fields[key] = value ?? ''
-    }
+  const id = Number(route.params.id)
+  if (!id) {
+    goBack()
+    return
   }
-
-  const parseIso = (v: string | null | undefined): Date | null => {
-    if (!v) return null
-    const d = new Date(v)
-    return isNaN(d.getTime()) ? null : d
-  }
-  createForm.value.start_time = parseIso((content as any).start_time)
-  createForm.value.end_time = parseIso((content as any).end_time)
-
+  editMode.value = true
+  pendingIsCopy.value = route.name === 'content-copy'
   loadingContentTypeDetail.value = true
-  selectedContentType.value = contentType
-
-  editorReady.value = false
-  contentDetailReceived.value = false
-  pendingContentDetail.value = null
-
-  socketEmit('displayhive:admin:cts:get_contenttype', { contenttype_id: contentType.id })
-  socketEmit('displayhive:admin:cts:get_content_element_detail', { content_element_id: content.id })
-
-  const hasRandomTags = Object.keys(createForm.value.fields).some(
-    k => k.endsWith('__image_mode') && createForm.value.fields[k] === 'random_tags'
-  )
-  if (hasRandomTags && availableImageTags.value.length === 0) {
-    socketEmit('displayhive:admin:cts:get_image_tags')
-  }
-
-  showCreateContentDialog.value = true
-  await nextTick()
+  socketEmit('displayhive:admin:cts:get_content_element_detail', { content_element_id: id })
 }
-
-const openCopy = async (content: ContentElement) => {
-  await openEdit(content)
-  createForm.value.id = null
-  createForm.value.title = `Copy of ${content.title}`
-}
-
-defineExpose({ openCreate, openCreateForType, openCreateForScreen, openEdit, openCopy })
 
 const selectContentType = (ct: ContentType) => {
   createForm.value.contenttype_id = ct.id
@@ -778,13 +810,8 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
             }
           }
           // start_time / end_time are not tag fields — apply them explicitly
-          const parseIso = (v: string | null | undefined): Date | null => {
-            if (!v) return null
-            const d = new Date(v)
-            return isNaN(d.getTime()) ? null : d
-          }
-          createForm.value.start_time = parseIso(pending.start_time)
-          createForm.value.end_time = parseIso(pending.end_time)
+          createForm.value.start_time = parseIsoDate(pending.start_time)
+          createForm.value.end_time = parseIsoDate(pending.end_time)
           pendingContentDetail.value = null
           contentDetailReceived.value = true
         }
@@ -801,48 +828,47 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
   }
 }
 
+/**
+ * Handles the response to get_content_element_detail — the entry point for
+ * both edit and copy mode (initFromRoute only knows an id; everything else,
+ * including which Contenttype this element uses, comes from here). Captures
+ * the metadata fields directly, then defers the custom field values to
+ * handleContentTypeDetail's pendingContentDetail merge once get_contenttype
+ * (fired from here) resolves the field list.
+ */
 const handleContentDetail = (data: { content: any }) => {
-  if (!data.content || !editMode.value) {
+  if (!data.content || !editMode.value) return
+  const content = data.content
+
+  createForm.value.id = pendingIsCopy.value ? null : content.id
+  createForm.value.title = pendingIsCopy.value ? `Copy of ${content.title}` : content.title
+  createForm.value.duration = content.duration
+  createForm.value.contenttype_id = content.contenttype_id
+
+  const sgIds = (content.screengroups || []).map((sg: any) => sg.id)
+  formScreengroupIds.value = [...sgIds]
+  originalScreengroupIds.value = [...sgIds]
+
+  createForm.value.start_time = parseIsoDate(content.start_time)
+  createForm.value.end_time = parseIsoDate(content.end_time)
+
+  selectedContentType.value = contentTypes.value.find(ct => ct.id === content.contenttype_id) || null
+
+  const hasRandomTags = Object.keys(content).some(
+    (k) => k.endsWith('__image_mode') && content[k] === 'random_tags'
+  )
+  if (hasRandomTags && availableImageTags.value.length === 0) {
+    socketEmit('displayhive:admin:cts:get_image_tags')
+  }
+
+  pendingContentDetail.value = content
+  contentDetailReceived.value = false
+
+  if (!content.contenttype_id) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Content type not found', life: 3000 })
     return
   }
-
-  if (!tagConfigs.value || tagConfigs.value.length === 0) {
-    pendingContentDetail.value = data.content
-    return
-  }
-
-  tagConfigs.value.forEach(tag => {
-    const value = data.content[tag.name]
-    if (value !== undefined && value !== null) {
-      createForm.value.fields[tag.name] = value
-    } else if (!(tag.name in createForm.value.fields)) {
-      if (tag.fieldHandler === 'numbers') {
-        createForm.value.fields[tag.name] = 0
-      } else {
-        createForm.value.fields[tag.name] = ''
-      }
-    }
-  })
-
-  const ignore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
-  for (const k of Object.keys(data.content)) {
-    if (!ignore.has(k) && !(tagConfigs.value.some(t => t.name === k))) {
-      createForm.value.fields[k] = data.content[k]
-    }
-  }
-
-  const parseIso = (v: string | null | undefined): Date | null => {
-    if (!v) return null
-    const d = new Date(v)
-    return isNaN(d.getTime()) ? null : d
-  }
-  createForm.value.start_time = parseIso(data.content.start_time)
-  createForm.value.end_time = parseIso(data.content.end_time)
-  pendingContentDetail.value = null
-  contentDetailReceived.value = true
-  nextTick(() => {
-    editorReady.value = true
-  })
+  socketEmit('displayhive:admin:cts:get_contenttype', { contenttype_id: content.contenttype_id })
 }
 
 const handleCreateResult = (data: { success: boolean; content_element_id?: number; error?: string }) => {
@@ -862,10 +888,10 @@ const handleCreateResult = (data: { success: boolean; content_element_id?: numbe
       detail: wasCreate ? 'Content created successfully' : 'Content updated successfully',
       life: 3000
     })
-    emit('saved')
     if (!pendingKeepOpen.value) {
-      showCreateContentDialog.value = false
-      resetCreateForm()
+      // ContentView.vue's own onMounted refetch covers what a `saved` emit
+      // used to trigger in the parent when this was a modal it controlled.
+      goBack()
     }
     pendingKeepOpen.value = false
   } else {
@@ -894,7 +920,13 @@ onMounted(() => {
   on('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   on('displayhive:admin:stc:image_tags', handleImageTags)
   on('displayhive:admin:stc:admin_settings', handleAdminSettingsForPreview)
+  on('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
+  on('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
+  on('displayhive:admin:stc:content_element_preview', handleContentPreview)
   socketEmit('displayhive:admin:cts:get_admin_settings')
+  socketEmit('displayhive:admin:cts:get_contenttypes')
+  socketEmit('displayhive:admin:cts:get_screengroups')
+  screensStore.fetch()
   previewInterval = setInterval(() => { previewNow.value = new Date() }, 1000)
 })
 
@@ -905,8 +937,18 @@ onUnmounted(() => {
   off('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   off('displayhive:admin:stc:image_tags', handleImageTags)
   off('displayhive:admin:stc:admin_settings', handleAdminSettingsForPreview)
+  off('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
+  off('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
+  off('displayhive:admin:stc:content_element_preview', handleContentPreview)
   if (previewInterval) clearInterval(previewInterval)
+  if (previewTimer) clearTimeout(previewTimer)
 })
+
+// Re-run route-driven init both on first mount and whenever the route
+// changes without unmounting this component (e.g. navigating directly
+// between two edit URLs) — placed after every function/ref it uses is
+// already defined, since {immediate: true} runs synchronously right here.
+watch(() => route.fullPath, initFromRoute, { immediate: true })
 </script>
 
 <template>
@@ -919,7 +961,7 @@ onUnmounted(() => {
   >
     <div class="contenttype-list">
       <Card
-        v-for="ct in props.contentTypes"
+        v-for="ct in contentTypes"
         :key="ct.id"
         class="contenttype-card"
         @click="selectContentType(ct)"
@@ -929,29 +971,29 @@ onUnmounted(() => {
           <p v-if="ct.description" class="text-muted">{{ ct.description }}</p>
         </template>
       </Card>
-      <div v-if="props.contentTypes.length === 0" class="empty-state">
+      <div v-if="contentTypes.length === 0" class="empty-state">
         <i class="pi pi-inbox"></i>
         <p>No content types available</p>
       </div>
     </div>
     <template #footer>
-      <Button label="Cancel" @click="showSelectContentTypeDialog = false" text />
+      <Button label="Cancel" @click="goBack" text />
     </template>
   </Dialog>
 
-  <!-- Step 2: Create/Edit Content Form -->
-  <Dialog
-    v-model:visible="showCreateContentDialog"
-    :header="editMode ? (createForm.id ? 'Edit Content' : 'Copy Content') : 'Create Content'"
-    modal
-    :style="{ width: '700px', maxHeight: '85vh' }"
-    :closable="!loadingContentTypeDetail"
-  >
+  <div class="content-edit-page">
+    <div class="content-edit-page-header">
+      <h2>{{ editMode ? (createForm.id ? 'Edit Content' : 'Copy Content') : 'Create Content' }}</h2>
+      <Button label="Back to Content" icon="pi pi-arrow-left" text @click="goBack" />
+    </div>
+
     <div v-if="loadingContentTypeDetail" class="loading-state">
       <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
       <p>Loading content type...</p>
     </div>
-    <div v-else class="dialog-content">
+    <div v-else class="content-edit-columns">
+    <div class="content-edit-form">
+    <div class="dialog-content">
       <div v-if="affectsMultipleScreens" class="multi-screen-warning">
         <i class="pi pi-exclamation-triangle"></i>
         <div>
@@ -1352,12 +1394,30 @@ onUnmounted(() => {
         />
       </div>
     </div>
-    <template #footer>
-      <Button label="Cancel" @click="showCreateContentDialog = false; resetCreateForm()" text />
+
+    <div class="content-edit-form-actions">
+      <Button label="Cancel" @click="goBack" text />
       <Button v-if="editMode && createForm.id" label="Update" severity="secondary" outlined @click="submitCreateContent(true)" :disabled="loadingContentTypeDetail" />
       <Button :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />
-    </template>
-  </Dialog>
+    </div>
+    </div>
+
+    <div class="content-edit-preview">
+      <h4>Preview</h4>
+      <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
+        <i class="pi pi-eye" style="font-size: 2rem"></i>
+        <p>Preview will appear here once a content type is selected.</p>
+      </div>
+      <iframe
+        v-else
+        :srcdoc="previewSrcdoc"
+        sandbox="allow-scripts"
+        class="content-edit-preview-iframe"
+        title="Content preview"
+      ></iframe>
+    </div>
+    </div>
+  </div>
 
   <!-- Image Picker Dialog -->
   <Dialog
@@ -1399,6 +1459,73 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.content-edit-page {
+  padding: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.content-edit-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.content-edit-page-header h2 {
+  margin: 0;
+}
+
+/* Two-column layout, mirroring LayoutCanvasEditor.vue's main+sidebar split
+   (.layout-editor) — here both sides are flexible instead of one fixed. */
+.content-edit-columns {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.content-edit-form {
+  flex: 1;
+  min-width: 0;
+}
+
+.content-edit-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.content-edit-preview {
+  flex: 1;
+  min-width: 0;
+  position: sticky;
+  top: 1rem;
+}
+
+.content-edit-preview h4 {
+  margin-top: 0;
+}
+
+.content-edit-preview-iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--p-surface-border, #ccc);
+  border-radius: 6px;
+}
+
+.content-edit-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--p-surface-border, #ccc);
+  border-radius: 6px;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
 .multi-screen-warning {
   display: flex;
   align-items: flex-start;
