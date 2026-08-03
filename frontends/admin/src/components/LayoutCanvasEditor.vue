@@ -10,8 +10,11 @@ import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import Editor from 'primevue/editor'
+import ToggleSwitch from 'primevue/toggleswitch'
+import Tag from 'primevue/tag'
 import MediaPickerDialog from './MediaPickerDialog.vue'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
@@ -92,6 +95,11 @@ interface DesignPreview {
 }
 const designPreview = ref<DesignPreview | null>(null)
 
+// Local-only preview toggles — never persisted, purely control what this
+// editor's own iframe renders (the real screen output is unaffected).
+const disableAnimationsInPreview = ref(false)
+const disableBackdropInPreview = ref(false)
+
 // Attribute-value escaping for the effect's custom-element tag below — the
 // settings values come from the backend (design's stored JSON), not from
 // this page's own trusted template literals, so they need escaping same as
@@ -108,6 +116,7 @@ const escapeAttr = (v: string): string =>
 // parent page (an iframe's own background-color would otherwise fully
 // hide anything layered behind it from outside).
 const effectFragment = computed(() => {
+  if (disableAnimationsInPreview.value) return ''
   const effect = designPreview.value?.background_effect
   if (!effect) return ''
   const def = getEffectDefinition(effect.name)
@@ -129,20 +138,40 @@ const effectFragment = computed(() => {
 const designPreviewSrcdoc = computed(() => {
   const p = designPreview.value
   if (!p) return ''
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div></body></html>`
+  // Backdrop (body's background-color/image/gradients) arrives already
+  // merged into p.css by the backend — there's no separate field to omit it
+  // from. Overriding it back out client-side is an approximation: this rule
+  // wins the cascade (same `body` selector, later in source order) for
+  // whatever the Backdrop itself set, but can't distinguish that from a
+  // Design's own hand-authored `body{...}` background in its custom CSS,
+  // since both are flattened into the same string server-side.
+  const backdropOverride = disableBackdropInPreview.value
+    ? 'body{background-color:transparent!important;background-image:none!important;}'
+    : ''
+  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}${backdropOverride}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div></body></html>`
 })
 
 const handleDesignPreview = (data: DesignPreview) => {
   designPreview.value = data
 }
 
+// Snaplines are global (shared across every Layout, not scoped to this one)
+// — loaded once here and kept live via the broadcast every save triggers, so
+// two admins editing different Layouts at once stay in sync.
+const handleLayoutSnaplines = (data: { snaplines?: Snapline[] }) => {
+  snaplines.value = data?.snaplines || []
+}
+
 onMounted(() => {
   on('displayhive:admin:stc:design_preview', handleDesignPreview)
+  on('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
   socketEmit('displayhive:admin:cts:get_design_preview')
+  socketEmit('displayhive:admin:cts:get_layout_snaplines')
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:design_preview', handleDesignPreview)
+  off('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
 })
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
@@ -256,9 +285,40 @@ watch(() => props.layout.id, () => {
 
 defineExpose({ flushPendingPositions, discardPendingPositions })
 
-// --- Edge snapping: moving/resizing a container snaps its edges to the
-// canvas bounds and to the edges of every other container already placed.
+// --- Edge/center snapping: moving/resizing a container snaps its edges AND
+// center to the canvas bounds+center, to the edges+centers of every other
+// placed container, and to any user-defined snaplines (see below).
 const SNAP_THRESHOLD = 1.5 // percent
+
+interface Snapline { axis: 'h' | 'v'; position: number } // 'h' = horizontal line, constrains top/bottom (vTargets); 'v' = vertical line, constrains left/right (hTargets)
+const snaplines = ref<Snapline[]>([])
+
+// Snaplines are global settings (application/admin/layouts/sockethandlers.py
+// stores them via SystemSetting), so add/remove just replace-and-persist the
+// whole list; `snaplines.value` itself is updated by the server's broadcast
+// (handleLayoutSnaplines) once the change is committed, not optimistically
+// here — keeps every open Layout editor in sync off one source of truth.
+const newSnaplineAxis = ref<'h' | 'v'>('h')
+const newSnaplinePosition = ref<number>(50)
+
+const saveSnaplines = async (next: Snapline[]) => {
+  const result = await emitWithAck<{ success: boolean; error?: string }>(
+    'displayhive:admin:cts:set_layout_snaplines',
+    { snaplines: next },
+  )
+  if (!result?.success) {
+    toast.add({ severity: 'error', summary: 'Error', detail: result?.error || 'Could not save snapline', life: 3000 })
+  }
+}
+
+const addSnapline = () => {
+  const position = clamp(newSnaplinePosition.value, 0, 100)
+  saveSnaplines([...snaplines.value, { axis: newSnaplineAxis.value, position }])
+}
+
+const removeSnapline = (index: number) => {
+  saveSnaplines(snaplines.value.filter((_, i) => i !== index))
+}
 
 const closestWithinThreshold = (value: number, targets: number[]): number | null => {
   let best: number | null = null
@@ -274,55 +334,51 @@ const closestWithinThreshold = (value: number, targets: number[]): number | null
 }
 
 const edgeTargets = (excludeId: number) => {
-  const hTargets = [0, 100]
-  const vTargets = [0, 100]
+  const hTargets = [0, 50, 100]
+  const vTargets = [0, 50, 100]
   for (const c of placedContainers.value) {
     if (c.id === excludeId) continue
     const p = posFor(c)
-    hTargets.push(p.left, p.left + p.width)
-    vTargets.push(p.top, p.top + p.height)
+    hTargets.push(p.left, p.left + p.width, p.left + p.width / 2)
+    vTargets.push(p.top, p.top + p.height, p.top + p.height / 2)
+  }
+  for (const line of snaplines.value) {
+    if (line.axis === 'v') hTargets.push(line.position)
+    else vTargets.push(line.position)
   }
   return { hTargets, vTargets }
 }
 
-const snapMove = (left: number, top: number, width: number, height: number, excludeId: number) => {
-  const { hTargets, vTargets } = edgeTargets(excludeId)
-
-  const leftSnap = closestWithinThreshold(left, hTargets)
-  const rightSnap = closestWithinThreshold(left + width, hTargets)
-  let newLeft = left
-  if (leftSnap !== null && (rightSnap === null || Math.abs(left - leftSnap) <= Math.abs(left + width - rightSnap))) {
-    newLeft = leftSnap
-  } else if (rightSnap !== null) {
-    newLeft = rightSnap - width
-  }
-
-  const topSnap = closestWithinThreshold(top, vTargets)
-  const bottomSnap = closestWithinThreshold(top + height, vTargets)
-  let newTop = top
-  if (topSnap !== null && (bottomSnap === null || Math.abs(top - topSnap) <= Math.abs(top + height - bottomSnap))) {
-    newTop = topSnap
-  } else if (bottomSnap !== null) {
-    newTop = bottomSnap - height
-  }
-
-  return { left: newLeft, top: newTop }
+// Picks whichever of {left edge, right edge, center} lands closest to a
+// target, so a move can snap on center just as readily as on a side.
+const snapAxis = (start: number, size: number, targets: number[]): number => {
+  const startSnap = closestWithinThreshold(start, targets)
+  const endSnap = closestWithinThreshold(start + size, targets)
+  const centerSnap = closestWithinThreshold(start + size / 2, targets)
+  const candidates: Array<{ value: number; diff: number }> = []
+  if (startSnap !== null) candidates.push({ value: startSnap, diff: Math.abs(start - startSnap) })
+  if (endSnap !== null) candidates.push({ value: endSnap - size, diff: Math.abs(start + size - endSnap) })
+  if (centerSnap !== null) candidates.push({ value: centerSnap - size / 2, diff: Math.abs(start + size / 2 - centerSnap) })
+  if (!candidates.length) return start
+  candidates.sort((a, b) => a.diff - b.diff)
+  return candidates[0]!.value
 }
 
-const snapResize = (left: number, top: number, width: number, height: number, excludeId: number) => {
+const snapMove = (left: number, top: number, width: number, height: number, excludeId: number) => {
   const { hTargets, vTargets } = edgeTargets(excludeId)
-  const rightSnap = closestWithinThreshold(left + width, hTargets)
-  const bottomSnap = closestWithinThreshold(top + height, vTargets)
   return {
-    width: rightSnap !== null ? rightSnap - left : width,
-    height: bottomSnap !== null ? bottomSnap - top : height,
+    left: snapAxis(left, width, hTargets),
+    top: snapAxis(top, height, vTargets),
   }
 }
 
 // --- Move / resize existing containers via pointer drag --------------------
+type Corner = 'tl' | 'tr' | 'bl' | 'br'
+
 interface DragState {
   id: number
   mode: 'move' | 'resize'
+  corner: Corner | null
   startX: number
   startY: number
   startTop: number
@@ -332,7 +388,7 @@ interface DragState {
 }
 let dragState: DragState | null = null
 
-const onRectPointerDown = (e: PointerEvent, c: ContentContainer, mode: 'move' | 'resize') => {
+const onRectPointerDown = (e: PointerEvent, c: ContentContainer, mode: 'move' | 'resize', corner: Corner | null = null) => {
   e.stopPropagation()
   e.preventDefault()
   selectedId.value = c.id
@@ -341,11 +397,50 @@ const onRectPointerDown = (e: PointerEvent, c: ContentContainer, mode: 'move' | 
   // already-moved container would snap it back to its original spot.
   const p = posFor(c)
   dragState = {
-    id: c.id, mode, startX: e.clientX, startY: e.clientY,
+    id: c.id, mode, corner, startX: e.clientX, startY: e.clientY,
     startTop: p.top, startLeft: p.left, startWidth: p.width, startHeight: p.height,
   }
   window.addEventListener('pointermove', onDragPointerMove)
   window.addEventListener('pointerup', onDragPointerUp)
+}
+
+const MIN_SIZE = 4 // percent
+
+// Resizes from *corner*, keeping the OPPOSITE corner fixed as the anchor —
+// the dragged corner's own edges snap to the same target set moves use
+// (other containers' edges/centers, canvas bounds/center, snaplines).
+const resizeFromCorner = (
+  corner: Corner, startLeft: number, startTop: number, startWidth: number, startHeight: number,
+  dxPct: number, dyPct: number, excludeId: number,
+) => {
+  const { hTargets, vTargets } = edgeTargets(excludeId)
+  const movesLeftEdge = corner === 'tl' || corner === 'bl'
+  const movesTopEdge = corner === 'tl' || corner === 'tr'
+
+  const anchorX = movesLeftEdge ? startLeft + startWidth : startLeft
+  const anchorY = movesTopEdge ? startTop + startHeight : startTop
+
+  let movingX = movesLeftEdge ? startLeft + dxPct : startLeft + startWidth + dxPct
+  let movingY = movesTopEdge ? startTop + dyPct : startTop + startHeight + dyPct
+
+  movingX = movesLeftEdge ? clamp(movingX, 0, anchorX - MIN_SIZE) : clamp(movingX, anchorX + MIN_SIZE, 100)
+  movingY = movesTopEdge ? clamp(movingY, 0, anchorY - MIN_SIZE) : clamp(movingY, anchorY + MIN_SIZE, 100)
+
+  const snappedXTarget = closestWithinThreshold(movingX, hTargets)
+  const snappedYTarget = closestWithinThreshold(movingY, vTargets)
+  if (snappedXTarget !== null) {
+    movingX = movesLeftEdge ? clamp(snappedXTarget, 0, anchorX - MIN_SIZE) : clamp(snappedXTarget, anchorX + MIN_SIZE, 100)
+  }
+  if (snappedYTarget !== null) {
+    movingY = movesTopEdge ? clamp(snappedYTarget, 0, anchorY - MIN_SIZE) : clamp(snappedYTarget, anchorY + MIN_SIZE, 100)
+  }
+
+  return {
+    left: movesLeftEdge ? movingX : anchorX,
+    top: movesTopEdge ? movingY : anchorY,
+    width: movesLeftEdge ? anchorX - movingX : movingX - anchorX,
+    height: movesTopEdge ? anchorY - movingY : movingY - anchorY,
+  }
 }
 
 const onDragPointerMove = (e: PointerEvent) => {
@@ -362,12 +457,12 @@ const onDragPointerMove = (e: PointerEvent) => {
     top = clamp(snapped.top, 0, 100 - dragState.startHeight)
     draft[dragState.id] = { top, left, width: dragState.startWidth, height: dragState.startHeight }
   } else {
-    let width = clamp(dragState.startWidth + dxPct, 4, 100 - dragState.startLeft)
-    let height = clamp(dragState.startHeight + dyPct, 4, 100 - dragState.startTop)
-    const snapped = snapResize(dragState.startLeft, dragState.startTop, width, height, dragState.id)
-    width = clamp(snapped.width, 4, 100 - dragState.startLeft)
-    height = clamp(snapped.height, 4, 100 - dragState.startTop)
-    draft[dragState.id] = { top: dragState.startTop, left: dragState.startLeft, width, height }
+    const corner = dragState.corner ?? 'br'
+    const resized = resizeFromCorner(
+      corner, dragState.startLeft, dragState.startTop, dragState.startWidth, dragState.startHeight,
+      dxPct, dyPct, dragState.id,
+    )
+    draft[dragState.id] = resized
   }
 }
 
@@ -774,6 +869,27 @@ const toggleSelectedLayoutMembership = () => {
   <div class="layout-editor">
     <div class="editor-main">
       <div class="editor-canvas-wrap">
+        <div class="preview-toggles">
+          <div class="filter-toggle">
+            <label for="disable-animations-preview">Disable animations in Preview</label>
+            <ToggleSwitch id="disable-animations-preview" v-model="disableAnimationsInPreview" />
+          </div>
+          <div class="filter-toggle">
+            <label for="disable-backdrop-preview">Disable Backdrop in Preview</label>
+            <ToggleSwitch id="disable-backdrop-preview" v-model="disableBackdropInPreview" />
+          </div>
+        </div>
+
+        <div class="snapline-bar">
+          <Select v-model="newSnaplineAxis" :options="[{ label: 'Horizontal', value: 'h' }, { label: 'Vertical', value: 'v' }]" optionLabel="label" optionValue="value" class="snapline-axis-select" />
+          <InputNumber v-model="newSnaplinePosition" :min="0" :max="100" suffix="%" class="snapline-position-input" />
+          <Button label="Add Snapline" icon="pi pi-plus" size="small" outlined @click="addSnapline" />
+          <Tag v-for="(line, i) in snaplines" :key="i" class="snapline-chip">
+            {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
+            <i class="pi pi-times snapline-chip-remove" @click="removeSnapline(i)"></i>
+          </Tag>
+        </div>
+
         <div
           ref="canvasEl"
           class="editor-canvas"
@@ -788,6 +904,13 @@ const toggleSelectedLayoutMembership = () => {
             title="Active Design preview"
             sandbox="allow-scripts"
           ></iframe>
+          <div
+            v-for="(line, i) in snaplines"
+            :key="`snapline-${i}`"
+            class="canvas-snapline"
+            :class="line.axis === 'h' ? 'canvas-snapline--h' : 'canvas-snapline--v'"
+            :style="line.axis === 'h' ? { top: `${line.position}%` } : { left: `${line.position}%` }"
+          ></div>
           <div
             v-for="c in placedContainers"
             :key="c.id"
@@ -827,7 +950,10 @@ const toggleSelectedLayoutMembership = () => {
                 <i class="pi pi-times"></i>
               </button>
             </div>
-            <div class="resize-handle" @pointerdown="onRectPointerDown($event, c, 'resize')"></div>
+            <div class="resize-handle resize-handle--tl" @pointerdown="onRectPointerDown($event, c, 'resize', 'tl')"></div>
+            <div class="resize-handle resize-handle--tr" @pointerdown="onRectPointerDown($event, c, 'resize', 'tr')"></div>
+            <div class="resize-handle resize-handle--bl" @pointerdown="onRectPointerDown($event, c, 'resize', 'bl')"></div>
+            <div class="resize-handle resize-handle--br" @pointerdown="onRectPointerDown($event, c, 'resize', 'br')"></div>
           </div>
           <div v-if="drawRect" class="editor-rect drawing-rect" :style="drawRectStyle"></div>
         </div>
@@ -1079,6 +1205,70 @@ const toggleSelectedLayoutMembership = () => {
   gap: 0.4rem;
 }
 
+.preview-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-toggle label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.snapline-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.snapline-axis-select {
+  width: 130px;
+}
+
+.snapline-position-input {
+  width: 90px;
+}
+
+.snapline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.snapline-chip-remove {
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.canvas-snapline {
+  position: absolute;
+  background: #e11d48;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.canvas-snapline--h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.canvas-snapline--v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
 .editor-canvas {
   position: relative;
   width: 100%;
@@ -1155,15 +1345,36 @@ const toggleSelectedLayoutMembership = () => {
 
 .resize-handle {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
   width: 14px;
   height: 14px;
   background: #2563ab;
   border: 1px solid white;
   border-radius: 2px;
-  cursor: nwse-resize;
   z-index: 3;
+}
+
+.resize-handle--tl {
+  top: 2px;
+  left: 2px;
+  cursor: nwse-resize;
+}
+
+.resize-handle--br {
+  bottom: 2px;
+  right: 2px;
+  cursor: nwse-resize;
+}
+
+.resize-handle--tr {
+  top: 2px;
+  right: 2px;
+  cursor: nesw-resize;
+}
+
+.resize-handle--bl {
+  bottom: 2px;
+  left: 2px;
+  cursor: nesw-resize;
 }
 
 .rect-toolbar {

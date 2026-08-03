@@ -94,6 +94,79 @@ def register_admin_layouts_handlers(socketio, app, db):
         payload = build_design_payload(db)
         socketio.emit('displayhive:admin:stc:design_preview', payload, room=request.sid)
 
+    _SNAPLINES_SETTING_KEY = 'layout_snaplines'
+
+    def _load_snaplines():
+        """Return the globally-shared canvas snaplines as a list of
+        {axis: 'h'|'v', position: float} dicts, stored as one JSON blob in
+        SystemSetting (same generic key/value store the Settings page uses)
+        rather than scoped to a single Layout — these are alignment guides
+        meant to be reused across every Layout's canvas.
+        """
+        import json
+        from application.models import SystemSetting
+        row = db.session.execute(
+            db.select(SystemSetting).where(SystemSetting.key == _SNAPLINES_SETTING_KEY)
+        ).scalar_one_or_none()
+        if not row or not row.value:
+            return []
+        try:
+            data = json.loads(row.value)
+        except Exception:
+            return []
+        return data if isinstance(data, list) else []
+
+    def _emit_snaplines(room=None):
+        socketio.emit(
+            'displayhive:admin:stc:layout_snaplines',
+            {'snaplines': _load_snaplines()},
+            room=room,
+        )
+
+    @socketio.on('displayhive:admin:cts:get_layout_snaplines')
+    @require_right('layouts.page')
+    def get_layout_snaplines(message=None):
+        _emit_snaplines(room=request.sid)
+
+    @socketio.on('displayhive:admin:cts:set_layout_snaplines')
+    @require_right('layouts.edit')
+    def handle_set_layout_snaplines(data=None):
+        """Replace the whole global snaplines list. data = {snaplines: [{axis, position}, ...]}"""
+        import json
+        from application.models import SystemSetting
+
+        raw = (data or {}).get('snaplines')
+        if not isinstance(raw, list):
+            return {'success': False, 'error': 'snaplines must be a list'}
+
+        cleaned = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            axis = item.get('axis')
+            if axis not in ('h', 'v'):
+                continue
+            try:
+                position = float(item.get('position'))
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= position <= 100):
+                continue
+            cleaned.append({'axis': axis, 'position': position})
+
+        row = db.session.execute(
+            db.select(SystemSetting).where(SystemSetting.key == _SNAPLINES_SETTING_KEY)
+        ).scalar_one_or_none()
+        value = json.dumps(cleaned)
+        if row:
+            row.value = value
+        else:
+            db.session.add(SystemSetting(key=_SNAPLINES_SETTING_KEY, value=value))
+        db.session.commit()
+
+        _emit_snaplines(room='admins')
+        return {'success': True}
+
     @socketio.on('displayhive:admin:cts:create_layout')
     @require_right('layouts.create')
     def handle_create_layout(data=None):
