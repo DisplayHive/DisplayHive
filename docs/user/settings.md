@@ -3,8 +3,8 @@
 The **Settings** page (`/settings`) covers instance-wide options that don't
 belong to a more specific page:
 
-- **Default template** — applied to any screen that doesn't have its own
-  template override.
+- **Default design** — the design applied instance-wide (see
+  [Layouts, designs, content types & content](content-and-templates.md)).
 - **Timezone** — used for scheduling and active-window content.
 - **Hide powered-by branding**
 - **Hide community links**

@@ -62,7 +62,7 @@ nav:
       - Installation: user/installation.md
       - Overview: user/index.md
       - Getting started: user/getting-started.md
-      - Templates, containers & content: user/content-and-templates.md
+      - Layouts, designs, content types & content: user/content-and-templates.md
       - Magic tags: user/magic-tags.md
       - Screens, devices & groups: user/screens-devices-groups.md
       - Pretalx integration: user/pretalx.md

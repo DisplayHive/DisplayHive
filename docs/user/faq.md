@@ -3,20 +3,22 @@
 ## What exactly does DisplayHive do?
 
 DisplayHive is self-hosted digital signage: it drives a network of displays
-(kiosks, TVs, info screens) from one admin panel. You build page layouts as
-HTML/CSS **templates**, drop typed **content** (text, images, tables,
-Pretalx schedules, etc.) into named **containers** within them, and assign
-that content to **screen groups**. Changes appear on screens instantly over
-Socket.IO — there's no publish step, caching, or refresh delay. See
-[Templates, containers & content](content-and-templates.md) for the full
-workflow.
+(kiosks, TVs, info screens) from one admin panel. You position named
+**containers** on a **layout**, style them instance-wide with a **design**
+(colors, gradients, backgrounds), drop typed **content** (text, images,
+tables, Pretalx schedules, etc.) into those containers via **content
+types**, and assign that content to **screen groups**. Changes appear on
+screens instantly over Socket.IO — there's no publish step, caching, or
+refresh delay. See
+[Layouts, designs, content types & content](content-and-templates.md) for
+the full workflow.
 
-## Is there something else than a NixOS deployment?
+## Is there something else than a Docker or NixOS deployment?
 
-Yes. The [NixOS module](https://github.com/DisplayHive/DisplayHive/blob/main/nix/module.nix)
-is a convenience wrapper, not a requirement. Underneath, DisplayHive is a
-plain Flask + Flask-SocketIO app, and the module's systemd service is
-ultimately just:
+Yes. Both are convenience wrappers, not a requirement. Underneath,
+DisplayHive is a plain Flask + Flask-SocketIO app; the [Docker](https://github.com/DisplayHive/DisplayHive#deployment)
+image and the [NixOS module](https://github.com/DisplayHive/DisplayHive/blob/main/nix/module.nix)'s
+systemd service both ultimately just run:
 
 ```bash
 alembic upgrade head
@@ -30,9 +32,7 @@ two frontends, put a reverse proxy (e.g. nginx) in front for TLS and
 WebSocket forwarding, and manage the process with systemd, another process
 supervisor, or a container of your own making. See the root
 [README](https://github.com/DisplayHive/DisplayHive#configuration) for the
-environment variables involved. There's no official Docker image yet — the
-NixOS module is just the only *packaged* path today, not the only
-*possible* one.
+environment variables involved.
 
 ## How many screens can I connect?
 

@@ -3,7 +3,7 @@
 | Component | Stack | Purpose |
 |---|---|---|
 | Backend | Flask + Flask-SocketIO (eventlet), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends |
-| Admin panel | Vue 3, PrimeVue, Pinia, Vite | Manage content, screens, devices, templates, settings |
+| Admin panel | Vue 3, PrimeVue, Pinia, Vite | Manage content, screens, devices, layouts/designs, settings |
 | Screen client | TypeScript (no framework), Vite | Kiosk-facing display client, renders pushed content |
 
 ## Backend entrypoint
@@ -23,8 +23,10 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
   endpoints), wired via `register_auth_routes(app, db)`. Everything else
   under `application/admin/*` is Socket.IO handlers, not HTTP.
 - On startup (inside `app.app_context()`), the app resets stale
-  `Device.is_online` flags, enforces exactly one default template, prunes
-  old screen logs, and bootstraps an admin user if none exists.
+  `Device.is_online` flags, enforces exactly one default design, prunes old
+  screen logs, seeds the built-in Superadmin group and right-definition
+  catalog (`sync_right_definitions()`, see `application/permissions.py`),
+  and bootstraps an admin user if none exists.
 - `register_all_handlers(socketio, app, db)`
   ([`application/socketio_handlers/__init__.py`](https://github.com/DisplayHive/DisplayHive/blob/main/application/socketio_handlers/__init__.py))
   is the central registry: it imports and calls each feature's
@@ -41,18 +43,37 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
 Defined under `application/models/`:
 
 - **`content.py`** — `ContentElement` (a placed content item; FK to
-  `Contenttype`, `ContentContainer`, and many-to-many with `Screengroup`),
-  `Template` (a page's HTML/CSS, with an `isDefault` flag), `ContentContainer`
-  (a named region within a template), `Contenttype` (a reusable
-  HTML/CSS + field schema), `TagConfig` (one field definition on a
-  `Contenttype`), `MagicTag`, `SystemSetting`, Telegram alerting models
-  (`AlertSubscription`, `TelegramUser`), `Media`, and the Pretalx models
-  (`PretalxApiUrl`, `PretalxApiCache`, `PretalxSettings`).
+  `Contenttype`, and many-to-many with `Screengroup`), `Design` (the
+  instance-wide skin: backdrop, background effect, default color palette,
+  an `isDefault` flag, plus HTML/CSS for anything not covered by the
+  structured options), `Gradient` / `DesignGradient` (reusable named CSS
+  gradients, ordered/stacked per `Design`), `DesignContainerStyle` /
+  `DesignGlobalStyle` (per-container / all-container CSS property
+  overrides, scoped to one `Design`), `Layout` (a named, reusable group of
+  positioned containers — purely organizational, no "screen uses this
+  layout" concept), `ContentContainer` (a screen-relative position/size,
+  reusable across multiple `Layout`s, with an optional default field
+  handler/content), `Contenttype` (bound to one `Layout`; a reusable field
+  schema), `TagConfig` (one field definition on a `Contenttype`, targeting
+  one container, with `default_value` and per-sub-setting `option_flags`
+  for locking/hiding), `MagicTag` / `MagicTagValueList`, `SystemSetting`,
+  Telegram alerting models (`AlertSubscription`, `TelegramUser`), `Media`,
+  and the Pretalx models (`PretalxApiUrl`, `PretalxApiCache`,
+  `PretalxSettings`).
 - **`device.py`** — `Device` (a physical/browser player: `devicekey`,
   `is_online`, FK to `Screen`).
-- **`screen.py`** — `Screen` (a logical display slot, FK to `Template`),
-  `ScreenLog`, `Screengroup`.
+- **`screen.py`** — `Screen` (a logical display slot — resolution,
+  monitoring/debug flags; no per-screen design/layout override, every
+  screen renders the same instance-wide `Design`), `ScreenLog`,
+  `Screengroup`.
 - **`user.py`** — `AdminUser`.
+- **`rights.py`** — the rights system: `RightDefinition` (the right
+  catalog, synced from `application/permissions.py`'s `RIGHTS` list on
+  startup), `Group` (nestable via `parent_group_id`; `is_superadmin`
+  grants everything), `GroupRight` (allow-only grants on a group),
+  `UserGroup` (user↔group membership), `UserRight` (per-user allow/deny
+  override; absence of a row means inherit from group membership). See
+  `application/permissions.py` for the resolution algorithm.
 - **`base.py`** — the `Screen` ↔ `Screengroup` and `ContentElement` ↔
   `Screengroup` many-to-many association tables.
 
@@ -67,17 +88,19 @@ panel feature, using a `displayhive:admin:<feature>:cts:*` (client-to-server)
 | `alerting` | Telegram bot token, discovered chat users, per-user alert-type subscriptions, test sends |
 | `auth` | HTTP-only: login, session check, JWT issuing |
 | `content` | Query + mutation handlers for `ContentElement` (create/update/move/delete); mutations trigger a content push |
-| `contenttypes` | CRUD for `Contenttype` |
+| `contenttypes` | CRUD for `Contenttype` and its `TagConfig` fields |
+| `designs` | CRUD for `Design`, `Gradient`, and per-container/global style overrides |
 | `devices` | Connection/adoption handshake (`connection.py`) and management: list, ping, update, assign to screen, find, delete (`management.py`) |
 | `importexport` | Full DB + media export/import as a zip, mirrored by an HTTP route for the actual file transfer |
-| `magictags` | CRUD for `MagicTag` |
+| `layouts` | CRUD for `Layout` and `ContentContainer` positioning/assignment |
+| `magictags` | CRUD for `MagicTag` and `MagicTagValueList` |
 | `matrix` | No handlers of its own — the Matrix page calls the same `screens`/`screengroups` mutations directly |
 | `media` | Media library CRUD, folders, uploads |
 | `pretalx` | Pretalx URL/settings/room config, cache; triggers a content push when data refreshes |
+| `rights` | CRUD for `Group`/`GroupRight`, user↔group membership, per-user `UserRight` overrides |
 | `screengroups` | CRUD for `Screengroup` plus screen/content membership |
 | `screens` | Create/delete/rename `Screen`, toggle monitoring/debug, reset size |
-| `settings` | Default template, instance-wide `SystemSetting`s |
-| `templates` | CRUD for `Template` |
+| `settings` | Default design, instance-wide `SystemSetting`s |
 | `users` | CRUD + activate/deactivate for `AdminUser` |
 
 ## Socket.IO handlers (`application/socketio_handlers/*.py`)
@@ -109,7 +132,9 @@ admin panel features:
 **Admin panel** (`frontends/admin/src`) — Vue 3 SPA:
 
 - `stores/` — one Pinia store per domain (`auth`, `content`, `devices`,
-  `magicTags`, `media`, `screengroups`, `screens`, `settings`, `templates`).
+  `magicTags`, `magicTagValueLists`, `media`, `rights`, `screengroups`,
+  `screens`, `settings`). Designs, layouts, and content types talk to their
+  sockets directly from their views rather than through a dedicated store.
   Stores emit `displayhive:admin:...:cts:*` events and listen for the
   matching `:stc:*` responses.
 - `composables/useSocket.ts` — a singleton `socket.io-client` wrapper that
@@ -124,7 +149,7 @@ framework:
 - `socket-handlers.ts` — every `socket.on(...)` listener, including
   `upd_content`.
 - `content-display.ts` / `container-manager.ts` — render playlists and HTML
-  into template containers.
+  into positioned containers.
 - `adopt.ts` — the device adoption flow (QR code / token).
 - `clock.ts`, `storage.ts`, `debug-panel.ts`, `viewport-tracker.ts`,
   `preload-iframes.ts` — supporting concerns.

@@ -26,8 +26,9 @@ the schedule will look at a future point.
 ## Showing it on a screen
 
 Create a **Content Type** (see
-[Templates, containers & content](content-and-templates.md)) with a field
-using the **pretalx** handler. When creating content of that type, pick:
+[Layouts, designs, content types & content](content-and-templates.md)) with
+a field using the **Pretalx Table** handler. When creating content of that
+type, pick:
 
 - which Pretalx URL/room to pull from,
 - a room name filter,

@@ -7,7 +7,7 @@ screens rather than individual screens or devices.
 | Concept | Page | What it is |
 |---|---|---|
 | Device | `/devices` | A physical/browser player that connects over Socket.IO |
-| Screen | `/screens` | A logical, named display slot with its own resolution and (optional) template |
+| Screen | `/screens` | A logical, named display slot with its own resolution |
 | Screen group | `/screengroups` | A set of screens that content is assigned to |
 | Matrix | `/matrix` | A grid for bulk-managing which screens belong to which groups |
 
@@ -46,9 +46,10 @@ Devices page.
 ## Screens
 
 A **Screen** (`/screens`) is the logical slot content actually targets: it
-has a resolution, a debug flag, and optionally its own template override
-(falls back to the instance default template if unset). Multiple devices
-could point at the same screen, but typically it's one device per screen.
+has a resolution, a monitoring toggle, and a debug flag. Every screen renders
+the same instance-wide design and shares the same layouts — there's no
+per-screen override. Multiple devices could point at the same screen, but
+typically it's one device per screen.
 
 ## Screen groups
 

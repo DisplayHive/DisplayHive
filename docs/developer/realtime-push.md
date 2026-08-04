@@ -15,7 +15,7 @@ browser and a screen updating — the core loop that makes DisplayHive "live".
 3. **Payload build** — `send_upd_content`
    (`application/socketio_handlers/upd_content.py`) resolves which screens
    are affected via the content's screen groups, then builds a
-   per-screen payload (`_build_payload`) containing the screen's template
+   per-screen payload (`_build_payload`) containing the active design's
    HTML/CSS, per-container playlists, and rendered content HTML/CSS.
 4. **Emit** — for each affected device, it emits:
 
@@ -29,7 +29,7 @@ browser and a screen updating — the core loop that makes DisplayHive "live".
    listens for `upd_content` and hands the payload to `content-display.ts`,
    which re-renders the affected containers in place.
 
-Every content, template, container, and content-type mutation across
+Every content, design, layout/container, and content-type mutation across
 `application/admin/*` follows this same pattern: mutate the DB, then call
 `send_upd_content` with the affected content/screen IDs. If you add a new
 mutation that should appear on screens immediately, call it the same way.

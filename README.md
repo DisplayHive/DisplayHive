@@ -3,27 +3,30 @@
 Self-hosted digital signage for managing screens, content, and schedules in real time.
 
 DisplayHive drives networks of displays (kiosks, TVs, info screens) from a single admin
-panel. Content is composed from HTML/CSS templates with named containers, pushed to
-screens instantly over Socket.IO, and organized into groups so you can target one
-display or a hundred at once.
+panel. Content is composed on drag-and-drop layouts with named containers, styled
+instance-wide with a design, pushed to screens instantly over Socket.IO, and organized
+into groups so you can target one display or a hundred at once.
 
 ## Features
 
 - **Live content push** — changes in the admin panel appear on screens immediately via Socket.IO, no polling or refresh required.
-- **Templates & containers** — build layouts once, drop typed content elements into named containers, reuse across screens.
-- **Magic tags** — `{{variable}}` placeholders for dynamic values inside templates.
+- **Layouts & containers** — position named containers on a drag-and-drop canvas (with snapping), reuse across screens.
+- **Designs** — style a layout with color palettes, gradients, and animated/dynamic backgrounds, independent of its container placement.
+- **Content types** — reusable field schemas (text, image, icon, link, table, Pretalx table, date/time, WYSIWYG, ...) that populate containers.
+- **Magic tags** — `{{ var_name }}` placeholders for dynamic values inside designs.
 - **Screens & groups** — register devices, assign them to screens, organize screens into groups, and manage assignments from a matrix view.
+- **Live preview** — watch exactly what a screen renders from the admin panel without a physical device.
+- **Demo mode** — import ready-made example content packages to explore the admin panel with data already in place.
 - **Pretalx integration** — pull conference schedules from a Pretalx instance and render them as content.
 - **Alerting** — Telegram notifications when screens/devices go online, offline, or hit an error state.
 - **Import/export** — back up or migrate a full instance (database + media) as a single archive.
-- **JWT auth** — admin accounts with rate-limited login, no third-party auth dependency.
+- **Rights & groups** — granular per-feature permissions, nested groups, and per-user allow/deny overrides on top of JWT-authenticated, rate-limited login.
 
 ## A few clarifying words on the current state
 
 DisplayHive is currently in its early stages of development. Even if it is already quite powerful, there may be some issues. If you encounter them or want to help, just contact us on Mastodon (displayhive@chaos.social).
 Some of our main issues are:
 
-- No rights management
 - Some features are not as feature-rich or self-explanatory as they should be
 
 ## AI Usage
@@ -35,7 +38,7 @@ At the beginning of development, DisplayHive started without any AI usage. As th
 | Component         | Stack                                                  | Purpose                                               |
 | ----------------- | ------------------------------------------------------ | ----------------------------------------------------- |
 | **Backend**       | Flask + Flask-SocketIO (eventlet), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends        |
-| **Admin panel**   | Vue 3, PrimeVue, Pinia, Vite                           | Manage content, screens, devices, templates, settings |
+| **Admin panel**   | Vue 3, PrimeVue, Pinia, Vite                           | Manage content, screens, devices, layouts/designs, settings |
 | **Screen client** | TypeScript (no framework), Vite                        | Kiosk-facing display client, renders pushed content   |
 
 SQLite is used for local development; set `DATABASE_URL` to point at PostgreSQL in
@@ -109,8 +112,8 @@ npm run docs:serve   # http://localhost:8000
 ```
 
 - **User guide** ([`docs/user/`](docs/user/)) — using the admin panel:
-  templates, content, magic tags, screens/devices/groups, integrations,
-  import/export, and settings.
+  layouts, designs, content, magic tags, screens/devices/groups, rights &
+  groups, integrations, import/export, and settings.
 - **Developer guide** ([`docs/developer/`](docs/developer/)) — architecture,
   the real-time content push pipeline, and how to contribute.
 
@@ -128,7 +131,7 @@ runs this container alongside a PostgreSQL service.
 cp .env.example .env      # then edit .env and set the secrets
 # Generate a strong SECRET_KEY:  openssl rand -hex 32
 
-docker compose up -d --build
+docker compose up -d
 ```
 
 On startup the container applies Alembic migrations (`alembic upgrade head`), then
@@ -150,15 +153,15 @@ Useful commands:
 
 ```bash
 docker compose logs -f displayhive   # follow app logs
-docker compose up -d --build          # rebuild and restart after changes
+docker compose up -d                  # pull the latest image and restart
 docker compose down                   # stop (add -v to also delete volumes/data)
 ```
 
-To pull a pre-built image from GitHub Container Registry instead of building locally,
-swap the `build: .` line in [`compose.yml`](compose.yml) for
-`image: ghcr.io/displayhive/displayhive:latest`. Images are published automatically by
-the [`docker-image`](.github/workflows/docker-image.yml) workflow on every push to
-`main` and on version tags.
+By default [`compose.yml`](compose.yml) pulls the pre-built
+`ghcr.io/displayhive/displayhive:latest` image, published automatically by the
+[`docker-image`](.github/workflows/docker-image.yml) workflow on every push to `main`
+and on version tags. To build locally from source instead, comment out the `image:`
+line and uncomment `build: .`, then run `docker compose up -d --build`.
 
 ### NixOS
 

@@ -11,7 +11,7 @@ At its core, DisplayHive is a way to design a screen layout once, drop live
 content into it, and have that content show up — instantly, and in sync —
 across any number of displays you organize into groups. Because everything
 runs on your own infrastructure, there's no per-screen subscription, vendor
-lock-in, or cloud dependency: you own the templates, the content, and the
+lock-in, or cloud dependency: you own the layouts, the content, and the
 data.
 
 That combination — self-hosted, live-updating, group-targeted — makes it a

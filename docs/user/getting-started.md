@@ -47,9 +47,9 @@ starting from an empty one — is to import the bundled demo package. On the
     on a fresh instance, but see [Import & export](import-export.md) if you
     ever need to back up real content first.
 
-This gives you working templates, content types, content, screens, and
-screen groups to check the system with and to use as a reference while you
-build your own.
+This gives you working layouts, designs, content types, content, screens,
+and screen groups to check the system with and to use as a reference while
+you build your own.
 
 ## 4. Preview content without a screen
 
@@ -71,23 +71,25 @@ afterwards, open the device's edit dialog on the **Devices** page
 
 With your screen client showing content, go back to the admin panel and edit
 something it's currently displaying — change a content item's title, tweak
-the welcome text in [Settings](settings.md), or edit a template's CSS. Watch
-your screen client tab: the change appears immediately, with no refresh and
-no publish step. This live push is the core of how DisplayHive works, and
-it's worth seeing happen at least once before you build anything of your own.
+the welcome text in [Settings](settings.md), or edit the active design's
+CSS. Watch your screen client tab: the change appears immediately, with no
+refresh and no publish step. This live push is the core of how DisplayHive
+works, and it's worth seeing happen at least once before you build anything
+of your own.
 
 ## 7. Add your own content and show it on your screen
 
-On the **Content** page, add a new content item into a container that's
-allowed a text content type (the demo package includes one you can reuse,
-e.g. **Free Text**) and that's rendered by the template your registered
-screen (from step 5) is using. Fill in a title and the text field, and save.
+On the **Content** page, add a new content item using a text content type
+(the demo package includes one you can reuse, e.g. **Free Text**). Fill in a
+title and the text field, and save — it lands in whichever container its
+content type is scoped to via its layout, and every screen shares the same
+layouts.
 
 Check your screen client tab: your text should now be showing live, the same
-way the demo content did in step 6. If it landed in a container your screen
-doesn't render, use **Move Content** to reassign it — see
-[Templates, containers & content](content-and-templates.md) for how
-containers and content types fit together.
+way the demo content did in step 6. If it landed in a container you didn't
+expect, use **Move Content** to reassign it — see
+[Layouts, designs, content types & content](content-and-templates.md) for
+how containers and content types fit together.
 
 From here, that page and
 [Screens, devices & groups](screens-devices-groups.md) cover each of these
@@ -97,8 +99,8 @@ pieces in full depth.
 
 Now that you've seen the whole flow once, take some time to click through
 the rest of the admin panel and see how the Nordhofen Electric example is
-put together — its templates, containers, content types, and screen groups
-are all real, working examples you can learn from. Then head back to the
-**Demo Mode** page (`/demo`) and check out the other example packages
-(**Event**, **Hackerspace**) to see different ways templates and content can
+put together — its layouts, designs, containers, content types, and screen
+groups are all real, working examples you can learn from. Then head back to
+the **Demo Mode** page (`/demo`) and check out the other example packages
+(**Event**, **Hackerspace**) to see different ways layouts and content can
 be structured.

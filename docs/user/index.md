@@ -1,7 +1,7 @@
 # User Guide
 
 This guide covers day-to-day use of the DisplayHive admin panel — the web
-interface where you manage templates, content, screens, and devices.
+interface where you manage layouts, designs, content, screens, and devices.
 
 Everything here happens at `/admin/` on your DisplayHive instance and pushes
 to screens live, no publish step or refresh needed.
@@ -13,22 +13,24 @@ this is how they relate to each other:
 
 ```mermaid
 graph LR
-  Template -->|defines named regions| Container
+  Layout -->|groups positioned| Container
+  Design -->|styles| Container
+  ContentType -->|scoped to one| Layout
   ContentType -->|allowed in| Container
   Content -->|is an instance of| ContentType
   Content -->|assigned to| Screengroup
   Screengroup -->|contains| Screen
-  Screen -->|renders| Template
   Device -->|connects as| Screen
 ```
 
-In short: a **Template** is a page layout that defines **Containers**
-(named regions). A **Content Type** declares which containers it's allowed
-into, and **Content** is a specific item of a content type, assigned to a
-**Screen Group**. Every **Screen** in that group shows it, rendered through
-whichever **Template** the screen uses (its own override, or the instance
-default). A **Device** is the physical/browser player that connects to a
-screen. See [Templates, containers & content](content-and-templates.md) and
+In short: a **Layout** groups positioned **Containers** on a canvas, and a
+**Design** (exactly one active instance-wide) styles them — colors,
+gradients, backgrounds, per-container CSS. A **Content Type** is scoped to
+one layout and declares which of its containers it's allowed into, and
+**Content** is a specific item of a content type, assigned to a **Screen
+Group**. Every **Screen** in that group shows it. A **Device** is the
+physical/browser player that connects to a screen. See
+[Layouts, designs, content types & content](content-and-templates.md) and
 [Screens, devices & groups](screens-devices-groups.md) for the details
 behind each box.
 
@@ -41,10 +43,11 @@ roughly in order:
 2. **[Getting started](getting-started.md)** — a hands-on walkthrough: load
    the demo content, register a device, watch a live update happen, and
    publish your own content type end to end.
-3. **[Users & login](users-and-login.md)** — log in for the first time and set
-   a real password.
-4. **[Templates, containers & content](content-and-templates.md)** — build a
-   layout and put content on it.
+3. **[Users & login](users-and-login.md)** — log in for the first time, set
+   a real password, and (if you're setting up others) understand rights &
+   groups.
+4. **[Layouts, designs, content types & content](content-and-templates.md)**
+   — build a layout and put content on it.
 5. **[Screens, devices & groups](screens-devices-groups.md)** — register a
    physical/browser display and point it at your content.
 
@@ -54,8 +57,3 @@ optional integrations (both experimental — see their pages for details).
 [Import & export](import-export.md) covers backups,
 and [Settings](settings.md) covers instance-wide options. If something's
 unclear, check the [FAQ](faq.md) first.
-
-!!! warning "No rights management yet"
-    Every admin account has equal, full access — there are no roles or
-    permission tiers. Only give admin accounts to people you trust with the
-    whole instance.
