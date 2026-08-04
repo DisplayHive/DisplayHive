@@ -17,6 +17,7 @@ import Menubar from 'primevue/menubar'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Ripple from 'primevue/ripple'
+import Tooltip from 'primevue/tooltip'
 
 // PrimeIcons
 import 'primeicons/primeicons.css'
@@ -108,6 +109,7 @@ async function bootstrap() {
   app.component('Toast', Toast)
   app.component('ConfirmDialog', ConfirmDialog)
   app.directive('ripple', Ripple)
+  app.directive('tooltip', Tooltip)
 
   app.mount('#app')
 }

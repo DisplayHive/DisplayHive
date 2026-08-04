@@ -28,13 +28,6 @@ interface ContentElement {
   [key: string]: any
 }
 
-interface ContentField {
-  name: string
-  label: string
-  value: string
-  order: number
-}
-
 const props = withDefaults(defineProps<{
   items: ContentElement[]
   emptyMessage?: string
@@ -75,8 +68,10 @@ const hasBackendContent = computed(() =>
   props.totalItems !== undefined ? props.totalItems > 0 : props.items.length > 0
 )
 
-// Row expansion state — keyed by row data object
-const expandedRows = ref<ContentElement[]>([])
+// Row expansion state — because the DataTable below has `dataKey="id"`,
+// PrimeVue keeps v-model:expandedRows as an object map of {id: true}
+// rather than an array of row objects (that only happens without dataKey).
+const expandedRows = ref<Record<string, boolean>>({})
 
 // data.design/data.containers are the same Layout-positioned + Design-
 // skinned shape the Content edit page's live preview uses (see
@@ -89,8 +84,9 @@ const expandedRows = ref<ContentElement[]>([])
 // template on every render.
 const resolvedSrcdocs = ref<Record<number, string>>({})
 const resolvedSrcdocKeys: Record<number, string> = {}
-watch([expandedRows, () => props.items], async ([rows]) => {
-  for (const row of rows) {
+watch([expandedRows, () => props.items], async ([expanded, items]) => {
+  for (const row of items) {
+    if (!expanded[row.id]) continue
     const key = JSON.stringify([row.design, row.containers])
     if (resolvedSrcdocKeys[row.id] === key) continue
     resolvedSrcdocKeys[row.id] = key
@@ -101,53 +97,6 @@ watch([expandedRows, () => props.items], async ([rows]) => {
   }
 }, { deep: false })
 
-const getContentFields = (content: any): ContentField[] => {
-  if (!content) return []
-  const ignore = new Set([
-    'id', 'title', 'active', 'duration', 'start_time', 'end_time',
-    'contenttypeName', 'screengroups', 'contenttype_id', 'design', 'containers', '_field_metadata',
-  ])
-  const fields: ContentField[] = []
-  const metadata = content._field_metadata || {}
-  // option_flags is keyed by wire key (e.g. 'photo', 'photo__size') — the
-  // same keys content's own top-level properties use — so a hidden key from
-  // any field's option_flags can be checked directly against `k` below.
-  const hiddenKeys = new Set<string>()
-  for (const meta of Object.values<any>(metadata)) {
-    for (const [key, flag] of Object.entries<any>(meta?.option_flags || {})) {
-      if (flag?.hidden) hiddenKeys.add(key)
-    }
-  }
-
-  for (const k of Object.keys(content)) {
-    if (ignore.has(k)) continue
-    if (k.endsWith('__image_mode') || k.endsWith('__image_tags')) continue
-    if (hiddenKeys.has(k)) continue
-    const v = content[k]
-    if (v === null || v === undefined || v === '') continue
-
-    let textValue = ''
-    if (typeof v === 'object') {
-      try { textValue = JSON.stringify(v) } catch { continue }
-    } else {
-      textValue = String(v)
-    }
-
-    textValue = textValue.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    if (!textValue) continue
-    if (textValue.length > 100) textValue = textValue.slice(0, 100) + '…'
-
-    const meta = metadata[k] || {}
-    fields.push({
-      name: k,
-      label: meta.label || k,
-      value: textValue,
-      order: meta.order ?? 999,
-    })
-  }
-
-  return fields.sort((a, b) => a.order - b.order)
-}
 </script>
 
 <template>
@@ -275,21 +224,6 @@ const getContentFields = (content: any): ContentField[] => {
                   @click="emit('setDuration', data, val)"
                 />
               </div>
-            </div>
-            <div v-if="data.start_time || data.end_time" class="expansion-schedule">
-              <span class="expansion-label">Schedule</span>
-              <span v-if="data.start_time" class="schedule-chip schedule-chip--start">
-                <i class="pi pi-calendar" /> From&nbsp;{{ data.start_time?.replace('T', ' ') }}
-              </span>
-              <span v-if="data.end_time" class="schedule-chip schedule-chip--end">
-                <i class="pi pi-calendar-times" /> Until&nbsp;{{ data.end_time?.replace('T', ' ') }}
-              </span>
-            </div>
-          </div>
-          <div v-if="getContentFields(data).length > 0" class="expansion-fields">
-            <div v-for="field in getContentFields(data)" :key="field.name" class="content-field-row">
-              <span class="field-label">{{ field.label }}</span>
-              <span class="field-value">{{ field.value }}</span>
             </div>
           </div>
           <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
