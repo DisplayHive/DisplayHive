@@ -633,7 +633,6 @@ body {
 .app-menubar {
   background: transparent !important;
   border: none !important;
-  margin-right: 100px;
 }
 
 .header-controls {
@@ -693,15 +692,21 @@ body {
 .app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-submenu {
   position: fixed !important;
   top: var(--header-height) !important;
+  max-width: calc(100vw - 1rem) !important;
 }
 
 /* Nested submenus (e.g. grouped Admin items) must stay anchored to their
    parent item rather than the header — the rule above only pins the
-   first-level flyout so it isn't clipped below the sticky header. */
+   first-level flyout so it isn't clipped below the sticky header.
+   They open to the left instead of the right: their parent item ("Admin")
+   sits at the right edge of the bar, so opening rightward (left: 100%)
+   pushed them off the edge of the window. */
 .app-menubar .p-menubar-submenu .p-menubar-submenu {
   position: absolute !important;
-  left: 100% !important;
+  left: auto !important;
+  right: 100% !important;
   top: 0 !important;
+  max-width: calc(100vw - 1rem) !important;
 }
 
 .app-main {
