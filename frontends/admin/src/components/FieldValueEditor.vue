@@ -171,9 +171,10 @@ const setIconValue = (name: string, v: IconPickerValue) => {
 // `<name>__size` — same translation purpose as the pretalx one above.
 const iconOptionFlags = computed<OptionFlags>(() => {
   const out: OptionFlags = {}
-  if (props.optionFlags?.[props.tag.name]) out.icon = props.optionFlags[props.tag.name]
-  const sizeKey = `${props.tag.name}__size`
-  if (props.optionFlags?.[sizeKey]) out.size = props.optionFlags[sizeKey]
+  const iconFlag = props.optionFlags?.[props.tag.name]
+  if (iconFlag) out.icon = iconFlag
+  const sizeFlag = props.optionFlags?.[`${props.tag.name}__size`]
+  if (sizeFlag) out.size = sizeFlag
   return out
 })
 
