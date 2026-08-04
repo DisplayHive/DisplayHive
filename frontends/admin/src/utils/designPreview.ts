@@ -10,6 +10,7 @@
  * them here that CSS silently matches nothing.
  */
 import { getEffectDefinition } from './backgroundEffects'
+import { loadIcon } from './iconLibraries'
 // `?raw` inlines the pre-built bundle's source as a string at build time —
 // see LayoutCanvasEditor.vue for why this has to be literal <script> content
 // rather than a normal import/evaluation inside a sandboxed srcdoc iframe.
@@ -56,17 +57,56 @@ function buildEffectFragment(effect: DesignPreviewPayload['background_effect'] |
   )
 }
 
-export function buildDesignPreviewSrcdoc(
+/** Strip any hardcoded width/height off the SVG root so it scales to its wrapper — mirrors icon-resolver.ts's sizeToFit. */
+function sizeIconSvgToFit(svg: string): string {
+  return svg.replace(
+    /<svg\b([^>]*)>/i,
+    (_match, attrs: string) =>
+      `<svg${attrs.replace(/\s+(width|height)="[^"]*"/gi, '')} style="height:100%;width:auto;display:block;">`,
+  )
+}
+
+// 'icon' fields render as a <div data-dh-icon-library data-dh-icon-name>
+// placeholder (the backend can't read the icon SVGs — they ship as npm
+// packages bundled into the frontends, not backend-readable files — see
+// render_content_fields in application/admin/content/helper.py) that's
+// normally resolved to real inline SVG client-side after DOM insertion
+// (icon-resolver.ts, screen client only, via container-manager.ts). This
+// preview is a srcdoc string for a sandboxed iframe with no
+// allow-same-origin, so it gets an opaque origin — a <script> running inside
+// it can't fetch same-server static files (no CORS headers on them, and the
+// opaque origin makes the fetch cross-origin) the way the real screen client
+// can. So placeholders are resolved here instead, in the real (non-sandboxed)
+// admin page, before the srcdoc string is ever assembled.
+async function resolveIconPlaceholders(html: string): Promise<string> {
+  if (!html.includes('data-dh-icon-library')) return html
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html')
+  const els = Array.from(doc.querySelectorAll<HTMLElement>('[data-dh-icon-library]'))
+  await Promise.all(
+    els.map(async (el) => {
+      const library = el.getAttribute('data-dh-icon-library')
+      const name = el.getAttribute('data-dh-icon-name')
+      if (!library || !name) return
+      const svg = await loadIcon(library, name)
+      if (svg) el.innerHTML = sizeIconSvgToFit(svg)
+    }),
+  )
+  return doc.body.firstElementChild?.innerHTML ?? html
+}
+
+export async function buildDesignPreviewSrcdoc(
   design: DesignPreviewPayload | null | undefined,
   containers: Record<string, PreviewContainer> | null | undefined,
-): string {
+): Promise<string> {
   if (!design) return ''
-  const containersHtml = Object.entries(containers || {})
-    .map(
-      ([id, c]) =>
-        `<div class="dh-container dh-container-${id}" style="position:absolute;top:${c.top}vh;left:${c.left}vw;width:${c.width}vw;height:${c.height}vh;">${c.html}</div>`,
+  const containersHtml = (
+    await Promise.all(
+      Object.entries(containers || {}).map(async ([id, c]) => {
+        const html = await resolveIconPlaceholders(c.html)
+        return `<div class="dh-container dh-container-${id}" style="position:absolute;top:${c.top}vh;left:${c.left}vw;width:${c.width}vw;height:${c.height}vh;">${html}</div>`
+      }),
     )
-    .join('')
+  ).join('')
   return (
     `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${design.css}</style></head>` +
     `<body>${buildEffectFragment(design.background_effect)}<div style="position:relative;">${design.html}</div>${containersHtml}</body></html>`

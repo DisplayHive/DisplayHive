@@ -107,7 +107,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
     def _serialize_contenttype_detail(ct):
         """Build the full contenttype detail payload (used by both get and update)."""
-        tagconfigs = ct.tagconfigs or []
+        tagconfigs = sorted(ct.tagconfigs or [], key=lambda t: (t.order, t.id or 0))
         return {
             'id': ct.id,
             'name': ct.name,

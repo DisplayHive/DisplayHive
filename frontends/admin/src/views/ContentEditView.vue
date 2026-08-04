@@ -176,7 +176,16 @@ watch(
   { deep: true },
 )
 
-const previewSrcdoc = computed(() => buildDesignPreviewSrcdoc(previewData.value?.design, previewData.value?.containers))
+const previewSrcdoc = ref('')
+watch(
+  previewData,
+  async (data) => {
+    const srcdoc = await buildDesignPreviewSrcdoc(data?.design, data?.containers)
+    // Guard against an older (slower) resolution overwriting a newer one.
+    if (previewData.value === data) previewSrcdoc.value = srcdoc
+  },
+  { immediate: true },
+)
 
 const sgSearchText = ref('')
 const screenSearchText = ref('')

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -83,8 +83,23 @@ const expandedRows = ref<ContentElement[]>([])
 // application/admin/content/helper.py's build_scene_containers) — reuse the
 // same srcdoc builder rather than the old unpositioned fragment-concatenation
 // approach, which never reflected what a scene actually looks like on screen.
-const buildSrcdoc = (data: ContentElement): string =>
-  buildDesignPreviewSrcdoc(data.design as DesignPreviewPayload, data.containers as Record<string, PreviewContainer>)
+// buildDesignPreviewSrcdoc is async (it resolves 'icon' field placeholders to
+// real inline SVG before assembling the srcdoc string), so results are
+// resolved per expanded row and cached here rather than built inline in the
+// template on every render.
+const resolvedSrcdocs = ref<Record<number, string>>({})
+const resolvedSrcdocKeys: Record<number, string> = {}
+watch([expandedRows, () => props.items], async ([rows]) => {
+  for (const row of rows) {
+    const key = JSON.stringify([row.design, row.containers])
+    if (resolvedSrcdocKeys[row.id] === key) continue
+    resolvedSrcdocKeys[row.id] = key
+    resolvedSrcdocs.value[row.id] = await buildDesignPreviewSrcdoc(
+      row.design as DesignPreviewPayload,
+      row.containers as Record<string, PreviewContainer>,
+    )
+  }
+}, { deep: false })
 
 const getContentFields = (content: any): ContentField[] => {
   if (!content) return []
@@ -270,7 +285,7 @@ const getContentFields = (content: any): ContentField[] => {
           <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
             <span class="expansion-label">Preview</span>
             <div class="preview-frame-wrapper">
-              <iframe :srcdoc="buildSrcdoc(data)" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
+              <iframe :srcdoc="resolvedSrcdocs[data.id] || ''" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
             </div>
           </div>
         </div>
