@@ -55,12 +55,19 @@ def build_content_dict(content, design_payload=None, db=None):
             pass
     tagconfigs = list(getattr(content.contenttype, 'tagconfigs', None) or []) if content.contenttype else []
     if tagconfigs:
+        def _option_flags(tag):
+            try:
+                return json.loads(tag.option_flags) if tag.option_flags else {}
+            except Exception:
+                return {}
+
         data['_field_metadata'] = {
             tag.field_name: {
                 'label': tag.field_label or tag.field_name,
                 'order': tag.order,
                 'type': tag.field_handler,
                 'contentcontainer_id': tag.contentcontainer_id,
+                'option_flags': _option_flags(tag),
             }
             for tag in tagconfigs
         }

@@ -45,6 +45,8 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                 title = item.get('title') or item.get('field_label')
                 order = item.get('order')
                 field_handler = item.get('field_handler', 'textklein')
+                default_value = item.get('default_value')
+                option_flags = item.get('option_flags')
 
                 contentcontainer_id = item.get('contentcontainer_id')
                 try:
@@ -77,6 +79,8 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                     if field_handler is not None:
                         target_tc.field_handler = field_handler
                     target_tc.contentcontainer_id = contentcontainer_id
+                    target_tc.default_value = default_value
+                    target_tc.option_flags = option_flags
                     db.session.add(target_tc)
                 else:
                     db.session.add(TagConfig(
@@ -86,6 +90,8 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                         field_label=title or name,
                         field_handler=field_handler,
                         order=int(order) if order is not None else 0,
+                        default_value=default_value,
+                        option_flags=option_flags,
                     ))
             except Exception:
                 continue
@@ -121,6 +127,8 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                     'field_handler': t.field_handler,
                     'contentcontainer_id': t.contentcontainer_id,
                     'order': t.order,
+                    'default_value': t.default_value,
+                    'option_flags': t.option_flags,
                 }
                 for t in tagconfigs
             ],

@@ -16,6 +16,8 @@ import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Dropdown from 'primevue/dropdown'
 import Tag from 'primevue/tag'
+import FieldValueEditor from '../components/FieldValueEditor.vue'
+import type { OptionFlags } from '../utils/optionFlags'
 
 interface TagConfig {
   id?: number | null
@@ -23,6 +25,14 @@ interface TagConfig {
   title: string
   field_handler: string
   contentcontainer_id: number | null
+  // Preset value for this field — same flat key-shape (field_name plus its
+  // handler-specific suffixes) FieldValueEditor.vue's `fields` prop expects,
+  // scoped to just this one field.
+  default_value: Record<string, any>
+  // One entry per individual sub-setting the field exposes (e.g. an 'image'
+  // field's mode/value/size are each independently lockable/hideable) —
+  // keyed the same way as default_value. See FieldValueEditor.vue.
+  option_flags: OptionFlags
 }
 
 interface ContentType {
@@ -149,6 +159,8 @@ const syncFieldsToLayoutContainers = () => {
       title: c.name,
       field_handler: 'textklein',
       contentcontainer_id: c.id,
+      default_value: {},
+      option_flags: {},
     }))
   editForm.value.tagconfigs = [...kept, ...added]
 }
@@ -160,6 +172,22 @@ const moveField = (index: number, direction: -1 | 1) => {
   const [moved] = arr.splice(index, 1)
   if (moved) arr.splice(target, 0, moved)
 }
+
+// Which fields' Preset panel is currently expanded, keyed by tagconfig id
+// (or "new-<index>" for not-yet-saved fields, matching the row :key below).
+const expandedPresetKeys = ref<Set<string | number>>(new Set())
+const presetKeyFor = (t: TagConfig, idx: number) => t.id ?? `new-${idx}`
+const togglePresetPanel = (key: string | number) => {
+  const next = new Set(expandedPresetKeys.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedPresetKeys.value = next
+}
+
+// Whether any individual sub-option on this field currently has a lock/hide
+// flag set — drives the Preset button's highlighted state.
+const hasAnyOptionFlag = (t: TagConfig): boolean =>
+  Object.values(t.option_flags || {}).some((f) => f.locked || f.hidden)
 
 const dragFieldIndex = ref<number | null>(null)
 const onFieldDragStart = (index: number) => {
@@ -186,6 +214,8 @@ const prepareTagConfigsPayload = () => {
   return editForm.value.tagconfigs.map((t, i) => ({
     id: t.id, name: t.name, title: t.title, field_handler: t.field_handler,
     contentcontainer_id: t.contentcontainer_id, order: i,
+    default_value: JSON.stringify(t.default_value || {}),
+    option_flags: JSON.stringify(t.option_flags || {}),
   }))
 }
 
@@ -223,6 +253,7 @@ const handleContentTypeDetail = async (data: any) => {
     const tagconfigs = (ct.tagconfigs || []).map((t: any) => ({
       name: t.field_name, title: t.field_label, field_handler: t.field_handler,
       contentcontainer_id: t.contentcontainer_id, order: t.order,
+      default_value: t.default_value, option_flags: t.option_flags,
     }))
     const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:create_contenttype', {
       name,
@@ -247,12 +278,18 @@ const handleContentTypeDetail = async (data: any) => {
       .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
       .map((t: any) => {
         const c = containers.value.find(x => x.id === t.contentcontainer_id)
+        let default_value: Record<string, any> = {}
+        try { default_value = t.default_value ? JSON.parse(t.default_value) : {} } catch { default_value = {} }
+        let option_flags: OptionFlags = {}
+        try { option_flags = t.option_flags ? JSON.parse(t.option_flags) : {} } catch { option_flags = {} }
         return {
           id: t.id,
           name: c?.name || t.field_name,
           title: t.field_label || c?.name || t.field_name,
           field_handler: t.field_handler ?? 'textklein',
           contentcontainer_id: t.contentcontainer_id ?? null,
+          default_value,
+          option_flags,
         }
       })
     // Ensure every container of the Layout has a slot, even if the Layout
@@ -522,41 +559,62 @@ const deleteContentType = (ct: ContentType) => {
               <div class="tagconfig-col-container">Container</div>
               <div class="tagconfig-col-title">Title</div>
               <div class="tagconfig-col-type">Field Handler</div>
+              <div class="tagconfig-col-preset"></div>
               <div class="tagconfig-col-order"></div>
             </div>
-            <div
-              v-for="(t, tIdx) in editForm.tagconfigs"
-              :key="t.id ?? `new-${tIdx}`"
-              class="tagconfig-row"
-              draggable="true"
-              @dragstart="onFieldDragStart(tIdx)"
-              @dragover.prevent
-              @drop="onFieldDrop(tIdx)"
-            >
-              <div class="tagconfig-col-drag">
-                <i class="pi pi-bars drag-handle" title="Drag to reorder"></i>
+            <template v-for="(t, tIdx) in editForm.tagconfigs" :key="t.id ?? `new-${tIdx}`">
+              <div
+                class="tagconfig-row"
+                draggable="true"
+                @dragstart="onFieldDragStart(tIdx)"
+                @dragover.prevent
+                @drop="onFieldDrop(tIdx)"
+              >
+                <div class="tagconfig-col-drag">
+                  <i class="pi pi-bars drag-handle" title="Drag to reorder"></i>
+                </div>
+                <div class="tagconfig-col-container">
+                  <Tag :value="containerLabelFor(t.contentcontainer_id)" />
+                </div>
+                <div class="tagconfig-col-title">
+                  <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
+                </div>
+                <div class="tagconfig-col-type">
+                  <Dropdown
+                    v-model="t.field_handler"
+                    :options="fieldHandlerOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-full"
+                    size="small"
+                  />
+                </div>
+                <div class="tagconfig-col-preset">
+                  <Button
+                    :icon="expandedPresetKeys.has(presetKeyFor(t, tIdx)) ? 'pi pi-chevron-up' : 'pi pi-sliders-h'"
+                    text
+                    size="small"
+                    :severity="hasAnyOptionFlag(t) ? 'warning' : undefined"
+                    :title="hasAnyOptionFlag(t) ? 'Preset value (active)' : 'Preset value'"
+                    @click="togglePresetPanel(presetKeyFor(t, tIdx))"
+                  />
+                </div>
+                <div class="tagconfig-col-order">
+                  <Button icon="pi pi-chevron-up" text size="small" :disabled="tIdx === 0" @click="moveField(tIdx, -1)" title="Move up" />
+                  <Button icon="pi pi-chevron-down" text size="small" :disabled="tIdx === editForm.tagconfigs.length - 1" @click="moveField(tIdx, 1)" title="Move down" />
+                </div>
               </div>
-              <div class="tagconfig-col-container">
-                <Tag :value="containerLabelFor(t.contentcontainer_id)" />
-              </div>
-              <div class="tagconfig-col-title">
-                <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
-              </div>
-              <div class="tagconfig-col-type">
-                <Dropdown
-                  v-model="t.field_handler"
-                  :options="fieldHandlerOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  class="w-full"
-                  size="small"
+              <div v-if="expandedPresetKeys.has(presetKeyFor(t, tIdx))" class="tagconfig-preset-panel">
+                <label class="preset-panel-label">Preset value <small>use the lock/hide icons next to each option to prohibit overwrite or hide it from the Content Editor</small></label>
+                <FieldValueEditor
+                  :tag="{ name: t.name, fieldHandler: t.field_handler }"
+                  :fields="t.default_value"
+                  mode="preset"
+                  :option-flags="t.option_flags"
+                  @update:option-flags="(v) => { t.option_flags = v }"
                 />
               </div>
-              <div class="tagconfig-col-order">
-                <Button icon="pi pi-chevron-up" text size="small" :disabled="tIdx === 0" @click="moveField(tIdx, -1)" title="Move up" />
-                <Button icon="pi pi-chevron-down" text size="small" :disabled="tIdx === editForm.tagconfigs.length - 1" @click="moveField(tIdx, 1)" title="Move down" />
-              </div>
-            </div>
+            </template>
           </div>
         </div>
       </div>
@@ -608,7 +666,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-header {
   display: grid;
-  grid-template-columns: 28px 160px 1fr 1fr 68px;
+  grid-template-columns: 28px 160px 1fr 1fr 40px 68px;
   gap: 0.5rem;
   padding: 0.5rem;
   background: #f5f5f5;
@@ -619,7 +677,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row {
   display: grid;
-  grid-template-columns: 28px 160px 1fr 1fr 68px;
+  grid-template-columns: 28px 160px 1fr 1fr 40px 68px;
   gap: 0.5rem;
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
@@ -650,13 +708,34 @@ const deleteContentType = (ct: ContentType) => {
   color: #999;
 }
 
-.tagconfig-col-order {
+.tagconfig-col-order,
+.tagconfig-col-preset {
   display: flex;
   align-items: center;
 }
 
 .tagconfig-row[draggable='true'] {
   cursor: default;
+}
+
+.tagconfig-preset-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 0.75rem 0.75rem 2.5rem;
+  background: var(--surface-b, #fafafa);
+  border-bottom: 1px solid #eee;
+}
+
+.preset-panel-label {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.preset-panel-label small {
+  font-weight: 400;
+  color: #888;
+  margin-left: 0.3rem;
 }
 
 .fields-section {

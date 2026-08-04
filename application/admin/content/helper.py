@@ -50,6 +50,34 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
 
     field_handlers = {tc.field_name: tc.field_handler for tc in (tagconfigs or []) if tc.field_name}
 
+    # Locked/hidden *individual sub-settings* always render their
+    # Contenttype-configured preset, regardless of what the caller's
+    # serialized_input actually contains for that key — this is the single
+    # enforcement point for both "prohibit overwrite" and "hide from user",
+    # since every rendering path (screens, previews, create/update) goes
+    # through this function. option_flags is keyed by the same flat wire key
+    # shape as default_value/ctx itself (e.g. '<name>', '<name>__size'), so
+    # only the specific flagged sub-settings are overridden, not the whole
+    # field.
+    for tc in (tagconfigs or []):
+        if not tc.field_name:
+            continue
+        try:
+            flags = json.loads(tc.option_flags) if tc.option_flags else {}
+        except Exception:
+            flags = {}
+        if not isinstance(flags, dict) or not flags:
+            continue
+        try:
+            preset = json.loads(tc.default_value) if tc.default_value else {}
+        except Exception:
+            preset = {}
+        if not isinstance(preset, dict):
+            continue
+        for key, flag in flags.items():
+            if isinstance(flag, dict) and (flag.get('locked') or flag.get('hidden')) and key in preset:
+                ctx[key] = preset[key]
+
     # Resolve random_tags image fields to a concrete URL before rendering
     if db is not None and field_handlers:
         from application.models.content import Media

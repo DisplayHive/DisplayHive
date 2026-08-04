@@ -13,24 +13,43 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import type { PretalxTableValue } from '../utils/pretalxTable'
+import type { OptionFlags } from '../utils/optionFlags'
 
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
+import OptionFlagToggle from './OptionFlagToggle.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: PretalxTableValue
   /** Label for the API-endpoint select — callers phrase this differently (a field vs. a container default). */
   label?: string
-}>()
+  /** See FieldValueEditor.vue's own `mode`/`optionFlags` doc comment. Local
+   * keys here are this component's own PretalxTableValue field names (url,
+   * type, roomname, ...) — the caller translates to/from wire keys. */
+  mode?: 'edit' | 'preset'
+  optionFlags?: OptionFlags
+}>(), {
+  mode: 'edit',
+  optionFlags: undefined,
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: PretalxTableValue]
+  'update:optionFlags': [OptionFlags]
 }>()
 
 const patch = (partial: Partial<PretalxTableValue>) => emit('update:modelValue', { ...props.modelValue, ...partial })
+
+const isFieldHidden = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.hidden
+const isFieldLocked = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.locked
+const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
+const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
+  const current = flagsFor(key)
+  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+}
 
 const { emit: socketEmit, emitWithAck: socketEmitWithAck, on, off } = useSocket()
 
@@ -181,162 +200,211 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
 
 <template>
   <div class="pretalx-table-editor">
-    <div class="field">
-      <label>{{ label || 'API Endpoint' }}</label>
-      <Select
-        :modelValue="modelValue.url"
-        @update:modelValue="(v: string) => patch({ url: v })"
-        :options="pretalxApiUrls.map(u => ({ label: u.name + (u.has_cache ? '' : ' ⚠ no cache'), value: String(u.id) }))"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="— select API endpoint —"
-        emptyMessage="No Pretalx API URLs configured"
-        class="w-full"
-      />
-    </div>
-
-    <div class="field">
-      <label>Type</label>
-      <Select
-        :modelValue="modelValue.type"
-        @update:modelValue="(v: string) => patch({ type: v })"
-        :options="[
-          { label: 'List', value: 'list' },
-          { label: 'Current Event', value: 'current' },
-          { label: 'Coming Up', value: 'coming_up' },
-          { label: 'Event Day', value: 'eventday' },
-          { label: 'Tracklist', value: 'tracklist' },
-        ]"
-        optionLabel="label"
-        optionValue="value"
-        class="w-full"
-      />
-    </div>
-
-    <div v-show="isVisible('roomname')" class="field">
-      <label>Room Name filter</label>
-      <div class="room-select">
-        <template v-if="roomsForCurrentUrl.length">
-          <label v-for="room in roomsForCurrentUrl" :key="room" class="room-option">
-            <Checkbox :binary="true" :modelValue="isRoomSelected(room)" @update:modelValue="(v: boolean) => setRoomSelected(room, v)" />
-            <span>{{ room }}</span>
-          </label>
-        </template>
-        <span v-else class="field-hint">{{ modelValue.url ? 'No rooms found in cache' : 'Select an API endpoint first' }}</span>
+    <div class="pretalx-option-row">
+      <div class="field">
+        <label>{{ label || 'API Endpoint' }}</label>
+        <Select
+          :modelValue="modelValue.url"
+          @update:modelValue="(v: string) => patch({ url: v })"
+          :options="pretalxApiUrls.map(u => ({ label: u.name + (u.has_cache ? '' : ' ⚠ no cache'), value: String(u.id) }))"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="— select API endpoint —"
+          emptyMessage="No Pretalx API URLs configured"
+          :disabled="isFieldLocked('url')"
+          class="w-full"
+        />
       </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('url')" @toggle-locked="toggleFlag('url', 'locked')" @toggle-hidden="toggleFlag('url', 'hidden')" />
     </div>
 
-    <div v-show="isVisible('fields')" class="field">
-      <label>Fields</label>
-      <div class="tracklist-cols-editor">
-        <div class="tracklist-cols-header"><span>Field</span><span>Header</span><span></span></div>
-        <div v-for="(row, idx) in eventFieldRows" :key="idx" class="tracklist-cols-row">
-          <Select
-            :modelValue="row.key || null"
-            @update:modelValue="(v: string | null) => updateEventFieldKey(idx, v ?? '')"
-            :options="EVENT_FIELD_OPTIONS"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="— select —"
-            size="small"
-            class="w-full"
-          />
-          <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateEventFieldLabel(idx, v ?? '')" size="small" class="w-full" />
-          <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeEventField(idx)" />
+    <div v-show="mode !== 'edit' || !isFieldHidden('type')" class="pretalx-option-row">
+      <div class="field">
+        <label>Type</label>
+        <Select
+          :modelValue="modelValue.type"
+          @update:modelValue="(v: string) => patch({ type: v })"
+          :options="[
+            { label: 'List', value: 'list' },
+            { label: 'Current Event', value: 'current' },
+            { label: 'Coming Up', value: 'coming_up' },
+            { label: 'Event Day', value: 'eventday' },
+            { label: 'Tracklist', value: 'tracklist' },
+          ]"
+          optionLabel="label"
+          optionValue="value"
+          :disabled="isFieldLocked('type')"
+          class="w-full"
+        />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('type')" @toggle-locked="toggleFlag('type', 'locked')" @toggle-hidden="toggleFlag('type', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('roomname') && (mode !== 'edit' || !isFieldHidden('roomname'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Room Name filter</label>
+        <div :class="['room-select', { 'pretalx-disabled': isFieldLocked('roomname') }]">
+          <template v-if="roomsForCurrentUrl.length">
+            <label v-for="room in roomsForCurrentUrl" :key="room" class="room-option">
+              <Checkbox :binary="true" :modelValue="isRoomSelected(room)" @update:modelValue="(v: boolean) => setRoomSelected(room, v)" />
+              <span>{{ room }}</span>
+            </label>
+          </template>
+          <span v-else class="field-hint">{{ modelValue.url ? 'No rooms found in cache' : 'Select an API endpoint first' }}</span>
         </div>
-        <Button label="Add Field" icon="pi pi-plus" size="small" text @click="addEventField" style="margin-top:0.25rem;" />
       </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('roomname')" @toggle-locked="toggleFlag('roomname', 'locked')" @toggle-hidden="toggleFlag('roomname', 'hidden')" />
     </div>
 
-    <div v-show="isVisible('linecount')" class="field">
-      <label>Line Count</label>
-      <InputNumber :modelValue="modelValue.linecount" @update:modelValue="(v: number | null) => patch({ linecount: v ?? 0 })" class="w-full" />
-    </div>
-
-    <div v-show="isVisible('author_under_title')" class="field field--checkbox">
-      <Checkbox :inputId="'pretalx-author-under-title'" :binary="true" :modelValue="modelValue.author_under_title" @update:modelValue="(v: boolean) => patch({ author_under_title: v })" />
-      <label for="pretalx-author-under-title">Display Author under Title</label>
-    </div>
-
-    <div v-show="isVisible('tracks_by_color')" class="field field--checkbox">
-      <Checkbox :inputId="'pretalx-tracks-by-color'" :binary="true" :modelValue="modelValue.tracks_by_color" @update:modelValue="(v: boolean) => patch({ tracks_by_color: v })" />
-      <label for="pretalx-tracks-by-color">Represent tracks by Color</label>
-    </div>
-
-    <div v-show="isVisible('today_only')" class="field field--checkbox">
-      <Checkbox :inputId="'pretalx-today-only'" :binary="true" :modelValue="modelValue.today_only" @update:modelValue="(v: boolean) => patch({ today_only: v })" />
-      <label for="pretalx-today-only">Only show today</label>
-    </div>
-
-    <div v-show="isVisible('separate_days')" class="field field--checkbox">
-      <Checkbox :inputId="'pretalx-separate-days'" :binary="true" :modelValue="modelValue.separate_days" @update:modelValue="(v: boolean) => patch({ separate_days: v })" />
-      <label for="pretalx-separate-days">Separate day tables</label>
-    </div>
-
-    <div v-show="isVisible('day_prefix')" class="field">
-      <label>Day Prefix</label>
-      <InputText :modelValue="modelValue.day_prefix" @update:modelValue="(v: string | undefined) => patch({ day_prefix: v ?? '' })" class="w-full" />
-    </div>
-
-    <div v-show="isVisible('empty_text')" class="field">
-      <label>No session running text</label>
-      <InputText :modelValue="modelValue.empty_text" @update:modelValue="(v: string | undefined) => patch({ empty_text: v ?? '' })" class="w-full" />
-    </div>
-
-    <div v-show="isVisible('tracklist_columns')" class="field">
-      <label>Tracklist Columns</label>
-      <div class="tracklist-cols-editor">
-        <div class="tracklist-cols-header"><span>Field</span><span>Header</span><span></span></div>
-        <div v-for="(row, idx) in tracklistRows" :key="idx" class="tracklist-cols-row">
-          <Select
-            :modelValue="row.key || null"
-            @update:modelValue="(v: string | null) => updateTracklistKey(idx, v ?? '')"
-            :options="TRACKLIST_COL_OPTIONS"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="— select —"
-            size="small"
-            class="w-full"
-          />
-          <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateTracklistLabel(idx, v ?? '')" size="small" class="w-full" />
-          <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeTracklistColumn(idx)" />
+    <div v-show="isVisible('fields') && (mode !== 'edit' || !isFieldHidden('fields'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Fields</label>
+        <div :class="['tracklist-cols-editor', { 'pretalx-disabled': isFieldLocked('fields') }]">
+          <div class="tracklist-cols-header"><span>Field</span><span>Header</span><span></span></div>
+          <div v-for="(row, idx) in eventFieldRows" :key="idx" class="tracklist-cols-row">
+            <Select
+              :modelValue="row.key || null"
+              @update:modelValue="(v: string | null) => updateEventFieldKey(idx, v ?? '')"
+              :options="EVENT_FIELD_OPTIONS"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="— select —"
+              size="small"
+              class="w-full"
+            />
+            <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateEventFieldLabel(idx, v ?? '')" size="small" class="w-full" />
+            <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeEventField(idx)" />
+          </div>
+          <Button label="Add Field" icon="pi pi-plus" size="small" text @click="addEventField" style="margin-top:0.25rem;" />
         </div>
-        <Button label="Add Column" icon="pi pi-plus" size="small" text @click="addTracklistColumn" style="margin-top:0.25rem;" />
       </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('fields')" @toggle-locked="toggleFlag('fields', 'locked')" @toggle-hidden="toggleFlag('fields', 'hidden')" />
     </div>
 
-    <div v-show="isVisible('tracklist_layout')" class="field">
-      <label>Tracklist Layout</label>
-      <Select
-        :modelValue="modelValue.tracklist_layout"
-        @update:modelValue="(v: string) => patch({ tracklist_layout: v })"
-        :options="[
-          { label: 'List (one track per row)', value: 'list' },
-          { label: 'Row (all tracks in one row)', value: 'row' },
-        ]"
-        optionLabel="label"
-        optionValue="value"
-        class="w-full"
-      />
+    <div v-show="isVisible('linecount') && (mode !== 'edit' || !isFieldHidden('linecount'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Line Count</label>
+        <InputNumber :modelValue="modelValue.linecount" @update:modelValue="(v: number | null) => patch({ linecount: v ?? 0 })" :disabled="isFieldLocked('linecount')" class="w-full" />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('linecount')" @toggle-locked="toggleFlag('linecount', 'locked')" @toggle-hidden="toggleFlag('linecount', 'hidden')" />
     </div>
 
-    <div v-show="isVisible('tracklist_exclude')" class="field">
-      <label>Exclude Tracks</label>
-      <small class="field-description">Comma-separated track names or slugs to exclude</small>
-      <InputText :modelValue="modelValue.tracklist_exclude" @update:modelValue="(v: string | undefined) => patch({ tracklist_exclude: v ?? '' })" class="w-full" />
+    <div v-show="isVisible('author_under_title') && (mode !== 'edit' || !isFieldHidden('author_under_title'))" class="pretalx-option-row">
+      <div class="field field--checkbox">
+        <Checkbox :inputId="'pretalx-author-under-title'" :binary="true" :modelValue="modelValue.author_under_title" @update:modelValue="(v: boolean) => patch({ author_under_title: v })" :disabled="isFieldLocked('author_under_title')" />
+        <label for="pretalx-author-under-title">Display Author under Title</label>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('author_under_title')" @toggle-locked="toggleFlag('author_under_title', 'locked')" @toggle-hidden="toggleFlag('author_under_title', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('tracks_by_color') && (mode !== 'edit' || !isFieldHidden('tracks_by_color'))" class="pretalx-option-row">
+      <div class="field field--checkbox">
+        <Checkbox :inputId="'pretalx-tracks-by-color'" :binary="true" :modelValue="modelValue.tracks_by_color" @update:modelValue="(v: boolean) => patch({ tracks_by_color: v })" :disabled="isFieldLocked('tracks_by_color')" />
+        <label for="pretalx-tracks-by-color">Represent tracks by Color</label>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('tracks_by_color')" @toggle-locked="toggleFlag('tracks_by_color', 'locked')" @toggle-hidden="toggleFlag('tracks_by_color', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('today_only') && (mode !== 'edit' || !isFieldHidden('today_only'))" class="pretalx-option-row">
+      <div class="field field--checkbox">
+        <Checkbox :inputId="'pretalx-today-only'" :binary="true" :modelValue="modelValue.today_only" @update:modelValue="(v: boolean) => patch({ today_only: v })" :disabled="isFieldLocked('today_only')" />
+        <label for="pretalx-today-only">Only show today</label>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('today_only')" @toggle-locked="toggleFlag('today_only', 'locked')" @toggle-hidden="toggleFlag('today_only', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('separate_days') && (mode !== 'edit' || !isFieldHidden('separate_days'))" class="pretalx-option-row">
+      <div class="field field--checkbox">
+        <Checkbox :inputId="'pretalx-separate-days'" :binary="true" :modelValue="modelValue.separate_days" @update:modelValue="(v: boolean) => patch({ separate_days: v })" :disabled="isFieldLocked('separate_days')" />
+        <label for="pretalx-separate-days">Separate day tables</label>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('separate_days')" @toggle-locked="toggleFlag('separate_days', 'locked')" @toggle-hidden="toggleFlag('separate_days', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('day_prefix') && (mode !== 'edit' || !isFieldHidden('day_prefix'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Day Prefix</label>
+        <InputText :modelValue="modelValue.day_prefix" @update:modelValue="(v: string | undefined) => patch({ day_prefix: v ?? '' })" :disabled="isFieldLocked('day_prefix')" class="w-full" />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('day_prefix')" @toggle-locked="toggleFlag('day_prefix', 'locked')" @toggle-hidden="toggleFlag('day_prefix', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('empty_text') && (mode !== 'edit' || !isFieldHidden('empty_text'))" class="pretalx-option-row">
+      <div class="field">
+        <label>No session running text</label>
+        <InputText :modelValue="modelValue.empty_text" @update:modelValue="(v: string | undefined) => patch({ empty_text: v ?? '' })" :disabled="isFieldLocked('empty_text')" class="w-full" />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('empty_text')" @toggle-locked="toggleFlag('empty_text', 'locked')" @toggle-hidden="toggleFlag('empty_text', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('tracklist_columns') && (mode !== 'edit' || !isFieldHidden('tracklist_columns'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Tracklist Columns</label>
+        <div :class="['tracklist-cols-editor', { 'pretalx-disabled': isFieldLocked('tracklist_columns') }]">
+          <div class="tracklist-cols-header"><span>Field</span><span>Header</span><span></span></div>
+          <div v-for="(row, idx) in tracklistRows" :key="idx" class="tracklist-cols-row">
+            <Select
+              :modelValue="row.key || null"
+              @update:modelValue="(v: string | null) => updateTracklistKey(idx, v ?? '')"
+              :options="TRACKLIST_COL_OPTIONS"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="— select —"
+              size="small"
+              class="w-full"
+            />
+            <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateTracklistLabel(idx, v ?? '')" size="small" class="w-full" />
+            <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeTracklistColumn(idx)" />
+          </div>
+          <Button label="Add Column" icon="pi pi-plus" size="small" text @click="addTracklistColumn" style="margin-top:0.25rem;" />
+        </div>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('tracklist_columns')" @toggle-locked="toggleFlag('tracklist_columns', 'locked')" @toggle-hidden="toggleFlag('tracklist_columns', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('tracklist_layout') && (mode !== 'edit' || !isFieldHidden('tracklist_layout'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Tracklist Layout</label>
+        <Select
+          :modelValue="modelValue.tracklist_layout"
+          @update:modelValue="(v: string) => patch({ tracklist_layout: v })"
+          :options="[
+            { label: 'List (one track per row)', value: 'list' },
+            { label: 'Row (all tracks in one row)', value: 'row' },
+          ]"
+          optionLabel="label"
+          optionValue="value"
+          :disabled="isFieldLocked('tracklist_layout')"
+          class="w-full"
+        />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('tracklist_layout')" @toggle-locked="toggleFlag('tracklist_layout', 'locked')" @toggle-hidden="toggleFlag('tracklist_layout', 'hidden')" />
+    </div>
+
+    <div v-show="isVisible('tracklist_exclude') && (mode !== 'edit' || !isFieldHidden('tracklist_exclude'))" class="pretalx-option-row">
+      <div class="field">
+        <label>Exclude Tracks</label>
+        <small class="field-description">Comma-separated track names or slugs to exclude</small>
+        <InputText :modelValue="modelValue.tracklist_exclude" @update:modelValue="(v: string | undefined) => patch({ tracklist_exclude: v ?? '' })" :disabled="isFieldLocked('tracklist_exclude')" class="w-full" />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('tracklist_exclude')" @toggle-locked="toggleFlag('tracklist_exclude', 'locked')" @toggle-hidden="toggleFlag('tracklist_exclude', 'hidden')" />
     </div>
 
     <details class="styling-collapsible">
       <summary class="styling-summary">Styling <small class="text-muted">(optional)</small></summary>
       <div class="styling-fields">
-        <div class="field">
-          <label>Invalid API Data Text</label>
-          <InputText
-            :modelValue="modelValue.invalid_data_text"
-            @update:modelValue="(v: string | undefined) => patch({ invalid_data_text: v ?? '' })"
-            placeholder="Uses global Pretalx setting when empty"
-            class="w-full"
-          />
+        <div v-show="mode !== 'edit' || !isFieldHidden('invalid_data_text')" class="pretalx-option-row">
+          <div class="field">
+            <label>Invalid API Data Text</label>
+            <InputText
+              :modelValue="modelValue.invalid_data_text"
+              @update:modelValue="(v: string | undefined) => patch({ invalid_data_text: v ?? '' })"
+              placeholder="Uses global Pretalx setting when empty"
+              :disabled="isFieldLocked('invalid_data_text')"
+              class="w-full"
+            />
+          </div>
+          <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('invalid_data_text')" @toggle-locked="toggleFlag('invalid_data_text', 'locked')" @toggle-hidden="toggleFlag('invalid_data_text', 'hidden')" />
         </div>
       </div>
     </details>
@@ -354,6 +422,23 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+}
+
+.pretalx-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.pretalx-option-row > .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.pretalx-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  user-select: none;
 }
 
 .field--checkbox {

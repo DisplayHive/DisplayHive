@@ -13,6 +13,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ICON_LIBRARIES, getIconManifest, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
+import type { OptionFlags } from '../utils/optionFlags'
 
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -20,16 +21,34 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
+import OptionFlagToggle from './OptionFlagToggle.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: IconPickerValue
-}>()
+  /** See FieldValueEditor.vue's own `mode`/`optionFlags` doc comment. Local
+   * keys here are 'icon' (the library/search/results/selected section) and
+   * 'size' (the Height (vh) input) — the caller translates to/from wire keys. */
+  mode?: 'edit' | 'preset'
+  optionFlags?: OptionFlags
+}>(), {
+  mode: 'edit',
+  optionFlags: undefined,
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: IconPickerValue]
+  'update:optionFlags': [OptionFlags]
 }>()
 
 const patch = (partial: Partial<IconPickerValue>) => emit('update:modelValue', { ...props.modelValue, ...partial })
+
+const isHidden = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.hidden
+const isLocked = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.locked
+const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
+const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
+  const current = flagsFor(key)
+  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+}
 
 const activeLibraries = ref<Set<string>>(new Set(ICON_LIBRARIES.map((l) => l.id)))
 const allActive = computed(() => activeLibraries.value.size === ICON_LIBRARIES.length)
@@ -110,73 +129,82 @@ const showLicenseDialog = ref(false)
 
 <template>
   <div class="icon-picker">
-    <div class="icon-picker-selected">
-      <div v-if="modelValue.icon && selectedLibrary" class="icon-picker-preview">
-        <span
-          class="icon-picker-preview-svg"
-          :style="{ height: `${modelValue.size}vh` }"
-          v-html="previewCache[previewKey(selectedLibraryId, selectedName)] || ''"
-        ></span>
-        <span class="icon-picker-preview-label">
-          {{ selectedName }}
-          <Tag :value="selectedLibrary.label" severity="secondary" />
-        </span>
-        <Button icon="pi pi-times" text size="small" @click="clearIcon" aria-label="Clear selected icon" />
-      </div>
-      <span v-else class="icon-picker-none">No icon selected</span>
-    </div>
+    <div v-if="mode !== 'edit' || !isHidden('icon')" class="icon-picker-option-row">
+      <div :class="['icon-picker-option-content', { 'icon-picker-disabled': isLocked('icon') }]">
+        <div class="icon-picker-selected">
+          <div v-if="modelValue.icon && selectedLibrary" class="icon-picker-preview">
+            <span
+              class="icon-picker-preview-svg"
+              :style="{ height: `${modelValue.size}vh` }"
+              v-html="previewCache[previewKey(selectedLibraryId, selectedName)] || ''"
+            ></span>
+            <span class="icon-picker-preview-label">
+              {{ selectedName }}
+              <Tag :value="selectedLibrary.label" severity="secondary" />
+            </span>
+            <Button icon="pi pi-times" text size="small" @click="clearIcon" aria-label="Clear selected icon" />
+          </div>
+          <span v-else class="icon-picker-none">No icon selected</span>
+        </div>
 
-    <div class="icon-picker-libraries">
-      <label class="icon-picker-label">Libraries</label>
-      <div class="icon-picker-library-list">
-        <Button
-          :label="allActive ? 'Deactivate all' : 'Activate all'"
-          size="small"
-          text
-          @click="toggleAll"
-        />
-        <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-library-item">
-          <Checkbox
-            :inputId="'icon-lib-' + library.id"
-            :binary="true"
-            :modelValue="activeLibraries.has(library.id)"
-            @update:modelValue="(v: boolean) => toggleLibrary(library.id, v)"
-          />
-          <label :for="'icon-lib-' + library.id">{{ library.label }}</label>
+        <div class="icon-picker-libraries">
+          <label class="icon-picker-label">Libraries</label>
+          <div class="icon-picker-library-list">
+            <Button
+              :label="allActive ? 'Deactivate all' : 'Activate all'"
+              size="small"
+              text
+              @click="toggleAll"
+            />
+            <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-library-item">
+              <Checkbox
+                :inputId="'icon-lib-' + library.id"
+                :binary="true"
+                :modelValue="activeLibraries.has(library.id)"
+                @update:modelValue="(v: boolean) => toggleLibrary(library.id, v)"
+              />
+              <label :for="'icon-lib-' + library.id">{{ library.label }}</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="icon-picker-search">
+          <InputText v-model="searchText" placeholder="Search icons…" class="w-full" />
+        </div>
+
+        <div class="icon-picker-results">
+          <button
+            v-for="match in filteredIcons"
+            :key="match.library.id + '/' + match.name"
+            type="button"
+            class="icon-picker-result"
+            :class="{ 'icon-picker-result--selected': modelValue.icon === `${match.library.id}/${match.name}` }"
+            @click="selectIcon(match)"
+            @mouseenter="ensurePreview(match.library.id, match.name)"
+          >
+            <span class="icon-picker-result-svg" v-html="previewCache[previewKey(match.library.id, match.name)] || ''"></span>
+            <span class="icon-picker-result-name">{{ match.name }}</span>
+            <Tag :value="match.library.label" severity="secondary" class="icon-picker-result-badge" />
+          </button>
+          <span v-if="filteredIcons.length === 0" class="icon-picker-empty">No matching icons</span>
         </div>
       </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('icon')" @toggle-locked="toggleFlag('icon', 'locked')" @toggle-hidden="toggleFlag('icon', 'hidden')" />
     </div>
 
-    <div class="icon-picker-search">
-      <InputText v-model="searchText" placeholder="Search icons…" class="w-full" />
-    </div>
-
-    <div class="icon-picker-results">
-      <button
-        v-for="match in filteredIcons"
-        :key="match.library.id + '/' + match.name"
-        type="button"
-        class="icon-picker-result"
-        :class="{ 'icon-picker-result--selected': modelValue.icon === `${match.library.id}/${match.name}` }"
-        @click="selectIcon(match)"
-        @mouseenter="ensurePreview(match.library.id, match.name)"
-      >
-        <span class="icon-picker-result-svg" v-html="previewCache[previewKey(match.library.id, match.name)] || ''"></span>
-        <span class="icon-picker-result-name">{{ match.name }}</span>
-        <Tag :value="match.library.label" severity="secondary" class="icon-picker-result-badge" />
-      </button>
-      <span v-if="filteredIcons.length === 0" class="icon-picker-empty">No matching icons</span>
-    </div>
-
-    <div class="icon-picker-size field">
-      <label>Height (vh)</label>
-      <InputNumber
-        :modelValue="modelValue.size"
-        @update:modelValue="(v: number | null) => patch({ size: v ?? 5 })"
-        :min="1"
-        :max="100"
-        class="w-full"
-      />
+    <div v-if="mode !== 'edit' || !isHidden('size')" class="icon-picker-option-row">
+      <div class="icon-picker-size field icon-picker-option-content">
+        <label>Height (vh)</label>
+        <InputNumber
+          :modelValue="modelValue.size"
+          @update:modelValue="(v: number | null) => patch({ size: v ?? 5 })"
+          :min="1"
+          :max="100"
+          :disabled="isLocked('size')"
+          class="w-full"
+        />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('size')" @toggle-locked="toggleFlag('size', 'locked')" @toggle-hidden="toggleFlag('size', 'hidden')" />
     </div>
 
     <Button label="Icon Libraries Licenses" icon="pi pi-info-circle" size="small" text @click="showLicenseDialog = true" />
@@ -199,6 +227,26 @@ const showLicenseDialog = ref(false)
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.icon-picker-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.icon-picker-option-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.icon-picker-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  user-select: none;
 }
 
 .icon-picker-selected {

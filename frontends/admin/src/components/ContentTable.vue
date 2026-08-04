@@ -109,10 +109,20 @@ const getContentFields = (content: any): ContentField[] => {
   ])
   const fields: ContentField[] = []
   const metadata = content._field_metadata || {}
+  // option_flags is keyed by wire key (e.g. 'photo', 'photo__size') — the
+  // same keys content's own top-level properties use — so a hidden key from
+  // any field's option_flags can be checked directly against `k` below.
+  const hiddenKeys = new Set<string>()
+  for (const meta of Object.values<any>(metadata)) {
+    for (const [key, flag] of Object.entries<any>(meta?.option_flags || {})) {
+      if (flag?.hidden) hiddenKeys.add(key)
+    }
+  }
 
   for (const k of Object.keys(content)) {
     if (ignore.has(k)) continue
     if (k.endsWith('__image_mode') || k.endsWith('__image_tags')) continue
+    if (hiddenKeys.has(k)) continue
     const v = content[k]
     if (v === null || v === undefined || v === '') continue
 

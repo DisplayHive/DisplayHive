@@ -258,7 +258,19 @@ class TagConfig(db.Model):
     field_handler: Mapped[str] = mapped_column(String(50))   # e.g., 'text', 'textarea', 'number', 'url'
     field_label: Mapped[str] = mapped_column(String(255), nullable=True)  # Display label
     required: Mapped[bool] = mapped_column(db.Boolean, default=False)
+    # JSON-serialized dict of this field's preset value(s) — same flat
+    # key-shape (field_name plus its handler-specific suffixes, e.g.
+    # '<name>__size', '<name>__image_mode') the Content Editor stores per
+    # field, scoped to just this one field. Only meaningful for keys flagged
+    # in option_flags; see render_content_fields() in admin/content/helper.py.
     default_value: Mapped[str] = mapped_column(Text, nullable=True)
+    # JSON-serialized {"<wire-key>": {"locked": bool, "hidden": bool}} — one
+    # entry per individual sub-setting the field exposes (e.g. an 'image'
+    # field's mode/value/size are each independently lockable/hideable, not
+    # the field as a whole). "locked": still shown in the Content Editor,
+    # pre-filled from default_value, but disabled. "hidden": doesn't show at
+    # all; default_value is always used when rendering.
+    option_flags: Mapped[str] = mapped_column(Text, nullable=True)
     order: Mapped[int] = mapped_column(Integer, default=0)  # Display order
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="tagconfigs")
