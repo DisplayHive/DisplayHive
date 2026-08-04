@@ -10,10 +10,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-permissions:
-  contents: read
-  packages: write
-
 concurrency:
   group: docker-image-${{ github.ref }}
   cancel-in-progress: true
