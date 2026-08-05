@@ -66,3 +66,27 @@ from trying more, but very large deployments haven't been a focus yet.
 There's no local content cache beyond what's already in the page, so a
 screen that loses power (not just network) and restarts will show a blank
 page until it reconnects and receives a fresh content push.
+
+## How does the "push" to screens actually work?
+
+Whenever you save a change that affects what a screen should show —
+toggling content on or off, editing content, changing a design, adjusting
+a layout, or reassigning content to a screen group — DisplayHive figures
+out which screens are affected and immediately sends each of them an
+updated snapshot of everything they should be displaying (design plus the
+full rotation of content for that screen). The screen swaps this in on
+the spot; it's not a browser reload, so there's no flicker or downtime.
+
+A few things worth knowing:
+
+- **Only affected screens are updated.** Screens that aren't assigned to
+  the changed content or screen group don't receive anything.
+- **There's no batching or delay.** Every save triggers its own push
+  right away, so if you make several edits in quick succession, each one
+  is sent out separately.
+- **Last save wins.** If two people edit the same thing around the same
+  time, there's no conflict warning — whoever saves last is what ends up
+  on the screens.
+- Some content (like randomized images or live Pretalx schedules) can
+  also refresh itself on the screen without any admin action, independent
+  of this push mechanism.
