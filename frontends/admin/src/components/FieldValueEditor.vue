@@ -814,6 +814,65 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div v-else-if="tag.fieldHandler === 'marquee'" class="marquee-field-wrapper">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
+        <InputText
+          :id="`field-${tag.name}`"
+          :modelValue="String(getFieldValue(tag.name))"
+          @update:modelValue="(v: string | undefined) => setFieldValue(tag.name, v ?? '')"
+          placeholder="Dein Lauftext…"
+          :disabled="isLocked(tag.name)"
+          class="w-full"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
+      </div>
+      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__speed')" class="fve-slot marquee-speed-row">
+        <label :for="`field-${tag.name}-speed`" class="marquee-speed-label">Geschwindigkeit (s)</label>
+        <InputNumber
+          :id="`field-${tag.name}-speed`"
+          :modelValue="Number(getFieldValue(tag.name + '__speed')) || 20"
+          @update:modelValue="(v: number | null) => setFieldValue(tag.name + '__speed', v ?? 20)"
+          :min="1" :max="300" :step="1"
+          suffix=" s"
+          :disabled="isLocked(tag.name + '__speed')"
+          style="width: 130px"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__speed')" @toggle-locked="toggleFlag(tag.name + '__speed', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__speed', 'hidden')" />
+      </div>
+      <small class="marquee-hint">Niedrigere Zahl = schnellere Laufgeschwindigkeit.</small>
+    </div>
+
+    <template v-else-if="tag.fieldHandler === 'iframe'">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
+        <InputText
+          :id="`field-${tag.name}`"
+          :modelValue="String(getFieldValue(tag.name))"
+          @update:modelValue="(v: string | undefined) => setFieldValue(tag.name, v ?? '')"
+          type="url"
+          placeholder="https://example.com"
+          :maxlength="tag.max_length"
+          :disabled="isLocked(tag.name)"
+          class="w-full"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
+      </div>
+    </template>
+
+    <template v-else-if="tag.fieldHandler === 'rawhtml'">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
+        <Textarea
+          :id="`field-${tag.name}`"
+          :modelValue="String(getFieldValue(tag.name))"
+          @update:modelValue="(v: string | undefined) => setFieldValue(tag.name, v ?? '')"
+          rows="5"
+          :disabled="isLocked(tag.name)"
+          class="w-full"
+          placeholder="<div>…</div>"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
+      </div>
+    </template>
+
     <template v-else>
       <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
         <InputText
@@ -1216,6 +1275,30 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   background: white;
+}
+
+.marquee-field-wrapper {
+  width: 100%;
+}
+
+.marquee-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.marquee-speed-label {
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
+  white-space: nowrap;
+}
+
+.marquee-hint {
+  font-size: 0.78rem;
+  color: var(--p-text-muted-color, #64748b);
+  display: block;
+  margin-top: 0.2rem;
 }
 
 .datetime-format-wrapper {

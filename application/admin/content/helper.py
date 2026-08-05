@@ -227,6 +227,38 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                 day_prefix=str(ctx.get(f'{field_name}__day_prefix', '')).strip(),
                 tracks_by_color=bool(ctx.get(f'{field_name}__tracks_by_color', False)),
             ))
+        elif ftype == 'iframe' and field_name in ctx and ctx[field_name]:
+            url = str(ctx[field_name]).strip()
+            parsed_scheme = urllib.parse.urlparse(url).scheme.lower()
+            if parsed_scheme not in ('', 'http', 'https'):
+                ctx[field_name] = ''
+            elif url:
+                ctx[field_name] = Markup(
+                    f'<iframe src="{_html_escape(url)}"'
+                    f' style="width:100%;height:100%;border:none;"'
+                    f' allowfullscreen></iframe>'
+                )
+        elif ftype == 'rawhtml' and field_name in ctx and ctx[field_name]:
+            ctx[field_name] = Markup(str(ctx[field_name]))
+        elif ftype == 'marquee' and field_name in ctx:
+            text = str(ctx.get(field_name, '')).strip()
+            if tvars:
+                from application.admin.magictags.helper import substitute_magic_tags
+                text = substitute_magic_tags(text, tvars)
+            speed = ctx.get(f'{field_name}__speed', 20)
+            try:
+                speed = float(speed)
+            except (TypeError, ValueError):
+                speed = 20
+            if speed <= 0:
+                speed = 20
+            escaped = _html_escape(text)
+            ctx[field_name] = Markup(
+                f'<style>@keyframes dh-marquee{{from{{transform:translateX(100vw)}}to{{transform:translateX(-100%)}}}}</style>'
+                f'<div style="overflow:hidden;white-space:nowrap;width:100%;height:100%;display:flex;align-items:center;">'
+                f'<span style="display:inline-block;animation:dh-marquee {speed:.1f}s linear infinite;">{escaped}</span>'
+                f'</div>'
+            )
         elif ftype in ('textklein', 'textbig', 'link') and field_name in ctx:
             raw = str(ctx[field_name])
             if tvars:
@@ -297,6 +329,12 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
             ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 5)}
         except Exception:
             ctx = {'default': content}
+    elif field_handler == 'marquee':
+        try:
+            parsed = json.loads(content)
+            ctx = {'default': parsed.get('text', ''), 'default__speed': parsed.get('speed', 20)}
+        except Exception:
+            ctx = {'default': content, 'default__speed': 20}
     elif field_handler == 'pretalx_table':
         try:
             parsed = json.loads(content)
