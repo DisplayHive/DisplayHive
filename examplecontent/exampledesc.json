@@ -1,20 +1,8 @@
 [
   {
     "id": 1,
-    "filename": "company.zip",
-    "name": "Company - Nordhofen Electric",
-    "description": "A ready-to-use example content set showcasing a display setup for a company, featuring a Lobby Display, Shop Window, two Workshops, and a Canteen. The content is based on the fictional company Nordhofen Electric."
-  },
-  {
-    "id": 2,
     "filename": "event.zip",
     "name": "Event",
-    "description": "Example content showcasing a display setup for an event. Currently not much to see here, but it will be filled with content in the future."
-  },
-  {
-    "id": 3,
-    "filename": "hackerspace.zip",
-    "name": "Hackerspace",
-    "description": "Example content showcasing a display setup for a hackerspace. Currently not much to see here, but it will be filled with content in the future."
+    "description": "Example content showcasing a display setup for an event."
   }
 ]
