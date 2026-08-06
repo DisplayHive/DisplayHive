@@ -643,7 +643,10 @@ const defaultFieldHandlerOptions = [
   { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
   { label: 'Date / Time Format', value: 'datetime_format' },
+  { label: 'HTML (raw)', value: 'rawhtml' },
   { label: 'Icon', value: 'icon' },
+  { label: 'iFrame', value: 'iframe' },
+  { label: 'Lauftext (Marquee)', value: 'marquee' },
   { label: 'Image', value: 'image' },
   { label: 'Link/URL', value: 'link' },
   { label: 'Long Text', value: 'textbig' },
@@ -735,6 +738,8 @@ const onDefaultHandlerChange = (newHandler: string) => {
     containerEditForm.default_content = JSON.stringify(blankPretalxTableValue())
   } else if (newHandler === 'datetime_format') {
     containerEditForm.default_content = 'HH:mm:ss'
+  } else if (newHandler === 'marquee') {
+    containerEditForm.default_content = JSON.stringify({ text: '', speed: 20 })
   } else {
     containerEditForm.default_content = ''
   }
@@ -759,6 +764,28 @@ const arrowSize = computed({
     let char = ''
     try { char = JSON.parse(containerEditForm.default_content || '{}').char || '' } catch { /* keep default */ }
     containerEditForm.default_content = JSON.stringify({ char, size: v ?? 5 })
+  },
+})
+
+// --- 'marquee' handler: {text, speed}, packed as JSON into default_content --
+const marqueeText = computed({
+  get: () => {
+    try { return JSON.parse(containerEditForm.default_content || '{}').text || '' } catch { return '' }
+  },
+  set: (v: string) => {
+    let speed = 20
+    try { speed = JSON.parse(containerEditForm.default_content || '{}').speed ?? 20 } catch { /* keep default */ }
+    containerEditForm.default_content = JSON.stringify({ text: v, speed })
+  },
+})
+const marqueeSpeed = computed({
+  get: () => {
+    try { return JSON.parse(containerEditForm.default_content || '{}').speed ?? 20 } catch { return 20 }
+  },
+  set: (v: number | null) => {
+    let text = ''
+    try { text = JSON.parse(containerEditForm.default_content || '{}').text || '' } catch { /* keep default */ }
+    containerEditForm.default_content = JSON.stringify({ text, speed: v ?? 20 })
   },
 })
 
@@ -1152,6 +1179,32 @@ const toggleSelectedLayoutMembership = () => {
               :model-value="pretalxTableData"
               @update:model-value="setPretalxTableData"
             />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'iframe'" class="field">
+            <label>iFrame URL</label>
+            <InputText v-model="containerEditForm.default_content" type="url" size="small" class="w-full" placeholder="https://example.com" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'rawhtml'" class="field">
+            <label>Default HTML</label>
+            <Textarea v-model="containerEditForm.default_content" rows="5" class="w-full" placeholder="<div>…</div>" />
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'marquee'" class="field">
+            <label>Lauftext</label>
+            <InputText :model-value="marqueeText" size="small" class="w-full" placeholder="Dein Lauftext…" @update:model-value="(v) => (marqueeText = String(v ?? ''))" />
+            <div class="arrow-size-row" style="margin-top:0.5rem;">
+              <label class="arrow-size-label">Geschwindigkeit (s)</label>
+              <InputNumber
+                :model-value="marqueeSpeed"
+                @update:model-value="(v) => (marqueeSpeed = v)"
+                :min="1" :max="300" :step="1"
+                suffix=" s"
+                style="width: 130px"
+              />
+            </div>
+            <small class="hint">Niedrigere Zahl = schnellere Laufgeschwindigkeit.</small>
           </div>
         </template>
 
