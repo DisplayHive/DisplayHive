@@ -155,6 +155,23 @@ export function renderScene(scene: Scene): void {
     if (paintContainerElement(id, c)) changedIds.push(id);
   }
 
+  try {
+    (window as any).debugPanel?.pushLayout?.(
+      scene.title || `Scene ${scene.id}`,
+      Object.entries(scene.containers).map(([id, c]) => ({
+        id,
+        name: c.name,
+        top: c.top,
+        left: c.left,
+        width: c.width,
+        height: c.height,
+        hasContent: !!c.html,
+      })),
+    );
+  } catch (e) {
+    /* intentional: debugPanel may not be initialized yet */
+  }
+
   tickNow(); // immediately fill any dh-clock elements in the new HTML
   // Only re-resolve icon placeholders inside containers whose content
   // actually changed — resolveIcons() re-fetches+reinjects unconditionally

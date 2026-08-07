@@ -168,12 +168,51 @@ export function initDebugPanel(): void {
       wrapperEl.appendChild(list);
     }
 
+    function pushLayout(
+      sceneTitle: string,
+      containers: Array<{
+        id: string;
+        name: string;
+        top: number;
+        left: number;
+        width: number;
+        height: number;
+        hasContent: boolean;
+      }>,
+    ): void {
+      const root = document.getElementById("debug-containers");
+      if (!root) return;
+
+      const sectionId = "debug-layout";
+      let wrapper = document.getElementById(sectionId);
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.id = sectionId;
+        wrapper.className = "debug-section debug-section-layout";
+        root.appendChild(wrapper);
+      }
+      const wrapperEl = wrapper as HTMLElement;
+      wrapperEl.innerHTML = `<h4>Layout: ${sceneTitle} <span class="debug-playlist-count">(${containers.length} container${containers.length === 1 ? "" : "s"})</span></h4>`;
+
+      containers.forEach((c) => {
+        const row = document.createElement("div");
+        row.className = "debug-container-entry";
+        row.innerHTML =
+          `<div class="debug-item">` +
+          `<span class="debug-label">${c.name} <span class="debug-playlist-count">#${c.id}</span></span>` +
+          `<span class="debug-value">${c.top.toFixed(1)}vh, ${c.left.toFixed(1)}vw — ${c.width.toFixed(1)}×${c.height.toFixed(1)} — ${c.hasContent ? "content" : "empty"}</span>` +
+          `</div>`;
+        wrapperEl.appendChild(row);
+      });
+    }
+
     try {
       if ((window as any).debugPanel) {
         (window as any).debugPanel.push = push;
         (window as any).debugPanel.pushPlaylist = pushPlaylist;
+        (window as any).debugPanel.pushLayout = pushLayout;
       } else {
-        (window as any).debugPanel = { push, pushPlaylist };
+        (window as any).debugPanel = { push, pushPlaylist, pushLayout };
       }
     } catch (e) {
       /* intentional: window may be unavailable in SSR/test contexts */
