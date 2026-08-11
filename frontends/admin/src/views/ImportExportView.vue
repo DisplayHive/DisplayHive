@@ -206,7 +206,11 @@ const onFileSelected = async (event: Event) => {
 }
 
 .card-header {
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
 }
 
 .description {

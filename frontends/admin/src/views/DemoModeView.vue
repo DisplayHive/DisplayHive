@@ -15,6 +15,7 @@ interface DemoPackage {
   filename: string
   name: string
   description: string
+  logo?: string
 }
 
 const toast = useToast()
@@ -108,24 +109,27 @@ const confirmImport = (pkg: DemoPackage) => {
 
     <div class="demo-list">
       <Card v-for="pkg in packages" :key="pkg.id" class="demo-card">
-        <template #title>
-          <div class="card-header">
-            <i class="pi pi-box" style="margin-right: 0.5rem" />
-            <span>{{ pkg.name }}</span>
-          </div>
-        </template>
         <template #content>
-          <p class="description">{{ pkg.description }}</p>
-          <Button
-            v-if="canImport"
-            label="Import Demo"
-            icon="pi pi-cloud-download"
-            severity="danger"
-            outlined
-            :loading="importingFilename === pkg.filename"
-            :disabled="importingFilename !== null"
-            @click="confirmImport(pkg)"
-          />
+          <div class="demo-card-body">
+            <div class="demo-logo">
+              <img v-if="pkg.logo" :src="`/static/${pkg.logo}`" :alt="`${pkg.name} logo`" />
+              <i v-else class="pi pi-box"></i>
+            </div>
+            <div class="demo-card-main">
+              <h3 class="demo-name">{{ pkg.name }}</h3>
+              <p class="description">{{ pkg.description }}</p>
+              <Button
+                v-if="canImport"
+                label="Import Demo"
+                icon="pi pi-cloud-download"
+                severity="danger"
+                outlined
+                :loading="importingFilename === pkg.filename"
+                :disabled="importingFilename !== null"
+                @click="confirmImport(pkg)"
+              />
+            </div>
+          </div>
         </template>
       </Card>
     </div>
@@ -137,7 +141,7 @@ const confirmImport = (pkg: DemoPackage) => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  max-width: 900px;
+  width: 100%;
 }
 
 .intro-message {
@@ -154,11 +158,44 @@ const confirmImport = (pkg: DemoPackage) => {
   width: 100%;
 }
 
-.card-header {
+.demo-card-body {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  text-align: left;
+  gap: 1.5rem;
+}
+
+.demo-logo {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--p-surface-100, #f3f4f6);
+  overflow: hidden;
+}
+
+.demo-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.demo-logo .pi-box {
+  font-size: 2.5rem;
+  color: var(--p-text-muted-color, #9ca3af);
+}
+
+.demo-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.demo-name {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .description {

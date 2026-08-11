@@ -3,6 +3,7 @@
     "id": 1,
     "filename": "event.zip",
     "name": "Event",
-    "description": "Example content showcasing a display setup for an event."
+    "description": "Example content showcasing a display setup for an event.",
+    "logo": "demo_logos/event.png"
   }
 ]
