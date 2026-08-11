@@ -5,6 +5,7 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useScreensStore } from '../stores/screens'
+import { useSettingsStore } from '../stores/settings'
 
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -15,6 +16,7 @@ import DatePicker from 'primevue/datepicker'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
+import Popover from 'primevue/popover'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 import type { OptionFlags } from '../utils/optionFlags'
@@ -52,9 +54,13 @@ const router = useRouter()
 const route = useRoute()
 const goBack = () => router.push({ name: 'content' })
 
+const titleHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleTitleHelp = (e: Event) => titleHelpPopover.value?.toggle(e)
+
 const toast = useToast()
 const confirm = useConfirm()
 const screensStore = useScreensStore()
+const settingsStore = useSettingsStore()
 const { on, off, emit: socketEmit } = useSocket()
 
 // Fetched locally now (this used to receive contentTypes/allScreengroups/
@@ -178,6 +184,41 @@ const sgPage = ref(0)
 const screenPage = ref(0)
 const SG_PAGE_SIZE = 10
 
+// Text-like field handlers whose value is reasonable material for an
+// auto-generated title (rendered as InputText/Textarea/rich-text — the
+// handlers rendered by other widgets, e.g. numbers/checkbox/image/table,
+// wouldn't produce sensible title text).
+const TEXT_FIELD_HANDLERS = new Set(['textklein', 'textbig', 'wysiwyg'])
+
+// Once the user types into the Title field themselves, stop overwriting it.
+// Compared against the last value *we* wrote (rather than a boolean flag
+// reset right after the assignment) because watch() callbacks are batched —
+// a flag reset synchronously would already be back to `false` by the time
+// the title-watcher below actually runs, misreading our own auto-fill as a
+// manual edit after just one character.
+const titleManuallyEdited = ref(false)
+let lastAutoTitle: string | null = null
+watch(() => createForm.value.title, (val) => {
+  if (val === lastAutoTitle) return
+  titleManuallyEdited.value = true
+})
+
+// Auto-generate the title from the first non-empty text-type field, as long
+// as the title is still blank and the user hasn't typed one themselves.
+watch(
+  () => createForm.value.fields,
+  (fields) => {
+    if (titleManuallyEdited.value || createForm.value.title.trim()) return
+    const source = tagConfigs.value.find(
+      (t) => TEXT_FIELD_HANDLERS.has(t.fieldHandler) && String(fields[t.name] ?? '').trim(),
+    )
+    if (!source) return
+    lastAutoTitle = String(fields[source.name]).trim().slice(0, 255)
+    createForm.value.title = lastAutoTitle
+  },
+  { deep: true },
+)
+
 const durationMinutes = computed({
   get: () => Math.floor(createForm.value.duration / 60),
   set: (m: number) => {
@@ -248,6 +289,8 @@ const resetCreateForm = () => {
   showCreateContentDialog.value = false
   previewData.value = null
   if (previewTimer) clearTimeout(previewTimer)
+  titleManuallyEdited.value = false
+  lastAutoTitle = null
 }
 
 // Whether the currently-loading content element should be saved as a new
@@ -648,12 +691,11 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     </template>
   </Dialog>
 
-  <div class="content-edit-page">
-    <div class="content-edit-page-header">
-      <h2>{{ editMode ? (createForm.id ? 'Edit Content' : 'Copy Content') : 'Create Content' }}</h2>
-      <Button label="Back to Content" icon="pi pi-arrow-left" text @click="goBack" />
-    </div>
+  <Teleport to="#page-header-actions">
+    <Button label="Back to Content" icon="pi pi-arrow-left" text @click="goBack" />
+  </Teleport>
 
+  <div class="content-edit-page">
     <div v-if="loadingContentTypeDetail" class="loading-state">
       <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
       <p>Loading content type...</p>
@@ -671,26 +713,37 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
           <div class="multi-screen-warning-list">
             <Tag v-for="name in affectedScreenNames" :key="name" :value="name" severity="warn" />
           </div>
+          <p class="multi-screen-warning-help">
+            Changes here apply everywhere this content is used — there's no way to edit just one
+            of these screens. If you only want to change it in one place, go back and use
+            <strong>Copy</strong> to create an independent element first.
+          </p>
         </div>
       </div>
 
       <div class="field">
-        <label for="create-title">Title *</label>
+        <label for="create-title">
+          Title *
+          <i
+            class="pi pi-question-circle field-help-icon"
+            role="button"
+            tabindex="0"
+            aria-label="Help: Title"
+            @click="toggleTitleHelp"
+            @keydown.enter="toggleTitleHelp"
+          ></i>
+        </label>
+        <Popover ref="titleHelpPopover">
+          <p class="field-help-text">
+            The title is only shown in the admin backend and in on-screen debug overlays —
+            it's never rendered to viewers. It exists purely to help you keep an overview of
+            your content list.
+          </p>
+        </Popover>
         <InputText id="create-title" v-model="createForm.title" class="w-full" />
       </div>
 
-      <div class="field">
-        <label>Duration</label>
-        <div class="flex align-items-center gap-2">
-          <InputNumber v-model="durationMinutes" :min="0" :max="99" placeholder="0" />
-          <span class="duration-unit-label">minutes</span>
-          <InputNumber v-model="durationSeconds" :min="0" :max="59" :use-grouping="false" placeholder="00" />
-          <span class="duration-unit-label">seconds</span>
-        </div>
-      </div>
-
       <div v-if="tagConfigs.length > 0" class="tag-fields-section">
-        <h4>Content Fields</h4>
         <div
           v-for="tag in tagConfigs"
           v-show="tag.fieldHandler !== ''"
@@ -736,50 +789,79 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </div>
       </details>
 
-      <!-- Screengroup assignment -->
-      <div class="screengroup-assignment-section">
-        <h4>Screen Groups</h4>
-        <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
-        <template v-else>
-          <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />
-          <div class="screengroup-checkboxes">
-            <div v-for="sg in pagedScreengroups" :key="sg.id" class="screengroup-checkbox-row">
-              <Checkbox :inputId="`sg-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
-              <label :for="`sg-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+      <!-- Duration -->
+      <details class="scheduling-collapsible" open>
+        <summary class="scheduling-summary">Duration</summary>
+        <div class="scheduling-fields">
+          <div class="field">
+            <div class="duration-fields">
+              <InputNumber v-model="durationMinutes" :min="0" :max="99" placeholder="0" />
+              <span class="duration-unit-label">minutes</span>
+              <InputNumber v-model="durationSeconds" :min="0" :max="59" :use-grouping="false" placeholder="00" />
+              <span class="duration-unit-label">seconds</span>
+              <Button
+                v-for="val in [10, 20, 30]"
+                :key="val"
+                :label="`${val}s`"
+                size="small"
+                outlined
+                @click="createForm.duration = val"
+              />
             </div>
-            <p v-if="filteredScreengroups.length === 0" class="text-muted">No results.</p>
           </div>
-          <Paginator
-            v-if="filteredScreengroups.length > SG_PAGE_SIZE"
-            :rows="SG_PAGE_SIZE"
-            :totalRecords="filteredScreengroups.length"
-            :first="sgPage * SG_PAGE_SIZE"
-            @page="(e: any) => sgPage = e.page"
-            class="sg-paginator"
-          />
-        </template>
-      </div>
-
-      <!-- Screens assignment (is_one_screen groups only) -->
-      <div class="screengroup-assignment-section" v-if="oneScreenGroups.length > 0">
-        <h4>Screens</h4>
-        <InputText v-model="screenSearchText" placeholder="Search screens…" class="screengroup-search" />
-        <div class="screengroup-checkboxes">
-          <div v-for="sg in pagedOneScreenGroups" :key="sg.id" class="screengroup-checkbox-row">
-            <Checkbox :inputId="`screen-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
-            <label :for="`screen-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
-          </div>
-          <p v-if="filteredOneScreenGroups.length === 0" class="text-muted">No results.</p>
         </div>
-        <Paginator
-          v-if="filteredOneScreenGroups.length > SG_PAGE_SIZE"
-          :rows="SG_PAGE_SIZE"
-          :totalRecords="filteredOneScreenGroups.length"
-          :first="screenPage * SG_PAGE_SIZE"
-          @page="(e: any) => screenPage = e.page"
-          class="sg-paginator"
-        />
-      </div>
+      </details>
+
+      <!-- Screen Groups & Screens -->
+      <details class="scheduling-collapsible" open>
+        <summary class="scheduling-summary">Screen Groups &amp; Screens</summary>
+        <div class="scheduling-fields">
+          <!-- Screengroup assignment -->
+          <div class="screengroup-assignment-section">
+            <h4>Screen Groups</h4>
+            <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
+            <template v-else>
+              <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />
+              <div class="screengroup-checkboxes">
+                <div v-for="sg in pagedScreengroups" :key="sg.id" class="screengroup-checkbox-row">
+                  <Checkbox :inputId="`sg-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
+                  <label :for="`sg-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+                </div>
+                <p v-if="filteredScreengroups.length === 0" class="text-muted">No results.</p>
+              </div>
+              <Paginator
+                v-if="filteredScreengroups.length > SG_PAGE_SIZE"
+                :rows="SG_PAGE_SIZE"
+                :totalRecords="filteredScreengroups.length"
+                :first="sgPage * SG_PAGE_SIZE"
+                @page="(e: any) => sgPage = e.page"
+                class="sg-paginator"
+              />
+            </template>
+          </div>
+
+          <!-- Screens assignment (is_one_screen groups only) -->
+          <div class="screengroup-assignment-section" v-if="oneScreenGroups.length > 0">
+            <h4>Screens</h4>
+            <InputText v-model="screenSearchText" placeholder="Search screens…" class="screengroup-search" />
+            <div class="screengroup-checkboxes">
+              <div v-for="sg in pagedOneScreenGroups" :key="sg.id" class="screengroup-checkbox-row">
+                <Checkbox :inputId="`screen-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
+                <label :for="`screen-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+              </div>
+              <p v-if="filteredOneScreenGroups.length === 0" class="text-muted">No results.</p>
+            </div>
+            <Paginator
+              v-if="filteredOneScreenGroups.length > SG_PAGE_SIZE"
+              :rows="SG_PAGE_SIZE"
+              :totalRecords="filteredOneScreenGroups.length"
+              :first="screenPage * SG_PAGE_SIZE"
+              @page="(e: any) => screenPage = e.page"
+              class="sg-paginator"
+            />
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="content-edit-form-actions">
@@ -789,8 +871,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     </div>
     </div>
 
-    <div class="content-edit-preview">
-      <h4>Preview</h4>
+    <div class="content-edit-preview" :style="{ flex: `0 0 ${settingsStore.contentEditPreviewSize}%` }">
       <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
         <i class="pi pi-eye" style="font-size: 2rem"></i>
         <p>Preview will appear here once a content type is selected.</p>
@@ -812,17 +893,6 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   padding: 1.5rem;
   max-width: 1600px;
   margin: 0 auto;
-}
-
-.content-edit-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-
-.content-edit-page-header h2 {
-  margin: 0;
 }
 
 /* Two-column layout, mirroring LayoutCanvasEditor.vue's main+sidebar split
@@ -905,10 +975,38 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   gap: 0.5rem;
 }
 
+.multi-screen-warning-help {
+  margin-top: 0.75rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 400 !important;
+  color: #92400e !important;
+}
+
+.duration-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .duration-unit-label {
   font-size: 0.875rem;
   color: var(--p-text-muted-color, #888);
   white-space: nowrap;
+}
+
+.field-help-icon {
+  font-size: 0.85rem;
+  margin-left: 0.35rem;
+  color: var(--p-text-muted-color, #9ca3af);
+  cursor: pointer;
+}
+
+.field-help-text {
+  max-width: 300px;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .contenttype-list {

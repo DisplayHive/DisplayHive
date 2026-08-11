@@ -1,5 +1,5 @@
-"""Mutating admin socket handlers for Content — create, update, delete, move
-and preview. Split out of the former monolithic ``sockethandlers`` module.
+"""Mutating admin socket handlers for Content — create, update, delete, and
+move. Split out of the former monolithic ``sockethandlers`` module.
 """
 
 import json
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def register_content_mutation_handlers(socketio, app, db):
-    """Register the mutating Content handlers (create/update/delete/move/preview)."""
+    """Register the mutating Content handlers (create/update/delete/move)."""
     from application.socketio_handlers.auth import admin_handler, fields, require_right, current_admin_user
     from application.permissions import has_right
 
@@ -62,25 +62,6 @@ def register_content_mutation_handlers(socketio, app, db):
 
         _push_upd_content(content_element_id)
         logger.info('ContentElement %s duration updated to: %s', content_element_id, duration)
-
-    @socketio.on('displayhive:admin:cts:show_content_element_in_preview')
-    @admin_handler
-    def show_content_element_in_preview(message):
-        """Send specific content_element to the preview_admin screen"""
-        (content_element_id,) = fields(message, 'content_element_id')
-        if not content_element_id:
-            return
-
-        content_element = db.session.get(ContentElement, content_element_id)
-        if not content_element:
-            return
-
-        socketio.emit('show_single_content', {
-            'id': content_element.id,
-            'html': content_element.html,
-            'duration': content_element.duration,
-        }, room='screen_preview_admin')
-        logger.info('Sent content_element %s to preview_admin', content_element_id)
 
     @socketio.on('displayhive:admin:cts:delete_content_element')
     @require_right('content.delete')

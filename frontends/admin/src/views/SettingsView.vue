@@ -10,6 +10,7 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
+import InputNumber from 'primevue/inputnumber'
 
 const { on, off, emit, emitWithAck } = useSocket()
 const toast = useToast()
@@ -27,6 +28,9 @@ const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
 const hidePoweredBy = ref(false)
 const hideDemoMode = ref(false)
+const contentEditPreviewSize = ref(35)
+const contentListPreviewSize = ref(20)
+const contentSaving = ref(false)
 
 // Time section
 const serverTimeBase = ref<Date | null>(null)
@@ -80,6 +84,10 @@ const handleSettings = (data: any) => {
   hideHelpingHand.value = sys.hide_helping_hand === true || sys.hide_helping_hand === 'true'
   hidePoweredBy.value = sys.hide_powered_by === true || sys.hide_powered_by === 'true'
   hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
+  const previewSize = Number(sys.content_edit_preview_size)
+  contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
+  const listPreviewSize = Number(sys.content_list_preview_size)
+  contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
 
   if (data?.server_time) {
     serverTimeBase.value = new Date(data.server_time)
@@ -126,6 +134,31 @@ const saveDashboardSettings = async () => {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     saving.value = false
+  }
+}
+
+const saveContentSettings = async () => {
+  if (!canEdit.value) return
+  contentSaving.value = true
+  try {
+    const ack = await emitWithAck<{ success: boolean; error?: string }>(
+      'displayhive:admin:cts:set_system_settings',
+      {
+        settings: {
+          content_edit_preview_size: String(contentEditPreviewSize.value),
+          content_list_preview_size: String(contentListPreviewSize.value),
+        },
+      },
+    )
+    if (ack?.success) {
+      toast.add({ severity: 'success', summary: 'Saved', detail: 'Content editor settings updated', life: 2500 })
+    } else {
+      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
+    }
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+  } finally {
+    contentSaving.value = false
   }
 }
 
@@ -218,6 +251,49 @@ const saveTimeSettings = async () => {
                 icon="pi pi-check"
                 :loading="saving"
                 @click="saveDashboardSettings"
+              />
+            </div>
+          </div>
+        </template>
+      </Card>
+
+      <Card>
+        <template #title>Content Editor</template>
+        <template #content>
+          <div class="settings-form">
+            <div class="field">
+              <label for="content-edit-preview-size">Preview size on the Content edit page</label>
+              <div class="flex align-items-center gap-2">
+                <InputNumber
+                  id="content-edit-preview-size"
+                  v-model="contentEditPreviewSize"
+                  :min="10"
+                  :max="90"
+                  suffix="%"
+                  :disabled="!canEdit"
+                />
+              </div>
+            </div>
+            <div class="field">
+              <label for="content-list-preview-size">Preview size in the Content list's expanded rows</label>
+              <div class="flex align-items-center gap-2">
+                <InputNumber
+                  id="content-list-preview-size"
+                  v-model="contentListPreviewSize"
+                  :min="10"
+                  :max="80"
+                  suffix="vh"
+                  :disabled="!canEdit"
+                />
+              </div>
+            </div>
+            <div class="field-actions">
+              <Button
+                v-if="canEdit"
+                label="Save"
+                icon="pi pi-check"
+                :loading="contentSaving"
+                @click="saveContentSettings"
               />
             </div>
           </div>

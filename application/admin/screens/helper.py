@@ -53,7 +53,7 @@ def emit_admin_screen(socketio, app, db, room=None):
     with app.app_context():
         from application.models import Screen, Device
 
-        screens = db.session.execute(db.select(Screen).where(Screen.name != 'preview_admin')).scalars().all()
+        screens = db.session.execute(db.select(Screen)).scalars().all()
         screens_data = []
 
         for entry in screens:

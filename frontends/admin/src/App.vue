@@ -371,6 +371,9 @@ const pageTitle = computed(() => {
     screens: 'Screens',
     screengroups: 'Screen Groups',
     content: 'Content',
+    'content-new': 'Create Content',
+    'content-edit': 'Edit Content',
+    'content-copy': 'Copy Content',
     contenttypes: 'Content Types',
     designs: 'Designs',
     layouts: 'Layouts',
@@ -395,6 +398,9 @@ const pageIcon = computed(() => {
     screens: 'pi pi-window-maximize',
     screengroups: 'pi pi-clone',
     content: 'pi pi-box',
+    'content-new': 'pi pi-plus',
+    'content-edit': 'pi pi-pencil',
+    'content-copy': 'pi pi-copy',
     contenttypes: 'pi pi-file',
     designs: 'pi pi-palette',
     layouts: 'pi pi-th-large',
@@ -522,6 +528,7 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           <Popover ref="helpPopover">
             <p class="page-help-text">{{ pageHelp }}</p>
           </Popover>
+          <div id="page-header-actions" class="page-header-actions"></div>
         </div>
         <RouterView />
       </main>
@@ -808,6 +815,15 @@ body {
   font-size: 1.75rem;
   font-weight: 600;
   color: #333;
+}
+
+/* Teleport target so a routed view can put a page-level action (e.g. a
+   "Back to X" link) on the same row as the title instead of its own line. */
+.page-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .page-title-icon-badge {

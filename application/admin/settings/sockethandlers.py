@@ -17,6 +17,8 @@ def register_admin_settings_handlers(socketio, app, db):
         'welcome_headline', 'welcome_text',
         'hide_community_links', 'hide_helping_hand',
         'hide_demo_mode',
+        'content_edit_preview_size',
+        'content_list_preview_size',
     }
 
     def _get_system_settings():

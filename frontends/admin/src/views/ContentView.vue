@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -10,6 +10,7 @@ import Button from 'primevue/button'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
+import Popover from 'primevue/popover'
 import ContentTable from '../components/ContentTable.vue'
 import { useRightsStore } from '../stores/rights'
 import { useScreensStore } from '../stores/screens'
@@ -80,14 +81,17 @@ const allScreengroups = ref<ScreengroupOption[]>([])
 const oneScreenGroups = ref<ScreengroupOption[]>([])
 const oneScreenGroupIds = computed(() => oneScreenGroups.value.map(g => g.id))
 
-// --- New filter system: exactly one of these three modes is active at a time. ---
-type FilterMode = 'screen' | 'group' | 'abandoned'
+// --- New filter system: exactly one of these four modes is active at a time. ---
+type FilterMode = 'all' | 'screen' | 'group' | 'abandoned'
 const filterModeOptions: Array<{ label: string; value: FilterMode }> = [
+  { label: 'All', value: 'all' },
   { label: 'By Screen', value: 'screen' },
   { label: 'By Group', value: 'group' },
   { label: 'Abandoned', value: 'abandoned' },
 ]
-const filterMode = ref<FilterMode>('group')
+const filterMode = ref<FilterMode>('screen')
+const filterHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleFilterHelp = (e: Event) => filterHelpPopover.value?.toggle(e)
 
 // Option 1: By Screen
 const selectedScreenId = ref<number | null>(null)
@@ -96,14 +100,27 @@ const screenOptions = computed(() =>
   screensStore.screens.map(s => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
 )
 
-// Option 2: By Group ('0' = "None" — show everything in some group, not narrowed to one)
-const selectedGroupId = ref<number>(0)
-const groupOptions = computed(() => {
-  const opts = allScreengroups.value
-    .map(sg => ({ id: sg.id, name: sg.name }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-  return [{ id: 0, name: 'None' }, ...opts]
-})
+// Default to the first screen once the screen list has loaded, so the page
+// shows something useful right away instead of the "select a screen" prompt.
+watch(screenOptions, (options) => {
+  if (selectedScreenId.value == null && options.length > 0) {
+    selectedScreenId.value = options[0].id
+  }
+}, { immediate: true })
+
+// Option 2: By Group
+const selectedGroupId = ref<number | null>(null)
+const groupOptions = computed(() =>
+  allScreengroups.value.map(sg => ({ id: sg.id, name: sg.name })).sort((a, b) => a.name.localeCompare(b.name))
+)
+
+// Default to the first group once the group list has loaded, mirroring the
+// screen filter's default-selection behavior above.
+watch(groupOptions, (options) => {
+  if (selectedGroupId.value == null && options.length > 0) {
+    selectedGroupId.value = options[0].id
+  }
+}, { immediate: true })
 
 // Shared across all three modes.
 const hideDisabled = ref(false)
@@ -113,7 +130,9 @@ const filteredContent = computed<ContentElement[]>(() => {
   const filter = searchFilter.value.toLowerCase()
   let items: ContentElement[]
 
-  if (filterMode.value === 'screen') {
+  if (filterMode.value === 'all') {
+    items = allContent.value
+  } else if (filterMode.value === 'screen') {
     if (selectedScreenId.value == null) {
       items = []
     } else {
@@ -129,9 +148,8 @@ const filteredContent = computed<ContentElement[]>(() => {
       items = allContent.value.filter(item => (item.screengroups || []).some(sg => groupIds.has(sg.id)))
     }
   } else if (filterMode.value === 'group') {
-    if (selectedGroupId.value === 0) {
-      const groupIds = new Set(allScreengroups.value.map(g => g.id))
-      items = allContent.value.filter(item => (item.screengroups || []).some(sg => groupIds.has(sg.id)))
+    if (selectedGroupId.value == null) {
+      items = []
     } else {
       const groupId = selectedGroupId.value
       items = allContent.value.filter(item => (item.screengroups || []).some(sg => sg.id === groupId))
@@ -227,11 +245,6 @@ const setDuration = (content: ContentElement, val: number) => {
   updateDuration(content)
 }
 
-const showInPreview = (content: ContentElement) => {
-  emit('displayhive:admin:cts:show_content_element_in_preview', { content_element_id: content.id })
-  toast.add({ severity: 'info', summary: 'Preview', detail: `Showing "${content.title}" in preview`, life: 3000 })
-}
-
 const deleteContent = (content: ContentElement) => {
   confirm.require({
     message: `Are you sure you want to delete "${content.title}"?`,
@@ -275,7 +288,6 @@ const copyContent = (content: ContentElement) => {
     <Card>
       <template #title>
         <div class="card-header">
-          <span>Content</span>
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Content" @click="openCreateWorkflow" size="small" />
             <Button icon="pi pi-refresh" label="Refresh" @click="refreshData" size="small" outlined />
@@ -291,6 +303,22 @@ const copyContent = (content: ContentElement) => {
             optionValue="value"
             :allowEmpty="false"
           />
+          <i
+            class="pi pi-question-circle filter-help-icon"
+            role="button"
+            tabindex="0"
+            aria-label="Help: Content filters"
+            @click="toggleFilterHelp"
+            @keydown.enter="toggleFilterHelp"
+          ></i>
+          <Popover ref="filterHelpPopover">
+            <ul class="filter-help-list">
+              <li><strong>All</strong> — shows every content element, regardless of assignment.</li>
+              <li><strong>By Screen</strong> — shows content assigned to one screen (directly, or via its groups if "Also show inherited" is on).</li>
+              <li><strong>By Group</strong> — shows content assigned to one screen group.</li>
+              <li><strong>Abandoned</strong> — shows content not assigned to any screen or group.</li>
+            </ul>
+          </Popover>
 
           <template v-if="filterMode === 'screen'">
             <Select
@@ -313,7 +341,7 @@ const copyContent = (content: ContentElement) => {
               :options="groupOptions"
               optionLabel="name"
               optionValue="id"
-              placeholder="None"
+              placeholder="Select a group"
               class="screengroup-filter-select"
             />
           </template>
@@ -329,10 +357,15 @@ const copyContent = (content: ContentElement) => {
           :totalItems="allContent.length"
           v-model:search="searchFilter"
           :oneScreenGroupIds="oneScreenGroupIds"
-          :emptyMessage="filterMode === 'screen' && selectedScreenId == null ? 'Select a screen to see its content' : 'No content'"
+          :emptyMessage="
+            filterMode === 'screen' && selectedScreenId == null
+              ? 'Select a screen to see its content'
+              : filterMode === 'group' && selectedGroupId == null
+                ? 'Select a group to see its content'
+                : 'No content'
+          "
           @edit="openEditContent"
           @copy="copyContent"
-          @preview="showInPreview"
           @delete="deleteContent"
           @toggleActive="toggleActive"
           @updateDuration="updateDuration"
@@ -352,7 +385,7 @@ const copyContent = (content: ContentElement) => {
 
 .card-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   width: 100%;
 }
@@ -383,5 +416,23 @@ const copyContent = (content: ContentElement) => {
   font-weight: 600;
   color: #6b7280;
   white-space: nowrap;
+}
+
+.filter-help-icon {
+  font-size: 1.1rem;
+  color: var(--p-text-muted-color, #9ca3af);
+  cursor: pointer;
+}
+
+.filter-help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
 }
 </style>

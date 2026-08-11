@@ -8,9 +8,11 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import { useRightsStore } from '../stores/rights'
+import { useSettingsStore } from '../stores/settings'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 
 const rightsStore = useRightsStore()
+const settingsStore = useSettingsStore()
 const canEdit = computed(() => rightsStore.can('content.edit'))
 const canDelete = computed(() => rightsStore.can('content.delete'))
 const canEnable = computed(() => rightsStore.can('content.enable'))
@@ -54,7 +56,6 @@ const getScreensAndGroups = (data: ContentElement) => {
 
 const emit = defineEmits<{
   (e: 'edit', content: ContentElement): void
-  (e: 'preview', content: ContentElement): void
   (e: 'copy', content: ContentElement): void
   (e: 'delete', content: ContentElement): void
   (e: 'toggleActive', content: ContentElement): void
@@ -176,7 +177,6 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
         <template #body="{ data }">
           <div class="action-buttons">
             <Button v-if="canEdit" icon="pi pi-pencil" @click="emit('edit', data)" size="small" outlined title="Edit" />
-            <Button icon="pi pi-eye" @click="emit('preview', data)" size="small" outlined title="Preview" />
             <Button
               v-if="canCreate"
               icon="pi pi-copy"
@@ -201,6 +201,11 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
       <!-- Expanded detail row — spans full width -->
       <template #expansion="{ data }">
         <div class="content-expansion">
+          <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
+            <div class="preview-frame-wrapper" :style="{ height: `${settingsStore.contentListPreviewSize}vh` }">
+              <iframe :srcdoc="resolvedSrcdocs[data.id] || ''" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
+            </div>
+          </div>
           <div class="expansion-details">
             <div class="expansion-duration">
               <span class="expansion-label">Duration</span>
@@ -224,12 +229,6 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
                   @click="emit('setDuration', data, val)"
                 />
               </div>
-            </div>
-          </div>
-          <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
-            <span class="expansion-label">Preview</span>
-            <div class="preview-frame-wrapper">
-              <iframe :srcdoc="resolvedSrcdocs[data.id] || ''" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
             </div>
           </div>
         </div>
@@ -295,13 +294,15 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
 .content-expansion {
   padding: 0.75rem 1rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex-direction: row;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1.5rem;
 }
 
 .expansion-details {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1.5rem;
   flex-wrap: wrap;
 }
@@ -394,8 +395,6 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
   border-radius: 4px;
   overflow: hidden;
   background: #000;
-  width: 100%;
-  max-width: 640px;
   aspect-ratio: 16 / 9;
   position: relative;
 }

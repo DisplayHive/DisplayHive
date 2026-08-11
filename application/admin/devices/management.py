@@ -527,9 +527,7 @@ def register_device_management_handlers(socketio, app, db):
         """Return screens that are not already assigned to another device."""
         from application.models import Device
 
-        screens = db.session.execute(
-            db.select(Screen).where(Screen.name != 'preview_admin')
-        ).scalars().all()
+        screens = db.session.execute(db.select(Screen)).scalars().all()
 
         assigned_screen_ids = {
             screen_id

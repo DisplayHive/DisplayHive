@@ -11,7 +11,7 @@ def get_zuweisungen_matrix_data(db):
         from application.models import Screen, Screengroup
 
         screengroup_entries = db.session.execute(db.select(Screengroup)).scalars().all()
-        screens = db.session.execute(db.select(Screen).where(Screen.name != 'preview_admin')).scalars().all()
+        screens = db.session.execute(db.select(Screen)).scalars().all()
 
         screengroups = [
             {'id': sg.id, 'name': sg.name}
