@@ -13,7 +13,8 @@ import Tag from 'primevue/tag'
 interface Screen {
   id: number
   name: string
-  active: boolean
+  hasDevice: boolean
+  online: boolean
 }
 
 interface Screengroup {
@@ -41,19 +42,18 @@ const normalizeScreen = (item: any): Screen => {
     if (item && item.attributes) {
       const id = Number(item.id)
       const name = item.attributes.name || String(item.id)
-      // If relationships.device exists, consider it active
       const rel = item.relationships || {}
-      const hasDevice = rel.device && rel.device.data
-      return { id, name, active: !!hasDevice }
+      const hasDevice = !!(rel.device && rel.device.data)
+      const online = !!(rel.device && rel.device.data && rel.device.data.is_online)
+      return { id, name, hasDevice, online }
     }
 
     const id = Number(item.id)
     const name = item.name || item.title || String(item.id)
     const attached = item.attached_device || item.device || null
-    const active = attached ? !!attached.is_online : true
-    return { id, name, active }
+    return { id, name, hasDevice: !!attached, online: !!attached?.is_online }
   } catch (e) {
-    return { id: Number(item.id || 0), name: String(item.name || item.id || 'unknown'), active: true }
+    return { id: Number(item.id || 0), name: String(item.name || item.id || 'unknown'), hasDevice: false, online: false }
   }
 }
 
@@ -169,7 +169,6 @@ const refreshData = () => {
   emit('get_screengroups')
 }
 
-const activeScreens = computed(() => screens.value.filter((s) => s.active))
 </script>
 
 <template>
@@ -185,20 +184,17 @@ const activeScreens = computed(() => screens.value.filter((s) => s.active))
   </div>
   <div v-else class="matrix-view">
     <Card>
-      <template #title>
-        <div class="card-header">
-          <span>Screen / Screengroup Matrix</span>
+      <template #content>
+        <div class="matrix-info-row">
+          <p class="matrix-description">
+            Assign screens to screengroups by checking the corresponding boxes. Changes are saved automatically.
+          </p>
           <div class="header-actions">
-            <Tag :value="`${activeScreens.length} screens`" severity="info" />
+            <Tag :value="`${screens.length} screens`" severity="info" />
             <Tag :value="`${screengroups.length} groups`" severity="secondary" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-      </template>
-      <template #content>
-        <p class="matrix-description">
-          Assign screens to screengroups by checking the corresponding boxes. Changes are saved automatically.
-        </p>
 
         <div class="matrix-container" v-if="!loading">
           <table class="matrix-table">
@@ -215,11 +211,17 @@ const activeScreens = computed(() => screens.value.filter((s) => s.active))
               </tr>
             </thead>
             <tbody>
-              <tr v-for="screen in activeScreens" :key="screen.id">
+              <tr v-for="screen in screens" :key="screen.id">
                 <td class="screen-name">
                   <div class="screen-name-inner">
                     <span>{{ screen.name }}</span>
-                    <Tag v-if="!screen.active" value="Inactive" severity="secondary" size="small" />
+                    <Tag
+                      v-if="screen.hasDevice"
+                      :value="screen.online ? 'Online' : 'Offline'"
+                      :severity="screen.online ? 'success' : 'danger'"
+                      size="small"
+                    />
+                    <Tag v-else value="No device" severity="secondary" size="small" />
                   </div>
                 </td>
                 <td
@@ -239,9 +241,9 @@ const activeScreens = computed(() => screens.value.filter((s) => s.active))
             </tbody>
           </table>
 
-          <div v-if="activeScreens.length === 0" class="empty-state">
+          <div v-if="screens.length === 0" class="empty-state">
             <i class="pi pi-desktop" style="font-size: 3rem"></i>
-            <p>No active screens available</p>
+            <p>No screens available</p>
           </div>
 
           <div v-if="screengroups.length === 0" class="empty-state">
@@ -266,10 +268,18 @@ const activeScreens = computed(() => screens.value.filter((s) => s.active))
   gap: 1rem;
 }
 
+.matrix-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 .matrix-description {
   color: #666;
-  margin-bottom: 1.5rem;
   font-size: 0.9rem;
+  margin: 0;
 }
 
 .matrix-container {
