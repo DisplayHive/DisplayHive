@@ -482,6 +482,9 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           </div>
         </div>
         <div v-if="pageTitle" class="page-header">
+          <span v-if="route.name === 'home'" class="page-title-icon-badge">
+            <i class="pi pi-home page-title-icon"></i>
+          </span>
           <h1>{{ pageTitle }}</h1>
           <i
             v-if="pageHelp"
@@ -781,6 +784,22 @@ body {
   font-size: 1.75rem;
   font-weight: 600;
   color: #333;
+}
+
+.page-title-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.page-title-icon {
+  font-size: 1.9rem;
+  color: #facc15;
 }
 
 .page-help-icon {

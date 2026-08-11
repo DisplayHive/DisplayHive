@@ -140,7 +140,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
     <Card class="welcome-card">
       <template #content>
         <div class="welcome-body">
-          <i class="pi pi-home welcome-icon"></i>
           <div>
             <div class="welcome-headline">{{ welcomeHeadline }}</div>
             <p class="welcome-text">{{ welcomeText }}</p>
@@ -288,7 +287,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
           <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://github.com/DisplayHive" target="_blank" rel="noopener" class="link-card link-card--github">
+        <a href="https://github.com/DisplayHive/DisplayHive" target="_blank" rel="noopener" class="link-card link-card--github">
           <div class="link-card-icon"><i class="pi pi-github"></i></div>
           <div class="link-card-body">
             <span class="link-card-title">GitHub</span>
@@ -328,103 +327,138 @@ const debugWarn = computed(() => screensInDebug.value > 0)
     </div>
 
     <!-- Support us -->
-    <div v-if="!hideCommunityLinks" class="support-section">
+    <div v-if="!hideCommunityLinks" class="community-section">
       <div class="community-heading">
         <i class="pi pi-heart"></i>
         <span>Support the Project</span>
       </div>
-      <p class="support-intro">
-        DisplayHive is free and open source. If you enjoy using it, here are a few ways to help — no pressure, every bit counts.
-      </p>
-      <div class="support-grid">
+      <p class="support-intro">DisplayHive is free and open source — a few ways to help.</p>
+      <div class="community-grid">
 
-        <a href="https://t.me/DisplayHiveDicussion" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--bug"><i class="pi pi-bug"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Found a bug?</span>
-            <p class="support-card-desc">Let us know in the Telegram discussion chat so we can fix it.</p>
+        <a href="https://github.com/DisplayHive/DisplayHive/issues" target="_blank" rel="noopener" class="link-card link-card--bug">
+          <div class="link-card-icon"><i class="pi pi-bug"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Found a bug?</span>
+            <span class="link-card-sub">Open a GitHub issue</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://t.me/DisplayHiveDicussion" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--idea"><i class="pi pi-lightbulb"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Have an idea?</span>
-            <p class="support-card-desc">Share your feature requests — we'd love to hear what would make your life easier.</p>
+        <a href="https://t.me/DisplayHiveDicussion" target="_blank" rel="noopener" class="link-card link-card--idea">
+          <div class="link-card-icon"><i class="pi pi-lightbulb"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Have an idea?</span>
+            <span class="link-card-sub">Tell us on Telegram</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://github.com/DisplayHive" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--star"><i class="pi pi-star"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Give us a star</span>
-            <p class="support-card-desc">A GitHub star helps others discover the project. It only takes a second.</p>
+        <a href="https://github.com/DisplayHive/DisplayHive" target="_blank" rel="noopener" class="link-card link-card--star">
+          <div class="link-card-icon"><i class="pi pi-star"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Give us a star</span>
+            <span class="link-card-sub">Star us on GitHub</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://chaos.social/@DisplayHive" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--share"><i class="pi pi-share-alt"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Spread the word</span>
-            <p class="support-card-desc">Using DisplayHive somewhere cool? Tell people about it — word of mouth matters.</p>
+        <a href="https://chaos.social/@DisplayHive" target="_blank" rel="noopener" class="link-card link-card--share">
+          <div class="link-card-icon"><i class="pi pi-share-alt"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Spread the word</span>
+            <span class="link-card-sub">Tell others about us</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://github.com/DisplayHive" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--code"><i class="pi pi-code"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Contribute code</span>
-            <p class="support-card-desc">If you feel like it, pull requests are always welcome — big or small.</p>
+        <a href="https://github.com/DisplayHive/DisplayHive" target="_blank" rel="noopener" class="link-card link-card--code">
+          <div class="link-card-icon"><i class="pi pi-code"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Contribute code</span>
+            <span class="link-card-sub">Pull requests welcome</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="https://github.com/DisplayHive" target="_blank" rel="noopener" class="support-card">
-          <div class="support-card-icon support-card-icon--audit"><i class="pi pi-eye"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Audit the software</span>
-            <p class="support-card-desc">Curious about what's under the hood? Feel free to read through the code and let us know if anything looks off — a fresh pair of eyes is always welcome.</p>
+        <a href="https://github.com/DisplayHive/DisplayHive" target="_blank" rel="noopener" class="link-card link-card--audit">
+          <div class="link-card-icon"><i class="pi pi-eye"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Audit the software</span>
+            <span class="link-card-sub">Read through the code</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
-        <a href="mailto:security@displayhive.org" class="support-card">
-          <div class="support-card-icon support-card-icon--security"><i class="pi pi-lock"></i></div>
-          <div class="support-card-body">
-            <span class="support-card-title">Found a security issue?</span>
-            <p class="support-card-desc">If you've spotted something that looks like a security concern, please reach out privately rather than opening a public issue. We'll take it from there.</p>
-            <span class="support-card-contact">security@displayhive.org</span>
+        <a href="mailto:security@displayhive.org" class="link-card link-card--security">
+          <div class="link-card-icon"><i class="pi pi-lock"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Security issue?</span>
+            <span class="link-card-sub">security@displayhive.org</span>
           </div>
+          <i class="pi pi-arrow-up-right link-card-arrow"></i>
         </a>
 
       </div>
     </div>
 
     <!-- Help wanted -->
-    <div v-if="!hideHelpingHand" class="help-section">
+    <div v-if="!hideHelpingHand" class="community-section">
       <div class="community-heading">
         <i class="pi pi-compass"></i>
         <span>Where a helping hand goes a long way</span>
       </div>
-      <p class="support-intro">
-        DisplayHive is still finding its shape. If you'd like to pitch in, these are the areas that would benefit most right now — no commitment needed, every contribution counts.
-      </p>
-      <ul class="help-list">
-        <li>
-          <i class="pi pi-bug help-list-icon help-list-icon--test"></i>
-          <span><strong>Testing &amp; Bug Reports</strong> — run it, break it, tell us. Real-world usage is the best test suite there is.</span>
-        </li>
-        <li>
-          <i class="pi pi-palette help-list-icon help-list-icon--design"></i>
-          <span><strong>Default Designs &amp; Content Types</strong> — a handful of ready-to-use layouts would make getting started much easier for everyone.</span>
-        </li>
-        <li>
-          <i class="pi pi-desktop help-list-icon help-list-icon--sample"></i>
-          <span><strong>Sample Applications</strong> — entrance signs, schedule boards, wayfinding displays … if you've built something, sharing it inspires others.</span>
-        </li>
-        <li>
-          <i class="pi pi-shield help-list-icon help-list-icon--security"></i>
-          <span><strong>Security &amp; Code Quality</strong> — a careful read-through of the codebase is always appreciated. Fresh eyes catch what familiar ones miss.</span>
-        </li>
-      </ul>
+      <p class="support-intro">Areas that would benefit most from a contribution right now.</p>
+      <div class="community-grid">
+
+        <div class="link-card link-card--static link-card--test">
+          <div class="link-card-icon"><i class="pi pi-check-square"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Testing</span>
+            <span class="link-card-sub">Run it, break it, tell us</span>
+          </div>
+        </div>
+
+        <div class="link-card link-card--static link-card--design">
+          <div class="link-card-icon"><i class="pi pi-palette"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Designs</span>
+            <span class="link-card-sub">Ready-to-use layouts</span>
+          </div>
+        </div>
+
+        <div class="link-card link-card--static link-card--contenttypes">
+          <div class="link-card-icon"><i class="pi pi-file"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Content Types</span>
+            <span class="link-card-sub">Reusable templates</span>
+          </div>
+        </div>
+
+        <div class="link-card link-card--static link-card--sample">
+          <div class="link-card-icon"><i class="pi pi-desktop"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Sample Applications</span>
+            <span class="link-card-sub">Share what you've built</span>
+          </div>
+        </div>
+
+        <div class="link-card link-card--static link-card--security">
+          <div class="link-card-icon"><i class="pi pi-shield"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Security</span>
+            <span class="link-card-sub">Fresh eyes catch bugs</span>
+          </div>
+        </div>
+
+        <div class="link-card link-card--static link-card--quality">
+          <div class="link-card-icon"><i class="pi pi-code"></i></div>
+          <div class="link-card-body">
+            <span class="link-card-title">Code Quality</span>
+            <span class="link-card-sub">Read-throughs welcome</span>
+          </div>
+        </div>
+
+      </div>
     </div>
 
   </div>
@@ -511,12 +545,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   gap: 1rem;
 }
 
-.welcome-icon {
-  font-size: 1.5rem;
-  color: var(--p-primary-color, #667eea);
-  margin-top: 0.15rem;
-  flex-shrink: 0;
-}
 
 .welcome-headline {
   font-size: 1.15rem;
@@ -668,6 +696,18 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 .link-card--github { border-left-color: #374151; }
 .link-card--telegram { border-left-color: #2ca5e0; }
 .link-card--mastodon { border-left-color: #6364ff; }
+.link-card--bug      { border-left-color: #ef4444; }
+.link-card--idea     { border-left-color: #f59e0b; }
+.link-card--star     { border-left-color: #eab308; }
+.link-card--share    { border-left-color: #8b5cf6; }
+.link-card--code     { border-left-color: #10b981; }
+.link-card--audit    { border-left-color: #06b6d4; }
+.link-card--security { border-left-color: #f97316; }
+.link-card--test     { border-left-color: #ef4444; }
+.link-card--design   { border-left-color: #8b5cf6; }
+.link-card--contenttypes { border-left-color: #6366f1; }
+.link-card--sample   { border-left-color: #06b6d4; }
+.link-card--quality  { border-left-color: #14b8a6; }
 
 .link-card-icon {
   font-size: 1.4rem;
@@ -679,7 +719,29 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 .link-card--web      .link-card-icon { color: #06b6d4; }
 .link-card--github   .link-card-icon { color: #374151; }
 .link-card--telegram .link-card-icon { color: #2ca5e0; }
-.link-card--mastodon .link-card-icon { color: #6364ff; }
+.link-card--mastodon  .link-card-icon { color: #6364ff; }
+.link-card--bug       .link-card-icon { color: #ef4444; }
+.link-card--idea      .link-card-icon { color: #f59e0b; }
+.link-card--star      .link-card-icon { color: #eab308; }
+.link-card--share     .link-card-icon { color: #8b5cf6; }
+.link-card--code      .link-card-icon { color: #10b981; }
+.link-card--audit     .link-card-icon { color: #06b6d4; }
+.link-card--security  .link-card-icon { color: #f97316; }
+.link-card--test      .link-card-icon { color: #ef4444; }
+.link-card--design    .link-card-icon { color: #8b5cf6; }
+.link-card--contenttypes .link-card-icon { color: #6366f1; }
+.link-card--sample    .link-card-icon { color: #06b6d4; }
+.link-card--quality   .link-card-icon { color: #14b8a6; }
+
+/* Non-link cards (e.g. "Help wanted" items with no target URL) */
+.link-card--static {
+  cursor: default;
+}
+
+.link-card--static:hover {
+  box-shadow: none;
+  transform: none;
+}
 
 .link-card-body {
   display: flex;
@@ -699,9 +761,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 .link-card-sub {
   font-size: 0.75rem;
   color: var(--p-text-muted-color, #9ca3af);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 .link-card-arrow {
@@ -710,127 +770,10 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   flex-shrink: 0;
 }
 
-/* Help wanted section */
-.help-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.help-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.help-list li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  font-size: 0.85rem;
-  color: var(--p-text-muted-color, #6b7280);
-  line-height: 1.5;
-}
-
-.help-list li strong {
-  color: var(--p-text-color, #111827);
-  font-weight: 600;
-}
-
-.help-list-icon {
-  flex-shrink: 0;
-  font-size: 0.8rem;
-  margin-top: 0.15rem;
-}
-
-.help-list-icon--test     { color: #ef4444; }
-.help-list-icon--design { color: #8b5cf6; }
-.help-list-icon--sample   { color: #06b6d4; }
-.help-list-icon--security { color: #f97316; }
-
-/* Support section */
-.support-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
 .support-intro {
   margin: 0;
   font-size: 0.85rem;
   color: var(--p-text-muted-color, #9ca3af);
   font-style: italic;
-}
-
-.support-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.85rem;
-}
-
-.support-card {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  border-radius: 0.75rem;
-  background: var(--p-surface-50, #f9fafb);
-  border: 1px dashed var(--p-surface-300, #d1d5db);
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s;
-}
-
-.support-card:hover {
-  background: var(--p-surface-0, #fff);
-  border-color: var(--p-surface-400, #9ca3af);
-  border-style: solid;
-  transform: translateY(-2px);
-  text-decoration: none;
-}
-
-.support-card-icon {
-  font-size: 1.35rem;
-  flex-shrink: 0;
-  width: 2rem;
-  text-align: center;
-  margin-top: 0.1rem;
-}
-
-.support-card-icon--bug      { color: #ef4444; }
-.support-card-icon--idea     { color: #f59e0b; }
-.support-card-icon--star     { color: #eab308; }
-.support-card-icon--share    { color: #8b5cf6; }
-.support-card-icon--code     { color: #10b981; }
-.support-card-icon--audit    { color: #06b6d4; }
-.support-card-icon--security { color: #f97316; }
-
-.support-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.support-card-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--p-text-color, #111827);
-}
-
-.support-card-desc {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--p-text-muted-color, #9ca3af);
-  line-height: 1.45;
-}
-
-.support-card-contact {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #f97316;
-  margin-top: 0.35rem;
-  display: block;
 }
 </style>
