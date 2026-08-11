@@ -521,7 +521,10 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .section-header {

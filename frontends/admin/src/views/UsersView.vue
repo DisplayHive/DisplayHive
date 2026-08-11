@@ -641,8 +641,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <Card>
             <template #title>
               <div class="card-header">
-                <span>Admin Users</span>
-                <Button v-if="canCreate" label="Add User" icon="pi pi-plus" @click="openCreateAccountDialog" />
+                <Button v-if="canCreate" label="Add User" icon="pi pi-plus" size="small" @click="openCreateAccountDialog" />
               </div>
             </template>
             <template #content>
@@ -732,7 +731,6 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <Card>
             <template #title>
               <div class="card-header">
-                <span>Groups</span>
                 <Button
                   v-if="canManageRights"
                   label="Add Group"
@@ -766,20 +764,20 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                   <template #body="{ data }">
                     <Button
                       v-if="canManageRights"
+                      icon="pi pi-pencil"
+                      text
+                      rounded
+                      title="Rename / move"
+                      @click="openEditGroupDialog(data)"
+                    />
+                    <Button
+                      v-if="canManageRights"
                       icon="pi pi-shield"
                       text
                       rounded
                       title="Edit rights"
                       :disabled="data.is_superadmin"
                       @click="openGroupRightsDialog(data)"
-                    />
-                    <Button
-                      v-if="canManageRights"
-                      icon="pi pi-pencil"
-                      text
-                      rounded
-                      title="Rename / move"
-                      @click="openEditGroupDialog(data)"
                     />
                     <Button
                       v-if="canManageRights"
@@ -993,7 +991,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 .card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 .dialog-form {
