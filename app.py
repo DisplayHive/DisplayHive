@@ -20,6 +20,7 @@ from application.socketio_handlers import register_all_handlers
 from application.admin.auth.routes import register_auth_routes, require_jwt_auth, require_http_right
 from application.auth import ensure_bootstrap_admin
 from application.permissions import sync_right_definitions, ensure_superadmin_group
+from application.help_content import sync_help_topics
 
 # Import database models
 from application.models import db, Design, Device
@@ -249,6 +250,7 @@ with app.app_context():
     _startup_step('ensure bootstrap admin user', lambda: ensure_bootstrap_admin(app, db))
     _startup_step('sync right definitions', lambda: sync_right_definitions(db))
     _startup_step('ensure superadmin group', lambda: ensure_superadmin_group(db))
+    _startup_step('sync help topics', lambda: sync_help_topics(db))
 
 # Register Socket.IO event handlers
 register_all_handlers(socketio, app, db)

@@ -7,6 +7,7 @@ import { useSocket } from './composables/useSocket'
 import { useAuthStore } from './stores/auth'
 import { useSettingsStore } from './stores/settings'
 import { useRightsStore } from './stores/rights'
+import { useHelpStore } from './stores/help'
 import LoginView from './views/LoginView.vue'
 
 // PrimeVue components
@@ -14,6 +15,7 @@ import Menubar from 'primevue/menubar'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 import Button from 'primevue/button'
+import Popover from 'primevue/popover'
 // use static public logo (frontends/admin/public/logo_wh.png)
 const Logo = '/admin/logo_wh.png'
 
@@ -23,6 +25,7 @@ const { connect, isConnected, reconnectFailed, on } = useSocket()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const rightsStore = useRightsStore()
+const helpStore = useHelpStore()
 
 on('connect_error', (err: unknown) => {
   const message = (err as { message?: string } | null)?.message
@@ -101,6 +104,7 @@ watch(isConnected, (connected) => {
     hasEverConnected.value = true
     settingsStore.fetchSettings()
     rightsStore.fetchMyRights()
+    helpStore.fetchHelp()
   } else if (hasEverConnected.value) {
     // Only reload on reconnect if the disconnect lasts longer than the grace
     // period — brief polling hiccups (~1 s) must not trigger a page reload.
@@ -382,6 +386,13 @@ const pageTitle = computed(() => {
   }
   return titles[route.name as string] || 'DisplayHive Admin'
 })
+
+const pageHelp = computed(() => {
+  return helpStore.helpFor(`page.${route.name as string}`)?.body || ''
+})
+
+const helpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
 </script>
 
 <template>
@@ -472,6 +483,18 @@ const pageTitle = computed(() => {
         </div>
         <div v-if="pageTitle" class="page-header">
           <h1>{{ pageTitle }}</h1>
+          <i
+            v-if="pageHelp"
+            class="pi pi-question-circle page-help-icon"
+            role="button"
+            tabindex="0"
+            :aria-label="`Help: ${pageTitle}`"
+            @click="toggleHelp"
+            @keydown.enter="toggleHelp"
+          ></i>
+          <Popover ref="helpPopover">
+            <p class="page-help-text">{{ pageHelp }}</p>
+          </Popover>
         </div>
         <RouterView />
       </main>
@@ -748,6 +771,9 @@ body {
 }
 
 .page-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
@@ -755,6 +781,23 @@ body {
   font-size: 1.75rem;
   font-weight: 600;
   color: #333;
+}
+
+.page-help-icon {
+  font-size: 1.1rem;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.page-help-icon:hover,
+.page-help-icon:focus-visible {
+  color: #6b7280;
+}
+
+.page-help-text {
+  max-width: 280px;
+  font-size: 0.9rem;
+  color: #374151;
 }
 
 /* Mobile responsive styles */

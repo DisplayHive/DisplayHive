@@ -24,10 +24,7 @@ into groups so you can target one display or a hundred at once.
 
 ## A few clarifying words on the current state
 
-DisplayHive is currently in its early stages of development. Even if it is already quite powerful, there may be some issues. If you encounter them or want to help, just contact us on Mastodon (displayhive@chaos.social).
-Some of our main issues are:
-
-- Some features are not as feature-rich or self-explanatory as they should be
+DisplayHive is by now mostly stable. Things will keep changing, but we don't expect updates to break your running system. Right now, the main rough edges are usability and documentation — some parts of the admin panel aren't as self-explanatory as they could be, and the docs don't yet cover everything. Both have already improved a lot and keep getting better. If you run into a bug, please [open a ticket](https://github.com/DisplayHive/DisplayHive/issues) so we can track it. For everything else, reach out on [Mastodon](https://chaos.social/@DisplayHive), join our [Telegram group](https://t.me/DisplayHiveDicussion) or follow the [announcement channel](https://t.me/DisplayHive) — more ways to reach us at [displayhive.org/contact](https://displayhive.org/contact/).
 
 ## AI Usage
 

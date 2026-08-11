@@ -6,6 +6,7 @@ from .screen import Screen, Screengroup, ScreenLog
 from .device import Device
 from .user import AdminUser
 from .rights import RightDefinition, Group, GroupRight, UserGroup, UserRight
+from .help import HelpTopic, HelpTranslation
 
 __all__ = [
     'db',
@@ -41,4 +42,6 @@ __all__ = [
     'GroupRight',
     'UserGroup',
     'UserRight',
+    'HelpTopic',
+    'HelpTranslation',
 ]
