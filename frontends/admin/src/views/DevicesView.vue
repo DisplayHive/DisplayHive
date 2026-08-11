@@ -19,6 +19,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Card from 'primevue/card'
+import Popover from 'primevue/popover'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -35,6 +36,12 @@ const canPreview = computed(() => rightsStore.can('device.preview'))
 const canAssign = computed(() => rightsStore.can('device.assign'))
 
 const filterText = ref('')
+
+// Help popovers
+const urlHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleUrlHelp = (e: Event) => urlHelpPopover.value?.toggle(e)
+const actionsHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleActionsHelp = (e: Event) => actionsHelpPopover.value?.toggle(e)
 
 // Online/offline visibility toggles
 const { showOnline, showOffline, toggleShowOnline, toggleShowOffline, applyOnlineFilter } = useOnlineFilter()
@@ -374,7 +381,6 @@ const deleteDevice = (device: Device) => {
     <Card>
       <template #title>
         <div class="card-header">
-          <span>Adopted Devices</span>
           <div class="header-actions">
             <Button
               v-if="canAdopt"
@@ -441,12 +447,33 @@ const deleteDevice = (device: Device) => {
             </template>
           </Column>
           <Column field="name" header="Name" sortable />
-          <Column v-if="canShowKey" field="devicekey" header="Device Key" sortable style="width: 220px;">
+          <Column v-if="canShowKey" field="devicekey" sortable style="width: 220px;">
+            <template #header>
+              <span class="col-header-with-help">
+                Device Key
+                <i
+                  class="pi pi-question-circle col-help-icon"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Help: Dynamic device URL"
+                  @click.stop="toggleUrlHelp"
+                  @keydown.enter.stop="toggleUrlHelp"
+                ></i>
+              </span>
+              <Popover ref="urlHelpPopover">
+                <p class="col-help-text">
+                  The <i class="pi pi-key"></i> button copies the device's raw key.
+                  The <i class="pi pi-share-alt"></i> button copies a dynamic device URL instead —
+                  a one-time link with the key embedded that opens this device's screen when visited.
+                  It's safe to share since it never gets written to that device's browser storage.
+                </p>
+              </Popover>
+            </template>
             <template #body="{ data }">
               <div class="key-cell">
                 <Button class="key-button" icon="pi pi-key" size="small" outlined @click="() => copyDeviceKey(data)" :title="'Copy key'">
                 </Button>
-                <Button class="key-button" icon="pi pi-link" size="small" outlined @click="() => copyDeviceUrl(data)" :title="'Copy dynamic device URL'">
+                <Button class="key-button" icon="pi pi-share-alt" size="small" outlined @click="() => copyDeviceUrl(data)" :title="'Copy dynamic device URL'">
                 </Button>
                 <span class="key-text">{{ data.devicekey }}</span>
               </div>
@@ -470,7 +497,29 @@ const deleteDevice = (device: Device) => {
               {{ data.screen_name || '-' }}
             </template>
           </Column>
-          <Column header="Actions" style="width: 200px">
+          <Column style="width: 200px">
+            <template #header>
+              <span class="col-header-with-help">
+                Actions
+                <i
+                  class="pi pi-question-circle col-help-icon"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Help: Actions"
+                  @click.stop="toggleActionsHelp"
+                  @keydown.enter.stop="toggleActionsHelp"
+                ></i>
+              </span>
+              <Popover ref="actionsHelpPopover">
+                <ul class="col-help-list">
+                  <li><i class="pi pi-play"></i> Play — open a live preview of what this device is showing.</li>
+                  <li><i class="pi pi-pencil"></i> Rename — change the device's display name.</li>
+                  <li><i class="pi pi-desktop"></i> Assign to Screen — attach this device to a screen.</li>
+                  <li><i class="pi pi-map-marker"></i> Locate Device — flash an on-screen marker to find it physically (only while online).</li>
+                  <li><i class="pi pi-trash"></i> Delete — remove the device and its adoption.</li>
+                </ul>
+              </Popover>
+            </template>
             <template #body="{ data }">
               <div class="action-buttons">
                 <Button
@@ -616,6 +665,13 @@ const deleteDevice = (device: Device) => {
   gap: 1rem;
 }
 
+/* No title text left in the card header now — keep the action buttons
+   right-aligned instead of collapsing to the start with nothing to space
+   against. */
+.card-header {
+  justify-content: flex-end;
+}
+
 .dt-header {
   display: flex;
   align-items: center;
@@ -695,5 +751,52 @@ const deleteDevice = (device: Device) => {
   color: #444;
   font-size: 0.85rem;
   display: block;
+}
+
+.col-header-with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.col-help-icon {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color, #9ca3af);
+  cursor: pointer;
+}
+
+.col-help-text {
+  max-width: 300px;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.col-help-text i {
+  font-size: 0.8rem;
+}
+
+.col-help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.col-help-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.col-help-list i {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 </style>

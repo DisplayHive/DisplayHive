@@ -367,7 +367,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     home: 'Dashboard',
     demo: 'Demo Mode',
-    devices: 'Devices',
+    devices: 'Adopted Devices',
     screens: 'Screens',
     screengroups: 'Screen Groups',
     content: 'Content',
@@ -385,6 +385,30 @@ const pageTitle = computed(() => {
     users: 'Users & Rights',
   }
   return titles[route.name as string] || 'DisplayHive Admin'
+})
+
+const pageIcon = computed(() => {
+  const icons: Record<string, string> = {
+    home: 'pi pi-home',
+    demo: 'pi pi-sparkles',
+    devices: 'pi pi-desktop',
+    screens: 'pi pi-window-maximize',
+    screengroups: 'pi pi-clone',
+    content: 'pi pi-box',
+    contenttypes: 'pi pi-file',
+    designs: 'pi pi-palette',
+    layouts: 'pi pi-th-large',
+    magictags: 'pi pi-tags',
+    settings: 'pi pi-cog',
+    logger: 'pi pi-list',
+    media: 'pi pi-images',
+    matrix: 'pi pi-th-large',
+    importexport: 'pi pi-database',
+    alerting: 'pi pi-bell',
+    pretalx: 'pi pi-calendar',
+    users: 'pi pi-users',
+  }
+  return icons[route.name as string] || ''
 })
 
 const pageHelp = computed(() => {
@@ -482,8 +506,8 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           </div>
         </div>
         <div v-if="pageTitle" class="page-header">
-          <span v-if="route.name === 'home'" class="page-title-icon-badge">
-            <i class="pi pi-home page-title-icon"></i>
+          <span v-if="pageIcon" class="page-title-icon-badge">
+            <i :class="[pageIcon, 'page-title-icon']"></i>
           </span>
           <h1>{{ pageTitle }}</h1>
           <i
