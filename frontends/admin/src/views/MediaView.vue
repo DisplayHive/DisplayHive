@@ -234,6 +234,37 @@ const deleteMedia = (item: MediaItem) => {
   })
 }
 
+const syncingPreviews = ref(false)
+const syncPreviews = async () => {
+  syncingPreviews.value = true
+  try {
+    const ack = await emitWithAck<{
+      success: boolean
+      total?: number
+      missing?: number
+      regenerated?: number
+      skipped_no_source?: number
+      error?: string
+    }>('displayhive:media:cts:sync_previews')
+    if (!ack?.success) {
+      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to sync previews', life: 4000 })
+      return
+    }
+    if (!ack.missing) {
+      toast.add({ severity: 'success', summary: 'Up to date', detail: `All ${ack.total} images have previews`, life: 3000 })
+    } else {
+      const parts = [`${ack.regenerated} of ${ack.missing} missing preview(s) regenerated`]
+      if (ack.skipped_no_source) parts.push(`${ack.skipped_no_source} skipped (original file missing)`)
+      toast.add({ severity: 'success', summary: 'Previews synced', detail: parts.join(' — '), life: 5000 })
+      mediaStore.fetch()
+    }
+  } catch {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not reach the server', life: 4000 })
+  } finally {
+    syncingPreviews.value = false
+  }
+}
+
 const isImage = (mimetype: string) => mimetype?.startsWith('image/')
 const isVideo = (mimetype: string) => mimetype?.startsWith('video/')
 
@@ -260,9 +291,18 @@ const copyUrl = (url: string) => {
       <Card>
         <template #title>
           <div class="card-header">
-            <span>Media Library</span>
             <div class="header-actions">
               <Button v-if="canUpload" icon="pi pi-upload" label="Upload" @click="showUploadDialog = true" size="small" />
+              <Button
+                v-if="canUpload"
+                icon="pi pi-sync"
+                label="Sync Previews"
+                @click="syncPreviews"
+                :loading="syncingPreviews"
+                size="small"
+                outlined
+                title="Count images vs. previews and regenerate any missing ones"
+              />
               <Button icon="pi pi-refresh" @click="mediaStore.fetch()" size="small" outlined />
             </div>
           </div>
@@ -284,7 +324,7 @@ const copyUrl = (url: string) => {
               </span>
             </div>
             <div class="tag-cloud-actions">
-              <Button label="Clear" text size="small" @click="clearTagFilters" />
+              <Button label="Clear tag selection" text size="small" @click="clearTagFilters" />
             </div>
           </div>
 
@@ -529,6 +569,12 @@ const copyUrl = (url: string) => {
   display: flex;
   gap: 1rem;
   height: calc(100vh - 150px);
+}
+
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .media-content {

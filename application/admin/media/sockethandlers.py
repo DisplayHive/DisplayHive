@@ -247,6 +247,56 @@ def register_admin_media_handlers(socketio, app, db):
             tags_raw = None
         return _do_media_edit(media_id=data.get('id'), title=title, tags_raw=tags_raw)
 
+    @socketio.on('displayhive:media:cts:sync_previews')
+    @require_right('media.upload')
+    def handle_sync_previews(data=None):
+        """Compare the count of media files against their preview/thumbnail
+        files on disk and regenerate any that are missing (e.g. lost in a
+        backup that didn't include static/media_previews, or a manual file
+        copy). Returns a summary ack; pushes a refreshed media list since a
+        previously-broken thumbnail URL now resolves.
+        """
+        all_media = db.session.execute(db.select(Media)).scalars().all()
+        missing = 0
+        regenerated = 0
+        skipped_no_source = 0
+        for m in all_media:
+            file_path = (
+                os.path.join(MEDIA_FOLDER, m.folder_path, m.filename)
+                if m.folder_path else os.path.join(MEDIA_FOLDER, m.filename)
+            )
+            preview_filename = f"{os.path.splitext(m.filename)[0]}_preview.jpg"
+            preview_path = (
+                os.path.join(PREVIEW_FOLDER, m.folder_path, preview_filename)
+                if m.folder_path else os.path.join(PREVIEW_FOLDER, preview_filename)
+            )
+            if os.path.exists(preview_path):
+                continue
+            missing += 1
+            if not os.path.exists(file_path):
+                skipped_no_source += 1
+                continue
+            os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+            is_video = m.mime_type and m.mime_type.startswith('video/')
+            create_preview(file_path, preview_path, is_video)
+            if os.path.exists(preview_path):
+                regenerated += 1
+
+        logger.info(
+            'sync_previews: %s media, %s missing previews, %s regenerated, %s skipped (source file missing)',
+            len(all_media), missing, regenerated, skipped_no_source,
+        )
+        if regenerated:
+            _push_media_list()
+
+        return {
+            'success': True,
+            'total': len(all_media),
+            'missing': missing,
+            'regenerated': regenerated,
+            'skipped_no_source': skipped_no_source,
+        }
+
     @socketio.on('displayhive:media:cts:delete_media')
     @require_right('media.delete')
     def handle_delete_media(data):
