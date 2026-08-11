@@ -331,18 +331,13 @@ const removeAllContentFromGroup = () => {
   </div>
   <div v-else class="screengroups-view">
     <Card>
-      <template #title>
-        <div class="card-header">
-          <span>Screen Groups</span>
+      <template #content>
+        <div class="filter-bar">
+          <InputText v-model="filterText" placeholder="Filter screen groups..." class="filter-input" />
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Screen Group" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
-        </div>
-      </template>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter screen groups..." class="filter-input" />
         </div>
 
         <DataTable
@@ -590,6 +585,13 @@ const removeAllContentFromGroup = () => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .screens-container {

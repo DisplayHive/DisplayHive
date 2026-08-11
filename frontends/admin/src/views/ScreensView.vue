@@ -236,7 +236,6 @@ const resetScreenSize = (screen: Screen) => {
     <Card>
       <template #title>
         <div class="card-header">
-          <span>Screens (Monitore)</span>
           <div class="header-actions">
             <Button
               v-if="canCreate"
@@ -458,6 +457,12 @@ const resetScreenSize = (screen: Screen) => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .dt-header {
