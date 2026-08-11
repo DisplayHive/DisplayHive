@@ -149,7 +149,6 @@ const sendTestLog = () => {
     <Card>
       <template #title>
         <div class="card-header">
-          <span>System Logs</span>
           <div class="header-actions">
             <Button
               :icon="autoScroll ? 'pi pi-lock' : 'pi pi-lock-open'"
@@ -222,6 +221,12 @@ const sendTestLog = () => {
   flex-direction: column;
   gap: 1rem;
   height: calc(100vh - 200px);
+}
+
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .filter-bar {
