@@ -15,12 +15,14 @@ import Dialog from 'primevue/dialog'
 import Editor from 'primevue/editor'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Tag from 'primevue/tag'
+import Card from 'primevue/card'
 import MediaPickerDialog from './MediaPickerDialog.vue'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
 import { getEffectDefinition } from '../utils/backgroundEffects'
+import { resolveIconPlaceholders, type PreviewContainer } from '../utils/designPreview'
 // `?raw` inlines the pre-built bundle's source as a string at build time.
 // It has to run *inside* the preview iframe's own document (own
 // customElements registry), so it can't just be imported/evaluated in this
@@ -99,6 +101,25 @@ const designPreview = ref<DesignPreview | null>(null)
 // editor's own iframe renders (the real screen output is unaffected).
 const disableAnimationsInPreview = ref(false)
 const disableBackdropInPreview = ref(false)
+const disableDefaultContentInPreview = ref(false)
+
+// Each placed container's own fallback content, already rendered through its
+// default_field_handler server-side (see render_container_default /
+// combine_layout_containers in application/admin/content/helper.py) — the
+// same {top, left, width, height, html} shape the Content list/edit page
+// previews use, so containers show what a real screen actually falls back to
+// here instead of an approximated client-side render.
+const layoutContainerPreviews = ref<Record<string, PreviewContainer>>({})
+
+const handleLayoutDefaultContentPreview = (data: { layout_id?: number; containers?: Record<string, PreviewContainer> }) => {
+  if (data?.layout_id !== props.layout.id) return
+  layoutContainerPreviews.value = data.containers || {}
+}
+
+const fetchLayoutDefaultContentPreview = () => {
+  if (!props.layout.id) return
+  socketEmit('displayhive:admin:cts:get_layout_default_content_preview', { layout_id: props.layout.id })
+}
 
 // Attribute-value escaping for the effect's custom-element tag below — the
 // settings values come from the backend (design's stored JSON), not from
@@ -135,9 +156,18 @@ const effectFragment = computed(() => {
   )
 })
 
-const designPreviewSrcdoc = computed(() => {
+// Async because container HTML may contain 'icon' field placeholders that
+// need resolving to real inline SVG first (resolveIconPlaceholders — see
+// utils/designPreview.ts for why that has to happen out here rather than
+// inside the sandboxed iframe itself).
+const designPreviewSrcdoc = ref('')
+
+const rebuildDesignPreviewSrcdoc = async () => {
   const p = designPreview.value
-  if (!p) return ''
+  if (!p) {
+    designPreviewSrcdoc.value = ''
+    return
+  }
   // Backdrop (body's background-color/image/gradients) arrives already
   // merged into p.css by the backend — there's no separate field to omit it
   // from. Overriding it back out client-side is an approximation: this rule
@@ -148,8 +178,24 @@ const designPreviewSrcdoc = computed(() => {
   const backdropOverride = disableBackdropInPreview.value
     ? 'body{background-color:transparent!important;background-image:none!important;}'
     : ''
-  return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}${backdropOverride}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div></body></html>`
-})
+  const containersHtml = disableDefaultContentInPreview.value
+    ? ''
+    : (
+        await Promise.all(
+          Object.entries(layoutContainerPreviews.value).map(async ([id, c]) => {
+            const html = await resolveIconPlaceholders(c.html)
+            return `<div class="dh-container dh-container-${id}" style="position:absolute;top:${c.top}vh;left:${c.left}vw;width:${c.width}vw;height:${c.height}vh;">${html}</div>`
+          }),
+        )
+      ).join('')
+  designPreviewSrcdoc.value = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}${backdropOverride}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div>${containersHtml}</body></html>`
+}
+
+watch(
+  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment],
+  rebuildDesignPreviewSrcdoc,
+  { deep: true },
+)
 
 const handleDesignPreview = (data: DesignPreview) => {
   designPreview.value = data
@@ -165,13 +211,16 @@ const handleLayoutSnaplines = (data: { snaplines?: Snapline[] }) => {
 onMounted(() => {
   on('displayhive:admin:stc:design_preview', handleDesignPreview)
   on('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
+  on('displayhive:admin:stc:layout_default_content_preview', handleLayoutDefaultContentPreview)
   socketEmit('displayhive:admin:cts:get_design_preview')
   socketEmit('displayhive:admin:cts:get_layout_snaplines')
+  fetchLayoutDefaultContentPreview()
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:design_preview', handleDesignPreview)
   off('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
+  off('displayhive:admin:stc:layout_default_content_preview', handleLayoutDefaultContentPreview)
 })
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
@@ -184,6 +233,20 @@ const placedContainers = computed(() =>
 )
 const availableContainers = computed(() =>
   props.containers.filter((c) => !(props.layout.container_ids || []).includes(c.id))
+)
+
+// Re-fetch the rendered default-content preview whenever the set of placed
+// containers or any container's own default content/handler changes — covers
+// add/remove from the Layout and edits made via the container edit modal
+// (props.containers is a fresh array from the parent on every upd_containers
+// broadcast, so a shallow field comparison here is enough to detect content
+// edits too).
+watch(
+  () => [
+    props.layout.id,
+    ...placedContainers.value.map((c) => `${c.id}:${c.default_field_handler || ''}:${c.default_content || ''}`),
+  ],
+  fetchLayoutDefaultContentPreview,
 )
 
 const selectedContainer = computed(() =>
@@ -894,8 +957,9 @@ const toggleSelectedLayoutMembership = () => {
 
 <template>
   <div class="layout-editor">
-    <div class="editor-main">
-      <div class="editor-canvas-wrap">
+    <Card class="editor-options-card">
+      <template #title>Preview &amp; Guides</template>
+      <template #content>
         <div class="preview-toggles">
           <div class="filter-toggle">
             <label for="disable-animations-preview">Disable animations in Preview</label>
@@ -905,18 +969,28 @@ const toggleSelectedLayoutMembership = () => {
             <label for="disable-backdrop-preview">Disable Backdrop in Preview</label>
             <ToggleSwitch id="disable-backdrop-preview" v-model="disableBackdropInPreview" />
           </div>
+          <div class="filter-toggle">
+            <label for="disable-default-content-preview">Disable default content in Preview</label>
+            <ToggleSwitch id="disable-default-content-preview" v-model="disableDefaultContentInPreview" />
+          </div>
         </div>
 
         <div class="snapline-bar">
           <Select v-model="newSnaplineAxis" :options="[{ label: 'Horizontal', value: 'h' }, { label: 'Vertical', value: 'v' }]" optionLabel="label" optionValue="value" class="snapline-axis-select" />
           <InputNumber v-model="newSnaplinePosition" :min="0" :max="100" suffix="%" class="snapline-position-input" />
           <Button label="Add Snapline" icon="pi pi-plus" size="small" outlined @click="addSnapline" />
-          <Tag v-for="(line, i) in snaplines" :key="i" class="snapline-chip">
-            {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
-            <i class="pi pi-times snapline-chip-remove" @click="removeSnapline(i)"></i>
-          </Tag>
+          <div class="snapline-chip-list">
+            <Tag v-for="(line, i) in snaplines" :key="i" class="snapline-chip">
+              {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
+              <i class="pi pi-times snapline-chip-remove" @click="removeSnapline(i)"></i>
+            </Tag>
+          </div>
         </div>
+      </template>
+    </Card>
 
+    <div class="editor-main">
+      <div class="editor-canvas-wrap">
         <div
           ref="canvasEl"
           class="editor-canvas"
@@ -1244,6 +1318,13 @@ const toggleSelectedLayoutMembership = () => {
   align-items: flex-start;
 }
 
+.editor-options-card {
+  flex: 0 0 260px;
+  min-width: 0;
+  position: sticky;
+  top: 1rem;
+}
+
 .editor-main {
   flex: 1;
   min-width: 0;
@@ -1260,36 +1341,43 @@ const toggleSelectedLayoutMembership = () => {
 
 .preview-toggles {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .filter-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
 .filter-toggle label {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #6b7280;
-  white-space: nowrap;
 }
 
 .snapline-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.5rem;
 }
 
 .snapline-axis-select {
-  width: 130px;
+  width: 100%;
 }
 
 .snapline-position-input {
-  width: 90px;
+  width: 100%;
+}
+
+.snapline-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .snapline-chip {
@@ -1359,6 +1447,7 @@ const toggleSelectedLayoutMembership = () => {
   border-radius: 4px;
   cursor: move;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   overflow: hidden;

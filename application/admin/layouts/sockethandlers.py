@@ -94,6 +94,30 @@ def register_admin_layouts_handlers(socketio, app, db):
         payload = build_design_payload(db)
         socketio.emit('displayhive:admin:stc:design_preview', payload, room=request.sid)
 
+    @socketio.on('displayhive:admin:cts:get_layout_default_content_preview')
+    @require_right('layouts.page')
+    def get_layout_default_content_preview(message=None):
+        """Emit each of a Layout's containers' own fallback content, rendered
+        through its default_field_handler and positioned per the Layout — same
+        {top, left, width, height, html} shape build_scene_containers hands the
+        Content list/edit previews, so the Layout editor's canvas can show
+        "what a screen falls back to here" without a Contenttype/ContentElement
+        in the picture at all. Read-only, gated like get_design_preview above.
+        """
+        layout_id = (message or {}).get('layout_id')
+        if not layout_id:
+            return
+        layout = db.session.get(Layout, int(layout_id))
+        if not layout:
+            return
+
+        from application.admin.content.helper import combine_layout_containers
+        containers = combine_layout_containers(layout.contentcontainers, {}, db=db)
+        socketio.emit('displayhive:admin:stc:layout_default_content_preview', {
+            'layout_id': layout.id,
+            'containers': containers,
+        }, room=request.sid)
+
     _SNAPLINES_SETTING_KEY = 'layout_snaplines'
 
     def _load_snaplines():

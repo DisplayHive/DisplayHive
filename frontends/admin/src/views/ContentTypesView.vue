@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -15,7 +16,7 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Dropdown from 'primevue/dropdown'
-import Tag from 'primevue/tag'
+import Popover from 'primevue/popover'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import type { OptionFlags } from '../utils/optionFlags'
 
@@ -44,6 +45,9 @@ interface ContentType {
   field_count?: number
 }
 
+const router = useRouter()
+const layoutHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
+const toggleLayoutHelp = (e: Event) => layoutHelpPopover.value?.toggle(e)
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit, emitWithAck } = useSocket()
@@ -166,14 +170,6 @@ const syncFieldsToLayoutContainers = () => {
       option_flags: {},
     }))
   editForm.value.tagconfigs = [...kept, ...added]
-}
-
-const moveField = (index: number, direction: -1 | 1) => {
-  const target = index + direction
-  const arr = editForm.value.tagconfigs
-  if (target < 0 || target >= arr.length) return
-  const [moved] = arr.splice(index, 1)
-  if (moved) arr.splice(target, 0, moved)
 }
 
 // Which fields' Preset panel is currently expanded, keyed by tagconfig id
@@ -444,18 +440,13 @@ const deleteContentType = (ct: ContentType) => {
   </div>
   <div v-else class="contenttypes-view">
     <Card>
-      <template #title>
-        <div class="card-header">
-          <span>Content Types</span>
+      <template #content>
+        <div class="filter-bar">
+          <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Content Type" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
-        </div>
-      </template>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
         </div>
 
         <DataTable
@@ -478,7 +469,12 @@ const deleteContentType = (ct: ContentType) => {
           </Column>
           <Column header="Layout" style="width: 160px">
             <template #body="{ data }">
-              <Tag v-if="data.layout_name" :value="data.layout_name" />
+              <a
+                v-if="data.layout_name"
+                href="#"
+                class="layout-link"
+                @click.prevent="router.push('/layouts')"
+              >{{ data.layout_name }} <i class="pi pi-external-link layout-link-icon"></i></a>
               <span v-else class="hint">none</span>
             </template>
           </Column>
@@ -531,7 +527,24 @@ const deleteContentType = (ct: ContentType) => {
           <Textarea id="ct-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
         <div class="field">
-          <label for="ct-layout">Layout</label>
+          <label for="ct-layout">
+            Layout
+            <i
+              class="pi pi-question-circle field-help-icon"
+              role="button"
+              tabindex="0"
+              aria-label="Help: Layout"
+              @click="toggleLayoutHelp"
+              @keydown.enter="toggleLayoutHelp"
+            ></i>
+          </label>
+          <Popover ref="layoutHelpPopover">
+            <p class="field-help-text">
+              The Layout determines which containers this content type's fields can target — one
+              field slot is created per container of the selected Layout, kept automatically in
+              sync with it.
+            </p>
+          </Popover>
           <Dropdown
             id="ct-layout"
             v-model="editForm.layout_id"
@@ -563,7 +576,6 @@ const deleteContentType = (ct: ContentType) => {
               <div class="tagconfig-col-title">Title</div>
               <div class="tagconfig-col-type">Field Handler</div>
               <div class="tagconfig-col-preset"></div>
-              <div class="tagconfig-col-order"></div>
             </div>
             <template v-for="(t, tIdx) in editForm.tagconfigs" :key="t.id ?? `new-${tIdx}`">
               <div
@@ -577,7 +589,7 @@ const deleteContentType = (ct: ContentType) => {
                   <i class="pi pi-bars drag-handle" title="Drag to reorder"></i>
                 </div>
                 <div class="tagconfig-col-container">
-                  <Tag :value="containerLabelFor(t.contentcontainer_id)" />
+                  <span class="container-label">{{ containerLabelFor(t.contentcontainer_id) }}</span>
                 </div>
                 <div class="tagconfig-col-title">
                   <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
@@ -601,10 +613,6 @@ const deleteContentType = (ct: ContentType) => {
                     :title="hasAnyOptionFlag(t) ? 'Preset value (active)' : 'Preset value'"
                     @click="togglePresetPanel(presetKeyFor(t, tIdx))"
                   />
-                </div>
-                <div class="tagconfig-col-order">
-                  <Button icon="pi pi-chevron-up" text size="small" :disabled="tIdx === 0" @click="moveField(tIdx, -1)" title="Move up" />
-                  <Button icon="pi pi-chevron-down" text size="small" :disabled="tIdx === editForm.tagconfigs.length - 1" @click="moveField(tIdx, 1)" title="Move down" />
                 </div>
               </div>
               <div v-if="expandedPresetKeys.has(presetKeyFor(t, tIdx))" class="tagconfig-preset-panel">
@@ -637,9 +645,30 @@ const deleteContentType = (ct: ContentType) => {
   gap: 1rem;
 }
 
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .hint {
   color: #888;
   font-size: 0.75rem;
+}
+
+.layout-link {
+  color: var(--p-text-color, #333);
+  text-decoration: none;
+}
+
+.layout-link:hover {
+  text-decoration: underline;
+}
+
+.layout-link-icon {
+  font-size: 0.7rem;
+  color: var(--p-text-muted-color, #9ca3af);
 }
 
 .tpl-loading {
@@ -669,7 +698,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-header {
   display: grid;
-  grid-template-columns: 28px 160px 1fr 1fr 40px 68px;
+  grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
   background: #f5f5f5;
@@ -680,7 +709,7 @@ const deleteContentType = (ct: ContentType) => {
 
 .tagconfig-row {
   display: grid;
-  grid-template-columns: 28px 160px 1fr 1fr 40px 68px;
+  grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
@@ -711,10 +740,28 @@ const deleteContentType = (ct: ContentType) => {
   color: #999;
 }
 
-.tagconfig-col-order,
 .tagconfig-col-preset {
   display: flex;
   align-items: center;
+}
+
+.container-label {
+  font-size: 0.85rem;
+  color: var(--p-text-color, #333);
+}
+
+.field-help-icon {
+  font-size: 0.85rem;
+  margin-left: 0.35rem;
+  color: var(--p-text-muted-color, #9ca3af);
+  cursor: pointer;
+}
+
+.field-help-text {
+  max-width: 300px;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .tagconfig-row[draggable='true'] {

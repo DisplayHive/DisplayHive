@@ -78,7 +78,7 @@ function sizeIconSvgToFit(svg: string): string {
 // opaque origin makes the fetch cross-origin) the way the real screen client
 // can. So placeholders are resolved here instead, in the real (non-sandboxed)
 // admin page, before the srcdoc string is ever assembled.
-async function resolveIconPlaceholders(html: string): Promise<string> {
+export async function resolveIconPlaceholders(html: string): Promise<string> {
   if (!html.includes('data-dh-icon-library')) return html
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html')
   const els = Array.from(doc.querySelectorAll<HTMLElement>('[data-dh-icon-library]'))

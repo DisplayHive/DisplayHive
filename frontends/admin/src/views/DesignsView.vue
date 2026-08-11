@@ -933,18 +933,13 @@ const deleteDesign = (design: Design) => {
   </div>
   <div v-else class="designs-view">
     <Card>
-      <template #title>
-        <div class="card-header">
-          <span>Designs</span>
+      <template #content>
+        <div class="filter-bar">
+          <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
-        </div>
-      </template>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
         </div>
 
         <DataTable
@@ -1517,6 +1512,13 @@ const deleteDesign = (design: Design) => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .hint {
