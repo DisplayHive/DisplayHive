@@ -1,6 +1,7 @@
 """Screen and screengroup database models."""
 
 from datetime import datetime
+from uuid import uuid4
 from sqlalchemy import Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db, screengroup_screen, content_element_screengroup
@@ -9,6 +10,7 @@ from .base import db, screengroup_screen, content_element_screengroup
 class Screen(db.Model):
     """Screen model representing a physical display connected to the system."""
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     active: Mapped[bool]
     lastseen: Mapped[datetime]
     name: Mapped[str]
@@ -43,6 +45,7 @@ class ScreenLog(db.Model):
 class Screengroup(db.Model):
     """Group of screens that can be assigned the same content."""
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     is_one_screen: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
     # many-to-many: a Screengroup can have many Screens

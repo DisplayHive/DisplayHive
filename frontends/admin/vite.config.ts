@@ -75,11 +75,19 @@ export default defineConfig({
       // These match by prefix, so they must be the exact literal endpoint
       // paths — NOT a shorter prefix like `/admin/import`, which would also
       // match (and hijack) the `/admin/importexport` SPA page route.
+      '/admin/export/tree': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       '/admin/export/download': {
         target: backendUrl,
         changeOrigin: true,
       },
-      '/admin/import/upload': {
+      '/admin/import/preview': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/admin/import/confirm': {
         target: backendUrl,
         changeOrigin: true,
       },

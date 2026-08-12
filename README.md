@@ -19,7 +19,7 @@ into groups so you can target one display or a hundred at once.
 - **Demo mode** — import ready-made example content packages to explore the admin panel with data already in place.
 - **Pretalx integration** — pull conference schedules from a Pretalx instance and render them as content.
 - **Alerting** — Telegram notifications when screens/devices go online, offline, or hit an error state.
-- **Import/export** — back up or migrate a full instance (database + media) as a single archive.
+- **Import/export** — back up or migrate any part of an instance (or all of it), by type or individual item, with dependencies auto-included; import can reset the instance or merge into existing data.
 - **Rights & groups** — granular per-feature permissions, nested groups, and per-user allow/deny overrides on top of JWT-authenticated, rate-limited login.
 
 ## A few clarifying words on the current state

@@ -17,11 +17,14 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance
   sharing the same CORS origins with `max_http_buffer_size` raised to
   100 MB to accommodate media uploads.
-- There are **no Flask blueprints** for the admin feature areas — only
+- There are **no Flask blueprints** for the admin feature areas.
   `application/admin/auth/routes.py` registers plain `@app.route` HTTP
-  routes (login, session check, and the JWT-protected export/import/demo
-  endpoints), wired via `register_auth_routes(app, db)`. Everything else
-  under `application/admin/*` is Socket.IO handlers, not HTTP.
+  routes for login/session check, wired via `register_auth_routes(app, db)`.
+  The JWT-protected export/import/demo endpoints are separate `@app.route`
+  handlers defined directly in `app.py` (`/admin/export/tree`,
+  `/admin/export/download`, `/admin/import/preview`, `/admin/import/confirm`,
+  `/admin/demo/list`, `/admin/demo/import`). Everything else under
+  `application/admin/*` is Socket.IO handlers, not HTTP.
 - On startup (inside `app.app_context()`), the app resets stale
   `Device.is_online` flags, enforces exactly one default design, prunes old
   screen logs, seeds the built-in Superadmin group and right-definition
@@ -91,7 +94,7 @@ panel feature, using a `displayhive:admin:<feature>:cts:*` (client-to-server)
 | `contenttypes` | CRUD for `Contenttype` and its `TagConfig` fields |
 | `designs` | CRUD for `Design`, `Gradient`, and per-container/global style overrides |
 | `devices` | Connection/adoption handshake (`connection.py`) and management: list, ping, update, assign to screen, find, delete (`management.py`) |
-| `importexport` | Full DB + media export/import as a zip, mirrored by an HTTP route for the actual file transfer |
+| `importexport` | Selective DB + media export/import as a zip (type/item tree selection, uuid-based dependency closure, reset/merge import modes) — no Socket.IO handlers of its own; the actual file transfer and selection endpoints are plain `@app.route`s in `app.py` |
 | `layouts` | CRUD for `Layout` and `ContentContainer` positioning/assignment |
 | `magictags` | CRUD for `MagicTag` and `MagicTagValueList` |
 | `matrix` | No handlers of its own — the Matrix page calls the same `screens`/`screengroups` mutations directly |

@@ -3,21 +3,28 @@
  *
  * Covered:
  *  1.  Export — clicking "Download Export" triggers a network download from
- *      /admin/export/download and the response is a valid ZIP (starts with PK).
- *  2.  Export + Import round-trip — export the DB, seed an extra screen,
- *      import the export (which wipes and restores the original state),
- *      verify the extra screen is gone and the original data is present.
+ *      /admin/export/download (now a POST with a {selection} body — the
+ *      Tree UI defaults to everything checked) and the response is a valid
+ *      ZIP (starts with PK).
+ *  2.  Export → seed extra screen → Import (reset mode) restores original
+ *      state — drives the two-step preview/confirm flow directly.
+ *  3.  Selective export — only the checked entity type's items end up in
+ *      the downloaded ZIP's db.json.
+ *  4.  Merge conflict resolution — importing a snapshot twice in merge mode
+ *      with 'skip' does not duplicate rows; with 'overwrite' it updates the
+ *      existing row's fields in place.
  *
  * Strategy:
  *  - Test 1 intercepts the download via the browser's download event.
- *  - Test 2 drives the same REST endpoints the UI uses
- *    (GET /admin/export/download, POST /admin/import/upload) directly via
- *    Playwright's `apiRequest` context, which — unlike `fetch()` from inside
- *    the page — isn't subject to the browser's CORS restrictions against the
- *    per-worker backend origin. The downloaded ZIP's db.json entry is
- *    inflated with a small local helper (no zip library dependency) to
- *    inspect/re-upload its contents; on the way back in, the JSON is
- *    uploaded standalone (`snapshot.json`), which the endpoint also accepts.
+ *  - The rest drive the REST endpoints the UI uses
+ *    (POST /admin/export/download, POST /admin/import/preview,
+ *    POST /admin/import/confirm) directly via Playwright's `apiRequest`
+ *    context, which — unlike `fetch()` from inside the page — isn't subject
+ *    to the browser's CORS restrictions against the per-worker backend
+ *    origin. The downloaded ZIP's db.json entry is inflated with a small
+ *    local helper (no zip library dependency) to inspect/re-upload its
+ *    contents; on the way back in, the JSON is uploaded standalone
+ *    (`snapshot.json`), which the preview endpoint also accepts.
  *  - All tests run serially on the same worker / isolated DB.
  */
 
@@ -103,14 +110,17 @@ function readZipEntry(buf: Buffer, entryName: string): Buffer {
   throw new Error(`Zip entry not found: ${entryName}`)
 }
 
-/** Download the export ZIP via REST and return the parsed db.json payload. */
+/** Download the export ZIP via REST (optionally scoped to a selection) and
+ * return the parsed db.json payload. */
 async function exportViaRest(
   apiRequest: APIRequestContext,
   backendUrl: string,
   token: string,
+  selection: Record<string, string[]> | null = null,
 ): Promise<Record<string, any>> {
-  const res = await apiRequest.get(`${backendUrl}/admin/export/download`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const res = await apiRequest.post(`${backendUrl}/admin/export/download`, {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: { selection },
     ignoreHTTPSErrors: true,
   })
   if (!res.ok()) {
@@ -121,15 +131,32 @@ async function exportViaRest(
   return JSON.parse(dbJson.toString('utf-8'))
 }
 
-/** Import a JSON payload via REST (as the endpoint's legacy .json upload path). */
-async function importViaRest(
+/** GET the export manifest tree (uuid/id/label per entity type). */
+async function exportTreeViaRest(
   apiRequest: APIRequestContext,
   backendUrl: string,
   token: string,
-  payload: Record<string, any>,
-): Promise<void> {
-  const res = await apiRequest.post(`${backendUrl}/admin/import/upload`, {
+): Promise<Record<string, Array<{ uuid: string; id: number; label: string }>>> {
+  const res = await apiRequest.get(`${backendUrl}/admin/export/tree`, {
     headers: { Authorization: `Bearer ${token}` },
+    ignoreHTTPSErrors: true,
+  })
+  if (!res.ok()) {
+    throw new Error(`export tree failed (${res.status()}): ${await res.text()}`)
+  }
+  return res.json()
+}
+
+/** Stage a JSON payload for import via the preview endpoint and return
+ * {token, is_legacy, manifest}. */
+async function previewImportViaRest(
+  apiRequest: APIRequestContext,
+  backendUrl: string,
+  authToken: string,
+  payload: Record<string, any>,
+): Promise<{ token: string; is_legacy: boolean; manifest: Record<string, any[]> }> {
+  const res = await apiRequest.post(`${backendUrl}/admin/import/preview`, {
+    headers: { Authorization: `Bearer ${authToken}` },
     multipart: {
       file: {
         name: 'snapshot.json',
@@ -140,9 +167,47 @@ async function importViaRest(
     ignoreHTTPSErrors: true,
   })
   const result = await res.json()
+  if (!res.ok() || result?.error) {
+    throw new Error(`Preview failed: ${JSON.stringify(result)}`)
+  }
+  return result
+}
+
+/** Confirm a staged import (by preview token) via REST. */
+async function confirmImportViaRest(
+  apiRequest: APIRequestContext,
+  backendUrl: string,
+  authToken: string,
+  opts: { token: string; selection?: Record<string, string[]> | null; mode?: 'reset' | 'merge'; conflict_resolution?: any },
+): Promise<any> {
+  const res = await apiRequest.post(`${backendUrl}/admin/import/confirm`, {
+    headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+    data: {
+      token: opts.token,
+      selection: opts.selection ?? null,
+      mode: opts.mode ?? 'reset',
+      conflict_resolution: opts.conflict_resolution ?? 'skip',
+    },
+    ignoreHTTPSErrors: true,
+  })
+  const result = await res.json()
   if (!result?.success) {
     throw new Error(`Import failed: ${JSON.stringify(result)}`)
   }
+  return result
+}
+
+/** Full preview + confirm round trip for a JSON payload (defaults to reset
+ * mode / everything selected, matching the old all-or-nothing importer). */
+async function importViaRest(
+  apiRequest: APIRequestContext,
+  backendUrl: string,
+  authToken: string,
+  payload: Record<string, any>,
+  opts: { selection?: Record<string, string[]> | null; mode?: 'reset' | 'merge'; conflict_resolution?: any } = {},
+): Promise<any> {
+  const { token } = await previewImportViaRest(apiRequest, backendUrl, authToken, payload)
+  return confirmImportViaRest(apiRequest, backendUrl, authToken, { token, ...opts })
 }
 
 // ---------------------------------------------------------------------------
@@ -212,5 +277,78 @@ test.describe('Import / Export page', () => {
     // Success toast from the import should have shown (we check indirectly via socket)
     await page.reload()
     await expect(page.locator('.importexport-view')).toBeVisible({ timeout: 10_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 3. Selective export — only the checked entity type ends up in the ZIP
+  // ---------------------------------------------------------------------------
+
+  test('selective export only includes the selected entity type', async ({
+    page,
+    apiRequest,
+    backendUrl,
+  }) => {
+    await gotoImportExport(page, backendUrl)
+    const token = await getAuthToken(apiRequest, backendUrl)
+
+    const screenName = `e2e-selective-${Math.random().toString(36).slice(2, 8)}`
+    await seedScreen(page, screenName)
+
+    const tree = await exportTreeViaRest(apiRequest, backendUrl, token)
+    expect(tree).toHaveProperty('screens')
+    const screenUuids = (tree.screens || []).map((s) => s.uuid)
+    expect(screenUuids.length).toBeGreaterThan(0)
+
+    const scoped = await exportViaRest(apiRequest, backendUrl, token, { screens: screenUuids })
+    expect((scoped.screens as any[]).length).toBe(screenUuids.length)
+    // Nothing else was selected, and screens have no hard dependency on any
+    // other entity type, so every other type should come back empty.
+    expect((scoped.designs as any[]).length).toBe(0)
+    expect((scoped.contenttypes as any[]).length).toBe(0)
+    expect((scoped.content_elements as any[]).length).toBe(0)
+  })
+
+  // ---------------------------------------------------------------------------
+  // 4. Merge mode conflict resolution — skip vs. overwrite
+  // ---------------------------------------------------------------------------
+
+  test('merge mode: skip leaves the existing row untouched, overwrite updates it', async ({
+    page,
+    apiRequest,
+    backendUrl,
+  }) => {
+    await gotoImportExport(page, backendUrl)
+    const token = await getAuthToken(apiRequest, backendUrl)
+
+    const screenName = `e2e-merge-${Math.random().toString(36).slice(2, 8)}`
+    await seedScreen(page, screenName)
+
+    const snapshot = await exportViaRest(apiRequest, backendUrl, token)
+    const screenCountBefore = (snapshot.screens as any[]).length
+    const seededRow = (snapshot.screens as any[]).find((s: any) => s.name === screenName)
+    expect(seededRow).toBeTruthy()
+    expect(seededRow.debug).toBe(false)
+
+    // Re-import the unmodified snapshot in merge/skip mode: same uuid already
+    // exists locally, so it must be skipped — no duplicate row, no field change.
+    await importViaRest(apiRequest, backendUrl, token, snapshot, { mode: 'merge', conflict_resolution: 'skip' })
+
+    const afterSkip = await exportViaRest(apiRequest, backendUrl, token)
+    expect((afterSkip.screens as any[]).length).toBe(screenCountBefore)
+    const afterSkipRow = (afterSkip.screens as any[]).find((s: any) => s.uuid === seededRow.uuid)
+    expect(afterSkipRow.debug).toBe(false)
+
+    // Re-import the same uuid again, this time with a changed field and
+    // conflict_resolution 'overwrite': the local row must be updated in place
+    // (still no duplicate row).
+    const mutatedSnapshot = JSON.parse(JSON.stringify(snapshot))
+    const mutatedRow = (mutatedSnapshot.screens as any[]).find((s: any) => s.uuid === seededRow.uuid)
+    mutatedRow.debug = true
+    await importViaRest(apiRequest, backendUrl, token, mutatedSnapshot, { mode: 'merge', conflict_resolution: 'overwrite' })
+
+    const afterOverwrite = await exportViaRest(apiRequest, backendUrl, token)
+    expect((afterOverwrite.screens as any[]).length).toBe(screenCountBefore)
+    const afterOverwriteRow = (afterOverwrite.screens as any[]).find((s: any) => s.uuid === seededRow.uuid)
+    expect(afterOverwriteRow.debug).toBe(true)
   })
 })

@@ -34,6 +34,33 @@ _CONTENT_ELEMENT_LIST_OPTIONS = (
 )
 
 
+def emit_all_content_element(socketio, db, room):
+    """Build the full ContentElement listing payload and emit it to *room*.
+
+    Shared by the ``get_all_content_element`` socket handler (per-requester
+    ``room=sid``) and callers that need to broadcast a refresh to every
+    connected admin (``room='admins'``), e.g. after a database import.
+    """
+    items = db.session.execute(
+        db.select(ContentElement).order_by(ContentElement.title)
+    ).scalars().all()
+
+    content_list = [
+        {
+            'id': mc.id,
+            'title': mc.title,
+            'active': mc.active,
+            'duration': mc.duration,
+            'contenttypeName': mc.contenttype.name if mc.contenttype else '',
+        }
+        for mc in items
+    ]
+
+    socketio.emit('displayhive:admin:stc:all_content_element', {'content': content_list}, room=room)
+    logger.debug('Sent %s total content_element items to %s', len(content_list), room)
+    return content_list
+
+
 def register_content_query_handlers(socketio, app, db):
     """Register the read-only Content handlers (pickers, listings, detail)."""
     from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
@@ -240,21 +267,4 @@ def register_content_query_handlers(socketio, app, db):
         user = current_admin_user()
         if not (has_right(db, user, 'content.page') or has_right(db, user, 'screengroups.manage_content')):
             return
-        sid = request.sid
-        items = db.session.execute(
-            db.select(ContentElement).order_by(ContentElement.title)
-        ).scalars().all()
-
-        content_list = [
-            {
-                'id': mc.id,
-                'title': mc.title,
-                'active': mc.active,
-                'duration': mc.duration,
-                'contenttypeName': mc.contenttype.name if mc.contenttype else '',
-            }
-            for mc in items
-        ]
-
-        socketio.emit('displayhive:admin:stc:all_content_element', {'content': content_list}, room=sid)
-        logger.debug('Sent %s total content_element items to %s', len(content_list), sid)
+        emit_all_content_element(socketio, db, room=request.sid)

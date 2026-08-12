@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from typing import Optional
+from uuid import uuid4
 from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db
@@ -12,6 +13,7 @@ class Device(db.Model):
     __tablename__ = 'device'
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     devicekey: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
     name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     registration_token: Mapped[Optional[str]] = mapped_column(String(36), unique=True, nullable=True, index=True)

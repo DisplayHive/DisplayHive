@@ -424,12 +424,41 @@ def _demo_mode_hidden() -> bool:
     return row is not None and row.value == 'true'
 
 
+def _broadcast_import_update():
+    """Notify already-connected admin tabs and screen clients that the
+    database was just replaced/merged via import, so they refetch instead of
+    continuing to show stale in-memory state.
+
+    Admin tabs: re-emit the same list broadcasts used after normal
+    layout/container/contenttype/content edits, to the whole 'admins' room.
+    Screens: force every connected device to hard-reload, which re-runs its
+    normal connect-time upd_content flow and picks up everything fresh.
+    """
+    from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
+    from application.admin.contenttypes.helper import emit_contenttypes_update
+    from application.admin.content.queries import emit_all_content_element
+    from application.utils import reload_devices_on_all_screens
+
+    try:
+        emit_layouts_update(socketio, app, db, room='admins')
+        emit_containers_update(socketio, app, db, room='admins')
+        emit_contenttypes_update(socketio, app, db, room='admins')
+        emit_all_content_element(socketio, db, room='admins')
+    except Exception:
+        logging.exception('Error broadcasting admin update after import')
+
+    try:
+        reload_devices_on_all_screens(socketio, db)
+    except Exception:
+        logging.exception('Error reloading screens after import')
+
+
 def _restore_from_zip_bytes(raw: bytes) -> dict:
     """Replace the media folder + database from an export-format ZIP's bytes.
 
-    Shared by the manual upload endpoint and the demo-content importer, which
-    both need to: pull db.json out of the zip, wipe the media folder and
-    restore any files it contains, then run import_database.
+    Used by the demo-content importer, which always does a full reset: pull
+    db.json out of the zip, wipe the media folder and restore any files it
+    contains, then run import_database with selection=None, mode='reset'.
     """
     import io
     import zipfile
@@ -464,20 +493,101 @@ def _restore_from_zip_bytes(raw: bytes) -> dict:
                 with zf.open(name) as src, open(target, 'wb') as dst:
                     dst.write(src.read())
 
-    return import_database(app, db, db_payload)
+    result = import_database(app, db, db_payload, selection=None, mode='reset')
+    if result.get('success'):
+        _broadcast_import_update()
+    return result
 
 
-@app.route('/admin/export/download')
+# ---------------------------------------------------------------------------
+# Selective import staging: a preview/confirm two-step flow. The preview
+# parses an uploaded file and stages it server-side under a random token
+# (so the full payload doesn't have to round-trip through the browser
+# again), returning a manifest for the tree-selection UI; confirm loads the
+# staged payload by token and actually applies the import.
+# ---------------------------------------------------------------------------
+
+import tempfile
+import secrets
+import time
+
+_IMPORT_STAGE_DIR = tempfile.gettempdir()
+_IMPORT_STAGE_MAX_AGE = 3600  # seconds
+
+
+def _import_stage_paths(token: str):
+    safe_token = ''.join(c for c in (token or '') if c.isalnum() or c == '-')
+    return (
+        os.path.join(_IMPORT_STAGE_DIR, f'displayhive-import-{safe_token}.json'),
+        os.path.join(_IMPORT_STAGE_DIR, f'displayhive-import-{safe_token}.zip'),
+    )
+
+
+def _open_stage_file(path: str, binary: bool):
+    """Create a staged-import file with owner-only permissions (0600).
+
+    ``tempfile.gettempdir()`` is a directory shared by every local user on
+    the host; a plain ``open(path, 'w')`` would create it at the default
+    0o644 (world-readable), exposing staged import contents — which can
+    include Device credentials (devicekey/registration_token) — to any
+    other local user until cleanup runs (up to _IMPORT_STAGE_MAX_AGE).
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, flags, 0o600)
+    return os.fdopen(fd, 'wb' if binary else 'w', encoding=None if binary else 'utf-8')
+
+
+def _cleanup_stale_import_stages():
+    """Best-effort delete of staged import files older than _IMPORT_STAGE_MAX_AGE."""
+    try:
+        now = time.time()
+        for name in os.listdir(_IMPORT_STAGE_DIR):
+            if not name.startswith('displayhive-import-'):
+                continue
+            path = os.path.join(_IMPORT_STAGE_DIR, name)
+            try:
+                if now - os.path.getmtime(path) > _IMPORT_STAGE_MAX_AGE:
+                    os.remove(path)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+@app.route('/admin/export/tree')
+@require_jwt_auth(app)
+@require_http_right(app, 'importexport.export')
+def admin_export_tree():
+    """Per-entity-type listing (uuid/id/label) for building the export selection tree."""
+    from application.admin.importexport.helper import export_manifest
+    return jsonify(export_manifest(app, db))
+
+
+@app.route('/admin/export/download', methods=['POST'])
 @require_jwt_auth(app)
 @require_http_right(app, 'importexport.export')
 def admin_export_download():
-    """Build a ZIP archive containing db.json + all media files and stream it."""
+    """Build a ZIP archive containing db.json + matching media files for the
+    selected entities (selection omitted/null = everything) and stream it."""
     import io
     import zipfile
     from datetime import datetime, timezone
     from application.admin.importexport.helper import export_database
 
-    export_data = export_database(app, db)
+    payload = request.get_json(silent=True) or {}
+    selection = payload.get('selection')  # dict[type, [uuid,...]] or None = everything
+
+    export_data = export_database(app, db, selection)
+
+    # When a selection was given, only bundle media files that belong to the
+    # (dependency-resolved) selected Media rows — export_data['media'] already
+    # reflects that resolution.
+    selected_rel_paths = None
+    if selection is not None:
+        selected_rel_paths = {
+            os.path.join(m.get('folder_path') or '', m['filename']).replace(os.sep, '/')
+            for m in export_data.get('media', [])
+        }
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -486,7 +596,10 @@ def admin_export_download():
             for root, _dirs, files in os.walk(_MEDIA_FOLDER):
                 for fname in files:
                     abs_path = os.path.join(root, fname)
-                    arcname = os.path.join('media', os.path.relpath(abs_path, _MEDIA_FOLDER))
+                    rel = os.path.relpath(abs_path, _MEDIA_FOLDER)
+                    if selected_rel_paths is not None and rel.replace(os.sep, '/') not in selected_rel_paths:
+                        continue
+                    arcname = os.path.join('media', rel)
                     zf.write(abs_path, arcname)
 
     buf.seek(0)
@@ -499,38 +612,127 @@ def admin_export_download():
     )
 
 
-@app.route('/admin/import/upload', methods=['POST'])
+@app.route('/admin/import/preview', methods=['POST'])
 @require_jwt_auth(app)
 @require_http_right(app, 'importexport.import')
-def admin_import_upload():
-    """Accept a ZIP (or legacy JSON) upload and restore the database + media files."""
+def admin_import_preview():
+    """Parse an uploaded ZIP/JSON export and stage it server-side under a
+    short-lived token, returning a manifest for the selection tree."""
+    import io
     import zipfile
-    from application.admin.importexport.helper import import_database
+    from application.admin.importexport.helper import prepare_import_payload, import_manifest
+
+    _cleanup_stale_import_stages()
 
     file = request.files.get('file')
     if not file:
         return jsonify({'success': False, 'error': 'No file uploaded'}), 400
 
     filename = file.filename or ''
+    raw = file.read()
+    zip_bytes = None
 
     if filename.lower().endswith('.zip'):
-        raw = file.read()
         try:
-            result = _restore_from_zip_bytes(raw)
+            with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
+                if 'db.json' not in zf.namelist():
+                    return jsonify({'success': False, 'error': 'ZIP does not contain db.json'}), 400
+                db_payload = json.loads(zf.read('db.json').decode('utf-8'))
         except zipfile.BadZipFile:
             return jsonify({'success': False, 'error': 'Invalid ZIP file'}), 400
-        return jsonify(result)
-
+        zip_bytes = raw
     elif filename.lower().endswith('.json'):
         try:
-            db_payload = json.loads(file.read().decode('utf-8'))
+            db_payload = json.loads(raw.decode('utf-8'))
         except Exception as exc:
             return jsonify({'success': False, 'error': f'Invalid JSON: {exc}'}), 400
-
     else:
         return jsonify({'success': False, 'error': 'Unsupported file type — upload a .zip or .json file'}), 400
 
-    result = import_database(app, db, db_payload)
+    version = db_payload.get('export_version', 1)
+    is_legacy = version < 9
+    prepare_import_payload(db_payload)  # backfills uuids + upgrades pre-v4 shape, in place
+
+    token = secrets.token_urlsafe(24)
+    json_path, zip_path = _import_stage_paths(token)
+    with _open_stage_file(json_path, binary=False) as f:
+        json.dump(db_payload, f)
+    if zip_bytes is not None:
+        with _open_stage_file(zip_path, binary=True) as f:
+            f.write(zip_bytes)
+
+    manifest = import_manifest(db_payload, app, db)
+
+    return jsonify({'token': token, 'is_legacy': is_legacy, 'manifest': manifest})
+
+
+@app.route('/admin/import/confirm', methods=['POST'])
+@require_jwt_auth(app)
+@require_http_right(app, 'importexport.import')
+def admin_import_confirm():
+    """Finish a staged import: apply the chosen selection/mode/conflict
+    resolution, restore matching media files, then discard the staged upload."""
+    import shutil
+    import zipfile
+    from application.admin.importexport.helper import import_database
+
+    payload = request.get_json(silent=True) or {}
+    token = payload.get('token') or ''
+    selection = payload.get('selection')
+    mode = payload.get('mode') or 'reset'
+    conflict_resolution = payload.get('conflict_resolution') or 'skip'
+
+    json_path, zip_path = _import_stage_paths(token)
+    if not os.path.isfile(json_path):
+        return jsonify({'success': False, 'error': 'Import session expired or not found — please re-upload the file.'}), 400
+
+    with open(json_path, 'r', encoding='utf-8') as f:
+        db_payload = json.load(f)
+
+    has_zip = os.path.isfile(zip_path)
+
+    try:
+        # Reset implies a full media-folder wipe first, matching the old
+        # whole-database-reset behaviour; merge leaves existing files alone.
+        if mode == 'reset':
+            if os.path.isdir(_MEDIA_FOLDER):
+                for entry in os.scandir(_MEDIA_FOLDER):
+                    if entry.is_dir(follow_symlinks=False):
+                        shutil.rmtree(entry.path)
+                    else:
+                        os.remove(entry.path)
+            os.makedirs(_MEDIA_FOLDER, exist_ok=True)
+
+        if has_zip:
+            selected_media_uuids = set(selection.get('media') or []) if selection is not None else None
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                names = set(zf.namelist())
+                for media_row in db_payload.get('media', []):
+                    if selected_media_uuids is not None and media_row.get('uuid') not in selected_media_uuids:
+                        continue
+                    rel = os.path.join(media_row.get('folder_path') or '', media_row['filename'])
+                    arcname = 'media/' + rel.replace(os.sep, '/')
+                    if arcname not in names:
+                        continue
+                    target = os.path.join(_MEDIA_FOLDER, rel)
+                    real_target = os.path.realpath(target)
+                    real_root = os.path.realpath(_MEDIA_FOLDER)
+                    if real_target != real_root and not real_target.startswith(real_root + os.sep):
+                        continue
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with zf.open(arcname) as src, open(target, 'wb') as dst:
+                        dst.write(src.read())
+
+        result = import_database(app, db, db_payload, selection=selection, mode=mode, conflict_resolution=conflict_resolution)
+        if result.get('success'):
+            _broadcast_import_update()
+    finally:
+        for path in (json_path, zip_path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
     return jsonify(result)
 
 

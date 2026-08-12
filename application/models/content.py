@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
+from uuid import uuid4
 from sqlalchemy import String, Text, Table, Column, Integer, Float, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db, content_element_screengroup
@@ -25,6 +26,7 @@ class ContentElement(db.Model):
     """
     __tablename__ = 'content_element'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     active: Mapped[bool]
     title: Mapped[str] = mapped_column(String(255))
     html: Mapped[str]
@@ -46,6 +48,7 @@ class Design(db.Model):
     """Design model: global screen skin (HTML/CSS). Exactly one is active instance-wide."""
     __tablename__ = 'design'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, nullable=True)
     html: Mapped[str] = mapped_column(Text)
@@ -106,6 +109,7 @@ class Gradient(db.Model):
     """
     __tablename__ = 'gradient'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     type: Mapped[str] = mapped_column(String(20), default='linear', nullable=False)  # 'linear' | 'radial' | 'conic'
     repeating: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
@@ -146,6 +150,7 @@ class Layout(db.Model):
     """
     __tablename__ = 'layout'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, nullable=True)
     # Many-to-many relationship to ContentContainer
@@ -159,6 +164,7 @@ class ContentContainer(db.Model):
     rendered as an absolutely-positioned overlay. Reusable across multiple Layouts."""
     __tablename__ = 'contentcontainer'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))  # Display/reference name (e.g., 'maincontent', 'sidebar')
     order: Mapped[int] = mapped_column(Integer, default=0)  # Display order in admin lists
     # Position/size on screen, in viewport-relative units.
@@ -232,6 +238,7 @@ class Contenttype(db.Model):
     its target container's rendered content.
     """
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text, nullable=True)
     layout_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('layout.id'), nullable=True)
@@ -281,6 +288,7 @@ class MagicTagValueList(db.Model):
     """A named list of key/value entries a 'list'-type MagicTag can draw from."""
     __tablename__ = 'magic_tag_value_list'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     entries: Mapped[list["MagicTagValueListEntry"]] = relationship(
         "MagicTagValueListEntry", back_populates="value_list", cascade="all, delete-orphan"
@@ -305,6 +313,7 @@ class MagicTag(db.Model):
     """
     __tablename__ = 'magic_tag'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255))
     value: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text, nullable=True, default='')
@@ -344,6 +353,7 @@ class Media(db.Model):
     """Media model for managing images and videos."""
     __tablename__ = 'media'
     id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     filename: Mapped[str] = mapped_column(String(255))  # Original filename
     title: Mapped[str] = mapped_column(String(255), nullable=True)  # User-defined title
     tags: Mapped[str] = mapped_column(Text, nullable=True)  # Comma-separated tags
