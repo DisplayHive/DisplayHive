@@ -103,7 +103,7 @@ const screenOptions = computed(() =>
 // Default to the first screen once the screen list has loaded, so the page
 // shows something useful right away instead of the "select a screen" prompt.
 watch(screenOptions, (options) => {
-  if (selectedScreenId.value == null && options.length > 0) {
+  if (selectedScreenId.value == null && options[0]) {
     selectedScreenId.value = options[0].id
   }
 }, { immediate: true })
@@ -117,7 +117,7 @@ const groupOptions = computed(() =>
 // Default to the first group once the group list has loaded, mirroring the
 // screen filter's default-selection behavior above.
 watch(groupOptions, (options) => {
-  if (selectedGroupId.value == null && options.length > 0) {
+  if (selectedGroupId.value == null && options[0]) {
     selectedGroupId.value = options[0].id
   }
 }, { immediate: true })
