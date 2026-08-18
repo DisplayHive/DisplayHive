@@ -98,7 +98,7 @@ Copy `.env.example` to `.env` (or export the variables in your shell) to configu
 
 ## Documentation
 
-The full docs are published at **[displayhive.github.io/DisplayHive](https://displayhive.github.io/DisplayHive/)**
+The full docs are published at **[docs.displayhive.org](https://docs.displayhive.org/)**
 (rebuilt automatically on every push to `main` that touches `docs/`).
 
 The source lives in [`docs/`](docs/) and is built with
