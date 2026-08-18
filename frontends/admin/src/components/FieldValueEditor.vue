@@ -23,6 +23,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
+import DatePicker from 'primevue/datepicker'
 import Textarea from 'primevue/textarea'
 import Editor from 'primevue/editor'
 import Select from 'primevue/select'
@@ -449,6 +450,58 @@ function _formatDateStr(d: Date, fmt: string, timezone: string): string {
 const formatDatePreview = (format: string): string =>
   _formatDateStr(previewNow.value, format || 'HH:mm:ss', previewTimezone.value)
 
+// --- countdown preview -------------------------------------------------------
+const COUNTDOWN_TOKENS = [
+  { token: 'DD', desc: 'Days remaining (padded)',    example: '03' },
+  { token: 'D',  desc: 'Days remaining',              example: '3'  },
+  { token: 'HH', desc: 'Hours remaining (padded)',    example: '05' },
+  { token: 'H',  desc: 'Hours remaining',             example: '5'  },
+  { token: 'mm', desc: 'Minutes remaining (padded)',  example: '09' },
+  { token: 'm',  desc: 'Minutes remaining',           example: '9'  },
+  { token: 'ss', desc: 'Seconds remaining (padded)',  example: '02' },
+  { token: 's',  desc: 'Seconds remaining',           example: '2'  },
+]
+
+function _formatCountdownStr(remainingMs: number, fmt: string): string {
+  const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000))
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return fmt.replace(/DD|D|HH|H|mm|m|ss|s/g, t => {
+    switch (t) {
+      case 'DD': return String(days).padStart(2, '0')
+      case 'D':  return String(days)
+      case 'HH': return String(hours).padStart(2, '0')
+      case 'H':  return String(hours)
+      case 'mm': return String(minutes).padStart(2, '0')
+      case 'm':  return String(minutes)
+      case 'ss': return String(seconds).padStart(2, '0')
+      case 's':  return String(seconds)
+      default:   return t
+    }
+  })
+}
+
+const formatCountdownPreview = (target: string, format: string, finishedText: string): string => {
+  if (!target) return '—'
+  const t = new Date(target).getTime()
+  if (isNaN(t)) return 'Invalid date'
+  const remainingMs = t - previewNow.value.getTime()
+  return remainingMs <= 0 && finishedText ? finishedText : _formatCountdownStr(remainingMs, format || 'DD:HH:mm:ss')
+}
+
+const fmtCountdownDt = (d: Date | null): string => {
+  if (!d) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+const parseCountdownDate = (raw: string): Date | null => {
+  if (!raw) return null
+  const d = new Date(raw)
+  return isNaN(d.getTime()) ? null : d
+}
+
 const handleAdminSettingsForPreview = (data: any) => {
   const tz = data?.system_settings?.timezone
   if (tz) previewTimezone.value = tz
@@ -465,6 +518,9 @@ onMounted(() => {
   if (props.tag.fieldHandler === 'datetime_format') {
     on('displayhive:admin:stc:admin_settings', handleAdminSettingsForPreview)
     socketEmit('displayhive:admin:cts:get_admin_settings')
+    previewInterval = setInterval(() => { previewNow.value = new Date() }, 1000)
+  }
+  if (props.tag.fieldHandler === 'countdown') {
     previewInterval = setInterval(() => { previewNow.value = new Date() }, 1000)
   }
 })
@@ -840,6 +896,68 @@ onUnmounted(() => {
         <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__speed')" @toggle-locked="toggleFlag(tag.name + '__speed', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__speed', 'hidden')" />
       </div>
       <small class="marquee-hint">Niedrigere Zahl = schnellere Laufgeschwindigkeit.</small>
+    </div>
+
+    <div v-else-if="tag.fieldHandler === 'countdown'" class="countdown-field-wrapper">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
+        <DatePicker
+          :id="`field-${tag.name}`"
+          :modelValue="parseCountdownDate(String(getFieldValue(tag.name) || ''))"
+          @update:modelValue="(v: Date | null) => setFieldValue(tag.name, fmtCountdownDt(v))"
+          showTime hourFormat="24" showClear dateFormat="dd.mm.yy"
+          placeholder="Target date &amp; time"
+          :disabled="isLocked(tag.name)"
+          class="w-full"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
+      </div>
+      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__format')" class="fve-slot">
+        <div class="countdown-subfield">
+          <label :for="`field-${tag.name}-format`">Format</label>
+          <InputText
+            :id="`field-${tag.name}-format`"
+            :modelValue="String(getFieldValue(tag.name + '__format') || 'DD:HH:mm:ss')"
+            @update:modelValue="(v: string | undefined) => setFieldValue(tag.name + '__format', v ?? '')"
+            placeholder="DD:HH:mm:ss"
+            :disabled="isLocked(tag.name + '__format')"
+            style="width: 160px"
+          />
+        </div>
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__format')" @toggle-locked="toggleFlag(tag.name + '__format', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__format', 'hidden')" />
+      </div>
+      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__finished_text')" class="fve-slot">
+        <div class="countdown-subfield">
+          <label :for="`field-${tag.name}-finished`">Finished Text</label>
+          <InputText
+            :id="`field-${tag.name}-finished`"
+            :modelValue="String(getFieldValue(tag.name + '__finished_text') || '')"
+            @update:modelValue="(v: string | undefined) => setFieldValue(tag.name + '__finished_text', v ?? '')"
+            placeholder="Optional text shown once the countdown ends"
+            :disabled="isLocked(tag.name + '__finished_text')"
+            class="w-full"
+          />
+        </div>
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__finished_text')" @toggle-locked="toggleFlag(tag.name + '__finished_text', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__finished_text', 'hidden')" />
+      </div>
+      <div class="datetime-preview">
+        <span class="datetime-preview-label">Preview</span>
+        <span class="datetime-preview-value">{{ formatCountdownPreview(String(getFieldValue(tag.name) || ''), String(getFieldValue(tag.name + '__format') || 'DD:HH:mm:ss'), String(getFieldValue(tag.name + '__finished_text') || '')) }}</span>
+      </div>
+      <div class="datetime-tokens">
+        <p class="datetime-tokens-title">Format tokens</p>
+        <table class="token-table">
+          <thead>
+            <tr><th>Token</th><th>Description</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in COUNTDOWN_TOKENS" :key="t.token">
+              <td><code>{{ t.token }}</code></td>
+              <td>{{ t.desc }}</td>
+              <td>{{ t.example }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <template v-else-if="tag.fieldHandler === 'iframe'">
@@ -1292,6 +1410,11 @@ onUnmounted(() => {
   font-size: 0.875rem;
   color: var(--p-text-color, #334155);
   white-space: nowrap;
+  /* .fve-slot's ":first-child { flex: 1 }" rule is meant for the control,
+     not a leading label — without this override, a label placed first
+     (as here and in the countdown fields below) grabs the row's flex-grow
+     and shoves the actual control off to the right instead. */
+  flex: 0 0 auto;
 }
 
 .marquee-hint {
@@ -1301,10 +1424,22 @@ onUnmounted(() => {
   margin-top: 0.2rem;
 }
 
-.datetime-format-wrapper {
+.datetime-format-wrapper,
+.countdown-field-wrapper {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.countdown-subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.countdown-subfield label {
+  font-size: 0.875rem;
+  color: var(--p-text-color, #334155);
 }
 
 .datetime-preview {

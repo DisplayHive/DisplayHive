@@ -84,6 +84,7 @@ const containersForLayout = computed(() => {
 const fieldHandlerOptions = [
   { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
+  { label: 'Countdown', value: 'countdown' },
   { label: 'Date / Time Format', value: 'datetime_format' },
   { label: 'HTML (raw)', value: 'rawhtml' },
   { label: 'Icon', value: 'icon' },

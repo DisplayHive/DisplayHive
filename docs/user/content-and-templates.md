@@ -54,8 +54,8 @@ Each container can optionally have a **default field handler** and matching
 size fields, a table builder, etc.) opens from the container's own settings.
 This default is what renders whenever no active content currently targets
 that container. The available handlers are: Short text, Long text, WYSIWYG,
-Number, Link/URL, Image, Icon, Arrow, Date/Time Format, Table, Pretalx
-Table, Raw HTML, iFrame, Marquee (scrolling text), or None.
+Number, Link/URL, Image, Icon, Arrow, Date/Time Format, Countdown, Table,
+Pretalx Table, Raw HTML, iFrame, Marquee (scrolling text), or None.
 
 There's no per-screen "this screen uses layout X" assignment — a layout's
 only job is to group containers and scope which containers a content type
@@ -117,10 +117,13 @@ For each field you can set:
   used as a header wherever the content renders.
 - A **field handler** — the same set available for a layout container's
   default content (short text, long text, WYSIWYG, number, link/URL, image,
-  icon, arrow, date/time format, table, Pretalx table — see
+  icon, arrow, date/time format, countdown, table, Pretalx table — see
   [Pretalx](pretalx.md) — raw HTML, iFrame, marquee, or none). Leaving a
   field as **None** means it has no input of its own and always falls back
-  to showing its container's default content.
+  to showing its container's default content. A **countdown** field counts
+  down to a target date/time, with a customizable format (day/hour/minute/
+  second tokens) and an optional "finished" text shown once the target has
+  passed.
 - Drag-to-reorder — the order fields appear in both the Content editor and
   the rendered output.
 

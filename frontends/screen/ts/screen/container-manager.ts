@@ -11,6 +11,7 @@
 
 import type { Scene } from "./types.js";
 import { tickNow } from "./clock.js";
+import { tickCountdown } from "./countdown.js";
 import { resolveIcons } from "./icon-resolver.js";
 import { log } from "./logger.js";
 
@@ -173,6 +174,7 @@ export function renderScene(scene: Scene): void {
   }
 
   tickNow(); // immediately fill any dh-clock elements in the new HTML
+  tickCountdown(); // immediately fill any dh-countdown elements in the new HTML
   // Only re-resolve icon placeholders inside containers whose content
   // actually changed — resolveIcons() re-fetches+reinjects unconditionally
   // for whatever it's given, so scoping this avoids needlessly reloading an

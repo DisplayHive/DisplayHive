@@ -10,6 +10,7 @@ import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import Dropdown from 'primevue/dropdown'
+import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import Editor from 'primevue/editor'
@@ -705,6 +706,7 @@ const onCanvasDrop = async (e: DragEvent) => {
 const defaultFieldHandlerOptions = [
   { label: 'None', value: '' },
   { label: 'Arrow', value: 'arrows' },
+  { label: 'Countdown', value: 'countdown' },
   { label: 'Date / Time Format', value: 'datetime_format' },
   { label: 'HTML (raw)', value: 'rawhtml' },
   { label: 'Icon', value: 'icon' },
@@ -803,6 +805,8 @@ const onDefaultHandlerChange = (newHandler: string) => {
     containerEditForm.default_content = 'HH:mm:ss'
   } else if (newHandler === 'marquee') {
     containerEditForm.default_content = JSON.stringify({ text: '', speed: 20 })
+  } else if (newHandler === 'countdown') {
+    containerEditForm.default_content = JSON.stringify({ target: '', format: 'DD:HH:mm:ss', finished_text: '' })
   } else {
     containerEditForm.default_content = ''
   }
@@ -850,6 +854,48 @@ const marqueeSpeed = computed({
     try { text = JSON.parse(containerEditForm.default_content || '{}').text || '' } catch { /* keep default */ }
     containerEditForm.default_content = JSON.stringify({ text, speed: v ?? 20 })
   },
+})
+
+// --- 'countdown' handler: {target, format, finished_text}, packed as JSON
+// into default_content. `target` is a naive "YYYY-MM-DDTHH:mm" string (no
+// timezone), parsed/formatted the same way Content's start_time/end_time
+// scheduling fields are — see ContentEditView.vue's parseIsoDate/fmtDt.
+const parseCountdownData = (): { target: string; format: string; finished_text: string } => {
+  try {
+    const parsed = JSON.parse(containerEditForm.default_content || '{}')
+    return {
+      target: parsed.target || '',
+      format: parsed.format || 'DD:HH:mm:ss',
+      finished_text: parsed.finished_text || '',
+    }
+  } catch {
+    return { target: '', format: 'DD:HH:mm:ss', finished_text: '' }
+  }
+}
+const setCountdownData = (data: { target: string; format: string; finished_text: string }) => {
+  containerEditForm.default_content = JSON.stringify(data)
+}
+const fmtCountdownDt = (d: Date | null): string => {
+  if (!d) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+const countdownTargetDate = computed<Date | null>({
+  get: () => {
+    const raw = parseCountdownData().target
+    if (!raw) return null
+    const d = new Date(raw)
+    return isNaN(d.getTime()) ? null : d
+  },
+  set: (v: Date | null) => setCountdownData({ ...parseCountdownData(), target: fmtCountdownDt(v) }),
+})
+const countdownFormat = computed({
+  get: () => parseCountdownData().format,
+  set: (v: string) => setCountdownData({ ...parseCountdownData(), format: v }),
+})
+const countdownFinishedText = computed({
+  get: () => parseCountdownData().finished_text,
+  set: (v: string) => setCountdownData({ ...parseCountdownData(), finished_text: v }),
 })
 
 // --- 'table' handler: {columns, rows}, stored directly as JSON -------------
@@ -1279,6 +1325,16 @@ const toggleSelectedLayoutMembership = () => {
               />
             </div>
             <small class="hint">Niedrigere Zahl = schnellere Laufgeschwindigkeit.</small>
+          </div>
+
+          <div v-else-if="containerEditForm.default_field_handler === 'countdown'" class="field">
+            <label>Target Date &amp; Time</label>
+            <DatePicker v-model="countdownTargetDate" showTime hourFormat="24" showClear dateFormat="dd.mm.yy" placeholder="Pick a date" class="w-full" />
+            <label style="margin-top:0.5rem;display:block;">Format</label>
+            <InputText v-model="countdownFormat" size="small" placeholder="DD:HH:mm:ss" style="width: 160px" />
+            <label style="margin-top:0.5rem;display:block;">Finished Text</label>
+            <InputText v-model="countdownFinishedText" size="small" class="w-full" placeholder="Optional text shown once the countdown ends" />
+            <small class="hint">Tokens: DD/D days, HH/H hours, mm/m minutes, ss/s seconds — remaining until the target.</small>
           </div>
         </template>
 

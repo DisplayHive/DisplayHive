@@ -181,6 +181,16 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                 f' data-dh-clock="{_html_escape(fmt_str)}"'
                 f' data-dh-timezone="{_html_escape(tz_name)}"></div>'
             )
+        elif ftype == 'countdown':
+            target = str(ctx.get(field_name, '')).strip()
+            fmt_str = str(ctx.get(f'{field_name}__format', 'DD:HH:mm:ss')).strip() or 'DD:HH:mm:ss'
+            finished_text = str(ctx.get(f'{field_name}__finished_text', '')).strip()
+            ctx[field_name] = Markup(
+                f'<div class="dh-countdown" data-dh-countdown="1"'
+                f' data-dh-countdown-target="{_html_escape(target)}"'
+                f' data-dh-countdown-format="{_html_escape(fmt_str)}"'
+                f' data-dh-countdown-finished="{_html_escape(finished_text)}"></div>'
+            )
         elif ftype == 'pretalx_table':
             pretalx_data = _get_pretalx_data(str(ctx.get(field_name, '')).strip(), db)
             _ps_no_session  = 'No session running'
@@ -335,6 +345,16 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
             ctx = {'default': parsed.get('text', ''), 'default__speed': parsed.get('speed', 20)}
         except Exception:
             ctx = {'default': content, 'default__speed': 20}
+    elif field_handler == 'countdown':
+        try:
+            parsed = json.loads(content)
+            ctx = {
+                'default': parsed.get('target', ''),
+                'default__format': parsed.get('format', 'DD:HH:mm:ss'),
+                'default__finished_text': parsed.get('finished_text', ''),
+            }
+        except Exception:
+            ctx = {'default': content, 'default__format': 'DD:HH:mm:ss', 'default__finished_text': ''}
     elif field_handler == 'pretalx_table':
         try:
             parsed = json.loads(content)
