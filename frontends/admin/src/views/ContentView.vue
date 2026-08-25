@@ -89,7 +89,7 @@ const filterModeOptions: Array<{ label: string; value: FilterMode }> = [
   { label: 'By Group', value: 'group' },
   { label: 'Abandoned', value: 'abandoned' },
 ]
-const filterMode = ref<FilterMode>('screen')
+const filterMode = ref<FilterMode>('all')
 const filterHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
 const toggleFilterHelp = (e: Event) => filterHelpPopover.value?.toggle(e)
 

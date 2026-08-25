@@ -233,6 +233,34 @@ const durationSeconds = computed({
   },
 })
 
+// Summaries shown in each collapsible's <summary> so its current value is
+// still visible while collapsed, instead of a static label.
+const formatDateDisplay = (d: Date | null): string => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d!.getDate())}.${pad(d!.getMonth() + 1)}.${d!.getFullYear()} ${pad(d!.getHours())}:${pad(d!.getMinutes())}`
+}
+
+const schedulingSummary = computed(() => {
+  const { start_time: start, end_time: end } = createForm.value
+  if (!start && !end) return 'no restriction'
+  if (start && end) return `${formatDateDisplay(start)} → ${formatDateDisplay(end)}`
+  if (start) return `from ${formatDateDisplay(start)}`
+  return `until ${formatDateDisplay(end)}`
+})
+
+const durationSummary = computed(() => {
+  const m = durationMinutes.value
+  const s = durationSeconds.value
+  if (m === 0) return `${s}s`
+  if (s === 0) return `${m}m`
+  return `${m}m ${s}s`
+})
+
+const assignmentSummary = computed(() => {
+  const n = formScreengroupIds.value.length
+  return n === 0 ? 'none selected' : `${n} selected`
+})
+
 const filteredScreengroups = computed(() => {
   const q = sgSearchText.value.toLowerCase()
   if (!q) return allScreengroups.value
@@ -703,6 +731,14 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     <div v-else class="content-edit-columns">
     <div class="content-edit-form">
     <div class="dialog-content">
+      <div v-if="selectedContentType" class="content-type-banner">
+        <i class="pi pi-file-edit"></i>
+        <div>
+          <strong>{{ selectedContentType.name }}</strong>
+          <p v-if="selectedContentType.description" class="text-muted">{{ selectedContentType.description }}</p>
+        </div>
+      </div>
+
       <div v-if="affectsMultipleScreens" class="multi-screen-warning">
         <i class="pi pi-exclamation-triangle"></i>
         <div>
@@ -721,147 +757,167 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </div>
       </div>
 
-      <div class="field">
-        <label for="create-title">
-          Title *
-          <i
-            class="pi pi-question-circle field-help-icon"
-            role="button"
-            tabindex="0"
-            aria-label="Help: Title"
-            @click="toggleTitleHelp"
-            @keydown.enter="toggleTitleHelp"
-          ></i>
-        </label>
-        <Popover ref="titleHelpPopover">
-          <p class="field-help-text">
-            The title is only shown in the admin backend and in on-screen debug overlays —
-            it's never rendered to viewers. It exists purely to help you keep an overview of
-            your content list.
-          </p>
-        </Popover>
-        <InputText id="create-title" v-model="createForm.title" class="w-full" />
-      </div>
+      <section class="form-section">
+        <h3 class="form-section-title">Content</h3>
 
-      <div v-if="tagConfigs.length > 0" class="tag-fields-section">
-        <div
-          v-for="tag in tagConfigs"
-          v-show="tag.fieldHandler !== ''"
-          :key="tag.name"
-          class="field"
-        >
-          <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
-          <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
-          <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :option-flags="tag.optionFlags" />
+        <div class="field">
+          <label for="create-title">
+            Title *
+            <i
+              class="pi pi-question-circle field-help-icon"
+              role="button"
+              tabindex="0"
+              aria-label="Help: Title"
+              @click="toggleTitleHelp"
+              @keydown.enter="toggleTitleHelp"
+            ></i>
+          </label>
+          <Popover ref="titleHelpPopover">
+            <p class="field-help-text">
+              The title is only shown in the admin backend and in on-screen debug overlays —
+              it's never rendered to viewers. It exists purely to help you keep an overview of
+              your content list.
+            </p>
+          </Popover>
+          <InputText id="create-title" v-model="createForm.title" class="w-full" />
         </div>
-      </div>
 
-      <!-- Scheduling -->
-      <details class="scheduling-collapsible">
-        <summary class="scheduling-summary">Scheduling <small class="text-muted">(optional — restrict when this content is shown)</small></summary>
-        <div class="scheduling-fields">
-          <div class="field">
-            <label for="create-start-time">Start Time</label>
-            <DatePicker
-              id="create-start-time"
-              v-model="createForm.start_time"
-              showTime
-              hourFormat="24"
-              showClear
-              dateFormat="dd.mm.yy"
-              placeholder="No start restriction"
-              class="w-full"
-            />
-          </div>
-          <div class="field">
-            <label for="create-end-time">End Time</label>
-            <DatePicker
-              id="create-end-time"
-              v-model="createForm.end_time"
-              showTime
-              hourFormat="24"
-              showClear
-              dateFormat="dd.mm.yy"
-              placeholder="No end restriction"
-              class="w-full"
-            />
+        <div v-if="tagConfigs.length > 0" class="tag-fields-section">
+          <div
+            v-for="tag in tagConfigs"
+            v-show="tag.fieldHandler !== ''"
+            :key="tag.name"
+            class="field"
+          >
+            <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
+            <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
+            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :option-flags="tag.optionFlags" />
           </div>
         </div>
-      </details>
+      </section>
 
-      <!-- Duration -->
-      <details class="scheduling-collapsible" open>
-        <summary class="scheduling-summary">Duration</summary>
-        <div class="scheduling-fields">
-          <div class="field">
-            <div class="duration-fields">
-              <InputNumber v-model="durationMinutes" :min="0" :max="99" placeholder="0" />
-              <span class="duration-unit-label">minutes</span>
-              <InputNumber v-model="durationSeconds" :min="0" :max="59" :use-grouping="false" placeholder="00" />
-              <span class="duration-unit-label">seconds</span>
-              <Button
-                v-for="val in [10, 20, 30]"
-                :key="val"
-                :label="`${val}s`"
-                size="small"
-                outlined
-                @click="createForm.duration = val"
+      <section class="form-section">
+        <h3 class="form-section-title">Delivery settings</h3>
+
+        <!-- Scheduling -->
+        <details class="scheduling-collapsible">
+          <summary class="scheduling-summary">
+            <i class="pi pi-clock summary-icon"></i>
+            Scheduling
+            <small class="text-muted">— {{ schedulingSummary }}</small>
+          </summary>
+          <div class="scheduling-fields">
+            <div class="field">
+              <label for="create-start-time">Start Time</label>
+              <DatePicker
+                id="create-start-time"
+                v-model="createForm.start_time"
+                showTime
+                hourFormat="24"
+                showClear
+                dateFormat="dd.mm.yy"
+                placeholder="No start restriction"
+                class="w-full"
+              />
+            </div>
+            <div class="field">
+              <label for="create-end-time">End Time</label>
+              <DatePicker
+                id="create-end-time"
+                v-model="createForm.end_time"
+                showTime
+                hourFormat="24"
+                showClear
+                dateFormat="dd.mm.yy"
+                placeholder="No end restriction"
+                class="w-full"
               />
             </div>
           </div>
-        </div>
-      </details>
+        </details>
 
-      <!-- Screen Groups & Screens -->
-      <details class="scheduling-collapsible" open>
-        <summary class="scheduling-summary">Screen Groups &amp; Screens</summary>
-        <div class="scheduling-fields">
-          <!-- Screengroup assignment -->
-          <div class="screengroup-assignment-section">
-            <h4>Screen Groups</h4>
-            <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
-            <template v-else>
-              <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />
-              <div class="screengroup-checkboxes">
-                <div v-for="sg in pagedScreengroups" :key="sg.id" class="screengroup-checkbox-row">
-                  <Checkbox :inputId="`sg-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
-                  <label :for="`sg-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+        <!-- Duration -->
+        <details class="scheduling-collapsible">
+          <summary class="scheduling-summary">
+            <i class="pi pi-stopwatch summary-icon"></i>
+            Duration
+            <small class="text-muted">— {{ durationSummary }}</small>
+          </summary>
+          <div class="scheduling-fields">
+            <div class="field">
+              <div class="duration-fields">
+                <InputNumber v-model="durationMinutes" :min="0" :max="99" placeholder="0" />
+                <span class="duration-unit-label">minutes</span>
+                <InputNumber v-model="durationSeconds" :min="0" :max="59" :use-grouping="false" placeholder="00" />
+                <span class="duration-unit-label">seconds</span>
+                <Button
+                  v-for="val in [10, 20, 30]"
+                  :key="val"
+                  :label="`${val}s`"
+                  size="small"
+                  outlined
+                  @click="createForm.duration = val"
+                />
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Screen Groups & Screens -->
+        <details class="scheduling-collapsible">
+          <summary class="scheduling-summary">
+            <i class="pi pi-desktop summary-icon"></i>
+            Screen Groups &amp; Screens
+            <small class="text-muted">— {{ assignmentSummary }}</small>
+          </summary>
+          <div class="scheduling-fields">
+            <!-- Screengroup assignment -->
+            <div class="screengroup-assignment-section">
+              <h4>Screen Groups</h4>
+              <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
+              <template v-else>
+                <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />
+                <div class="screengroup-checkboxes">
+                  <div v-for="sg in pagedScreengroups" :key="sg.id" class="screengroup-checkbox-row">
+                    <Checkbox :inputId="`sg-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
+                    <label :for="`sg-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+                  </div>
+                  <p v-if="filteredScreengroups.length === 0" class="text-muted">No results.</p>
                 </div>
-                <p v-if="filteredScreengroups.length === 0" class="text-muted">No results.</p>
+                <Paginator
+                  v-if="filteredScreengroups.length > SG_PAGE_SIZE"
+                  :rows="SG_PAGE_SIZE"
+                  :totalRecords="filteredScreengroups.length"
+                  :first="sgPage * SG_PAGE_SIZE"
+                  @page="(e: any) => sgPage = e.page"
+                  class="sg-paginator"
+                />
+              </template>
+            </div>
+
+            <!-- Screens assignment (is_one_screen groups only) -->
+            <div class="screengroup-assignment-section" v-if="oneScreenGroups.length > 0">
+              <h4>Screens</h4>
+              <InputText v-model="screenSearchText" placeholder="Search screens…" class="screengroup-search" />
+              <div class="screengroup-checkboxes">
+                <div v-for="sg in pagedOneScreenGroups" :key="sg.id" class="screengroup-checkbox-row">
+                  <Checkbox :inputId="`screen-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
+                  <label :for="`screen-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
+                </div>
+                <p v-if="filteredOneScreenGroups.length === 0" class="text-muted">No results.</p>
               </div>
               <Paginator
-                v-if="filteredScreengroups.length > SG_PAGE_SIZE"
+                v-if="filteredOneScreenGroups.length > SG_PAGE_SIZE"
                 :rows="SG_PAGE_SIZE"
-                :totalRecords="filteredScreengroups.length"
-                :first="sgPage * SG_PAGE_SIZE"
-                @page="(e: any) => sgPage = e.page"
+                :totalRecords="filteredOneScreenGroups.length"
+                :first="screenPage * SG_PAGE_SIZE"
+                @page="(e: any) => screenPage = e.page"
                 class="sg-paginator"
               />
-            </template>
-          </div>
-
-          <!-- Screens assignment (is_one_screen groups only) -->
-          <div class="screengroup-assignment-section" v-if="oneScreenGroups.length > 0">
-            <h4>Screens</h4>
-            <InputText v-model="screenSearchText" placeholder="Search screens…" class="screengroup-search" />
-            <div class="screengroup-checkboxes">
-              <div v-for="sg in pagedOneScreenGroups" :key="sg.id" class="screengroup-checkbox-row">
-                <Checkbox :inputId="`screen-${sg.id}`" :value="sg.id" v-model="formScreengroupIds" />
-                <label :for="`screen-${sg.id}`" class="screengroup-checkbox-label">{{ sg.name }}</label>
-              </div>
-              <p v-if="filteredOneScreenGroups.length === 0" class="text-muted">No results.</p>
             </div>
-            <Paginator
-              v-if="filteredOneScreenGroups.length > SG_PAGE_SIZE"
-              :rows="SG_PAGE_SIZE"
-              :totalRecords="filteredOneScreenGroups.length"
-              :first="screenPage * SG_PAGE_SIZE"
-              @page="(e: any) => screenPage = e.page"
-              class="sg-paginator"
-            />
           </div>
-        </div>
-      </details>
+        </details>
+      </section>
     </div>
 
     <div class="content-edit-form-actions">
@@ -943,6 +999,49 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   border: 1px dashed var(--p-surface-border, #ccc);
   border-radius: 6px;
   color: var(--p-text-muted-color, #6b7280);
+}
+
+.content-type-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: var(--p-content-background, #f8f9fa);
+  border: 1px solid var(--p-surface-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.content-type-banner > i {
+  font-size: 1.1rem;
+  margin-top: 0.15rem;
+  color: var(--p-text-muted-color, #6b7280);
+  flex-shrink: 0;
+}
+
+.content-type-banner p {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.85rem;
+}
+
+.form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-section-title {
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.summary-icon {
+  margin-right: 0.4rem;
+  font-size: 0.85rem;
 }
 
 .multi-screen-warning {
@@ -1028,6 +1127,8 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 }
 
 .tag-fields-section {
+  display: flex;
+  flex-direction: column;
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #ddd;
@@ -1036,6 +1137,20 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 .tag-fields-section h4 {
   margin: 0 0 1rem 0;
   font-size: 1rem;
+}
+
+.tag-fields-section .field {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+}
+
+.tag-fields-section .field:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.tag-fields-section .field:first-child {
+  padding-top: 0;
 }
 
 .field-description {
