@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def register_admin_user_handlers(socketio, app, db):
     """Register socket handlers for listing/creating/updating/deleting admin users."""
     from application.socketio_handlers.auth import require_right, admin_handler, current_admin_user, is_impersonating
-    from application.models import AdminUser
+    from application.models import AdminUser, AdminUserLogin
     from application.auth import hash_password, create_token
 
     def _emit_users(sid=None):
@@ -25,6 +25,22 @@ def register_admin_user_handlers(socketio, app, db):
     @require_right('users.page')
     def handle_get_users(data=None):
         _emit_users(getattr(request, 'sid', None))
+
+    @socketio.on('displayhive:admin:users:cts:get_user_logins')
+    @require_right('users.page')
+    def handle_get_user_logins(data=None):
+        """Return a user's 5 most recent logins, newest first. data: {id}."""
+        user_id = (data or {}).get('id')
+        if not user_id:
+            return {'success': False, 'error': 'Missing id'}
+
+        logins = db.session.execute(
+            db.select(AdminUserLogin)
+            .where(AdminUserLogin.user_id == user_id)
+            .order_by(AdminUserLogin.logged_in_at.desc())
+            .limit(5)
+        ).scalars().all()
+        return {'success': True, 'logins': [{'logged_in_at': l.logged_in_at.isoformat() if l.logged_in_at else None} for l in logins]}
 
     @socketio.on('displayhive:admin:users:cts:create_user')
     @require_right('users.create')

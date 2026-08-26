@@ -63,7 +63,7 @@ def require_http_right(app, right_key):
 
 def register_auth_routes(app, db):
     """Register the login and session-check HTTP routes."""
-    from application.models import AdminUser
+    from application.models import AdminUser, AdminUserLogin
     from datetime import datetime, timezone
 
     @app.route('/admin/api/auth/login', methods=['POST'])
@@ -94,6 +94,26 @@ def register_auth_routes(app, db):
 
         clear_failed_attempts(rate_key)
         user.last_login_at = datetime.now(timezone.utc)
+        db.session.add(AdminUserLogin(
+            user_id=user.id,
+            logged_in_at=user.last_login_at,
+            ip_address=request.remote_addr,
+        ))
+
+        # Cap storage at the 50 most recent logins per user.
+        keep_ids = db.session.execute(
+            db.select(AdminUserLogin.id)
+            .where(AdminUserLogin.user_id == user.id)
+            .order_by(AdminUserLogin.logged_in_at.desc())
+            .limit(50)
+        ).scalars().all()
+        db.session.execute(
+            db.delete(AdminUserLogin).where(
+                AdminUserLogin.user_id == user.id,
+                AdminUserLogin.id.not_in(keep_ids),
+            )
+        )
+
         db.session.commit()
 
         token = create_token(app, user)

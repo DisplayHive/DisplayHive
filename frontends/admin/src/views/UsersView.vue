@@ -25,6 +25,7 @@ import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import Checkbox from 'primevue/checkbox'
 import Tag from 'primevue/tag'
+import Popover from 'primevue/popover'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -374,6 +375,35 @@ const impersonate = async (user: AdminUser) => {
 
 const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleString() : '—')
 
+// --- Accounts: recent-logins popover -------------------------------------------
+
+interface LoginEntry { logged_in_at: string | null }
+
+const loginsPopover = ref<InstanceType<typeof Popover> | null>(null)
+const loginsLoading = ref(false)
+const loginsForUser = ref<LoginEntry[]>([])
+const loginsUsername = ref('')
+
+const toggleLogins = async (event: Event, user: AdminUser) => {
+  loginsPopover.value?.toggle(event)
+  loginsUsername.value = user.username
+  loginsForUser.value = []
+  loginsLoading.value = true
+  try {
+    const result = await emitWithAck<{ success: boolean; logins?: LoginEntry[]; error?: string }>(
+      'displayhive:admin:users:cts:get_user_logins',
+      { id: user.id },
+    )
+    if (result.success) {
+      loginsForUser.value = result.logins || []
+    } else {
+      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Failed to load login history', life: 5000 })
+    }
+  } finally {
+    loginsLoading.value = false
+  }
+}
+
 // --- Groups: create / rename / move / delete ---------------------------------
 
 const showGroupDialog = ref(false)
@@ -679,6 +709,14 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                 <Column header="Actions" style="width: 15rem">
                   <template #body="{ data }">
                     <Button
+                      icon="pi pi-info-circle"
+                      text
+                      rounded
+                      severity="secondary"
+                      title="Recent logins"
+                      @click="toggleLogins($event, data)"
+                    />
+                    <Button
                       v-if="rightsStore.can('special.impersonate') && !authStore.isImpersonating && data.username !== authStore.username"
                       icon="pi pi-user-edit"
                       text
@@ -797,6 +835,22 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         </TabPanel>
       </TabPanels>
     </Tabs>
+
+    <!-- Recent logins popover -->
+    <Popover ref="loginsPopover">
+      <div class="logins-popover">
+        <h4>Recent logins — {{ loginsUsername }}</h4>
+        <div v-if="loginsLoading" class="logins-loading">
+          <i class="pi pi-spin pi-spinner"></i>
+        </div>
+        <ul v-else-if="loginsForUser.length" class="logins-list">
+          <li v-for="(entry, i) in loginsForUser" :key="i">
+            <span>{{ formatDate(entry.logged_in_at) }}</span>
+          </li>
+        </ul>
+        <p v-else class="muted">No recorded logins yet.</p>
+      </div>
+    </Popover>
 
     <!-- Create/Edit account dialog -->
     <Dialog
@@ -1092,5 +1146,37 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 
 .rights-row-label {
   flex: 1;
+}
+
+.logins-popover {
+  min-width: 16rem;
+  max-width: 20rem;
+}
+
+.logins-popover h4 {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.logins-loading {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0;
+}
+
+.logins-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.logins-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
 }
 </style>
