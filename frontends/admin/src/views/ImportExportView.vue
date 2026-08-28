@@ -4,6 +4,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
+import { onRightsReady } from '../composables/useRightsReady'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -313,7 +314,10 @@ watch(checkedConflictUuids, (uuids) => {
   perItemOverrides.value = kept
 })
 
-loadExportTree()
+// loadExportTree() gates on canExport (rightsStore.can()), which stays false
+// until rightsStore.loaded resolves — calling it unconditionally here at
+// setup time loses that race on a fresh page load. See useRightsReady.
+onRightsReady(loadExportTree)
 </script>
 
 <template>

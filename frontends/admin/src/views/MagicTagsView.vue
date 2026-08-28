@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { onRightsReady } from '../composables/useRightsReady'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMagicTagsStore } from '../stores/magicTags'
@@ -180,7 +181,7 @@ const deleteValueList = (l: MagicTagValueList) => {
   })
 }
 
-onMounted(() => {
+onRightsReady(() => {
   if (canMagicTagsPage.value) magicTagsStore.fetch()
   if (canValueListsPage.value) magicTagValueListsStore.fetch()
 })

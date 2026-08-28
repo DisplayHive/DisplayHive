@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { onRightsReady } from '../composables/useRightsReady'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
@@ -239,6 +240,12 @@ onMounted(() => {
 watch(isConnected, (connected) => {
   if (connected) loadAll()
 })
+
+// loadUsers()/loadRights() also gate on canViewUsers/canViewRights (rightsStore.can()),
+// which stays false until rightsStore.loaded resolves — its own async round trip, so it
+// can still be pending when the watcher above fires. See useRightsReady for why this needs
+// its own retry rather than being covered by the isConnected watch above.
+onRightsReady(loadAll)
 
 onUnmounted(() => {
   off('displayhive:admin:users:stc:users', handleUsers)
