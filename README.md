@@ -76,8 +76,7 @@ npm run docs:serve   # http://localhost:8000
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up, PR conventions,
 and our AI-assisted contributions policy. Please report security
 vulnerabilities privately per [SECURITY.md](SECURITY.md) rather than as a
-public issue. Participation in this project is governed by our
-[Code of Conduct](CODE_OF_CONDUCT.md).
+public issue. 
 
 ## License
 
