@@ -4,10 +4,6 @@ DisplayHive can send Telegram notifications when a screen or device changes
 state — useful for catching a display that's gone offline before an
 audience notices.
 
-!!! warning "Experimental"
-    Alerting is experimental and may change in the future, including
-    breaking changes to its configuration or behavior.
-
 Configure alerting from the **Alerting** page (`/alerting`).
 
 ## Setup

@@ -4,10 +4,6 @@ DisplayHive can pull a conference schedule from a [Pretalx](https://pretalx.com/
 instance and render it as live content — useful for "next up in this room"
 displays at conferences.
 
-!!! warning "Experimental"
-    The Pretalx integration is experimental and may change in the future,
-    including breaking changes to its configuration or behavior.
-
 ## Configuring a source
 
 On the **Pretalx** page (`/pretalx`):

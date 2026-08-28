@@ -39,7 +39,3 @@ This documentation is split into two parts:
 - **[Developer Guide](developer/index.md)** — for contributors working on
   DisplayHive itself: architecture, the real-time push pipeline, and how to
   contribute changes.
-
-!!! note "Early stage"
-    DisplayHive is under active development. If something here is wrong, missing, or
-    confusing, see [Contact](contact.md) for how to reach out.

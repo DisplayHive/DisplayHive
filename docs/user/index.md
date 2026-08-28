@@ -53,7 +53,6 @@ roughly in order:
 
 Once the basics are running, see [Magic tags](magic-tags.md) for reusable
 placeholder values, and [Pretalx](pretalx.md) / [Alerting](alerting.md) for
-optional integrations (both experimental — see their pages for details).
-[Import & export](import-export.md) covers backups,
+optional integrations. [Import & export](import-export.md) covers backups,
 and [Settings](settings.md) covers instance-wide options. If something's
 unclear, check the [FAQ](faq.md) first.
