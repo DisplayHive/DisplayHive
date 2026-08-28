@@ -52,4 +52,6 @@ AI-assisted coding is welcome, but every commit is expected to be reviewed
 and understood by the person submitting it — no blind commits. If you use
 AI tooling, keep changes small, topic-focused, and easy to review, exactly
 as you would for hand-written code. If you spot something that looks
-AI-generated and unreviewed, flag it — see the README's AI Usage section.
+AI-generated and unreviewed, flag it — see
+[CONTRIBUTING.md](https://github.com/DisplayHive/DisplayHive/blob/main/CONTRIBUTING.md#ai-assisted-contributions)
+for more.
