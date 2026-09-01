@@ -903,7 +903,7 @@ onUnmounted(() => {
         <DatePicker
           :id="`field-${tag.name}`"
           :modelValue="parseCountdownDate(String(getFieldValue(tag.name) || ''))"
-          @update:modelValue="(v: Date | null) => setFieldValue(tag.name, fmtCountdownDt(v))"
+          @update:modelValue="(v: Date | Date[] | (Date | null)[] | null | undefined) => setFieldValue(tag.name, fmtCountdownDt(Array.isArray(v) ? (v[0] ?? null) : (v ?? null)))"
           showTime hourFormat="24" showClear dateFormat="dd.mm.yy"
           placeholder="Target date &amp; time"
           :disabled="isLocked(tag.name)"
