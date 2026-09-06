@@ -20,6 +20,7 @@ import Popover from 'primevue/popover'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 import type { OptionFlags } from '../utils/optionFlags'
+import type { DefaultColor } from '../types/models'
 
 interface ContentElement {
   id: number
@@ -146,6 +147,10 @@ let previewTimer: ReturnType<typeof setTimeout> | null = null
 const handleContentPreview = (data: PreviewData) => {
   previewData.value = data
 }
+
+// Active Design's color palette, from the preview payload — offered as
+// quick-pick swatches by the icon handler's color picker.
+const designPalette = computed<DefaultColor[]>(() => previewData.value?.design?.default_colors ?? [])
 
 const requestPreview = () => {
   if (!createForm.value.contenttype_id) {
@@ -791,7 +796,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
           >
             <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
             <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
-            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :option-flags="tag.optionFlags" />
+            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :palette="designPalette" :option-flags="tag.optionFlags" />
           </div>
         </div>
       </section>

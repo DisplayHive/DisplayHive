@@ -14,6 +14,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { ICON_LIBRARIES, getIconManifest, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
 import type { OptionFlags } from '../utils/optionFlags'
+import type { DefaultColor } from '../types/models'
 
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -21,18 +22,25 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
+import ColorPicker from 'primevue/colorpicker'
 import OptionFlagToggle from './OptionFlagToggle.vue'
+import ColorPalettePicker from './ColorPalettePicker.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: IconPickerValue
   /** See FieldValueEditor.vue's own `mode`/`optionFlags` doc comment. Local
-   * keys here are 'icon' (the library/search/results/selected section) and
-   * 'size' (the Height (vh) input) — the caller translates to/from wire keys. */
+   * keys here are 'icon' (the library/search/results/selected section),
+   * 'size' (the Height (vh) input) and 'color' (the Color row) — the caller
+   * translates to/from wire keys. */
   mode?: 'edit' | 'preset'
   optionFlags?: OptionFlags
+  /** Active Design's color palette, offered as quick-pick swatches for the
+   * icon color. Picking one stores a "@default:<id>" reference. */
+  palette?: DefaultColor[]
 }>(), {
   mode: 'edit',
   optionFlags: undefined,
+  palette: () => [],
 })
 
 const emit = defineEmits<{
@@ -124,6 +132,33 @@ const selectIcon = (match: IconMatch) => {
 }
 const clearIcon = () => patch({ icon: '' })
 
+// --- icon color ----------------------------------------------------------
+// modelValue.color is a literal CSS color, a "@default:<id>" palette
+// reference, or '' (keep the icon's own colors). Same reference mechanism
+// as DesignsView.vue's color fields — resolved server-side by
+// render_content_fields (application/admin/content/helper.py).
+const DEFAULT_COLOR_PREFIX = '@default:'
+const isColorRef = (v: string): boolean => v.startsWith(DEFAULT_COLOR_PREFIX)
+const resolvedColor = computed<string>(() => {
+  const v = props.modelValue.color || ''
+  if (!isColorRef(v)) return v
+  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
+  return props.palette.find((c) => c.id === id)?.hex || ''
+})
+const colorLabel = computed<string>(() => {
+  const v = props.modelValue.color || ''
+  if (!v) return 'Icon default'
+  if (!isColorRef(v)) return v
+  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
+  const c = props.palette.find((x) => x.id === id)
+  return c ? `🎨 ${c.name || c.hex}` : '(deleted default color)'
+})
+// PrimeVue ColorPicker works in bare hex (no '#').
+const colorHex = computed<string>(() => resolvedColor.value.replace(/^#/, ''))
+const setColorHex = (hex: string | undefined) => patch({ color: hex ? `#${hex}` : '' })
+const setColorRef = (c: DefaultColor) => patch({ color: `${DEFAULT_COLOR_PREFIX}${c.id}` })
+const clearColor = () => patch({ color: '' })
+
 const showLicenseDialog = ref(false)
 </script>
 
@@ -135,7 +170,7 @@ const showLicenseDialog = ref(false)
           <div v-if="modelValue.icon && selectedLibrary" class="icon-picker-preview">
             <span
               class="icon-picker-preview-svg"
-              :style="{ height: `${modelValue.size}vh` }"
+              :style="{ height: `${modelValue.size}vh`, color: resolvedColor || undefined }"
               v-html="previewCache[previewKey(selectedLibraryId, selectedName)] || ''"
             ></span>
             <span class="icon-picker-preview-label">
@@ -205,6 +240,26 @@ const showLicenseDialog = ref(false)
         />
       </div>
       <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('size')" @toggle-locked="toggleFlag('size', 'locked')" @toggle-hidden="toggleFlag('size', 'hidden')" />
+    </div>
+
+    <div v-if="mode !== 'edit' || !isHidden('color')" class="icon-picker-option-row">
+      <div :class="['icon-picker-color field icon-picker-option-content', { 'icon-picker-disabled': isLocked('color') }]">
+        <label>Color</label>
+        <div class="icon-picker-color-controls">
+          <ColorPicker :modelValue="colorHex" @update:modelValue="(v: string) => setColorHex(v)" />
+          <ColorPalettePicker :palette="palette" @select="setColorRef" />
+          <span class="icon-picker-color-label">{{ colorLabel }}</span>
+          <Button
+            v-if="modelValue.color"
+            icon="pi pi-times"
+            text
+            size="small"
+            @click="clearColor"
+            aria-label="Clear icon color"
+          />
+        </div>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('color')" @toggle-locked="toggleFlag('color', 'locked')" @toggle-hidden="toggleFlag('color', 'hidden')" />
     </div>
 
     <Button label="Icon Libraries Licenses" icon="pi pi-info-circle" size="small" text @click="showLicenseDialog = true" />
@@ -287,6 +342,17 @@ const showLicenseDialog = ref(false)
 .icon-picker-none {
   color: var(--p-text-muted-color, #6b7280);
   font-size: 0.9rem;
+}
+
+.icon-picker-color-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-picker-color-label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .icon-picker-label {

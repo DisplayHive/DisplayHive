@@ -253,6 +253,10 @@ def build_design_payload(db) -> dict:
         'name': getattr(design, 'name', '') or '',
         'html': getattr(design, 'html', '') or '',
         'css': css,
+        # Raw palette (list of {id, name, hex}) — render paths ignore this,
+        # but the admin's icon-color picker offers it as quick-pick swatches
+        # and needs to resolve its own "@default:<id>" refs for the preview.
+        'default_colors': _design_default_colors(design) if design is not None else [],
     }
 
     # Animated canvas background effect: not representable as CSS (see

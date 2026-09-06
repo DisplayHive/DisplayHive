@@ -33,6 +33,7 @@ import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
+import type { DefaultColor } from '../types/models'
 import OptionFlagToggle from './OptionFlagToggle.vue'
 import type { OptionFlags } from '../utils/optionFlags'
 
@@ -59,10 +60,14 @@ const props = withDefaults(defineProps<{
    */
   mode?: 'edit' | 'preset'
   optionFlags?: OptionFlags
+  /** Active Design's color palette — forwarded to the icon handler's color
+   * picker for quick-pick swatches. */
+  palette?: DefaultColor[]
 }>(), {
   disabled: false,
   mode: 'edit',
   optionFlags: undefined,
+  palette: () => [],
 })
 
 const emit = defineEmits<{
@@ -161,21 +166,26 @@ const onPretalxOptionFlagsUpdate = (localFlags: OptionFlags) => {
 const getIconValue = (name: string): IconPickerValue => ({
   icon: String(props.fields[name] ?? ''),
   size: Number(props.fields[name + '__size']) || 5,
+  color: String(props.fields[name + '__color'] ?? ''),
 })
 
 const setIconValue = (name: string, v: IconPickerValue) => {
   props.fields[name] = v.icon
   props.fields[name + '__size'] = v.size
+  props.fields[name + '__color'] = v.color
 }
 
-// Icon's two local keys ('icon', 'size') map onto wire keys `<name>` and
-// `<name>__size` — same translation purpose as the pretalx one above.
+// Icon's local keys ('icon', 'size', 'color') map onto wire keys `<name>`,
+// `<name>__size` and `<name>__color` — same translation purpose as the
+// pretalx one above.
 const iconOptionFlags = computed<OptionFlags>(() => {
   const out: OptionFlags = {}
   const iconFlag = props.optionFlags?.[props.tag.name]
   if (iconFlag) out.icon = iconFlag
   const sizeFlag = props.optionFlags?.[`${props.tag.name}__size`]
   if (sizeFlag) out.size = sizeFlag
+  const colorFlag = props.optionFlags?.[`${props.tag.name}__color`]
+  if (colorFlag) out.color = colorFlag
   return out
 })
 
@@ -183,6 +193,7 @@ const onIconOptionFlagsUpdate = (localFlags: OptionFlags) => {
   const next = { ...(props.optionFlags || {}) }
   if (localFlags.icon) next[props.tag.name] = localFlags.icon
   if (localFlags.size) next[`${props.tag.name}__size`] = localFlags.size
+  if (localFlags.color) next[`${props.tag.name}__color`] = localFlags.color
   emit('update:optionFlags', next)
 }
 
@@ -551,6 +562,7 @@ onUnmounted(() => {
       :model-value="getIconValue(tag.name)"
       @update:model-value="(v) => setIconValue(tag.name, v)"
       :mode="mode"
+      :palette="palette"
       :option-flags="iconOptionFlags"
       @update:option-flags="onIconOptionFlagsUpdate"
     />

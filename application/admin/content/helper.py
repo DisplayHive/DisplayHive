@@ -16,6 +16,33 @@ from application.admin.content.pretalx_render import (
 logger = logging.getLogger(__name__)
 
 
+def _resolve_icon_color(raw, db=None) -> str:
+    """Resolve an `icon` field's color value to a literal CSS color.
+
+    A literal ('#rrggbb', 'red', …) passes through; a "@default:<id>"
+    reference is resolved against the active Design's palette (same
+    mechanism as the Designs page — see resolve_default_color in
+    application/admin/designs/helper.py); a blank value, an unresolvable
+    reference, or a missing db all yield '' (meaning "keep the icon's own
+    colors").
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return ''
+    if not raw.startswith('@default:'):
+        return raw
+    if db is None:
+        return ''
+    try:
+        from application.utils.design import get_default_design
+        from application.admin.designs.helper import resolve_default_color
+        design = get_default_design(db)
+        return resolve_default_color(design, raw) if design is not None else ''
+    except Exception:
+        logger.debug('_resolve_icon_color: failed to resolve %r', raw, exc_info=True)
+        return ''
+
+
 def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     """Render each of *tagconfigs*' field values and return
     ``{contentcontainer_id_str: rendered_html}``, one entry per field.
@@ -145,10 +172,13 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                 except (TypeError, ValueError):
                     size = 0
                 size = size if size > 0 else 5
+                color = _resolve_icon_color(ctx.get(f'{field_name}__color'), db)
+                color_attr = f' data-dh-icon-color="{_html_escape(color)}"' if color else ''
                 ctx[field_name] = Markup(
                     f'<div class="dh-icon"'
                     f' data-dh-icon-library="{_html_escape(library)}"'
                     f' data-dh-icon-name="{_html_escape(name)}"'
+                    f'{color_attr}'
                     f' style="height:{size}vh;display:inline-block;"></div>'
                 )
             else:
@@ -332,7 +362,11 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
         except Exception:
             parsed = None
         if isinstance(parsed, dict) and 'icon' in parsed:
-            ctx = {'default': parsed.get('icon', ''), 'default__size': parsed.get('size') or 0}
+            ctx = {
+                'default': parsed.get('icon', ''),
+                'default__size': parsed.get('size') or 0,
+                'default__color': parsed.get('color', ''),
+            }
     elif field_handler == 'arrows':
         try:
             parsed = json.loads(content)

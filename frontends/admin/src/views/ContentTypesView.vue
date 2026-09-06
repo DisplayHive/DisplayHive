@@ -5,7 +5,7 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
-import type { Layout, ContentContainer } from '../types/models'
+import type { Layout, ContentContainer, DefaultColor } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -242,6 +242,13 @@ const handleContainersList = (data: any) => {
   containers.value = data?.data || []
 }
 
+// Active Design's palette — passed to the preset panel's icon-color picker
+// for "@default:<id>" quick-pick swatches.
+const designPalette = ref<DefaultColor[]>([])
+const handleActiveDesignColors = (data: any) => {
+  designPalette.value = Array.isArray(data?.colors) ? data.colors : []
+}
+
 const handleContentTypeDetail = async (data: any) => {
   const ct = data?.contenttype || data?.data || null
   if (!ct) return
@@ -310,16 +317,19 @@ onMounted(() => {
   on('displayhive:admin:stc:contenttype_detail', handleContentTypeDetail)
   on('displayhive:admin:stc:upd_layouts', handleLayoutsList)
   on('displayhive:admin:stc:upd_containers', handleContainersList)
+  on('displayhive:admin:stc:active_design_colors', handleActiveDesignColors)
 
   emit('displayhive:admin:cts:get_contenttypes')
   emit('displayhive:admin:cts:get_layouts')
   emit('displayhive:admin:cts:get_containers')
+  emit('displayhive:admin:cts:get_active_design_colors')
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
   off('displayhive:admin:stc:upd_layouts', handleLayoutsList)
   off('displayhive:admin:stc:upd_containers', handleContainersList)
+  off('displayhive:admin:stc:active_design_colors', handleActiveDesignColors)
 })
 
 const refreshData = () => {
@@ -622,6 +632,7 @@ const deleteContentType = (ct: ContentType) => {
                   :tag="{ name: t.name, fieldHandler: t.field_handler }"
                   :fields="t.default_value"
                   mode="preset"
+                  :palette="designPalette"
                   :option-flags="t.option_flags"
                   @update:option-flags="(v) => { t.option_flags = v }"
                 />

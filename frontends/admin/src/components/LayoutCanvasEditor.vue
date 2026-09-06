@@ -22,6 +22,7 @@ import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
+import type { DefaultColor } from '../types/models'
 import { getEffectDefinition } from '../utils/backgroundEffects'
 import { resolveIconPlaceholders, type PreviewContainer } from '../utils/designPreview'
 // `?raw` inlines the pre-built bundle's source as a string at build time.
@@ -95,6 +96,9 @@ interface DesignPreview {
   html: string
   css: string
   background_effect: { name: string; settings: Record<string, unknown> } | null
+  /** Active Design's color palette — offered as quick-pick swatches by the
+   * container-default icon handler's color picker. */
+  default_colors?: DefaultColor[]
 }
 const designPreview = ref<DesignPreview | null>(null)
 
@@ -754,15 +758,15 @@ const onDefaultImagePicked = (item: MediaItem) => {
   setImageData({ url: item.url, size: imageSize.value })
 }
 
-// --- 'icon' handler: {icon, size}, packed as JSON into default_content ----
+// --- 'icon' handler: {icon, size, color}, packed as JSON into default_content
 const iconValue = computed<IconPickerValue>(() => {
   try {
     const parsed = JSON.parse(containerEditForm.default_content || '{}')
     if (parsed && typeof parsed === 'object' && 'icon' in parsed) {
-      return { icon: parsed.icon || '', size: parsed.size ?? 5 }
+      return { icon: parsed.icon || '', size: parsed.size ?? 5, color: parsed.color || '' }
     }
   } catch { /* not JSON yet */ }
-  return { icon: '', size: 5 }
+  return { icon: '', size: 5, color: '' }
 })
 const setIconData = (v: IconPickerValue) => {
   containerEditForm.default_content = JSON.stringify(v)
@@ -796,7 +800,7 @@ const onDefaultHandlerChange = (newHandler: string) => {
   } else if (newHandler === 'image') {
     containerEditForm.default_content = JSON.stringify({ url: '', size: null })
   } else if (newHandler === 'icon') {
-    containerEditForm.default_content = JSON.stringify({ icon: '', size: 5 })
+    containerEditForm.default_content = JSON.stringify({ icon: '', size: 5, color: '' })
   } else if (newHandler === 'table') {
     containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
   } else if (newHandler === 'pretalx_table') {
@@ -1239,7 +1243,7 @@ const toggleSelectedLayoutMembership = () => {
 
           <div v-else-if="containerEditForm.default_field_handler === 'icon'" class="field">
             <label>Default Content</label>
-            <IconPickerField :model-value="iconValue" @update:model-value="setIconData" />
+            <IconPickerField :model-value="iconValue" @update:model-value="setIconData" :palette="designPreview?.default_colors ?? []" />
           </div>
 
           <div v-else-if="containerEditForm.default_field_handler === 'arrows'" class="field arrow-picker-wrapper">

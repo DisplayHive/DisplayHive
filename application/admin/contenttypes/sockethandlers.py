@@ -152,6 +152,22 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         payload = {'contenttype': _serialize_contenttype_detail(ct)}
         socketio.emit('displayhive:admin:stc:contenttype_detail', payload, room=request.sid)
 
+    @socketio.on('displayhive:admin:cts:get_active_design_colors')
+    @admin_handler
+    def get_active_design_colors(message=None):
+        # The active Design's color palette ({id, name, hex}), so the
+        # contenttype editor's preset panel can offer the same "@default:<id>"
+        # quick-pick swatches for an icon field's color that the Content
+        # editor does. Read-only, same either-right rule as the reads above.
+        user = current_admin_user()
+        if not (has_right(db, user, 'contenttypes.page') or has_right(db, user, 'content.page')):
+            return
+        from application.utils.design import get_default_design
+        from application.admin.designs.helper import _design_default_colors
+        design = get_default_design(db)
+        colors = _design_default_colors(design) if design is not None else []
+        socketio.emit('displayhive:admin:stc:active_design_colors', {'colors': colors}, room=request.sid)
+
     @socketio.on('displayhive:admin:cts:update_contenttype')
     @require_right('contenttypes.edit')
     def handle_update_contenttype(data=None):
