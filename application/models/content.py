@@ -56,7 +56,7 @@ class Design(db.Model):
     isDefault: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # Backdrop: plain body background-color, plus an image URL rendered as
     # the bottommost `background-image` layer, beneath any Gradients.
-    background_color: Mapped[str] = mapped_column(String(20), nullable=True)
+    background_color: Mapped[str] = mapped_column(String(64), nullable=True)
     background_image_url: Mapped[str] = mapped_column(Text, nullable=True)
     background_repeat: Mapped[str] = mapped_column(String(20), nullable=True)
     background_size: Mapped[str] = mapped_column(String(30), nullable=True)

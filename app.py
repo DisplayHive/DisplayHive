@@ -342,7 +342,16 @@ def admin_redirect():
 # =====================================================
 @app.route('/dist/screen/<path:filename>')
 def screen_dist(filename):
-    """Serve compiled screen TypeScript bundle from dist/screen/."""
+    """Serve compiled screen TypeScript bundle from dist/screen/.
+
+    Icons are the one part of this path fetched at runtime (see
+    icon-libraries.ts) rather than bundled into screen.js, so under
+    SCREEN_DEV_SERVER they'd otherwise 404 against a dist/ that was never
+    built — fall back to the source copy Vite itself serves in dev mode.
+    """
+    if app.config['SCREEN_DEV_SERVER'] and filename.startswith('icons/'):
+        icons_dir = os.path.join(os.path.dirname(__file__), 'frontends', 'screen', 'public', 'icons')
+        return send_from_directory(icons_dir, filename[len('icons/'):])
     dist_dir = os.path.join(os.path.dirname(__file__), 'dist', 'screen')
     return send_from_directory(dist_dir, filename)
 

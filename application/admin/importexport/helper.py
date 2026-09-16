@@ -568,7 +568,7 @@ def _reset_postgres_sequences(db):
     for table, col in sequences:
         db.session.execute(db.text(
             f"SELECT setval(pg_get_serial_sequence('{table}', '{col}'), "
-            f"COALESCE(MAX({col}), 0)) FROM {table}"
+            f"COALESCE(MAX({col}), 1), MAX({col}) IS NOT NULL) FROM {table}"
         ))
 
 
