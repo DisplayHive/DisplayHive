@@ -16,6 +16,11 @@
  * serialized_input or (for a Contenttype field preset) a TagConfig's
  * default_value.
  */
+/* eslint-disable vue/no-mutating-props -- `fields` is intentionally a mutable
+ * bag this component writes to directly (see the file-level doc comment
+ * above); Vue's reactivity tracks the mutation through the shared object
+ * reference, so there's no missing event, just a pattern the default rule
+ * doesn't know is deliberate here. */
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 
@@ -49,7 +54,7 @@ interface MediaItem {
 
 const props = withDefaults(defineProps<{
   tag: { name: string; fieldHandler: string; max_length?: number }
-  fields: Record<string, any>
+  fields: Record<string, unknown>
   disabled?: boolean
   /**
    * 'edit' (default): a real Content Editor — hides/disables individual
@@ -77,7 +82,7 @@ const emit = defineEmits<{
 const { on, off, emit: socketEmit } = useSocket()
 
 const getFieldValue = (tagName: string): string | number | boolean => {
-  return props.fields[tagName] ?? ''
+  return (props.fields[tagName] as string | number | boolean | undefined) ?? ''
 }
 const setFieldValue = (tagName: string, value: string | number | boolean) => {
   props.fields[tagName] = value
@@ -204,7 +209,14 @@ const onIconOptionFlagsUpdate = (localFlags: OptionFlags) => {
 const editorReady = ref(false)
 onMounted(() => { nextTick(() => { editorReady.value = true }) })
 
-const onEditorLoad = (fieldName: string, event: { instance: any }) => {
+// No @types/quill installed (see the same rationale in main.ts) — only the
+// bit of the Quill instance actually touched here is typed.
+interface QuillInstance {
+  clipboard?: { convert: (html: string) => unknown }
+  setContents: (delta: unknown, source: string) => void
+}
+
+const onEditorLoad = (fieldName: string, event: { instance: QuillInstance }) => {
   const quill = event.instance
   const html = String(props.fields[fieldName] || '')
   if (html && quill && quill.clipboard) {
@@ -513,7 +525,7 @@ const parseCountdownDate = (raw: string): Date | null => {
   return isNaN(d.getTime()) ? null : d
 }
 
-const handleAdminSettingsForPreview = (data: any) => {
+const handleAdminSettingsForPreview = (data: { system_settings?: { timezone?: string } }) => {
   const tz = data?.system_settings?.timezone
   if (tz) previewTimezone.value = tz
 }
@@ -619,7 +631,7 @@ onUnmounted(() => {
           @update:modelValue="(v: string | undefined) => setFieldValue(tag.name, v ?? '')"
           editorStyle="height: 220px"
           :readonly="isLocked(tag.name)"
-          @load="(e: any) => onEditorLoad(tag.name, e)"
+          @load="(e: { instance: QuillInstance }) => onEditorLoad(tag.name, e)"
         />
         <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
       </div>

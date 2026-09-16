@@ -1,9 +1,10 @@
 import { fileURLToPath, URL } from 'node:url'
 import { execSync } from 'node:child_process'
 
-import { defineConfig } from 'vite'
+import { defineConfig, type Connect, type ViteDevServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import type { ServerResponse } from 'node:http'
 
 const gitCommit = (() => {
   try {
@@ -34,8 +35,8 @@ export default defineConfig({
     vueDevTools(),
     {
       name: 'redirect-admin-trailing-slash',
-      configureServer(server: any) {
-        server.middlewares.use((req: any, res: any, next: any) => {
+      configureServer(server: ViteDevServer) {
+        server.middlewares.use((req: Connect.IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
           try {
             if (
               req.method === 'GET' &&
@@ -47,7 +48,7 @@ export default defineConfig({
               res.end()
               return
             }
-          } catch (e) {
+          } catch {
             // ignore errors and continue
           }
           next()

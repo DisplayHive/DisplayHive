@@ -27,7 +27,7 @@ interface ContentElement {
   end_time?: string | null
   contenttypeName: string
   screengroups?: Array<{ id: number; name: string }>
-  [key: string]: any
+  [key: string]: unknown
 }
 
 const props = withDefaults(defineProps<{

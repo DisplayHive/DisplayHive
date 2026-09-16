@@ -107,11 +107,11 @@ const deleteEditingLayout = () => {
   })
 }
 
-const handleContainersList = (data: any) => {
+const handleContainersList = (data: { data?: ContentContainer[] }) => {
   containers.value = data?.data || []
 }
 
-const handleLayoutsList = (data: any) => {
+const handleLayoutsList = (data: { data?: Layout[] }) => {
   layouts.value = data?.data || []
   loading.value = false
 }

@@ -53,8 +53,12 @@ const showMatrix = computed(() =>
   hasToken.value && savedUsers.value.length > 0 && alertTypes.value.length > 0
 )
 
+// Shape shared by every emitWithAck() response below: a success flag plus an
+// optional error message, and (per-call) whatever payload it carries.
+interface AckResponse { ok?: boolean; error?: string }
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
-const handleSettings = (data: any) => {
+const handleSettings = (data: { has_telegram_token?: boolean }) => {
   loading.value = false
   hasToken.value = !!data?.has_telegram_token
   if (hasToken.value) {
@@ -64,16 +68,16 @@ const handleSettings = (data: any) => {
   }
 }
 
-const handleSavedUsers = (data: any) => {
+const handleSavedUsers = (data: { users?: SavedUser[] }) => {
   savedUsers.value = data?.users || []
 }
 
-const handleAlertTypes = (data: any) => {
+const handleAlertTypes = (data: { alert_types?: AlertType[] }) => {
   alertTypes.value = data?.alert_types || []
 }
 
-const handleAlertSubscriptions = (data: any) => {
-  const subs: Array<{ user_id: number; alert_type: string }> = data?.subscriptions || []
+const handleAlertSubscriptions = (data: { subscriptions?: Array<{ user_id: number; alert_type: string }> }) => {
+  const subs = data?.subscriptions || []
   subscriptionSet.value = new Set(subs.map(s => `${s.user_id}:${s.alert_type}`))
 }
 
@@ -81,7 +85,7 @@ const handleAlertSubscriptions = (data: any) => {
 const saveToken = async () => {
   savingToken.value = true
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value })
     if (ack?.ok) {
       tokenInput.value = ''
       toast.add({ severity: 'success', summary: 'Saved', detail: 'Telegram token saved', life: 2500 })
@@ -104,7 +108,7 @@ const fetchBotUsers = async () => {
   loadingBotUsers.value = true
   botUsersError.value = ''
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
+    const ack = await emitWithAck<AckResponse & { users?: BotUser[] }>('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
     botUsersLoaded.value = true
     if (ack?.ok) {
       botUsers.value = ack.users || []
@@ -126,7 +130,7 @@ const fetchAlertSubscriptions = () => emit('displayhive:admin:alerting:cts:get_a
 const addUser = async (user: BotUser) => {
   addingChatId.value = String(user.id)
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:add_telegram_user', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:add_telegram_user', {
       name: user.title,
       chat_id: String(user.id),
     })
@@ -145,7 +149,7 @@ const addUser = async (user: BotUser) => {
 const removeUser = async (user: SavedUser) => {
   removingId.value = user.id
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id })
     if (!ack?.ok) {
       toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to remove', life: 4000 })
     }
@@ -159,7 +163,7 @@ const removeUser = async (user: SavedUser) => {
 const sendTest = async (user: SavedUser) => {
   testingId.value = user.id
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id })
     if (ack?.ok) {
       toast.add({ severity: 'success', summary: 'Sent', detail: `Test message sent to ${user.name}`, life: 2500 })
     } else {
@@ -184,7 +188,7 @@ const toggleSubscription = async (userId: number, alertKey: string) => {
   subscriptionSet.value = next
 
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:toggle_alert_subscription', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:toggle_alert_subscription', {
       user_id: userId,
       alert_type: alertKey,
       enabled,

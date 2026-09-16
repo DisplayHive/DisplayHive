@@ -39,7 +39,7 @@ const displayedServerTime = ref('')
 const selectedTimezone = ref('UTC')
 const correctedTime = ref('')
 
-const timezoneOptions = (Intl as any).supportedValuesOf('timeZone').map((tz: string) => ({
+const timezoneOptions = Intl.supportedValuesOf('timeZone').map((tz: string) => ({
   label: tz,
   value: tz,
 }))
@@ -75,7 +75,19 @@ const updateDisplayedTimes = () => {
 
 watch(selectedTimezone, updateDisplayedTimes)
 
-const handleSettings = (data: any) => {
+interface SystemSettings {
+  welcome_headline?: string
+  welcome_text?: string
+  hide_community_links?: boolean | string
+  hide_helping_hand?: boolean | string
+  hide_powered_by?: boolean | string
+  hide_demo_mode?: boolean | string
+  content_edit_preview_size?: number | string
+  content_list_preview_size?: number | string
+  timezone?: string
+}
+
+const handleSettings = (data: { system_settings?: SystemSettings; server_time?: string }) => {
   loading.value = false
   const sys = data?.system_settings || {}
   welcomeHeadline.value = sys.welcome_headline ?? 'Welcome to DisplayHive Admin'

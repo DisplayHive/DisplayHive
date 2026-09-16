@@ -81,7 +81,7 @@ const filteredScreens = computed(() => {
 })
 
 // Dialog-specific: receives current screengroup membership for the screen being renamed
-const handleScreengroupsData = (data: { all_screengroups: any[]; current_screengroups: number[] }) => {
+const handleScreengroupsData = (data: { all_screengroups: unknown[]; current_screengroups: number[] }) => {
   if (renamingScreen.value && data.current_screengroups) {
     renameForm.value.screengroup_ids = data.current_screengroups
   }
@@ -121,7 +121,7 @@ const createScreen = async () => {
   }
   isCreating.value = true
   try {
-    const payload: any = { name: createForm.value.name }
+    const payload: { name: string; width?: string | null; height?: string | null } = { name: createForm.value.name }
     if (createForm.value.width && createForm.value.height) {
       payload.width = createForm.value.width
       payload.height = createForm.value.height

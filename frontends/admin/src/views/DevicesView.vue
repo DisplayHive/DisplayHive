@@ -183,7 +183,7 @@ const stopQRScanner = async () => {
       }
       try {
         html5QrScanner.clear()
-      } catch (e) {}
+      } catch {}
       html5QrScanner = null
     }
     scannerActive.value = false
@@ -212,7 +212,7 @@ const adoptDevice = async () => {
     } else {
       toast.add({ severity: 'error', summary: 'Error', detail: result?.error || 'Failed to adopt device', life: 5000 })
     }
-  } catch (e) {
+  } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to adopt device', life: 5000 })
   } finally {
     isAdopting.value = false
@@ -275,7 +275,7 @@ const toggleActiveDevice = (device: Device, val: boolean) => {
 // - In production, admin + screen are both served by Flask on the same
 //   origin, so `window.location.origin` is correct.
 const getScreenBaseUrl = (): string => {
-  const env = (import.meta as any).env || {}
+  const env = import.meta.env || {}
   return (
     (env.VITE_SCREEN_URL as string) ||
     (env.DEV ? (env.VITE_BACKEND_URL as string) || (env.VITE_SOCKET_URL as string) || 'http://localhost:5000' : window.location.origin)
@@ -309,7 +309,7 @@ const copyDeviceKey = async (device: Device) => {
   try {
     await navigator.clipboard.writeText(key)
     toast.add({ severity: 'success', summary: 'Copied', detail: 'Device key copied to clipboard', life: 2000 })
-  } catch (e) {
+  } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to copy device key', life: 3000 })
   }
 }
@@ -335,7 +335,7 @@ const copyDeviceUrl = async (device: Device) => {
     const url = `${base}#devicekey=${encodeURIComponent(key)}`
     await navigator.clipboard.writeText(url)
     toast.add({ severity: 'success', summary: 'Copied', detail: 'Dynamic device URL copied to clipboard', life: 2000 })
-  } catch (e) {
+  } catch {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to copy device URL', life: 3000 })
   }
 }
@@ -346,7 +346,7 @@ const formatDate = (iso?: string | null) => {
     const d = new Date(iso)
     if (isNaN(d.getTime())) return '-'
     return d.toLocaleString()
-  } catch (e) {
+  } catch {
     return '-'
   }
 }

@@ -27,7 +27,15 @@ const hideHelpingHand = ref(false)
 const hideDemoMode = ref(false)
 const demoModeSaving = ref(false)
 
-const handleSettings = (data: any) => {
+interface SystemSettings {
+  welcome_headline?: string
+  welcome_text?: string
+  hide_community_links?: boolean | string
+  hide_helping_hand?: boolean | string
+  hide_demo_mode?: boolean | string
+}
+
+const handleSettings = (data: { system_settings?: SystemSettings }) => {
   const sys = data?.system_settings || {}
   if (sys.welcome_headline !== undefined) welcomeHeadline.value = sys.welcome_headline
   if (sys.welcome_text !== undefined) welcomeText.value = sys.welcome_text

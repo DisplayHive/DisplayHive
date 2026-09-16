@@ -29,7 +29,7 @@ interface TagConfig {
   // Preset value for this field — same flat key-shape (field_name plus its
   // handler-specific suffixes) FieldValueEditor.vue's `fields` prop expects,
   // scoped to just this one field.
-  default_value: Record<string, any>
+  default_value: Record<string, unknown>
   // One entry per individual sub-setting the field exposes (e.g. an 'image'
   // field's mode/value/size are each independently lockable/hideable) —
   // keyed the same way as default_value. See FieldValueEditor.vue.
@@ -229,27 +229,47 @@ const filteredContentTypes = computed(() => {
   )
 })
 
-const handleContentTypesList = (data: any) => {
+const handleContentTypesList = (data: { data?: ContentType[]; contenttypes?: ContentType[] }) => {
   contentTypes.value = data?.data || data?.contenttypes || []
   loading.value = false
 }
 
-const handleLayoutsList = (data: any) => {
+const handleLayoutsList = (data: { data?: Layout[] }) => {
   layouts.value = data?.data || []
 }
 
-const handleContainersList = (data: any) => {
+const handleContainersList = (data: { data?: ContentContainer[] }) => {
   containers.value = data?.data || []
 }
 
 // Active Design's palette — passed to the preset panel's icon-color picker
 // for "@default:<id>" quick-pick swatches.
 const designPalette = ref<DefaultColor[]>([])
-const handleActiveDesignColors = (data: any) => {
+const handleActiveDesignColors = (data: { colors?: DefaultColor[] }) => {
   designPalette.value = Array.isArray(data?.colors) ? data.colors : []
 }
 
-const handleContentTypeDetail = async (data: any) => {
+// Raw tagconfig row as the backend sends it (snake_case, JSON-encoded
+// default_value/option_flags) — mirrors ContentEditView.vue's RawTagConfig.
+interface RawTagConfig {
+  id?: number
+  field_name?: string
+  field_label?: string
+  field_handler?: string
+  contentcontainer_id?: number | null
+  order?: number
+  default_value?: string
+  option_flags?: string
+}
+
+interface RawContentTypeDetail {
+  id: number
+  description?: string
+  layout_id: number | null
+  tagconfigs?: RawTagConfig[]
+}
+
+const handleContentTypeDetail = async (data: { contenttype?: RawContentTypeDetail; data?: RawContentTypeDetail }) => {
   const ct = data?.contenttype || data?.data || null
   if (!ct) return
 
@@ -257,7 +277,7 @@ const handleContentTypeDetail = async (data: any) => {
   if (pendingCopyName.value) {
     const name = pendingCopyName.value
     pendingCopyName.value = ''
-    const tagconfigs = (ct.tagconfigs || []).map((t: any) => ({
+    const tagconfigs = (ct.tagconfigs || []).map((t) => ({
       name: t.field_name, title: t.field_label, field_handler: t.field_handler,
       contentcontainer_id: t.contentcontainer_id, order: t.order,
       default_value: t.default_value, option_flags: t.option_flags,
@@ -282,17 +302,17 @@ const handleContentTypeDetail = async (data: any) => {
     editForm.value.layout_id = ct.layout_id
     editForm.value.tagconfigs = (ct.tagconfigs || [])
       .slice()
-      .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      .map((t: any) => {
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((t) => {
         const c = containers.value.find(x => x.id === t.contentcontainer_id)
-        let default_value: Record<string, any> = {}
+        let default_value: Record<string, unknown> = {}
         try { default_value = t.default_value ? JSON.parse(t.default_value) : {} } catch { default_value = {} }
         let option_flags: OptionFlags = {}
         try { option_flags = t.option_flags ? JSON.parse(t.option_flags) : {} } catch { option_flags = {} }
         return {
           id: t.id,
-          name: c?.name || t.field_name,
-          title: t.field_label || c?.name || t.field_name,
+          name: c?.name || t.field_name || '',
+          title: t.field_label || c?.name || t.field_name || '',
           field_handler: t.field_handler ?? 'textklein',
           contentcontainer_id: t.contentcontainer_id ?? null,
           default_value,
@@ -356,7 +376,7 @@ const openEditDialog = (ct: ContentType) => {
       loadingContentTypeError.value = 'Timed out while fetching content type detail.'
       contentTypeLoadTimer = null
     }, 8000)
-  } catch (e) {}
+  } catch {}
   showEditDialog.value = true
 }
 

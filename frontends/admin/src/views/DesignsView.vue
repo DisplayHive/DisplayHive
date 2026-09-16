@@ -155,7 +155,7 @@ const containers = ref<ContentContainer[]>([])
 // contentcontainer id -> { property: value }
 const containerStyles = ref<Record<number, Record<string, string>>>({})
 
-const handleContainersList = (data: any) => {
+const handleContainersList = (data: { data?: ContentContainer[] }) => {
   containers.value = data?.data || []
 }
 
@@ -172,7 +172,7 @@ const isValidForType = (type: FontProperty['type'], value: string): boolean => {
   return true
 }
 
-const handleDesignContainerStyles = (data: any) => {
+const handleDesignContainerStyles = (data: { design_id?: number; data?: Record<string, unknown> }) => {
   if (!data || data.design_id !== editForm.value.id) return
   const loaded: Record<number, Record<string, string>> = {}
   for (const [idStr, rawStyles] of Object.entries(data.data || {})) {
@@ -247,7 +247,7 @@ const setColorRef = (containerId: number, prop: string, ref: string) => {
 // overrides < the Design's own hand-written CSS (see upd_content.py).
 const globalStyles = ref<Record<string, string>>({})
 
-const handleDesignGlobalStyles = (data: any) => {
+const handleDesignGlobalStyles = (data: { design_id?: number; data?: Record<string, string> }) => {
   if (!data || data.design_id !== editForm.value.id) return
   const styles: Record<string, string> = { ...data.data }
   for (const p of FONT_PROPERTIES) {
@@ -302,11 +302,11 @@ const setGlobalColorRef = (prop: string, ref: string) => {
 // hand-written CSS — see upd_content.py — so a manual CSS edit still wins).
 const gradients = ref<Gradient[]>([])
 
-const handleGradientsList = (data: any) => {
+const handleGradientsList = (data: { data?: Gradient[] }) => {
   gradients.value = data?.data || []
 }
 
-const handleDesignGradients = (data: any) => {
+const handleDesignGradients = (data: { design_id?: number; gradient_ids?: number[] }) => {
   if (!data || data.design_id !== editForm.value.id) return
   editForm.value.gradient_ids = data.gradient_ids || []
 }
@@ -710,13 +710,13 @@ const filteredDesigns = computed(() => {
   )
 })
 
-const handleDesignsList = (data: any) => {
+const handleDesignsList = (data: { data?: Design[]; designs?: Design[] }) => {
   const list = data?.data || data?.designs || []
   designs.value = list
   loading.value = false
 }
 
-const handleDesignDetail = (data: any) => {
+const handleDesignDetail = (data: { design?: Design }) => {
   try {
     const design = data?.design || null
     if (!design) return
@@ -851,7 +851,7 @@ const openEditDialog = (design: Design) => {
       loadingDesignError.value = 'Timed out while fetching design content.'
       designLoadTimer = null
     }, 8000)
-  } catch (e) {}
+  } catch {}
 
   showEditDialog.value = true
 }

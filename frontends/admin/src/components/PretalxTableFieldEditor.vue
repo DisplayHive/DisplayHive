@@ -63,8 +63,8 @@ interface PretalxApiUrlOption {
 const pretalxApiUrls = ref<PretalxApiUrlOption[]>([])
 const pretalxRoomsCache = ref<Record<string, string[]>>({})
 
-const handlePretalxUrls = (data: any) => {
-  pretalxApiUrls.value = (data?.urls || []).map((u: any) => ({
+const handlePretalxUrls = (data: { urls?: PretalxApiUrlOption[] }) => {
+  pretalxApiUrls.value = (data?.urls || []).map((u) => ({
     id: u.id,
     name: u.name,
     url: u.url,
@@ -77,7 +77,7 @@ async function fetchPretalxRooms(urlId: string) {
   if (!urlId || urlId in pretalxRoomsCache.value) return
   pretalxRoomsCache.value[urlId] = []
   try {
-    const ack = await socketEmitWithAck<any>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
+    const ack = await socketEmitWithAck<{ ok?: boolean; rooms?: string[] }>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
     if (ack?.ok) pretalxRoomsCache.value[urlId] = ack.rooms || []
   } catch { /* keep empty */ }
 }

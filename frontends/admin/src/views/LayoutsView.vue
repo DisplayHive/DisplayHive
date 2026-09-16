@@ -98,7 +98,7 @@ const executeCopyLayout = async () => {
 
 // --- Data loading ---------------------------------------------------------
 
-const handleLayoutsList = (data: any) => {
+const handleLayoutsList = (data: { data?: Layout[] }) => {
   layouts.value = data?.data || []
   loading.value = false
 }

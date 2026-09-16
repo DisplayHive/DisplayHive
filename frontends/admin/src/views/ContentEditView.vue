@@ -22,22 +22,12 @@ import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContai
 import type { OptionFlags } from '../utils/optionFlags'
 import type { DefaultColor } from '../types/models'
 
-interface ContentElement {
-  id: number
-  title: string
-  active: boolean
-  duration: number
-  start_time?: string | null
-  end_time?: string | null
-  contenttypeName: string
-  screengroups?: Array<{ id: number; name: string }>
-}
-
 interface ContentType {
   id: number
   name: string
   description?: string
   html?: string
+  tagconfigs?: RawTagConfig[]
 }
 
 interface TagConfig {
@@ -50,6 +40,20 @@ interface TagConfig {
 }
 
 interface ScreengroupOption { id: number; name: string; screen_ids: number[] }
+
+// Raw TagConfig as the backend sends it (snake_case, JSON-encoded
+// option_flags/default_value) — mapped into the camelCase `TagConfig` above.
+interface RawTagConfig {
+  field_handler?: string
+  field_name?: string
+  name?: string
+  field_label?: string
+  title?: string
+  description?: string
+  max_length?: number
+  option_flags?: string
+  default_value?: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -77,18 +81,28 @@ const handleContentTypesList = (data: { data?: ContentType[]; contenttypes?: Con
   contentTypes.value = data.data || data.contenttypes || []
 }
 
-const handleAllScreengroups = (data: any) => {
+// Wire shape pushed by 'upd_screengroups' — either flat or JSON:API-style
+// (attributes/relationships), depending on which backend path produced it.
+interface RawScreengroup {
+  id: number | string
+  name?: string
+  is_one_screen?: boolean
+  attributes?: { name?: string; is_one_screen?: boolean }
+  relationships?: { screens?: { data?: Array<{ id: number | string }> } }
+}
+
+const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
   const arr = data?.screengroups || data?.data || []
-  const toOption = (sg: any): ScreengroupOption => ({
+  const toOption = (sg: RawScreengroup): ScreengroupOption => ({
     id: Number(sg.id),
     name: sg.attributes?.name || sg.name || '',
-    screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
+    screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
   })
   allScreengroups.value = arr
-    .filter((sg: any) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
   oneScreenGroups.value = arr
-    .filter((sg: any) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
 }
 
@@ -100,7 +114,21 @@ const pendingKeepOpen = ref(false)
 const contentDetailReceived = ref(false)
 const loadingContentTypeDetail = ref(false)
 const selectedContentType = ref<ContentType | null>(null)
-const pendingContentDetail = ref<any | null>(null)
+
+// Raw content-element payload from get_content_element_detail: the known
+// metadata fields plus arbitrary per-tag field values (indexed dynamically
+// by tag name, see the merge loop in handleContentTypeDetail below).
+interface RawContentDetail {
+  id: number
+  title: string
+  duration: number
+  contenttype_id: number
+  screengroups?: Array<{ id: number }>
+  start_time?: string | null
+  end_time?: string | null
+  [key: string]: unknown
+}
+const pendingContentDetail = ref<RawContentDetail | null>(null)
 
 const createForm = ref({
   id: null as number | null,
@@ -447,7 +475,7 @@ const doSubmitCreateContent = () => {
     createForm.value.end_time = null
   }
 
-  const payload: any = {
+  const payload: Record<string, unknown> = {
     title: createForm.value.title,
     duration: createForm.value.duration,
     start_time: fmtDt(createForm.value.start_time),
@@ -479,9 +507,9 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     selectedContentType.value = data.contenttype
     // Fields (TagConfig) belong to the Contenttype itself — each one maps
     // directly to one of its Layout's containers.
-    const serverTagConfigs: any[] = (data.contenttype as any).tagconfigs || []
+    const serverTagConfigs: RawTagConfig[] = data.contenttype.tagconfigs || []
     if (serverTagConfigs && serverTagConfigs.length > 0) {
-      tagConfigs.value = serverTagConfigs.map((t: any) => {
+      tagConfigs.value = serverTagConfigs.map((t) => {
         const fieldHandler = (t.field_handler as string) ?? 'textklein'
         return {
           name: t.field_name || t.name || '',
@@ -550,7 +578,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           tagConfigs.value.forEach(tag => {
             const v = pending[tag.name]
             if (v !== undefined && v !== null) {
-              createForm.value.fields[tag.name] = v
+              createForm.value.fields[tag.name] = v as string | number | boolean
             }
           })
           // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`,
@@ -558,7 +586,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
           for (const k of Object.keys(pending)) {
             if (!pendingIgnore.has(k) && !tagConfigs.value.some(t => t.name === k)) {
-              createForm.value.fields[k] = pending[k]
+              createForm.value.fields[k] = pending[k] as string | number | boolean
             }
           }
           // start_time / end_time are not tag fields — apply them explicitly
@@ -569,7 +597,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
         }
       }
     } else {
-      extractTagConfigs((data.contenttype as any).html || '')
+      extractTagConfigs(data.contenttype.html || '')
     }
 
     // Locked/hidden individual sub-options always show (and, when locked,
@@ -582,12 +610,12 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     tagConfigs.value.forEach(tag => {
       const flags = tag.optionFlags
       if (!flags) return
-      const raw = serverTagConfigs.find((t: any) => (t.field_name || t.name) === tag.name)?.default_value
-      let preset: Record<string, any> = {}
+      const raw = serverTagConfigs.find((t) => (t.field_name || t.name) === tag.name)?.default_value
+      let preset: Record<string, unknown> = {}
       try { preset = raw ? JSON.parse(raw) : {} } catch { preset = {} }
       for (const [key, flag] of Object.entries(flags)) {
         if ((flag.locked || flag.hidden) && key in preset) {
-          createForm.value.fields[key] = preset[key]
+          createForm.value.fields[key] = preset[key] as string | number | boolean
         }
       }
     })
@@ -604,7 +632,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
  * handleContentTypeDetail's pendingContentDetail merge once get_contenttype
  * (fired from here) resolves the field list.
  */
-const handleContentDetail = (data: { content: any }) => {
+const handleContentDetail = (data: { content: RawContentDetail }) => {
   if (!data.content || !editMode.value) return
   const content = data.content
 
@@ -613,7 +641,7 @@ const handleContentDetail = (data: { content: any }) => {
   createForm.value.duration = content.duration
   createForm.value.contenttype_id = content.contenttype_id
 
-  const sgIds = (content.screengroups || []).map((sg: any) => sg.id)
+  const sgIds = (content.screengroups || []).map((sg) => sg.id)
   formScreengroupIds.value = [...sgIds]
   originalScreengroupIds.value = [...sgIds]
 

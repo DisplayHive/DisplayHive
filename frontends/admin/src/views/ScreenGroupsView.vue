@@ -17,7 +17,6 @@ import InputText from 'primevue/inputtext'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Badge from 'primevue/badge'
-import MultiSelect from 'primevue/multiselect'
 
 // Dialog-local screen shape (backend sends flat is_online, not nested in attached_device)
 interface DialogScreen {
@@ -103,9 +102,9 @@ const filteredAvailableContent = computed(() => {
 })
 
 // Dialog-specific: receives assigned screens for the open screengroup
-const handleScreenGroupScreens = (data: any) => {
+const handleScreenGroupScreens = (data: { screens?: DialogScreen[] }) => {
   if (data && data.screens) {
-    assignedScreens.value = data.screens.map((s: any) => ({
+    assignedScreens.value = data.screens.map((s) => ({
       id: s.id,
       name: s.name,
       resolution: s.resolution || 'n/a',
@@ -125,9 +124,9 @@ const handleScreenGroupScreens = (data: any) => {
 }
 
 // Dialog-specific: receives assigned content for the open screengroup
-const handleScreenGroupContent = (data: any) => {
+const handleScreenGroupContent = (data: { content?: Array<{ id: number; title: string; type?: string; contenttype_name?: string }> }) => {
   if (data && data.content) {
-    assignedContent.value = data.content.map((c: any) => ({
+    assignedContent.value = data.content.map((c) => ({
       id: c.id,
       title: c.title,
       contenttype_name: c.type || c.contenttype_name,
@@ -138,7 +137,9 @@ const handleScreenGroupContent = (data: any) => {
   contentLoading.value = false
 }
 
-const handleScreenGroupCreated = (data: any) => {
+interface ActionResult { success?: boolean; error?: string }
+
+const handleScreenGroupCreated = (data: ActionResult) => {
   if (data.success) {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group created', life: 3000 })
     screengroupsStore.fetch()
@@ -147,7 +148,7 @@ const handleScreenGroupCreated = (data: any) => {
   }
 }
 
-const handleScreenGroupDeleted = (data: any) => {
+const handleScreenGroupDeleted = (data: ActionResult) => {
   if (data.success) {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group deleted', life: 3000 })
     screengroupsStore.fetch()

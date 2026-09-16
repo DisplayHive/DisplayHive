@@ -23,6 +23,26 @@ interface Screengroup {
   screen_ids: number[]
 }
 
+// Wire shape for a Screen/Screengroup item — either flat (helper payloads)
+// or JSON:API-style (attributes/relationships), depending on which backend
+// path produced it. normalizeScreen/normalizeScreengroup below accept
+// either.
+interface RawItem {
+  id: number | string
+  name?: string
+  title?: string
+  attached_device?: { is_online?: boolean } | null
+  device?: { is_online?: boolean } | null
+  screen_ids?: number[]
+  screens?: number[]
+  is_one_screen?: boolean
+  attributes?: { name?: string; is_one_screen?: boolean }
+  relationships?: {
+    device?: { data?: { is_online?: boolean } | null }
+    screens?: { data?: Array<{ id: number | string }> }
+  }
+}
+
 const toast = useToast()
 const { on, off, emit } = useSocket()
 const rightsStore = useRightsStore()
@@ -35,7 +55,7 @@ const loading = ref(true)
 // Track changes locally
 const matrixState = ref<Map<string, boolean>>(new Map())
 
-const normalizeScreen = (item: any): Screen => {
+const normalizeScreen = (item: RawItem): Screen => {
   // Support either helper payloads ({ id, name, attached_device })
   // or JSON:API style ({ id, attributes: { name }, relationships })
   try {
@@ -52,26 +72,26 @@ const normalizeScreen = (item: any): Screen => {
     const name = item.name || item.title || String(item.id)
     const attached = item.attached_device || item.device || null
     return { id, name, hasDevice: !!attached, online: !!attached?.is_online }
-  } catch (e) {
+  } catch {
     return { id: Number(item.id || 0), name: String(item.name || item.id || 'unknown'), hasDevice: false, online: false }
   }
 }
 
-const handleScreensList = (data: any) => {
+const handleScreensList = (data: { screens?: RawItem[]; data?: RawItem[] }) => {
   const arr = data?.screens || data?.data || []
   screens.value = (arr || []).map(normalizeScreen)
   updateMatrixState()
   loading.value = false
 }
 
-const normalizeScreengroup = (item: any): Screengroup => {
+const normalizeScreengroup = (item: RawItem): Screengroup => {
   try {
     if (item && item.attributes) {
       const id = Number(item.id)
       const name = item.attributes.name || String(item.id)
       const rel = item.relationships || {}
       const screen_refs = (rel.screens && rel.screens.data) || []
-      const screen_ids = (screen_refs || []).map((s: any) => Number(s.id))
+      const screen_ids = (screen_refs || []).map((s) => Number(s.id))
       return { id, name, screen_ids }
     }
 
@@ -79,15 +99,15 @@ const normalizeScreengroup = (item: any): Screengroup => {
     const name = item.name || String(item.id)
     const screen_ids = item.screen_ids || item.screens || []
     return { id, name, screen_ids }
-  } catch (e) {
+  } catch {
     return { id: Number(item.id || 0), name: String(item.name || item.id || 'group'), screen_ids: [] }
   }
 }
 
-const handleScreengroupsList = (data: any) => {
+const handleScreengroupsList = (data: { screengroups?: RawItem[]; data?: RawItem[] }) => {
   const arr = data?.screengroups || data?.data || []
   screengroups.value = (arr || [])
-    .filter((item: any) => {
+    .filter((item) => {
       const attrs = item.attributes || item
       return !(attrs.is_one_screen ?? false)
     })

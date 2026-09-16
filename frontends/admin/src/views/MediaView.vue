@@ -140,9 +140,9 @@ const startUpload = async () => {
       })
       if (!result?.success) throw new Error(result?.error || 'Upload failed')
       progress.status = 'done'
-    } catch (e: any) {
+    } catch (e) {
       progress.status = 'error'
-      progress.error = e?.message || 'Upload failed'
+      progress.error = (e as Error)?.message || 'Upload failed'
     }
   }
 
@@ -213,8 +213,8 @@ const saveMedia = async (keepOpen = false) => {
     toast.add({ severity: 'success', summary: 'Saved', detail: 'Media updated', life: 3000 })
     if (!keepOpen) showEditDialog.value = false
     mediaStore.fetch()
-  } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: e?.message || 'Save failed', life: 4000 })
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Error', detail: (e as Error)?.message || 'Save failed', life: 4000 })
   } finally {
     isSavingMedia.value = false
   }
