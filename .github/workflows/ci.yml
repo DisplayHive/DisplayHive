@@ -64,7 +64,4 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run pytest
-        # No test_*.py files exist yet — pytest exits 5 ("no tests collected")
-        # in that case; treat that specific exit code as success so CI stays
-        # green until a real suite is added, without masking actual failures.
-        run: pytest || [ $? -eq 5 ]
+        run: pytest
