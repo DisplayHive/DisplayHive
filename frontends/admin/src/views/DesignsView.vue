@@ -194,7 +194,7 @@ const getStyleValue = (containerId: number, prop: string): string =>
 const saveDebounce: Record<number, ReturnType<typeof setTimeout>> = {}
 
 const setStyleValue = (containerId: number, prop: string, value: string | undefined) => {
-  const current = { ...(containerStyles.value[containerId] || {}) }
+  const current = { ...containerStyles.value[containerId] }
   current[prop] = value || ''
   containerStyles.value = { ...containerStyles.value, [containerId]: current }
 
@@ -249,7 +249,7 @@ const globalStyles = ref<Record<string, string>>({})
 
 const handleDesignGlobalStyles = (data: any) => {
   if (!data || data.design_id !== editForm.value.id) return
-  const styles: Record<string, string> = { ...(data.data || {}) }
+  const styles: Record<string, string> = { ...data.data }
   for (const p of FONT_PROPERTIES) {
     const v = styles[p.key]
     if (v && !isValidForType(p.type, v)) delete styles[p.key]

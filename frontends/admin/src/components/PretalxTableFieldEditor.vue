@@ -48,7 +48,7 @@ const isFieldLocked = (key: string) => props.mode === 'edit' && !!props.optionFl
 const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
 const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
   const current = flagsFor(key)
-  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+  emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
 }
 
 const { emit: socketEmit, emitWithAck: socketEmitWithAck, on, off } = useSocket()

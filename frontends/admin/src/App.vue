@@ -258,8 +258,7 @@ const contentStructureGroupItems = computed(() => [
     : []),
 ])
 
-const integrationsGroupItems = computed(() => [
-  ...(rightsStore.can('pretalx.page')
+const integrationsGroupItems = computed(() => (rightsStore.can('pretalx.page')
     ? [
         {
           label: 'Pretalx',
@@ -267,8 +266,7 @@ const integrationsGroupItems = computed(() => [
           command: () => router.push('/pretalx'),
         },
       ]
-    : []),
-])
+    : []))
 
 const systemGroupItems = computed(() => [
   ...(rightsStore.can('importexport.page')
@@ -309,8 +307,7 @@ const systemGroupItems = computed(() => [
     : []),
 ])
 
-const usersGroupItems = computed(() => [
-  ...(rightsStore.can('users.page') || rightsStore.can('rights.page')
+const usersGroupItems = computed(() => (rightsStore.can('users.page') || rightsStore.can('rights.page')
     ? [
         {
           label: 'Users & Rights',
@@ -318,8 +315,7 @@ const usersGroupItems = computed(() => [
           command: () => router.push('/users'),
         },
       ]
-    : []),
-])
+    : []))
 
 const adminMenuItems = computed(() => [
   ...(deviceGroupItems.value.length

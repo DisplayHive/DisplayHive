@@ -58,7 +58,7 @@ function buildEffectFragment(effect: DesignPreviewPayload['background_effect'] |
   return (
     `<div id="design-effect-background" style="position:absolute;inset:0;overflow:hidden;">` +
     `<${def.tag} style="display:block;width:100%;height:100%;" ${attrs}></${def.tag}></div>` +
-    `<script type="module">${bbScriptSourceSafe}<\/script>`
+    `<script type="module">${bbScriptSourceSafe}</script>`
   )
 }
 
@@ -177,7 +177,7 @@ const TICK_SCRIPT = `<script>
   tick();
   setInterval(tick, 1000);
 })();
-<\/script>`
+</script>`
 
 export async function buildDesignPreviewSrcdoc(
   design: DesignPreviewPayload | null | undefined,

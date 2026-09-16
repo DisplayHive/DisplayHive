@@ -14,7 +14,7 @@ describe('ThemeSwitcher', () => {
     // mock location.reload
     const reload = vi.fn()
     // @ts-ignore
-    global.window.location = { ...(global.window.location || {}), reload }
+    global.window.location = { ...global.window.location, reload }
 
     const wrapper = mount(ThemeSwitcher, {
       global: {

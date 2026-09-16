@@ -89,7 +89,7 @@ const isLocked = (key: string) => props.mode === 'edit' && !!props.optionFlags?.
 const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
 const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
   const current = flagsFor(key)
-  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+  emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
 }
 
 // --- pretalx_table field adapter ------------------------------------------
@@ -155,7 +155,7 @@ const pretalxOptionFlags = computed<OptionFlags>(() => {
 })
 
 const onPretalxOptionFlagsUpdate = (localFlags: OptionFlags) => {
-  const next = { ...(props.optionFlags || {}) }
+  const next = { ...props.optionFlags }
   for (const [local, flag] of Object.entries(localFlags)) {
     next[pretalxWireKey(props.tag.name, local)] = flag
   }
@@ -190,7 +190,7 @@ const iconOptionFlags = computed<OptionFlags>(() => {
 })
 
 const onIconOptionFlagsUpdate = (localFlags: OptionFlags) => {
-  const next = { ...(props.optionFlags || {}) }
+  const next = { ...props.optionFlags }
   if (localFlags.icon) next[props.tag.name] = localFlags.icon
   if (localFlags.size) next[`${props.tag.name}__size`] = localFlags.size
   if (localFlags.color) next[`${props.tag.name}__color`] = localFlags.color

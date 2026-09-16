@@ -316,7 +316,7 @@ export function setupSocketHandlers(socket: any): void {
 
     if (cmd === "DEVICE_REVOKED" || cmd === "DEVICE_REVOKE") {
       // Admin revoked this device key — clear stored key and reload into adoption flow.
-      try { localStorage.removeItem("deviceKey"); } catch { /* ignore */ }
+      setDeviceKey(null);
       socket.disconnect();
       setTimeout(() => window.location.reload(), 500);
       return;

@@ -44,6 +44,20 @@ import bbScriptSource from 'beautiful-backgrounds?raw'
 // land inside a string/regex in the source itself.
 const bbScriptSourceSafe = bbScriptSource.replace(/<\/script/gi, '<\\/script')
 
+// Same underlying problem as above, but for the wrapper tags this file writes
+// around bbScriptSourceSafe (below). A closing script tag typed directly,
+// verbatim, into this .vue file's own <script> block — even inside a JS
+// template literal — confuses the SFC compiler's block locator: it scans the
+// raw file text for that exact byte sequence without understanding it's
+// sitting inside a string, and ends this file's own script block right
+// there, corrupting everything parsed after it (see the build error this
+// caused: a "Duplicate attribute" / "Element is missing end tag" deep in the
+// unrelated code that follows). Concatenating the tag name keeps the closing
+// sequence from ever appearing literally in this file's source while still
+// producing the intended string at runtime.
+const SCRIPT_OPEN_TAG = '<' + 'script type="module">'
+const SCRIPT_CLOSE_TAG = '<' + '/script>'
+
 interface MediaItem { id: number; url: string }
 
 // Same arrow set as ContentEditView.vue's field picker.
@@ -157,7 +171,7 @@ const effectFragment = computed(() => {
   return (
     `<div id="design-effect-background" style="position:absolute;inset:0;overflow:hidden;">` +
     `<${def.tag} style="display:block;width:100%;height:100%;" ${attrs}></${def.tag}></div>` +
-    `<script type="module">${bbScriptSourceSafe}<\/script>`
+    SCRIPT_OPEN_TAG + bbScriptSourceSafe + SCRIPT_CLOSE_TAG
   )
 })
 

@@ -74,21 +74,38 @@ pkgs.mkShell {
     }
 
     # Install JS dependencies (root + each frontend) if package.json is present
-    # and node_modules is missing. frontends/admin and frontends/screen are
-    # separate npm projects (not npm workspaces), so each needs its own install.
+    # and node_modules is either missing or stale relative to package-lock.json.
+    # frontends/admin and frontends/screen are separate npm projects (not npm
+    # workspaces), so each needs its own install. Staleness is tracked via a
+    # hash of package-lock.json stamped into node_modules on each successful
+    # install, so `nix develop`/`nix-shell` re-syncs automatically whenever the
+    # lockfile changes (e.g. after a git pull) instead of silently keeping
+    # outdated packages around.
     for jsdir in "$PWD" "$PWD/frontends/admin" "$PWD/frontends/screen"; do
-      if [ -f "$jsdir/package.json" ] && [ ! -d "$jsdir/node_modules" ]; then
-        echo "node_modules not found in $jsdir; installing JS dependencies..."
-        (
-          cd "$jsdir"
-          if command -v yarn >/dev/null 2>&1; then
-            yarn install --frozen-lockfile || npm install
-          elif command -v pnpm >/dev/null 2>&1; then
-            pnpm install || npm install
-          else
-            npm install
-          fi
-        )
+      if [ -f "$jsdir/package.json" ]; then
+        lockfile="$jsdir/package-lock.json"
+        stamp="$jsdir/node_modules/.lockfile-hash"
+        lockhash=""
+        [ -f "$lockfile" ] && lockhash=$(sha256sum "$lockfile" | cut -d' ' -f1)
+
+        if [ ! -d "$jsdir/node_modules" ]; then
+          echo "node_modules not found in $jsdir; installing JS dependencies..."
+          (
+            cd "$jsdir"
+            if command -v yarn >/dev/null 2>&1; then
+              yarn install --frozen-lockfile || npm install
+            elif command -v pnpm >/dev/null 2>&1; then
+              pnpm install || npm install
+            else
+              npm install
+            fi
+          )
+        elif [ -n "$lockhash" ] && [ "$(cat "$stamp" 2>/dev/null)" != "$lockhash" ]; then
+          echo "package-lock.json changed in $jsdir; re-syncing node_modules (npm ci)..."
+          ( cd "$jsdir" && npm ci )
+        fi
+
+        [ -n "$lockhash" ] && [ -d "$jsdir/node_modules" ] && echo "$lockhash" > "$stamp"
       fi
     done
 

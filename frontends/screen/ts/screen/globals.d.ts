@@ -1,8 +1,8 @@
 import type { Auth, DeviceConfig } from "./types";
 
-declare const __GIT_COMMIT__: string;
-
 declare global {
+  const __GIT_COMMIT__: string;
+
   // Minimal hand-rolled Vite client types — this project doesn't pull in
   // the full `vite/client` type package, so only what's actually used
   // (import.meta.env.BASE_URL, read in icon-libraries.ts to resolve /icons/
