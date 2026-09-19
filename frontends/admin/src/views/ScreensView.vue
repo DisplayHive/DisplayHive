@@ -226,7 +226,7 @@ const resetScreenSize = (screen: Screen) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Screens page.</p>
         </div>
       </template>
@@ -282,24 +282,6 @@ const resetScreenSize = (screen: Screen) => {
               <div class="dt-right">
                 <div class="filter-row">
                   <Tag
-                    :severity="showOnline ? 'success' : 'info'"
-                    :value="`Online (${onlineCount})`"
-                    @click="toggleShowOnline"
-                    class="clickable-tag"
-                    :aria-pressed="showOnline"
-                    :style="{ opacity: showOnline ? 1 : 0.5 }"
-                  />
-                  <Tag
-                    :severity="showOffline ? 'danger' : 'info'"
-                    :value="`Offline (${offlineCount})`"
-                    @click="toggleShowOffline"
-                    class="clickable-tag"
-                    :aria-pressed="showOffline"
-                    :style="{ opacity: showOffline ? 1 : 0.5 }"
-                  />
-                </div>
-                <div class="filter-row">
-                  <Tag
                     severity="warn"
                     :value="`Windowed (${windowedCount})`"
                     @click="toggleShowWindowed"
@@ -314,6 +296,24 @@ const resetScreenSize = (screen: Screen) => {
                     class="clickable-tag"
                     :aria-pressed="showFullscreen"
                     :style="{ opacity: showFullscreen ? 1 : 0.5 }"
+                  />
+                </div>
+                <div class="filter-row">
+                  <Tag
+                    :severity="showOnline ? 'success' : 'info'"
+                    :value="`Online (${onlineCount})`"
+                    @click="toggleShowOnline"
+                    class="clickable-tag"
+                    :aria-pressed="showOnline"
+                    :style="{ opacity: showOnline ? 1 : 0.5 }"
+                  />
+                  <Tag
+                    :severity="showOffline ? 'danger' : 'info'"
+                    :value="`Offline (${offlineCount})`"
+                    @click="toggleShowOffline"
+                    class="clickable-tag"
+                    :aria-pressed="showOffline"
+                    :style="{ opacity: showOffline ? 1 : 0.5 }"
                   />
                 </div>
               </div>
@@ -401,7 +401,13 @@ const resetScreenSize = (screen: Screen) => {
     </Card>
 
     <!-- Create Screen Dialog -->
-    <Dialog v-model:visible="showCreateDialog" header="Add Screen" modal :style="{ width: '450px' }">
+    <Dialog v-model:visible="showCreateDialog" modal :style="{ width: '450px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Add Screen</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="create-name">Screen Name</label>
@@ -423,7 +429,13 @@ const resetScreenSize = (screen: Screen) => {
     </Dialog>
 
     <!-- Rename Screen Dialog -->
-    <Dialog v-model:visible="showRenameDialog" header="Rename Screen" modal :style="{ width: '600px' }">
+    <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '600px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Rename Screen</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="rename-name">Screen Name</label>
@@ -480,8 +492,10 @@ const resetScreenSize = (screen: Screen) => {
 }
 
 .dt-right {
-  flex-direction: column;
-  align-items: flex-end;
+  /* Windowed/Fullscreen sits left of Online/Offline, with a wider gap
+     between the two groups than the 0.5rem used within each group
+     (.filter-row) — keeps the two filter groups visually distinct. */
+  gap: 1.5rem;
 }
 
 .filter-row {
@@ -496,7 +510,7 @@ const resetScreenSize = (screen: Screen) => {
   max-height: 300px;
   overflow-y: auto;
   padding: 0.5rem;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--p-content-border-color, #dee2e6);
   border-radius: 4px;
 }
 

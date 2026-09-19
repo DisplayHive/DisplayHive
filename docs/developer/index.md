@@ -14,5 +14,8 @@ organized.
   frontend structure.
 - **[Real-time content push](realtime-push.md)** — how an edit in the admin
   panel ends up rendered on a screen.
+- **[Admin panel styleguide](styleguide.md)** — colors, type scale, spacing,
+  card patterns, icon usage, and the dark-mode rules that keep new views
+  from repeating past contrast bugs.
 - **[Contributing](contributing.md)** — conventions and expectations for
   changes, including AI-assisted ones.

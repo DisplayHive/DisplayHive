@@ -1,10 +1,14 @@
 """Admin user model for the login-protected admin backend."""
 
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, DateTime, Boolean, Integer, ForeignKey
+from sqlalchemy import String, DateTime, Boolean, Integer, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import db
+
+logger = logging.getLogger(__name__)
 
 
 class AdminUser(db.Model):
@@ -21,9 +25,24 @@ class AdminUser(db.Model):
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # JSON-encoded dict of self-service UI preferences (e.g. {"theme": "dark"}),
+    # opaque here — same convention as Design.default_colors etc. Never exposed
+    # via the admin Users page, only through the owning user's own /auth/me.
+    preferences: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     def __repr__(self):
         return f"<AdminUser {self.username}>"
+
+    def get_preferences(self) -> dict:
+        """Decode `preferences`, tolerating missing/corrupt data."""
+        if not self.preferences:
+            return {}
+        try:
+            decoded = json.loads(self.preferences)
+            return decoded if isinstance(decoded, dict) else {}
+        except (TypeError, ValueError):
+            logger.warning("AdminUser %s has corrupt preferences JSON", self.id)
+            return {}
 
     def to_dict(self):
         """Convert to a dict for admin clients. Never includes password_hash."""

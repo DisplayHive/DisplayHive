@@ -160,7 +160,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
     <div class="stats-grid">
 
       <!-- Screens -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" style="cursor:pointer" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-desktop stat-icon"></i>
@@ -186,7 +186,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Devices -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" style="cursor:pointer" @click="router.push('/devices')">
+      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/devices')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-tablet stat-icon"></i>
@@ -205,7 +205,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Content -->
-      <Card v-if="rightsStore.can('content.page')" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" style="cursor:pointer" @click="router.push('/content')">
+      <Card v-if="rightsStore.can('content.page')" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-file stat-icon"></i>
@@ -221,7 +221,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screen Groups -->
-      <Card v-if="rightsStore.can('screengroups.page')" class="stat-card stat-card--ok" style="cursor:pointer" @click="router.push('/screengroups')">
+      <Card v-if="rightsStore.can('screengroups.page')" class="stat-card stat-card--ok" @click="router.push('/screengroups')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-th-large stat-icon"></i>
@@ -233,7 +233,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Media -->
-      <Card v-if="rightsStore.can('media.page')" class="stat-card stat-card--ok" style="cursor:pointer" @click="router.push('/media')">
+      <Card v-if="rightsStore.can('media.page')" class="stat-card stat-card--ok" @click="router.push('/media')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-images stat-icon"></i>
@@ -245,7 +245,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Find Mode -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" style="cursor:pointer" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-search stat-icon"></i>
@@ -261,7 +261,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Debug Mode -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" style="cursor:pointer" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-wrench stat-icon"></i>
@@ -344,7 +344,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       <div class="community-grid">
 
         <a href="https://github.com/DisplayHive/DisplayHive/issues" target="_blank" rel="noopener" class="link-card link-card--bug">
-          <div class="link-card-icon"><i class="pi pi-bug"></i></div>
+          <div class="link-card-icon"><i class="pi pi-flag"></i></div>
           <div class="link-card-body">
             <span class="link-card-title">Found a bug?</span>
             <span class="link-card-sub">Open a GitHub issue</span>
@@ -579,6 +579,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   border-radius: 0.75rem;
   border-top: 4px solid transparent;
   transition: border-color 0.2s;
+  cursor: pointer;
 }
 
 .stat-card--ok {
@@ -783,5 +784,65 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   font-size: 0.85rem;
   color: var(--p-text-muted-color, #9ca3af);
   font-style: italic;
+}
+
+/* Dark mode: --p-surface-0 and --p-amber-50 are fixed points on PrimeVue's
+   ramp (always white/pale-amber in both themes) rather than semantic tokens
+   that swap with the dark selector, unlike --p-text-color/--p-text-muted-color
+   above (which do swap and already read correctly against a dark card). Since
+   these two backgrounds were pinned to that fixed ramp, the already-lightened
+   text ended up on an unchanged light card — hence the unreadable/low-contrast
+   community, support and demo-hint cards. Give them an explicit dark surface. */
+.dark-mode .demo-hint-card {
+  background: var(--p-surface-800, #1e293b);
+  border-color: var(--p-amber-700, #b45309);
+}
+
+.dark-mode .demo-hint-footer {
+  border-top-color: var(--p-surface-700, #334155);
+}
+
+.dark-mode .link-card {
+  background: var(--p-surface-800, #1e293b);
+  border-color: var(--p-surface-700, #334155);
+}
+
+.dark-mode .link-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.dark-mode .community-heading {
+  border-bottom-color: var(--p-surface-700, #334155);
+}
+
+.dark-mode .detail-sep,
+.dark-mode .link-card-arrow {
+  color: var(--p-surface-600, #4b5563);
+}
+
+/* Dark mode: PrimeVue's own dark Card background (--p-content-background,
+   here resolving very close to the page's own dark background set in
+   App.vue) leaves the card barely distinguishable from the page behind it.
+   Bump these two up to the same explicit surface used for the link/demo
+   cards above so they read as raised elements again. */
+.welcome-card,
+.stat-card {
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.dark-mode .welcome-card {
+  background: var(--p-surface-800, #1e293b);
+  border: 1px solid var(--p-surface-700, #334155);
+}
+
+/* box-shadow rather than border: .stat-card/--ok/--warn already own
+   border-top (the green/amber status color) via the shorthand `border-top`
+   property, so a plain `border` here would need higher specificity than
+   .stat-card--ok/--warn to win and would wipe out that colored top border
+   in the process. An inset ring achieves the same "raised card" outline
+   without touching border-top at all. */
+.dark-mode .stat-card {
+  background: var(--p-surface-800, #1e293b);
+  box-shadow: inset 0 0 0 1px var(--p-surface-700, #334155);
 }
 </style>

@@ -196,7 +196,7 @@ const refreshData = () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Matrix page.</p>
         </div>
       </template>
@@ -262,18 +262,18 @@ const refreshData = () => {
           </table>
 
           <div v-if="screens.length === 0" class="empty-state">
-            <i class="pi pi-desktop" style="font-size: 3rem"></i>
+            <i class="pi pi-desktop"></i>
             <p>No screens available</p>
           </div>
 
           <div v-if="screengroups.length === 0" class="empty-state">
-            <i class="pi pi-th-large" style="font-size: 3rem"></i>
+            <i class="pi pi-th-large"></i>
             <p>No screengroups defined</p>
           </div>
         </div>
 
         <div class="loading-state" v-if="loading">
-          <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+          <i class="pi pi-spin pi-spinner"></i>
           <p>Loading matrix...</p>
         </div>
       </template>
@@ -297,7 +297,7 @@ const refreshData = () => {
 }
 
 .matrix-description {
-  color: #666;
+  color: var(--p-text-muted-color, #666);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -310,24 +310,25 @@ const refreshData = () => {
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
+  color: var(--p-text-color, #1f2937);
 }
 
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--p-content-border-color, #e0e0e0);
   padding: 0.75rem;
   text-align: center;
 }
 
 .screen-header {
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   text-align: left;
   min-width: 200px;
 }
 
 .group-header {
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   min-width: 120px;
 }
@@ -357,7 +358,14 @@ const refreshData = () => {
 }
 
 .matrix-cell:hover {
-  background-color: #f0f0f0;
+  background-color: var(--p-content-hover-background, #f0f0f0);
+}
+
+/* Dark mode: --p-surface-100 is a fixed ramp point, kept as the light-mode
+   header shade above — see docs/developer/styleguide.md. */
+.dark-mode .screen-header,
+.dark-mode .group-header {
+  background: var(--p-surface-800, #1e293b);
 }
 
 </style>

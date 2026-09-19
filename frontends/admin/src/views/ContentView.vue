@@ -289,7 +289,7 @@ const copyContent = (content: ContentElement) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Content page.</p>
         </div>
       </template>
@@ -425,7 +425,7 @@ const copyContent = (content: ContentElement) => {
 .filter-toggle label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--p-text-muted-color, #6b7280);
   white-space: nowrap;
 }
 

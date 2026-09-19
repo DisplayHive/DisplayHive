@@ -192,7 +192,7 @@ onRightsReady(() => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Magic Tags page.</p>
         </div>
       </template>
@@ -203,7 +203,10 @@ onRightsReady(() => {
     <Card v-if="canMagicTagsPage">
       <template #title>
         <div class="card-header">
-          <span>Magic Tags</span>
+          <div class="card-header-title">
+            <i class="pi pi-tags card-header-icon" />
+            <span>Magic Tags</span>
+          </div>
           <div class="header-actions">
             <Button v-if="canMagicTagsCreate" icon="pi pi-plus" label="New Magic Tag" @click="openNewTagDialog" size="small" />
             <Button icon="pi pi-refresh" @click="magicTagsStore.fetch()" size="small" outlined />
@@ -273,7 +276,10 @@ onRightsReady(() => {
     <Card v-if="canValueListsPage">
       <template #title>
         <div class="card-header">
-          <span>Magic Tag Value Lists</span>
+          <div class="card-header-title">
+            <i class="pi pi-list card-header-icon" />
+            <span>Magic Tag Value Lists</span>
+          </div>
           <div class="header-actions">
             <Button v-if="canValueListsCreate" icon="pi pi-plus" label="New Value List" @click="openNewValueListDialog" size="small" />
             <Button icon="pi pi-refresh" @click="magicTagValueListsStore.fetch()" size="small" outlined />
@@ -312,10 +318,15 @@ onRightsReady(() => {
     <!-- Magic Tag Edit Dialog -->
     <Dialog
       v-model:visible="showTagDialog"
-      :header="isNewTag ? 'New Magic Tag' : 'Edit Magic Tag'"
       modal
       :style="{ width: '480px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-tag dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNewTag ? 'New Magic Tag' : 'Edit Magic Tag' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="var-name">Name</label>
@@ -348,10 +359,15 @@ onRightsReady(() => {
     <!-- Magic Tag Value List Edit Dialog -->
     <Dialog
       v-model:visible="showValueListDialog"
-      :header="isNewValueList ? 'New Value List' : 'Edit Value List'"
       modal
       :style="{ width: '560px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNewValueList ? 'New Value List' : 'Edit Value List' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="vl-name">Name</label>

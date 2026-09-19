@@ -264,7 +264,13 @@ const showLicenseDialog = ref(false)
 
     <Button label="Icon Libraries Licenses" icon="pi pi-info-circle" size="small" text @click="showLicenseDialog = true" />
 
-    <Dialog v-model:visible="showLicenseDialog" header="Icon Libraries Licenses" modal :style="{ width: '40rem', maxWidth: '90vw' }">
+    <Dialog v-model:visible="showLicenseDialog" modal :style="{ width: '640px', maxWidth: '90vw' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-book dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Icon Libraries Licenses</span>
+        </div>
+      </template>
       <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-license-entry">
         <h4>
           {{ library.label }}
@@ -360,6 +366,7 @@ const showLicenseDialog = ref(false)
   font-size: 0.9rem;
   display: block;
   margin-bottom: 0.25rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .icon-picker-library-list {

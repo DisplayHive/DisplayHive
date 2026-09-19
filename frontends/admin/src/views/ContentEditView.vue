@@ -726,10 +726,15 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   <!-- Step 1: Select Content Type -->
   <Dialog
     v-model:visible="showSelectContentTypeDialog"
-    header="Select Content Type"
     modal
     :style="{ width: '600px' }"
   >
+    <template #header>
+      <div class="dialog-title">
+        <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
+        <span class="p-dialog-title">Select Content Type</span>
+      </div>
+    </template>
     <div class="contenttype-list">
       <Card
         v-for="ct in contentTypes"
@@ -758,7 +763,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
   <div class="content-edit-page">
     <div v-if="loadingContentTypeDetail" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+      <i class="pi pi-spin pi-spinner"></i>
       <p>Loading content type...</p>
     </div>
     <div v-else class="content-edit-columns">
@@ -962,7 +967,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
     <div class="content-edit-preview" :style="{ flex: `0 0 ${settingsStore.contentEditPreviewSize}%` }">
       <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
-        <i class="pi pi-eye" style="font-size: 2rem"></i>
+        <i class="pi pi-eye"></i>
         <p>Preview will appear here once a content type is selected.</p>
       </div>
       <iframe
@@ -1018,7 +1023,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 .content-edit-preview-iframe {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--p-surface-border, #ccc);
+  border: 1px solid var(--p-content-border-color, #ccc);
   border-radius: 6px;
 }
 
@@ -1029,9 +1034,13 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   justify-content: center;
   gap: 0.5rem;
   aspect-ratio: 16 / 9;
-  border: 1px dashed var(--p-surface-border, #ccc);
+  border: 1px dashed var(--p-content-border-color, #ccc);
   border-radius: 6px;
   color: var(--p-text-muted-color, #6b7280);
+}
+
+.content-edit-preview-empty i {
+  font-size: 2rem;
 }
 
 .content-type-banner {
@@ -1039,7 +1048,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   align-items: flex-start;
   gap: 0.75rem;
   background: var(--p-content-background, #f8f9fa);
-  border: 1px solid var(--p-surface-border, #e5e7eb);
+  border: 1px solid var(--p-content-border-color, #e5e7eb);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-bottom: 1.25rem;
@@ -1064,7 +1073,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 .form-section-title {
   margin: 0 0 0.75rem 0;
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
   font-size: 0.95rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1112,6 +1121,27 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   font-size: 0.85rem !important;
   font-weight: 400 !important;
   color: #92400e !important;
+}
+
+/* Dark mode: the light-mode pale-amber banner (background/text all fixed
+   dark-on-light amber tones, meant for a light page) needs the pairing
+   inverted rather than just a background swap — light-mode dark-amber text
+   would be unreadable against a dark card. */
+.dark-mode .multi-screen-warning {
+  background: var(--p-surface-800, #1e293b);
+  border-color: var(--p-amber-600, #d97706);
+}
+
+.dark-mode .multi-screen-warning > i {
+  color: var(--p-amber-400, #fbbf24);
+}
+
+.dark-mode .multi-screen-warning p {
+  color: var(--p-amber-200, #fde68a);
+}
+
+.dark-mode .multi-screen-warning-help {
+  color: var(--p-amber-300, #fcd34d) !important;
 }
 
 .duration-fields {
@@ -1164,7 +1194,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   flex-direction: column;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--p-content-border-color, #ddd);
 }
 
 .tag-fields-section h4 {
@@ -1174,7 +1204,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
 .tag-fields-section .field {
   padding: 1.5rem 0;
-  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
 }
 
 .tag-fields-section .field:last-child {
@@ -1237,7 +1267,7 @@ details[open] .scheduling-summary::before {
 .screengroup-assignment-section {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--p-content-border-color, #ddd);
 }
 
 .screengroup-assignment-section h4 {

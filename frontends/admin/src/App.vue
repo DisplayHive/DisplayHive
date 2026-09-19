@@ -8,6 +8,7 @@ import { useAuthStore } from './stores/auth'
 import { useSettingsStore } from './stores/settings'
 import { useRightsStore } from './stores/rights'
 import { useHelpStore } from './stores/help'
+import { useTheme } from './composables/useTheme'
 import LoginView from './views/LoginView.vue'
 
 // PrimeVue components
@@ -26,6 +27,20 @@ const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const rightsStore = useRightsStore()
 const helpStore = useHelpStore()
+const { preference: themePreference, isDark, setTheme } = useTheme()
+
+const themePopover = ref()
+const toggleThemePopover = (event: Event) => themePopover.value?.toggle(event)
+const THEME_OPTIONS = [
+  { value: 'light' as const, label: 'Light', icon: 'pi pi-sun' },
+  { value: 'dark' as const, label: 'Dark', icon: 'pi pi-moon' },
+  { value: 'system' as const, label: 'System', icon: 'pi pi-desktop' },
+]
+const selectTheme = async (value: 'light' | 'dark' | 'system') => {
+  themePopover.value?.hide()
+  const error = await setTheme(value)
+  if (error) console.error('Failed to save theme preference:', error)
+}
 
 on('connect_error', (err: unknown) => {
   const message = (err as { message?: string } | null)?.message
@@ -492,6 +507,32 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
             {{ authStore.username }}
           </span>
           <Button
+            :icon="isDark ? 'pi pi-moon' : 'pi pi-sun'"
+            text
+            size="small"
+            class="theme-toggle-button"
+            data-testid="theme-toggle-button"
+            aria-label="Change theme"
+            v-tooltip.bottom="'Change theme'"
+            @click="toggleThemePopover"
+          />
+          <Popover ref="themePopover">
+            <div class="theme-menu">
+              <button
+                v-for="option in THEME_OPTIONS"
+                :key="option.value"
+                type="button"
+                class="theme-menu-item"
+                :class="{ active: themePreference === option.value }"
+                :data-testid="`theme-option-${option.value}`"
+                @click="selectTheme(option.value)"
+              >
+                <i :class="option.icon"></i>
+                {{ option.label }}
+              </button>
+            </div>
+          </Popover>
+          <Button
             icon="pi pi-sign-out"
             text
             size="small"
@@ -726,6 +767,50 @@ body {
 
 .logout-button.p-button .p-button-icon {
   color: #94a3b8;
+}
+
+.theme-toggle-button.p-button {
+  color: white;
+  padding: 0.5rem 0.75rem;
+}
+
+.theme-toggle-button.p-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.theme-toggle-button.p-button .p-button-icon {
+  color: #94a3b8;
+}
+
+.theme-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 140px;
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.theme-menu-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.theme-menu-item.active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-item-content {
@@ -970,5 +1055,104 @@ body {
     white-space: normal;
     word-wrap: break-word;
   }
+}
+
+/* Dark mode overrides for the app shell's own raw HTML/CSS (the header is
+   already dark-on-light by default and needs no override). PrimeVue's own
+   components restyle themselves via the aura preset's darkModeSelector
+   (see main.ts) and need nothing here. */
+.dark-mode body {
+  background-color: #14181c;
+}
+
+.dark-mode .page-header h1 {
+  color: #e5e7eb;
+}
+
+.dark-mode .page-help-icon {
+  color: #9ca3af;
+}
+
+.dark-mode .page-help-icon:hover,
+.dark-mode .page-help-icon:focus-visible {
+  color: #d1d5db;
+}
+
+.dark-mode .page-help-text {
+  color: #d1d5db;
+}
+
+.dark-mode .disconnect-message {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+
+.dark-mode .theme-menu-item:hover,
+.dark-mode .theme-menu-item.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .git-commit-badge {
+  color: #9ca3af;
+}
+
+/* Dark mode: PrimeVue's own dark Card background resolves very close to the
+   page's own dark background (#14181c above), leaving every plain <Card> on
+   every page barely distinguishable from the page behind it — this was first
+   found on the Dashboard's welcome/stat cards, but every page uses <Card>
+   (see docs/developer/styleguide.md), so it's fixed globally here rather
+   than per-page. Any page-specific card class (e.g. DashboardView's
+   .stat-card) that already sets its own background overrides this by
+   selector specificity and can keep doing so unchanged. */
+.dark-mode .p-card {
+  background: var(--p-surface-800, #1e293b);
+  border: 1px solid var(--p-surface-700, #334155);
+}
+
+/* Dark mode: PrimeVue's striped DataTable rows use a fixed ramp token
+   (--p-surface-950) completely independent of the .p-card background
+   above, so the "lighter" alternating rows never matched the card they
+   sit in. Pin it to the same value as the card override. */
+.dark-mode .p-datatable {
+  --p-datatable-row-striped-background: var(--p-surface-800, #1e293b);
+}
+
+/* Dark mode: PrimeVue's own default input border color (aura's dark
+   colorScheme sets formField.borderColor to surface.600, a medium-light
+   gray) isn't broken — it's just noticeably brighter than the darker
+   surface-700/-800 borders used everywhere else in this app, so inputs
+   visually read as "too white" next to a Card border or a button border.
+   Darken every form control's border to match. */
+.dark-mode .p-inputtext,
+.dark-mode .p-select,
+.dark-mode .p-textarea,
+.dark-mode .p-inputnumber-input,
+.dark-mode .p-checkbox-box,
+.dark-mode .p-datepicker-input,
+.dark-mode .p-password-input,
+.dark-mode .p-multiselect,
+.dark-mode .p-togglebutton {
+  border-color: var(--p-surface-700, #334155);
+}
+
+/* The Dialog close button is an unstyled default <Button> (no `text`
+   variant passed), so it renders with PrimeVue's full button chrome — a
+   visible border/background circle — unlike every other icon-only button
+   in the app (logout, theme toggle, table row actions), which are all
+   `text`/`outlined` and borderless until hovered. Strip the default chrome
+   so every Dialog's close button matches that convention. */
+.p-dialog-close-button {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+.p-dialog-close-button:hover {
+  background: var(--p-content-hover-background, rgba(0, 0, 0, 0.06)) !important;
+}
+
+.p-dialog-close-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--p-content-hover-background, rgba(0, 0, 0, 0.1)) !important;
 }
 </style>

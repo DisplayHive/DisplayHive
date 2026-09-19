@@ -74,20 +74,25 @@ const selectItem = (item: MediaItem) => {
   <Dialog
     :visible="visible"
     @update:visible="(v) => emit('update:visible', v)"
-    header="Select Image"
     modal
     :style="{ width: '860px', maxWidth: '95vw' }"
   >
+    <template #header>
+      <div class="dialog-title">
+        <span class="dialog-title-icon-badge"><i class="pi pi-image dialog-title-icon"></i></span>
+        <span class="p-dialog-title">Select Image</span>
+      </div>
+    </template>
     <div class="picker-toolbar">
       <InputText v-model="searchText" placeholder="Search images…" class="picker-search" />
       <Tag :value="`${filtered.length} images`" />
     </div>
     <div v-if="loading" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem" />
+      <i class="pi pi-spin pi-spinner" />
       <p>Loading media…</p>
     </div>
     <div v-else-if="filtered.length === 0" class="empty-state">
-      <i class="pi pi-images" style="font-size: 3rem" />
+      <i class="pi pi-images" />
       <p>No images found</p>
     </div>
     <div v-else class="picker-grid">
@@ -133,7 +138,7 @@ const selectItem = (item: MediaItem) => {
 }
 
 .picker-item {
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -153,7 +158,7 @@ const selectItem = (item: MediaItem) => {
 .picker-thumb {
   width: 100%;
   height: 90px;
-  background: #f1f5f9;
+  background: var(--p-content-background, #f1f5f9);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -172,6 +177,6 @@ const selectItem = (item: MediaItem) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: white;
+  background: var(--p-content-background, white);
 }
 </style>

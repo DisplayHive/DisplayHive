@@ -139,7 +139,7 @@ const sendTestLog = () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Logger page.</p>
         </div>
       </template>

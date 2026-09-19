@@ -463,7 +463,7 @@ const deleteContentType = (ct: ContentType) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Content Types page.</p>
         </div>
       </template>
@@ -471,15 +471,15 @@ const deleteContentType = (ct: ContentType) => {
   </div>
   <div v-else class="contenttypes-view">
     <Card>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+      <template #title>
+        <div class="card-header">
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Content Type" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-
+      </template>
+      <template #content>
         <DataTable
           :value="filteredContentTypes"
           :loading="loading"
@@ -491,6 +491,13 @@ const deleteContentType = (ct: ContentType) => {
           :rows="10"
           responsiveLayout="scroll"
         >
+          <template #header>
+            <div class="dt-header">
+              <div class="dt-left">
+                <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+              </div>
+            </div>
+          </template>
           <Column field="id" header="ID" style="width: 60px" sortable />
           <Column field="name" header="Name" sortable />
           <Column field="description" header="Description">
@@ -526,7 +533,13 @@ const deleteContentType = (ct: ContentType) => {
     </Card>
 
     <!-- Copy Dialog -->
-    <Dialog v-model:visible="showCopyDialog" header="Copy Content Type" modal :style="{ width: '400px' }">
+    <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Copy Content Type</span>
+        </div>
+      </template>
       <div class="field">
         <label for="copy-ct-name">New Name</label>
         <InputText id="copy-ct-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyContentType" />
@@ -540,10 +553,15 @@ const deleteContentType = (ct: ContentType) => {
     <!-- Edit Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
-      :header="isNew ? 'New Content Type' : 'Edit Content Type'"
       modal
       :style="{ width: '90vw', maxWidth: '1200px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNew ? 'New Content Type' : 'Edit Content Type' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div v-if="loadingContentType" class="tpl-loading">
           Loading content type…
@@ -677,15 +695,14 @@ const deleteContentType = (ct: ContentType) => {
   gap: 1rem;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .hint {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   font-size: 0.75rem;
 }
 
@@ -704,11 +721,11 @@ const deleteContentType = (ct: ContentType) => {
 }
 
 .tpl-loading {
-  background: var(--surface-b);
-  border: 1px dashed var(--surface-d);
+  background: var(--p-content-background, #f5f5f5);
+  border: 1px dashed var(--p-content-border-color, #ccc);
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  color: var(--text-color, #333);
+  color: var(--p-text-color, #333);
   font-style: italic;
   margin-bottom: 0.5rem;
 }
@@ -723,7 +740,7 @@ const deleteContentType = (ct: ContentType) => {
 .tagconfigs-table {
   display: flex;
   flex-direction: column;
-  border: 1px solid #ddd;
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -733,10 +750,10 @@ const deleteContentType = (ct: ContentType) => {
   grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid var(--p-content-border-color, #ddd);
 }
 
 .tagconfig-row {
@@ -744,13 +761,13 @@ const deleteContentType = (ct: ContentType) => {
   grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--p-content-border-color, #eee);
   align-items: center;
   transition: background 0.2s;
 }
 
 .tagconfig-row:hover {
-  background: #f9f9f9;
+  background: var(--p-content-hover-background, #f9f9f9);
 }
 
 .tagconfig-row:last-child {
@@ -769,7 +786,7 @@ const deleteContentType = (ct: ContentType) => {
   align-items: center;
   justify-content: center;
   cursor: grab;
-  color: #999;
+  color: var(--p-text-muted-color, #999);
 }
 
 .tagconfig-col-preset {
@@ -805,18 +822,19 @@ const deleteContentType = (ct: ContentType) => {
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-  background: var(--surface-b, #fafafa);
-  border-bottom: 1px solid #eee;
+  background: var(--p-content-background, #fafafa);
+  border-bottom: 1px solid var(--p-content-border-color, #eee);
 }
 
 .preset-panel-label {
   font-weight: 600;
   font-size: 0.8rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .preset-panel-label small {
   font-weight: 400;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   margin-left: 0.3rem;
 }
 
@@ -830,11 +848,18 @@ const deleteContentType = (ct: ContentType) => {
 .fields-section > label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .fields-section > label small {
   font-weight: 400;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   margin-left: 0.3rem;
+}
+
+/* Dark mode: --p-surface-100 is a fixed ramp point, kept as the light-mode
+   header shade above — see docs/developer/styleguide.md. */
+.dark-mode .tagconfig-header {
+  background: var(--p-surface-800, #1e293b);
 }
 </style>

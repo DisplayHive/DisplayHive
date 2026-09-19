@@ -925,7 +925,7 @@ const deleteDesign = (design: Design) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Designs page.</p>
         </div>
       </template>
@@ -933,15 +933,15 @@ const deleteDesign = (design: Design) => {
   </div>
   <div v-else class="designs-view">
     <Card>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
+      <template #title>
+        <div class="card-header">
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-
+      </template>
+      <template #content>
         <DataTable
           :value="filteredDesigns"
           :loading="loading"
@@ -953,6 +953,13 @@ const deleteDesign = (design: Design) => {
           :rows="10"
           responsiveLayout="scroll"
         >
+          <template #header>
+            <div class="dt-header">
+              <div class="dt-left">
+                <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
+              </div>
+            </div>
+          </template>
           <Column field="id" header="ID" style="width: 60px" sortable />
           <Column field="name" header="Name" sortable>
             <template #body="{ data }">
@@ -988,7 +995,13 @@ const deleteDesign = (design: Design) => {
     </Card>
 
     <!-- Copy Dialog -->
-    <Dialog v-model:visible="showCopyDialog" header="Copy Design" modal :style="{ width: '400px' }">
+    <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Copy Design</span>
+        </div>
+      </template>
       <div class="field">
         <label for="copy-design-name">New Name</label>
         <InputText id="copy-design-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyDesign" />
@@ -1002,10 +1015,15 @@ const deleteDesign = (design: Design) => {
     <!-- Edit Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
-      :header="isNew ? 'New Design' : 'Edit Design'"
       modal
       :style="{ width: '95vw', maxWidth: '1800px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-palette dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNew ? 'New Design' : 'Edit Design' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div v-if="loadingDesign" class="tpl-loading">
           Loading design HTML/CSS…
@@ -1395,7 +1413,13 @@ const deleteDesign = (design: Design) => {
     </Dialog>
 
     <!-- Manage Gradients Dialog -->
-    <Dialog v-model:visible="showGradientManageDialog" header="Manage Gradients" modal :style="{ width: '600px' }">
+    <Dialog v-model:visible="showGradientManageDialog" modal :style="{ width: '600px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-sliders-h dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Manage Gradients</span>
+        </div>
+      </template>
       <div class="gradient-manage-header">
         <Button v-if="canCreate" label="New Gradient" icon="pi pi-plus" size="small" @click="openNewGradientDialog" />
       </div>
@@ -1418,10 +1442,15 @@ const deleteDesign = (design: Design) => {
     <!-- Edit Gradient Dialog -->
     <Dialog
       v-model:visible="showGradientEditDialog"
-      :header="isNewGradient ? 'New Gradient' : 'Edit Gradient'"
       modal
       :style="{ width: '500px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-sliders-h dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNewGradient ? 'New Gradient' : 'Edit Gradient' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label>Name</label>
@@ -1514,11 +1543,10 @@ const deleteDesign = (design: Design) => {
   gap: 1rem;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .hint {
@@ -1546,6 +1574,7 @@ const deleteDesign = (design: Design) => {
 .code-editor-field label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .code-editor-field .vue-codemirror {
@@ -1555,11 +1584,11 @@ const deleteDesign = (design: Design) => {
 }
 
 .tpl-loading {
-  background: var(--surface-b);
-  border: 1px dashed var(--surface-d);
+  background: var(--p-content-background, #f5f5f5);
+  border: 1px dashed var(--p-content-border-color, #ccc);
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  color: var(--text-color, #333);
+  color: var(--p-text-color, #333);
   font-style: italic;
   margin-bottom: 0.5rem;
 }
@@ -1580,6 +1609,7 @@ const deleteDesign = (design: Design) => {
 .var-tags-section label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .var-chips {
@@ -1617,6 +1647,7 @@ const deleteDesign = (design: Design) => {
 .container-styles-section > label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .container-style-panel {
@@ -1644,7 +1675,7 @@ const deleteDesign = (design: Design) => {
 }
 
 .font-collapsible {
-  border: 1px dashed var(--p-surface-border, #ddd);
+  border: 1px dashed var(--p-content-border-color, #ddd);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
 }
@@ -1696,7 +1727,7 @@ const deleteDesign = (design: Design) => {
   margin-top: 0.6rem;
   height: 60px;
   border-radius: 6px;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   background-size: cover;
 }
 
@@ -1720,7 +1751,7 @@ const deleteDesign = (design: Design) => {
   width: 60px;
   height: 40px;
   border-radius: 6px;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   background-size: cover;
   background-position: center;
 }
@@ -1742,7 +1773,7 @@ const deleteDesign = (design: Design) => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.4rem 0.5rem;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 6px;
 }
 
@@ -1750,7 +1781,7 @@ const deleteDesign = (design: Design) => {
   width: 48px;
   height: 32px;
   border-radius: 4px;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   flex-shrink: 0;
   background-size: cover;
 }

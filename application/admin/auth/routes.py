@@ -6,6 +6,7 @@ to the JWT check performed here. Also provides `require_jwt_auth`, the
 decorator used to protect the existing export/import routes in app.py.
 """
 
+import json
 from functools import wraps
 
 from flask import request, jsonify
@@ -66,6 +67,12 @@ def register_auth_routes(app, db):
     from application.models import AdminUser, AdminUserLogin
     from datetime import datetime, timezone
 
+    # Self-service preference keys settable via PATCH /admin/api/auth/me/preferences.
+    # Same allowlist convention as ALLOWED_SETTING_KEYS in the admin Settings
+    # socket handlers: an explicit set, not "anything the client sends".
+    ALLOWED_PREFERENCE_KEYS = {'theme'}
+    ALLOWED_THEME_VALUES = {'light', 'dark', 'system'}
+
     @app.route('/admin/api/auth/login', methods=['POST'])
     def admin_auth_login():
         """Authenticate a username/password pair and return a JWT."""
@@ -117,12 +124,17 @@ def register_auth_routes(app, db):
         db.session.commit()
 
         token = create_token(app, user)
-        return jsonify({'success': True, 'token': token, 'username': user.username})
+        return jsonify({
+            'success': True,
+            'token': token,
+            'username': user.username,
+            'preferences': user.get_preferences(),
+        })
 
     @app.route('/admin/api/auth/me', methods=['GET'])
     @require_jwt_auth(app)
     def admin_auth_me():
-        """Validate the current token and return the associated username.
+        """Validate the current token and return the associated username + preferences.
 
         Used by the SPA on load to confirm a stored token is still valid
         (e.g. the user hasn't been deleted) before restoring the session.
@@ -134,4 +146,38 @@ def register_auth_routes(app, db):
         if not user:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
-        return jsonify({'success': True, 'username': user.username})
+        return jsonify({'success': True, 'username': user.username, 'preferences': user.get_preferences()})
+
+    @app.route('/admin/api/auth/me/preferences', methods=['PATCH'])
+    @require_jwt_auth(app)
+    def admin_auth_set_preferences():
+        """Upsert one or more of the caller's own preferences (e.g. {"theme": "dark"}).
+
+        Self-service only — a user can set their own preferences, nothing lets
+        one admin set another's. Unknown keys/values are rejected rather than
+        silently dropped, since this is a small explicit allowlist, not a
+        general-purpose settings blob.
+        """
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        user = user_from_token(app, db, token)
+        if not user:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
+        data = request.get_json(silent=True) or {}
+        updates = data.get('preferences', {})
+        if not isinstance(updates, dict) or not updates:
+            return jsonify({'success': False, 'error': 'No preferences provided'}), 400
+
+        for key, value in updates.items():
+            if key not in ALLOWED_PREFERENCE_KEYS:
+                return jsonify({'success': False, 'error': f'Unknown preference: {key}'}), 400
+            if key == 'theme' and value not in ALLOWED_THEME_VALUES:
+                return jsonify({'success': False, 'error': f'Invalid theme: {value}'}), 400
+
+        preferences = user.get_preferences()
+        preferences.update(updates)
+        user.preferences = json.dumps(preferences)
+        db.session.commit()
+
+        return jsonify({'success': True, 'preferences': preferences})

@@ -75,5 +75,6 @@ nav:
       - Overview: developer/index.md
       - Architecture: developer/architecture.md
       - Real-time content push: developer/realtime-push.md
+      - Admin panel styleguide: developer/styleguide.md
       - Contributing: developer/contributing.md
   - Contact: contact.md

@@ -17,6 +17,54 @@
   width: 100%;
 }
 
+/* DH yellow: the same fixed brand accent used for page-level header icons
+   (App.vue's .page-title-icon) — every Card headline that carries an icon
+   uses this exact color, in both themes, rather than a semantic token. A
+   dedicated class rather than a `.card-header i` descendant selector, so it
+   never accidentally recolors a PrimeVue Button's own icon sitting in the
+   same header row. */
+.card-header-icon {
+  color: #facc15;
+  margin-right: 0.5rem;
+}
+
+/* Groups an icon + title text into one flex item, so .card-header's
+   space-between still puts "icon + title" at the start and .header-actions
+   at the end, instead of space-between treating the icon and title as two
+   separate items and stranding the title in the middle of the row. */
+.card-header-title {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Dialog headline (icon-badge + title) ──────────────────────────────────
+   Same treatment as the page-level <h1> headline (App.vue's
+   .page-title-icon-badge/.page-title-icon), scaled down for a Dialog's
+   header bar: a circular black badge holding a DH-yellow (#facc15) icon,
+   next to the title text. Every Dialog header uses this instead of the
+   plain PrimeVue `header="..."` string. */
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dialog-title-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.dialog-title-icon {
+  font-size: 1.15rem;
+  color: #facc15;
+}
+
 .header-actions {
   display: flex;
   gap: 0.5rem;
@@ -98,6 +146,7 @@
 .field label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 /* ── Loading / empty states ──────────────────────────────────────────────── */
@@ -108,7 +157,11 @@
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
+}
+
+.loading-state i {
+  font-size: 2rem;
 }
 
 .empty-state {
@@ -117,12 +170,19 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
 }
 
 .empty-state i {
-  font-size: 2rem;
+  font-size: 3rem;
   margin-bottom: 0.5rem;
+}
+
+/* A smaller, less prominent empty-state — e.g. a DataTable's own "no rows
+   yet" placeholder, next to a page-level access-denied .empty-state that
+   still wants the full 3rem icon elsewhere on the same page. */
+.empty-state--compact i {
+  font-size: 1.5rem;
 }
 
 /* ── Utility ─────────────────────────────────────────────────────────────── */
@@ -130,6 +190,30 @@
   width: 100%;
 }
 
+.flex-1 {
+  flex: 1;
+}
+
+.d-block {
+  display: block;
+}
+
 .text-muted {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
+}
+
+/* Small set of spacing utilities — named after their rem value (quarters of
+   1rem, matching the app's spacing scale — see
+   docs/developer/styleguide.md), not a full utility-CSS framework. Add to
+   this set rather than reaching for an inline style for a one-off margin. */
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-4 { margin-bottom: 1rem; }
+.ml-1 { margin-left: 0.25rem; }
+.ml-2 { margin-left: 0.5rem; }
+.mr-1 { margin-right: 0.25rem; }
+
+.thin-progress {
+  height: 6px;
 }

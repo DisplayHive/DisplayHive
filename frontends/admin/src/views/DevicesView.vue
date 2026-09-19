@@ -371,7 +371,7 @@ const deleteDevice = (device: Device) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Devices page.</p>
         </div>
       </template>
@@ -572,7 +572,13 @@ const deleteDevice = (device: Device) => {
     </Card>
 
     <!-- Adopt Device Dialog -->
-    <Dialog v-model:visible="showAdoptDialog" header="Adopt Device" modal :style="{ width: '600px' }" @hide="closeAdoptDialog">
+    <Dialog v-model:visible="showAdoptDialog" modal :style="{ width: '600px' }" @hide="closeAdoptDialog">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-qrcode dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Adopt Device</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="adopt-name">Device Name</label>
@@ -621,7 +627,13 @@ const deleteDevice = (device: Device) => {
     </Dialog>
 
     <!-- Rename Device Dialog -->
-    <Dialog v-model:visible="showRenameDialog" header="Rename Device" modal :style="{ width: '420px' }">
+    <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '420px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Rename Device</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="rename-name">Device Name</label>
@@ -636,7 +648,13 @@ const deleteDevice = (device: Device) => {
     </Dialog>
 
     <!-- Assign to Screen Dialog -->
-    <Dialog v-model:visible="showAssignDialog" header="Assign to Screen" modal :style="{ width: '420px' }">
+    <Dialog v-model:visible="showAssignDialog" modal :style="{ width: '420px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Assign to Screen</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="assign-screen">Assign to Screen</label>
@@ -698,14 +716,14 @@ const deleteDevice = (device: Device) => {
 }
 
 .key-hidden {
-  color: #9ca3af;
+  color: var(--p-text-muted-color, #9ca3af);
 }
 
   .key-text {
   font-family: monospace;
   font-size: 0.8rem;
-  background: #f5f5f5;
-  color: #111;
+  background: var(--p-content-background, #f5f5f5);
+  color: var(--p-text-color, #111);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   white-space: nowrap;
@@ -732,9 +750,9 @@ const deleteDevice = (device: Device) => {
 .scanner-container {
   margin: 1rem 0;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--p-content-background, #f8f9fa);
   border-radius: 8px;
-  border: 2px dashed #dee2e6;
+  border: 2px dashed var(--p-content-border-color, #dee2e6);
 }
 
 #qr-reader-element {
@@ -748,7 +766,7 @@ const deleteDevice = (device: Device) => {
   gap: 0.25rem;
 }
 .connection-cell .conn-line small {
-  color: #444;
+  color: var(--p-text-muted-color, #444);
   font-size: 0.85rem;
   display: block;
 }

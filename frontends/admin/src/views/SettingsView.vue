@@ -200,7 +200,7 @@ const saveTimeSettings = async () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Settings page.</p>
         </div>
       </template>
@@ -209,13 +209,18 @@ const saveTimeSettings = async () => {
   <div v-else class="settings-view">
 
     <div v-if="loading" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+      <i class="pi pi-spin pi-spinner"></i>
       <p>Loading settings…</p>
     </div>
 
     <template v-else>
       <Card>
-        <template #title>Dashboard</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-home card-header-icon" />
+            <span>Dashboard</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">
@@ -270,7 +275,12 @@ const saveTimeSettings = async () => {
       </Card>
 
       <Card>
-        <template #title>Content Editor</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-file-edit card-header-icon" />
+            <span>Content Editor</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">
@@ -313,7 +323,12 @@ const saveTimeSettings = async () => {
       </Card>
 
       <Card>
-        <template #title>Time</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-clock card-header-icon" />
+            <span>Time</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">

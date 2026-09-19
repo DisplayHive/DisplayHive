@@ -280,7 +280,7 @@ const copyUrl = (url: string) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Media page.</p>
         </div>
       </template>
@@ -343,7 +343,7 @@ const copyUrl = (url: string) => {
                 <img v-if="isImage(item.mimetype)" :src="item.preview_url || item.url" :alt="item.title" />
                 <video v-else-if="isVideo(item.mimetype)" :src="item.url" />
                 <div v-else class="file-icon">
-                  <i class="pi pi-file" style="font-size: 3rem"></i>
+                  <i class="pi pi-file"></i>
                 </div>
               </div>
               <div class="media-info">
@@ -367,12 +367,12 @@ const copyUrl = (url: string) => {
           </div>
 
           <div class="loading-state" v-if="mediaStore.loading">
-            <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+            <i class="pi pi-spin pi-spinner"></i>
             <p>Loading media...</p>
           </div>
 
           <div class="empty-state" v-if="!mediaStore.loading && filteredMedia.length === 0">
-            <i class="pi pi-images" style="font-size: 3rem"></i>
+            <i class="pi pi-images"></i>
             <p>No media files found</p>
           </div>
         </template>
@@ -382,10 +382,15 @@ const copyUrl = (url: string) => {
     <!-- Edit Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
-      header="Edit Media"
       modal
       :style="{ width: '820px', maxWidth: '95vw' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Edit Media</span>
+        </div>
+      </template>
       <div class="edit-dialog-content">
         <!-- Media preview -->
         <div class="edit-preview" v-if="editForm.preview_url || editForm.url">
@@ -402,7 +407,7 @@ const copyUrl = (url: string) => {
             controls
           />
           <div v-else class="edit-preview-file">
-            <i class="pi pi-file" style="font-size: 3rem; color: #94a3b8" />
+            <i class="pi pi-file" />
           </div>
         </div>
 
@@ -456,7 +461,7 @@ const copyUrl = (url: string) => {
 
           <!-- Arrow divider -->
           <div class="edit-tag-divider">
-            <i class="pi pi-arrows-h" style="font-size: 1.2rem; color: #94a3b8" />
+            <i class="pi pi-arrows-h" />
           </div>
 
           <!-- Available tags (not yet assigned) -->
@@ -495,12 +500,17 @@ const copyUrl = (url: string) => {
     <!-- Upload Dialog -->
     <Dialog
       v-model:visible="showUploadDialog"
-      header="Upload Media"
       modal
       :style="{ width: '620px' }"
       :closable="!isUploading"
       @hide="closeUploadDialog"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-upload dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Upload Media</span>
+        </div>
+      </template>
       <!-- Drop zone -->
       <div
         class="upload-drop-zone"
@@ -510,9 +520,9 @@ const copyUrl = (url: string) => {
         @drop.prevent="onUploadDrop"
         @click="($refs.uploadInput as HTMLInputElement).click()"
       >
-        <i class="pi pi-cloud-upload" style="font-size: 2rem; color: #aaa" />
-        <p style="margin: 0.5rem 0 0">Drag &amp; drop files here, or <strong>click to browse</strong></p>
-        <p style="font-size: 0.8rem; color: #aaa">JPEG &amp; PNG only (max 50 MB each)</p>
+        <i class="pi pi-cloud-upload" />
+        <p class="upload-drop-zone-text">Drag &amp; drop files here, or <strong>click to browse</strong></p>
+        <p class="upload-drop-zone-hint">JPEG &amp; PNG only (max 50 MB each)</p>
       </div>
       <input
         ref="uploadInput"
@@ -534,8 +544,8 @@ const copyUrl = (url: string) => {
           <span class="upload-file-size">{{ (file.size / 1024 / 1024).toFixed(1) }} MB</span>
           <span v-if="uploadProgress[idx]" :class="'upload-status-' + uploadProgress[idx].status">
             <i v-if="uploadProgress[idx].status === 'uploading'" class="pi pi-spin pi-spinner" />
-            <i v-else-if="uploadProgress[idx].status === 'done'" class="pi pi-check" style="color: green" />
-            <i v-else-if="uploadProgress[idx].status === 'error'" class="pi pi-times" style="color: red" :title="uploadProgress[idx].error" />
+            <i v-else-if="uploadProgress[idx].status === 'done'" class="pi pi-check" />
+            <i v-else-if="uploadProgress[idx].status === 'error'" class="pi pi-times" :title="uploadProgress[idx].error" />
           </span>
           <Button
             v-if="!isUploading"
@@ -548,7 +558,7 @@ const copyUrl = (url: string) => {
         </div>
       </div>
 
-      <ProgressBar v-if="isUploading" mode="indeterminate" style="margin-top: 1rem; height: 6px" />
+      <ProgressBar v-if="isUploading" mode="indeterminate" class="mt-4 thin-progress" />
 
       <template #footer>
         <Button label="Cancel" text :disabled="isUploading" @click="closeUploadDialog" />
@@ -603,12 +613,12 @@ const copyUrl = (url: string) => {
   align-items: center;
 }
 .tag-pill {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: var(--p-content-background, #f1f5f9);
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
   font-size: 0.8rem;
-  color: #334155;
+  color: var(--p-text-color, #334155);
   cursor: pointer;
   display: inline-flex;
   gap: 0.4rem;
@@ -640,8 +650,8 @@ const copyUrl = (url: string) => {
 }
 
 .media-item {
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
+  background: var(--p-content-background, #f9f9f9);
+  border: 1px solid var(--p-content-border-color, #e0e0e0);
   border-radius: 8px;
   overflow: hidden;
   transition: box-shadow 0.2s;
@@ -653,7 +663,7 @@ const copyUrl = (url: string) => {
 
 .media-preview {
   height: 150px;
-  background: #ddd;
+  background: var(--p-surface-200, #ddd);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -668,7 +678,8 @@ const copyUrl = (url: string) => {
 }
 
 .file-icon {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
+  font-size: 3rem;
 }
 
 .media-info {
@@ -687,10 +698,16 @@ const copyUrl = (url: string) => {
 .media-filename {
   display: block;
   font-size: 0.75rem;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Dark mode: --p-surface-200 is a fixed ramp point, kept as the light-mode
+   placeholder shade above — see docs/developer/styleguide.md. */
+.dark-mode .media-preview {
+  background: var(--p-surface-700, #334155);
 }
 
 .media-url-row {
@@ -736,7 +753,7 @@ const copyUrl = (url: string) => {
 
 .media-actions {
   padding: 0.5rem 0.75rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--p-content-border-color, #e0e0e0);
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
@@ -754,7 +771,7 @@ const copyUrl = (url: string) => {
   max-height: 280px;
   border-radius: 8px;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--p-surface-200, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -769,6 +786,8 @@ const copyUrl = (url: string) => {
 
 .edit-preview-file {
   padding: 2rem;
+  font-size: 3rem;
+  color: var(--p-text-muted-color, #94a3b8);
 }
 
 /* Tag-cloud area inside edit dialog */
@@ -795,13 +814,13 @@ const copyUrl = (url: string) => {
 .edit-tag-panel-label {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #334155;
+  color: var(--p-text-color, #334155);
 }
 
 .edit-tag-panel-count {
   font-size: 0.75rem;
-  color: #94a3b8;
-  background: #f1f5f9;
+  color: var(--p-text-muted-color, #94a3b8);
+  background: var(--p-content-background, #f1f5f9);
   border-radius: 999px;
   padding: 0.1rem 0.45rem;
 }
@@ -815,9 +834,9 @@ const copyUrl = (url: string) => {
   gap: 0.4rem;
   align-content: flex-start;
   padding: 0.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--p-content-background, #fafafa);
 }
 
 .edit-tag-cloud.cloud-empty {
@@ -827,7 +846,7 @@ const copyUrl = (url: string) => {
 
 .cloud-placeholder {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--p-text-muted-color, #94a3b8);
   font-style: italic;
 }
 
@@ -842,9 +861,9 @@ const copyUrl = (url: string) => {
 }
 
 .tag-pill--available {
-  background: #f1f5f9;
-  color: #334155;
-  border-color: #e2e8f0;
+  background: var(--p-content-background, #f1f5f9);
+  color: var(--p-text-color, #334155);
+  border-color: var(--p-content-border-color, #e2e8f0);
 }
 
 .tag-pill--available:hover {
@@ -865,6 +884,11 @@ const copyUrl = (url: string) => {
   flex-shrink: 0;
 }
 
+.edit-tag-divider i {
+  font-size: 1.2rem;
+  color: var(--p-text-muted-color, #94a3b8);
+}
+
 .new-tag-row {
   display: flex;
   gap: 0.4rem;
@@ -878,7 +902,7 @@ const copyUrl = (url: string) => {
 
 /* Upload dialog styles */
 .upload-drop-zone {
-  border: 2px dashed #ccc;
+  border: 2px dashed var(--p-content-border-color, #ccc);
   border-radius: 8px;
   padding: 2rem;
   text-align: center;
@@ -890,6 +914,17 @@ const copyUrl = (url: string) => {
 .upload-drop-zone.drop-active {
   border-color: var(--p-primary-color, #3b82f6);
   background: rgba(59, 130, 246, 0.04);
+}
+.upload-drop-zone i {
+  font-size: 2rem;
+  color: var(--p-text-muted-color, #aaa);
+}
+.upload-drop-zone-text {
+  margin: 0.5rem 0 0;
+}
+.upload-drop-zone-hint {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #aaa);
 }
 .upload-file-list {
   margin-top: 1rem;
@@ -905,7 +940,7 @@ const copyUrl = (url: string) => {
   gap: 0.5rem;
   padding: 0.3rem 0.5rem;
   border-radius: 4px;
-  background: #f5f5f5;
+  background: var(--p-content-background, #f5f5f5);
   font-size: 0.85rem;
 }
 .upload-file-name {
@@ -915,8 +950,22 @@ const copyUrl = (url: string) => {
   white-space: nowrap;
 }
 .upload-file-size {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+.upload-status-done {
+  color: var(--p-green-500, #22c55e);
+}
+
+.upload-status-error {
+  color: var(--p-red-500, #ef4444);
+}
+
+/* Dark mode: --p-surface-200 is a fixed ramp point, kept as the light-mode
+   placeholder shade for .edit-preview above — see docs/developer/styleguide.md. */
+.dark-mode .edit-preview {
+  background: var(--p-surface-700, #334155);
 }
 </style>
