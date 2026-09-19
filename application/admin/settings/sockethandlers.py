@@ -4,22 +4,25 @@ from flask import request
 
 logger = logging.getLogger(__name__)
 
+# Keys the generic settings endpoint is allowed to write, and the only
+# SystemSetting keys the import/export feature ever touches (see
+# application/admin/importexport/helper.py). Anything else (e.g.
+# telegram_token) has its own dedicated, validated handler and must not be
+# settable through this catch-all upsert, nor leave the instance in an
+# export file.
+ALLOWED_SETTING_KEYS = {
+    'hide_powered_by', 'timezone',
+    'welcome_headline', 'welcome_text',
+    'hide_community_links', 'hide_helping_hand',
+    'hide_demo_mode',
+    'content_edit_preview_size',
+    'content_list_preview_size',
+}
+
 
 def register_admin_settings_handlers(socketio, app, db):
     """Register socket handlers for the admin Settings page."""
     from application.socketio_handlers.auth import require_right
-
-    # Keys the generic settings endpoint is allowed to write. Anything else
-    # (e.g. telegram_token) has its own dedicated, validated handler and must
-    # not be settable through this catch-all upsert.
-    ALLOWED_SETTING_KEYS = {
-        'hide_powered_by', 'timezone',
-        'welcome_headline', 'welcome_text',
-        'hide_community_links', 'hide_helping_hand',
-        'hide_demo_mode',
-        'content_edit_preview_size',
-        'content_list_preview_size',
-    }
 
     def _get_system_settings():
         """Return all system settings as a {key: value} dict."""

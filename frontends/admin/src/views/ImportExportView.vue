@@ -332,6 +332,14 @@ onRightsReady(loadExportTree)
     </Card>
   </div>
   <div v-else class="importexport-view">
+    <Message severity="warn" :closable="false" class="not-a-backup-notice">
+      <strong>This is not a full system backup.</strong> It exports/imports display content
+      (screens, designs, layouts, content, media, devices, magic tags) and general app settings
+      only. It never includes admin user accounts, API keys or tokens (Telegram bot token, Pretalx
+      credentials), or log files — restoring a file elsewhere will not recreate logins or
+      integration credentials.
+    </Message>
+
     <!-- Export -->
     <Card class="section-card">
       <template #title>
@@ -344,7 +352,9 @@ onRightsReady(loadExportTree)
         <p class="description">
           Pick exactly what to export — by type, or individual items within a type. Dependencies
           (e.g. a Content Type's Layout) are pulled in automatically. The download is a ZIP
-          archive containing <code>db.json</code> and a <code>media/</code> folder.
+          archive containing <code>db.json</code> and a <code>media/</code> folder. General app
+          settings (e.g. timezone, welcome text, branding toggles) are always included and aren't
+          shown in the tree below.
         </p>
         <template v-if="canExport">
           <ProgressBar v-if="exportTreeLoading" mode="indeterminate" class="thin-progress mb-4" />
@@ -509,6 +519,10 @@ onRightsReady(loadExportTree)
 }
 
 .section-card {
+  width: 100%;
+}
+
+.not-a-backup-notice {
   width: 100%;
 }
 

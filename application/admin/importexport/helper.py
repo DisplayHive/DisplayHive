@@ -40,7 +40,19 @@ from .registry import ENTITY_TYPES, ENTITY_TYPES_BY_KEY, get_model
 
 logger = logging.getLogger(__name__)
 
-EXPORT_VERSION = 9  # bumped from 8: every row now carries a stable 'uuid' alongside 'id'.
+EXPORT_VERSION = 10  # bumped from 9: added the 'system_settings' blob.
+
+# SystemSetting is a flat key/value store (no uuid, not independently
+# selectable), so it rides along with every export/import as a single blob
+# rather than through the registry/ENTITY_TYPES machinery. Only an explicit
+# allowlist of known-safe, non-secret keys is ever exported or imported —
+# secrets such as 'telegram_token' (application/admin/alerting/sockethandlers.py)
+# must never leave the instance in an export file. Reuses the same allowlist
+# the generic Settings-page write endpoint already trusts, plus the one
+# other known-safe key (layout snap lines) that has its own dedicated handler.
+def _exportable_setting_keys():
+    from application.admin.settings.sockethandlers import ALLOWED_SETTING_KEYS
+    return ALLOWED_SETTING_KEYS | {'layout_snaplines'}
 
 
 def _support_models():
@@ -323,9 +335,18 @@ def export_database(app, db, selection=None):
             if ceid in selected['content_elements'] and sgid in selected['screengroups']
         ]
 
+        from application.models import SystemSetting
+        exportable_keys = _exportable_setting_keys()
+        system_settings = {
+            row.key: row.value
+            for row in db.session.execute(db.select(SystemSetting)).scalars()
+            if row.key in exportable_keys
+        }
+
         return {
             'export_version': EXPORT_VERSION,
             'exported_at': datetime.now(timezone.utc).isoformat(),
+            'system_settings': system_settings,
             'screens': [_row_screen(s) for s in rows_of('screens')],
             'screengroups': [_row_screengroup(sg) for sg in rows_of('screengroups')],
             'screengroup_screen': screengroup_screen_rows,
@@ -851,6 +872,30 @@ def _import_magic_tags(ctx):
     ))
 
 
+def _import_system_settings(ctx):
+    """Upsert the exported 'system_settings' blob (present since export_version
+    10) by key, ignoring any key outside the current export allowlist — a
+    file could be hand-edited, or older/newer than this instance's allowlist,
+    so the import side re-validates rather than trusting the file."""
+    from application.models import SystemSetting
+
+    settings = ctx.data.get('system_settings') or {}
+    if not settings:
+        return
+    exportable_keys = _exportable_setting_keys()
+    db = ctx.db
+    existing_by_key = {row.key: row for row in db.session.execute(db.select(SystemSetting)).scalars()}
+    for key, value in settings.items():
+        if key not in exportable_keys:
+            continue
+        existing = existing_by_key.get(key)
+        if existing is not None:
+            existing.value = value
+        else:
+            db.session.add(SystemSetting(key=key, value=value))
+    db.session.flush()
+
+
 def _import_soft_associations(ctx):
     """screengroup_screen / content_element_screengroup: only written when
     both endpoints ended up selected (and processed) — see registry.py."""
@@ -936,6 +981,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             _import_magic_tag_value_lists(ctx)
             _import_magic_tags(ctx)
             _import_soft_associations(ctx)
+            _import_system_settings(ctx)
 
             if mode == 'reset':
                 _reset_postgres_sequences(db)
