@@ -127,6 +127,8 @@ export interface ContentContainer {
   left: number
   width: number
   height: number
+  /** When true, the Layout editor blocks drag/resize on this container. */
+  locked?: boolean
   /** Field handler used to render `default_content` as this container's fallback. */
   default_field_handler?: string | null
   /** Shown (via default_field_handler's transform) when no active scene targets this container. */

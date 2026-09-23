@@ -172,6 +172,10 @@ class ContentContainer(db.Model):
     left: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vw
     width: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vw
     height: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vh
+    # When true, the Layout editor blocks drag/resize on this container until
+    # unlocked again — a shared, persisted property (not per-Layout), since
+    # the container itself is the standalone entity being positioned.
+    locked: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # Fallback content shown when no active scene's field currently targets
     # this container. Reuses the same field_handler transform as TagConfig
     # (textklein, image, pretalx_table, etc); null field_handler means no

@@ -289,11 +289,22 @@ def register_admin_layouts_handlers(socketio, app, db):
         if not container:
             return {'ok': False, 'error': 'Container not found'}
 
+        # Apply 'locked' first so a request that unlocks and repositions in
+        # the same call (e.g. the editor's own toggle-then-drag) is allowed,
+        # while a stray position update against an otherwise-locked
+        # container is rejected below rather than silently applied.
+        if 'locked' in data:
+            container.locked = bool(data.get('locked'))
+
+        position_fields = ('top', 'left', 'width', 'height')
+        if container.locked and any(data.get(f) is not None for f in position_fields):
+            return {'ok': False, 'error': 'Container is locked'}
+
         container.name = data.get('name', container.name)
         for field in ('order',):
             if data.get(field) is not None:
                 setattr(container, field, int(data[field]))
-        for field in ('top', 'left', 'width', 'height'):
+        for field in position_fields:
             if data.get(field) is not None:
                 setattr(container, field, float(data[field]))
         # Explicit keys (rather than "is not None") so clearing either field

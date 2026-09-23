@@ -12,7 +12,6 @@ import Textarea from 'primevue/textarea'
 import Dropdown from 'primevue/dropdown'
 import DatePicker from 'primevue/datepicker'
 import Select from 'primevue/select'
-import Dialog from 'primevue/dialog'
 import Editor from 'primevue/editor'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Tag from 'primevue/tag'
@@ -96,6 +95,13 @@ const toast = useToast()
 
 const canvasEl = ref<HTMLElement | null>(null)
 const selectedId = ref<number | null>(null)
+
+// Staged (unsaved) drag/resize positions, keyed by container id — declared
+// this early because rebuildDesignPreviewSrcdoc's watcher below also reads
+// it live, so a container's default-content preview moves with it while
+// dragging. See the "Staged position overlay" section further down for the
+// full explanation and the rest of this mechanism (posFor, flush/discard, etc).
+const draft = reactive<Record<number, { top: number; left: number; width: number; height: number }>>({})
 
 // --- Design preview: the active Design, rendered behind the canvas so
 // containers can be positioned against how the screen will actually look.
@@ -203,7 +209,13 @@ const rebuildDesignPreviewSrcdoc = async () => {
         await Promise.all(
           Object.entries(layoutContainerPreviews.value).map(async ([id, c]) => {
             const html = await resolveIconPlaceholders(c.html)
-            return `<div class="dh-container dh-container-${id}" style="position:absolute;top:${c.top}vh;left:${c.left}vw;width:${c.width}vw;height:${c.height}vh;">${html}</div>`
+            // Use the container's live (possibly still-unsaved) drag/resize
+            // position rather than this preview's own top/left/width/height
+            // — those came from the server as of the last save, so without
+            // this override the preview would stay put while its container
+            // rect moves on the canvas above it.
+            const pos = draft[Number(id)] || c
+            return `<div class="dh-container dh-container-${id}" style="position:absolute;top:${pos.top}vh;left:${pos.left}vw;width:${pos.width}vw;height:${pos.height}vh;">${html}</div>`
           }),
         )
       ).join('')
@@ -211,7 +223,7 @@ const rebuildDesignPreviewSrcdoc = async () => {
 }
 
 watch(
-  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment],
+  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment, draft],
   rebuildDesignPreviewSrcdoc,
   { deep: true },
 )
@@ -246,13 +258,26 @@ const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min)
 const round1 = (v: number) => Math.round(v * 10) / 10
 
 // Containers currently assigned to this Layout, vs. everything else
-// (shown in the sidebar so they can be dragged in).
+// (shown in the sidebar so they can be dragged in). Also drives the canvas
+// rects — NOT filtered by containerFilterText, so searching the sidebar
+// never hides anything already placed on the canvas.
 const placedContainers = computed(() =>
   props.containers.filter((c) => (props.layout.container_ids || []).includes(c.id))
 )
 const availableContainers = computed(() =>
   props.containers.filter((c) => !(props.layout.container_ids || []).includes(c.id))
 )
+
+// Search/filter for the two sidebar lists only — matches on name (including
+// any in-progress unsaved rename) or id.
+const containerFilterText = ref('')
+const matchesContainerFilter = (c: ContentContainer) => {
+  const q = containerFilterText.value.trim().toLowerCase()
+  if (!q) return true
+  return contentFor(c).name.toLowerCase().includes(q) || String(c.id).includes(q)
+}
+const filteredPlacedContainers = computed(() => placedContainers.value.filter(matchesContainerFilter))
+const filteredAvailableContainers = computed(() => availableContainers.value.filter(matchesContainerFilter))
 
 // Re-fetch the rendered default-content preview whenever the set of placed
 // containers or any container's own default content/handler changes — covers
@@ -285,8 +310,10 @@ const canDeleteContainer = (c: ContentContainer) => !c.in_use && otherLayoutsUsi
 // every Layout that uses them. Moves/resizes are only staged here locally —
 // nothing is sent to the server until flushPendingPositions() runs (called
 // by the parent when the Layout dialog is saved/closed/switched), matching
-// "changes save with the Layout, not on every drag".
-const draft = reactive<Record<number, { top: number; left: number; width: number; height: number }>>({})
+// "changes save with the Layout, not on every drag". Declared up near
+// selectedId (rather than down here with the rest of this section) because
+// rebuildDesignPreviewSrcdoc's watcher, defined earlier in the file, also
+// reads it live so a container's default-content preview moves with it.
 
 const posFor = (c: ContentContainer) => draft[c.id] || { top: c.top, left: c.left, width: c.width, height: c.height }
 
@@ -300,19 +327,36 @@ const rectStyle = (c: ContentContainer) => {
   }
 }
 
-// Sends every staged (drag/resize/modal) position change to the server and
-// clears the local staging area. Exposed so the parent can call it when the
+// Same idea as `draft`, for the settings card's non-position fields (name,
+// default field handler/content) — edited live in the card, shown live on
+// the canvas (rect label), but likewise only sent to the server when the
+// Layout itself is saved.
+interface ContentDraftEntry { name: string; default_field_handler: string; default_content: string }
+const contentDraft = reactive<Record<number, ContentDraftEntry>>({})
+
+const contentFor = (c: ContentContainer): ContentDraftEntry =>
+  contentDraft[c.id] || { name: c.name, default_field_handler: c.default_field_handler || '', default_content: c.default_content || '' }
+
+// Whether *c* has an unsaved staged move/resize — drives the "reset to
+// default position" button shown on its rect.
+const hasPendingChange = (c: ContentContainer) => draft[c.id] !== undefined
+
+// Whether *c* has any unsaved staged edit at all (position or settings) —
+// drives the "Revert" button in the settings card.
+const hasAnyPendingChange = (c: ContentContainer) => draft[c.id] !== undefined || contentDraft[c.id] !== undefined
+
+// Sends every staged (drag/resize/settings-card) change to the server and
+// clears the local staging areas. Exposed so the parent can call it when the
 // admin actually saves/closes the Layout dialog. If any staged container is
 // also used by another Layout, warns about that once here (not while
 // dragging) and lets the admin back out — returns false without sending
 // anything if they cancel.
 const flushPendingPositions = async (): Promise<boolean> => {
-  const entries = Object.entries(draft)
-  if (!entries.length) return true
+  const ids = new Set([...Object.keys(draft), ...Object.keys(contentDraft)].map(Number))
+  if (!ids.size) return true
 
   const affectedLines: string[] = []
-  for (const [idStr] of entries) {
-    const id = Number(idStr)
+  for (const id of ids) {
     const others = otherLayoutsUsing(id)
     if (others.length) {
       const c = props.containers.find((x) => x.id === id)
@@ -324,7 +368,7 @@ const flushPendingPositions = async (): Promise<boolean> => {
   if (affectedLines.length) {
     const proceed = await new Promise<boolean>((resolve) => {
       confirm.require({
-        message: `Saving these position changes will also affect other layouts:\n${affectedLines.join('\n')}\nKeep the changes?`,
+        message: `Saving these changes will also affect other layouts:\n${affectedLines.join('\n')}\nKeep the changes?`,
         header: 'Shared container',
         icon: 'pi pi-exclamation-triangle',
         acceptLabel: 'Keep',
@@ -336,24 +380,56 @@ const flushPendingPositions = async (): Promise<boolean> => {
     if (!proceed) return false
   }
 
-  await Promise.all(entries.map(([idStr, pos]) =>
-    emitWithAck('displayhive:admin:cts:update_container', {
-      id: Number(idStr),
-      top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height),
+  await Promise.all([...ids].map((id) => {
+    const pos = draft[id]
+    const content = contentDraft[id]
+    return emitWithAck('displayhive:admin:cts:update_container', {
+      id,
+      ...(pos ? { top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height) } : {}),
+      ...(content ? { name: content.name, default_field_handler: content.default_field_handler, default_content: content.default_content } : {}),
     })
-  ))
-  for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
+  }))
+  for (const id of ids) {
+    delete draft[id]
+    delete contentDraft[id]
+  }
   return true
 }
 
-// Silently drops any staged (unsaved) position changes without sending or
-// warning about anything — used when navigating away from this Layout
-// without saving (switching layouts, starting a new one). Also dismisses any
-// "also affects layout Y" confirmation left open from an unfinished Save, so
+// Silently drops any staged (unsaved) changes without sending or warning
+// about anything — used when navigating away from this Layout without
+// saving (switching layouts, starting a new one). Also dismisses any "also
+// affects layout Y" confirmation left open from an unfinished Save, so
 // switching away never leaves that dialog on screen.
 const discardPendingPositions = () => {
   for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
+  for (const idStr of Object.keys(contentDraft)) delete contentDraft[Number(idStr)]
   confirm.close()
+}
+
+// Discards the staged move/resize for *c* only, snapping its rect back to
+// the last-saved (props.containers) position — same mechanism as
+// discardPendingPositions(), just scoped to one container. Settings-card
+// edits (name/handler/content) are left untouched.
+const resetContainerPosition = (c: ContentContainer) => {
+  delete draft[c.id]
+  if (containerEditForm.id === c.id) {
+    containerEditForm.top = c.top
+    containerEditForm.left = c.left
+    containerEditForm.width = c.width
+    containerEditForm.height = c.height
+  }
+}
+
+// Locking is persisted immediately (unlike position, which stages until the
+// Layout is saved) — it's a discrete, deliberate toggle rather than a
+// continuous drag, so there's nothing useful to "stage".
+const toggleContainerLock = async (c: ContentContainer) => {
+  try {
+    await emitWithAck('displayhive:admin:cts:update_container', { id: c.id, locked: !c.locked })
+  } catch (e) {
+    console.error('[LayoutCanvasEditor] toggleContainerLock failed', e)
+  }
 }
 
 // Belt-and-braces: whenever the Layout being edited actually changes (however
@@ -474,6 +550,7 @@ const onRectPointerDown = (e: PointerEvent, c: ContentContainer, mode: 'move' | 
   e.stopPropagation()
   e.preventDefault()
   selectedId.value = c.id
+  if (c.locked) return
   // Start from wherever it currently is — including any not-yet-saved
   // staged position — not the last-saved value from props, or picking up an
   // already-moved container would snap it back to its original spot.
@@ -740,7 +817,6 @@ const defaultFieldHandlerOptions = [
   { label: 'WYSIWYG', value: 'wysiwyg' },
 ]
 
-const showContainerEditModal = ref(false)
 const showImagePickerDialog = ref(false)
 const containerEditForm = reactive({
   id: null as number | null,
@@ -786,22 +862,85 @@ const setIconData = (v: IconPickerValue) => {
   containerEditForm.default_content = JSON.stringify(v)
 }
 
-const openContainerEditModal = (c: ContentContainer) => {
-  selectedId.value = c.id
+// Populates containerEditForm from *c*, resuming any already-staged
+// position/content drafts (e.g. re-selecting a container edited earlier in
+// this session) — used to seed the settings card when the selection changes.
+const seedEditForm = (c: ContentContainer) => {
   const p = posFor(c)
+  const content = contentFor(c)
   containerEditForm.id = c.id
-  containerEditForm.name = c.name
+  containerEditForm.name = content.name
   containerEditForm.top = p.top
   containerEditForm.left = p.left
   containerEditForm.width = p.width
   containerEditForm.height = p.height
-  containerEditForm.default_field_handler = c.default_field_handler || ''
-  containerEditForm.default_content = c.default_content || ''
-  showContainerEditModal.value = true
+  containerEditForm.default_field_handler = content.default_field_handler
+  containerEditForm.default_content = content.default_content
 }
 
-const closeContainerEditModal = () => {
-  showContainerEditModal.value = false
+// Re-seeds the settings card whenever the SELECTION changes (not on every
+// props.containers refresh — a server push while the form is mid-edit must
+// not clobber it) — mirrors what opening the old edit modal used to do.
+watch(selectedId, (id) => {
+  if (id == null) {
+    containerEditForm.id = null
+    return
+  }
+  const c = props.containers.find((x) => x.id === id)
+  if (c) seedEditForm(c)
+}, { immediate: true })
+
+// Every containerEditForm edit is staged live (into draft/contentDraft) as
+// it's made — there's no separate "Save" in the settings card; the whole
+// Layout's staged changes (this plus any drag/resize) are only sent to the
+// server when the page itself is saved (flushPendingPositions, called by the
+// parent). Comparing against the *last-saved* container (not the current
+// draft) on every keystroke keeps this idempotent either way.
+watch(containerEditForm, () => {
+  const id = containerEditForm.id
+  if (id == null) return
+  const c = props.containers.find((x) => x.id === id)
+  if (!c) return
+
+  const contentChanged =
+    containerEditForm.name !== c.name ||
+    containerEditForm.default_field_handler !== (c.default_field_handler || '') ||
+    containerEditForm.default_content !== (c.default_content || '')
+  if (contentChanged) {
+    contentDraft[id] = {
+      name: containerEditForm.name,
+      default_field_handler: containerEditForm.default_field_handler,
+      default_content: containerEditForm.default_content,
+    }
+  } else {
+    delete contentDraft[id]
+  }
+
+  const posChanged =
+    containerEditForm.top !== c.top || containerEditForm.left !== c.left ||
+    containerEditForm.width !== c.width || containerEditForm.height !== c.height
+  if (posChanged) {
+    draft[id] = {
+      top: containerEditForm.top, left: containerEditForm.left,
+      width: containerEditForm.width, height: containerEditForm.height,
+    }
+  } else {
+    delete draft[id]
+  }
+}, { deep: true })
+
+// Discards in-progress edits (position AND settings) back to the last-saved
+// values — styled and placed alongside the other per-container actions.
+const revertContainerEdit = () => {
+  const c = selectedContainer.value
+  if (!c) return
+  containerEditForm.name = c.name
+  containerEditForm.top = c.top
+  containerEditForm.left = c.left
+  containerEditForm.width = c.width
+  containerEditForm.height = c.height
+  containerEditForm.default_field_handler = c.default_field_handler || ''
+  containerEditForm.default_content = c.default_content || ''
 }
 
 // Switching the handler in the dropdown re-seeds default_content with a
@@ -971,40 +1110,9 @@ const setPretalxTableData = (v: PretalxTableValue) => {
   containerEditForm.default_content = JSON.stringify(v)
 }
 
-const saveContainerEditModal = () => {
-  const id = containerEditForm.id
-  if (id == null) return
-  const c = props.containers.find((x) => x.id === id)
-  if (!c) return
-
-  if (
-    containerEditForm.name !== c.name ||
-    containerEditForm.default_field_handler !== (c.default_field_handler || '') ||
-    containerEditForm.default_content !== (c.default_content || '')
-  ) {
-    socketEmit('displayhive:admin:cts:update_container', {
-      id,
-      name: containerEditForm.name,
-      default_field_handler: containerEditForm.default_field_handler,
-      default_content: containerEditForm.default_content,
-    })
-  }
-
-  const current = posFor(c)
-  const pos = {
-    top: containerEditForm.top, left: containerEditForm.left,
-    width: containerEditForm.width, height: containerEditForm.height,
-  }
-  if (pos.top !== current.top || pos.left !== current.left || pos.width !== current.width || pos.height !== current.height) {
-    stagePositionChange(id, pos)
-  }
-
-  showContainerEditModal.value = false
-}
-
 // The container being edited can come from the canvas (already placed) or
-// from the sidebar (not yet part of this Layout) — the modal's assign/remove
-// button reflects and toggles whichever state it's currently in.
+// from the sidebar (not yet part of this Layout) — the settings card's
+// assign/remove button reflects and toggles whichever state it's currently in.
 const isSelectedPlaced = computed(() =>
   selectedId.value != null && (props.layout.container_ids || []).includes(selectedId.value)
 )
@@ -1021,42 +1129,82 @@ const toggleSelectedLayoutMembership = () => {
 
 <template>
   <div class="layout-editor">
-    <Card class="editor-options-card">
-      <template #title>
-        <div class="card-header-title">
-          <i class="pi pi-eye card-header-icon" />
-          <span>Preview &amp; Guides</span>
-        </div>
-      </template>
-      <template #content>
-        <div class="preview-toggles">
-          <div class="filter-toggle">
-            <label for="disable-animations-preview">Disable animations in Preview</label>
-            <ToggleSwitch id="disable-animations-preview" v-model="disableAnimationsInPreview" />
-          </div>
-          <div class="filter-toggle">
-            <label for="disable-backdrop-preview">Disable Backdrop in Preview</label>
-            <ToggleSwitch id="disable-backdrop-preview" v-model="disableBackdropInPreview" />
-          </div>
-          <div class="filter-toggle">
-            <label for="disable-default-content-preview">Disable default content in Preview</label>
-            <ToggleSwitch id="disable-default-content-preview" v-model="disableDefaultContentInPreview" />
-          </div>
-        </div>
+    <div class="editor-left-column">
+      <div class="container-filter">
+        <i class="pi pi-search container-filter-icon"></i>
+        <InputText v-model="containerFilterText" size="small" class="w-full" placeholder="Search containers…" />
+        <button v-if="containerFilterText" type="button" class="container-filter-clear" title="Clear" @click="containerFilterText = ''">
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
 
-        <div class="snapline-bar">
-          <Select v-model="newSnaplineAxis" :options="[{ label: 'Horizontal', value: 'h' }, { label: 'Vertical', value: 'v' }]" optionLabel="label" optionValue="value" class="snapline-axis-select" />
-          <InputNumber v-model="newSnaplinePosition" :min="0" :max="100" suffix="%" class="snapline-position-input" />
-          <Button label="Add Snapline" icon="pi pi-plus" size="small" outlined @click="addSnapline" />
-          <div class="snapline-chip-list">
-            <Tag v-for="(line, i) in snaplines" :key="i" class="snapline-chip">
-              {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
-              <i class="pi pi-times snapline-chip-remove" @click="removeSnapline(i)"></i>
-            </Tag>
+      <Card class="editor-used-card">
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-check-square card-header-icon" />
+            <span>Used in this Layout</span>
           </div>
-        </div>
-      </template>
-    </Card>
+        </template>
+        <template #content>
+          <div class="sidebar-list">
+            <div
+              v-for="c in filteredPlacedContainers"
+              :key="c.id"
+              class="sidebar-item"
+              :class="{ selected: selectedId === c.id }"
+              @click="selectedId = c.id"
+            >
+              <i class="pi pi-th-large"></i>
+              <span class="sidebar-item-label">{{ contentFor(c).name }} <span class="hint">#{{ c.id }}</span></span>
+              <button type="button" class="sidebar-icon-btn" title="Remove from Layout" @click.stop.prevent="removeFromLayout(c.id)">
+                <i class="pi pi-minus"></i>
+              </button>
+            </div>
+            <p v-if="!placedContainers.length" class="hint">No containers placed in this layout yet.</p>
+            <p v-else-if="!filteredPlacedContainers.length" class="hint">No containers match "{{ containerFilterText }}".</p>
+          </div>
+        </template>
+      </Card>
+
+      <Card class="editor-containers-card">
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-th-large card-header-icon" />
+            <span>Containers</span>
+          </div>
+        </template>
+        <template #content>
+          <Button label="New Container" icon="pi pi-plus" size="small" class="w-full" @click="addNewContainerViaButton" />
+          <h4>Available Containers</h4>
+          <p class="hint">Drag one onto the canvas to add it to this Layout.</p>
+          <div class="sidebar-list">
+            <div
+              v-for="c in filteredAvailableContainers"
+              :key="c.id"
+              class="sidebar-item"
+              :class="{ selected: selectedId === c.id }"
+              draggable="true"
+              @click="selectedId = c.id"
+              @dragstart="onSidebarDragStart($event, c)"
+            >
+              <i class="pi pi-th-large"></i>
+              <span class="sidebar-item-label">{{ contentFor(c).name }} <span class="hint">#{{ c.id }}</span></span>
+              <button
+                type="button"
+                class="sidebar-icon-btn"
+                :class="{ disabled: !canDeleteContainer(c) }"
+                :title="canDeleteContainer(c) ? 'Delete container entirely' : 'In use — cannot delete'"
+                @click.stop.prevent="confirmDeleteContainer(c.id)"
+              >
+                <i class="pi pi-times"></i>
+              </button>
+            </div>
+            <p v-if="!availableContainers.length" class="hint">All containers are already in this layout.</p>
+            <p v-else-if="!filteredAvailableContainers.length" class="hint">No containers match "{{ containerFilterText }}".</p>
+          </div>
+        </template>
+      </Card>
+    </div>
 
     <div class="editor-main">
       <div class="editor-canvas-wrap">
@@ -1085,11 +1233,11 @@ const toggleSelectedLayoutMembership = () => {
             v-for="c in placedContainers"
             :key="c.id"
             class="editor-rect"
-            :class="{ selected: selectedId === c.id }"
+            :class="{ selected: selectedId === c.id, locked: c.locked }"
             :style="rectStyle(c)"
             @pointerdown="onRectPointerDown($event, c, 'move')"
           >
-            <span class="rect-label">{{ c.name }} <span class="rect-label-id">#{{ c.id }}</span></span>
+            <span class="rect-label">{{ contentFor(c).name }} <span class="rect-label-id">#{{ c.id }}</span></span>
             <div class="rect-toolbar">
               <button
                 type="button"
@@ -1102,15 +1250,6 @@ const toggleSelectedLayoutMembership = () => {
               </button>
               <button
                 type="button"
-                class="edit-handle"
-                title="Edit container"
-                @pointerdown.stop.prevent
-                @click.stop.prevent="openContainerEditModal(c)"
-              >
-                <i class="pi pi-pencil"></i>
-              </button>
-              <button
-                type="button"
                 class="delete-handle"
                 :class="{ disabled: !canDeleteContainer(c) }"
                 :title="canDeleteContainer(c) ? 'Delete container entirely' : 'In use — cannot delete'"
@@ -1120,10 +1259,22 @@ const toggleSelectedLayoutMembership = () => {
                 <i class="pi pi-times"></i>
               </button>
             </div>
-            <div class="resize-handle resize-handle--tl" @pointerdown="onRectPointerDown($event, c, 'resize', 'tl')"></div>
-            <div class="resize-handle resize-handle--tr" @pointerdown="onRectPointerDown($event, c, 'resize', 'tr')"></div>
-            <div class="resize-handle resize-handle--bl" @pointerdown="onRectPointerDown($event, c, 'resize', 'bl')"></div>
-            <div class="resize-handle resize-handle--br" @pointerdown="onRectPointerDown($event, c, 'resize', 'br')"></div>
+            <button
+              type="button"
+              class="lock-handle"
+              :class="{ 'lock-handle--locked': c.locked }"
+              :title="c.locked ? 'Unlock position' : 'Lock position'"
+              @pointerdown.stop.prevent
+              @click.stop.prevent="toggleContainerLock(c)"
+            >
+              <i :class="c.locked ? 'pi pi-lock' : 'pi pi-lock-open'"></i>
+            </button>
+            <template v-if="!c.locked">
+              <div class="resize-handle resize-handle--tl" @pointerdown="onRectPointerDown($event, c, 'resize', 'tl')"></div>
+              <div class="resize-handle resize-handle--tr" @pointerdown="onRectPointerDown($event, c, 'resize', 'tr')"></div>
+              <div class="resize-handle resize-handle--bl" @pointerdown="onRectPointerDown($event, c, 'resize', 'bl')"></div>
+              <div class="resize-handle resize-handle--br" @pointerdown="onRectPointerDown($event, c, 'resize', 'br')"></div>
+            </template>
           </div>
           <div v-if="drawRect" class="editor-rect drawing-rect" :style="drawRectStyle"></div>
         </div>
@@ -1131,47 +1282,57 @@ const toggleSelectedLayoutMembership = () => {
       </div>
     </div>
 
-    <div class="editor-sidebar">
-      <Button label="New Container" icon="pi pi-plus" size="small" class="w-full" @click="addNewContainerViaButton" />
-      <h4>Available Containers</h4>
-      <p class="hint">Drag one onto the canvas to add it to this Layout.</p>
-      <div class="sidebar-list">
-        <div
-          v-for="c in availableContainers"
-          :key="c.id"
-          class="sidebar-item"
-          :class="{ selected: selectedId === c.id }"
-          draggable="true"
-          @dragstart="onSidebarDragStart($event, c)"
-        >
-          <i class="pi pi-th-large"></i>
-          <span class="sidebar-item-label">{{ c.name }} <span class="hint">#{{ c.id }}</span></span>
-          <button type="button" class="sidebar-icon-btn" title="Edit container" @click.stop.prevent="openContainerEditModal(c)">
-            <i class="pi pi-pencil"></i>
-          </button>
-          <button
-            type="button"
-            class="sidebar-icon-btn"
-            :class="{ disabled: !canDeleteContainer(c) }"
-            :title="canDeleteContainer(c) ? 'Delete container entirely' : 'In use — cannot delete'"
-            @click.stop.prevent="confirmDeleteContainer(c.id)"
-          >
-            <i class="pi pi-times"></i>
-          </button>
-        </div>
-        <p v-if="!availableContainers.length" class="hint">All containers are already in this layout.</p>
-      </div>
-    </div>
+    <div class="editor-right-column">
+      <Card class="editor-options-card">
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-eye card-header-icon" />
+            <span>Preview &amp; Guides</span>
+          </div>
+        </template>
+        <template #content>
+          <div class="preview-toggles">
+            <div class="filter-toggle">
+              <label for="disable-animations-preview">Disable animations in Preview</label>
+              <ToggleSwitch id="disable-animations-preview" v-model="disableAnimationsInPreview" />
+            </div>
+            <div class="filter-toggle">
+              <label for="disable-backdrop-preview">Disable Backdrop in Preview</label>
+              <ToggleSwitch id="disable-backdrop-preview" v-model="disableBackdropInPreview" />
+            </div>
+            <div class="filter-toggle">
+              <label for="disable-default-content-preview">Disable default content in Preview</label>
+              <ToggleSwitch id="disable-default-content-preview" v-model="disableDefaultContentInPreview" />
+            </div>
+          </div>
 
-    <!-- Container Edit Modal -->
-    <Dialog v-model:visible="showContainerEditModal" modal :style="{ width: '480px' }">
-      <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Edit Container #{{ containerEditForm.id }}</span>
-        </div>
-      </template>
-      <div class="dialog-content">
+          <div class="snapline-bar">
+            <Select v-model="newSnaplineAxis" :options="[{ label: 'Horizontal', value: 'h' }, { label: 'Vertical', value: 'v' }]" optionLabel="label" optionValue="value" class="snapline-axis-select" />
+            <InputNumber v-model="newSnaplinePosition" :min="0" :max="100" suffix="%" class="snapline-position-input" />
+            <Button label="Add Snapline" icon="pi pi-plus" size="small" outlined @click="addSnapline" />
+            <div class="snapline-chip-list">
+              <Tag v-for="(line, i) in snaplines" :key="i" class="snapline-chip">
+                {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
+                <i class="pi pi-times snapline-chip-remove" @click="removeSnapline(i)"></i>
+              </Tag>
+            </div>
+          </div>
+        </template>
+      </Card>
+
+      <Card class="editor-settings-card">
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-sliders-h card-header-icon" />
+            <span>Container Settings</span>
+          </div>
+        </template>
+        <template #content>
+          <div v-if="!selectedContainer" class="empty-state empty-state--compact">
+            <i class="pi pi-th-large"></i>
+            <p>Select a container to edit its settings.</p>
+          </div>
+          <div v-else class="dialog-content">
         <div class="field">
           <label>Name</label>
           <InputText v-model="containerEditForm.name" size="small" class="w-full" />
@@ -1194,7 +1355,7 @@ const toggleSelectedLayoutMembership = () => {
             <InputNumber v-model="containerEditForm.height" size="small" class="w-full" :min="1" :max="100" />
           </div>
         </div>
-        <p class="hint">Position changes here save with this Layout too — not immediately.</p>
+        <p class="hint">Changes here are shown live, but only saved to the server when you save this Layout.</p>
 
         <div class="field">
           <label>Default Field Handler</label>
@@ -1295,31 +1456,33 @@ const toggleSelectedLayoutMembership = () => {
 
           <div v-else-if="containerEditForm.default_field_handler === 'table'" class="field">
             <label>Default Content</label>
-            <table class="default-table-editor">
-              <thead>
-                <tr>
-                  <th v-for="(col, ci) in tableData.columns" :key="ci">
-                    <InputText
-                      :model-value="col" size="small" placeholder="Header"
-                      @update:model-value="(v) => updateTableHeader(ci, String(v ?? ''))"
-                    />
-                    <Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.columns.length <= 1" @click="removeTableColumn(ci)" />
-                  </th>
-                  <th><Button icon="pi pi-plus" size="small" text title="Add column" @click="addTableColumn" /></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, ri) in tableData.rows" :key="ri">
-                  <td v-for="(cell, ci) in row" :key="ci">
-                    <InputText
-                      :model-value="cell" size="small"
-                      @update:model-value="(v) => updateTableCell(ri, ci, String(v ?? ''))"
-                    />
-                  </td>
-                  <td><Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.rows.length <= 1" @click="removeTableRow(ri)" /></td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="default-table-editor-scroll">
+              <table class="default-table-editor">
+                <thead>
+                  <tr>
+                    <th v-for="(col, ci) in tableData.columns" :key="ci">
+                      <InputText
+                        :model-value="col" size="small" placeholder="Header"
+                        @update:model-value="(v) => updateTableHeader(ci, String(v ?? ''))"
+                      />
+                      <Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.columns.length <= 1" @click="removeTableColumn(ci)" />
+                    </th>
+                    <th><Button icon="pi pi-plus" size="small" text title="Add column" @click="addTableColumn" /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, ri) in tableData.rows" :key="ri">
+                    <td v-for="(cell, ci) in row" :key="ci">
+                      <InputText
+                        :model-value="cell" size="small"
+                        @update:model-value="(v) => updateTableCell(ri, ci, String(v ?? ''))"
+                      />
+                    </td>
+                    <td><Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.rows.length <= 1" @click="removeTableRow(ri)" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <Button label="Add Row" icon="pi pi-plus" size="small" text @click="addTableRow" />
           </div>
 
@@ -1369,6 +1532,17 @@ const toggleSelectedLayoutMembership = () => {
 
         <div class="selected-actions">
           <Button
+            v-if="hasPendingChange(selectedContainer)"
+            label="Reset to Default Position" icon="pi pi-refresh" outlined size="small"
+            @click="resetContainerPosition(selectedContainer)"
+          />
+          <Button
+            :label="selectedContainer.locked ? 'Unlock Position' : 'Lock Position'"
+            :icon="selectedContainer.locked ? 'pi pi-lock' : 'pi pi-lock-open'"
+            outlined size="small"
+            @click="toggleContainerLock(selectedContainer)"
+          />
+          <Button
             :label="isSelectedPlaced ? 'Remove from Layout' : 'Add to Layout'"
             :icon="isSelectedPlaced ? 'pi pi-eject' : 'pi pi-plus'"
             outlined size="small"
@@ -1376,17 +1550,20 @@ const toggleSelectedLayoutMembership = () => {
           />
           <Button
             label="Delete Container" icon="pi pi-trash" severity="danger" outlined size="small"
-            :disabled="!selectedContainer || !canDeleteContainer(selectedContainer)"
-            :title="selectedContainer && canDeleteContainer(selectedContainer) ? '' : 'In use — cannot delete'"
-            @click="confirmDeleteContainer(selectedId); closeContainerEditModal()"
+            :disabled="!canDeleteContainer(selectedContainer)"
+            :title="canDeleteContainer(selectedContainer) ? '' : 'In use — cannot delete'"
+            @click="confirmDeleteContainer(selectedId)"
+          />
+          <Button
+            v-if="hasAnyPendingChange(selectedContainer)"
+            label="Revert" icon="pi pi-undo" outlined size="small"
+            @click="revertContainerEdit"
           />
         </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="closeContainerEditModal" text />
-        <Button label="Save" @click="saveContainerEditModal" />
-      </template>
-    </Dialog>
+          </div>
+        </template>
+      </Card>
+    </div>
 
     <MediaPickerDialog
       v-model:visible="showImagePickerDialog"
@@ -1403,11 +1580,78 @@ const toggleSelectedLayoutMembership = () => {
   align-items: flex-start;
 }
 
-.editor-options-card {
+.editor-left-column {
   flex: 0 0 260px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   position: sticky;
   top: 1rem;
+}
+
+.editor-used-card,
+.editor-containers-card {
+  width: 100%;
+}
+
+.container-filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.container-filter-icon {
+  position: absolute;
+  left: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #888);
+  pointer-events: none;
+}
+
+.container-filter :deep(input) {
+  padding-left: 1.8rem;
+  padding-right: 1.8rem;
+}
+
+.container-filter-clear {
+  position: absolute;
+  right: 0.4rem;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--p-text-muted-color, #888);
+  cursor: pointer;
+  font-size: 0.65rem;
+  border-radius: 3px;
+}
+
+.container-filter-clear:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--p-text-color, #333);
+}
+
+.editor-right-column {
+  flex: 0 0 340px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.editor-options-card,
+.editor-settings-card {
+  width: 100%;
 }
 
 .editor-main {
@@ -1600,7 +1844,9 @@ const toggleSelectedLayoutMembership = () => {
 
 .resize-handle--bl {
   bottom: 2px;
-  left: 2px;
+  /* Offset from the true bottom-left corner (left: 2px) — that spot is
+     reserved for .lock-handle, which is always rendered there. */
+  left: 20px;
   cursor: nesw-resize;
 }
 
@@ -1614,7 +1860,6 @@ const toggleSelectedLayoutMembership = () => {
 }
 
 .remove-handle,
-.edit-handle,
 .delete-handle {
   width: 16px;
   height: 16px;
@@ -1638,14 +1883,6 @@ const toggleSelectedLayoutMembership = () => {
   background: #e53935;
 }
 
-.edit-handle {
-  background: #2563ab;
-}
-
-.edit-handle:hover {
-  background: #1e3a5f;
-}
-
 .delete-handle {
   background: #c62828;
 }
@@ -1659,6 +1896,43 @@ const toggleSelectedLayoutMembership = () => {
   cursor: not-allowed;
 }
 
+.lock-handle {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  z-index: 4;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid white;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: white;
+  background: rgba(30, 58, 95, 0.7);
+}
+
+.lock-handle:hover {
+  background: #1e3a5f;
+}
+
+.lock-handle--locked {
+  background: #c62828;
+}
+
+.lock-handle--locked:hover {
+  background: #e53935;
+}
+
+.editor-rect.locked {
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 .hint {
   color: var(--p-text-muted-color, #888);
   font-size: 0.75rem;
@@ -1669,6 +1943,8 @@ const toggleSelectedLayoutMembership = () => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .field {
@@ -1685,28 +1961,18 @@ const toggleSelectedLayoutMembership = () => {
 
 .position-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem 0.75rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem 0.5rem;
 }
 
 .selected-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
 
-.editor-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  border-radius: 6px;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.editor-sidebar h4 {
+.editor-left-column h4 {
   margin: 0;
   font-size: 0.9rem;
 }
@@ -1777,14 +2043,22 @@ const toggleSelectedLayoutMembership = () => {
   color: var(--p-text-muted-color, #ccc);
 }
 
-.default-table-editor {
+/* The settings card has a fixed width — a table with many/wide columns
+   scrolls inside this wrapper instead of widening the card (and the page)
+   sideways. */
+.default-table-editor-scroll {
   width: 100%;
-  border-collapse: collapse;
+  overflow-x: auto;
   margin-bottom: 0.4rem;
+}
+
+.default-table-editor {
+  border-collapse: collapse;
 }
 
 .default-table-editor th,
 .default-table-editor td {
+  min-width: 90px;
   border: 1px solid var(--p-content-border-color, #ddd);
   padding: 0.25rem;
   text-align: left;
@@ -1899,6 +2173,7 @@ const toggleSelectedLayoutMembership = () => {
 
 .arrow-size-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.6rem;
@@ -1912,6 +2187,7 @@ const toggleSelectedLayoutMembership = () => {
 
 .image-size-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.6rem;
