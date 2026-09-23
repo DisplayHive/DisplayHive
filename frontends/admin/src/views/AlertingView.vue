@@ -53,8 +53,12 @@ const showMatrix = computed(() =>
   hasToken.value && savedUsers.value.length > 0 && alertTypes.value.length > 0
 )
 
+// Shape shared by every emitWithAck() response below: a success flag plus an
+// optional error message, and (per-call) whatever payload it carries.
+interface AckResponse { ok?: boolean; error?: string }
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
-const handleSettings = (data: any) => {
+const handleSettings = (data: { has_telegram_token?: boolean }) => {
   loading.value = false
   hasToken.value = !!data?.has_telegram_token
   if (hasToken.value) {
@@ -64,16 +68,16 @@ const handleSettings = (data: any) => {
   }
 }
 
-const handleSavedUsers = (data: any) => {
+const handleSavedUsers = (data: { users?: SavedUser[] }) => {
   savedUsers.value = data?.users || []
 }
 
-const handleAlertTypes = (data: any) => {
+const handleAlertTypes = (data: { alert_types?: AlertType[] }) => {
   alertTypes.value = data?.alert_types || []
 }
 
-const handleAlertSubscriptions = (data: any) => {
-  const subs: Array<{ user_id: number; alert_type: string }> = data?.subscriptions || []
+const handleAlertSubscriptions = (data: { subscriptions?: Array<{ user_id: number; alert_type: string }> }) => {
+  const subs = data?.subscriptions || []
   subscriptionSet.value = new Set(subs.map(s => `${s.user_id}:${s.alert_type}`))
 }
 
@@ -81,7 +85,7 @@ const handleAlertSubscriptions = (data: any) => {
 const saveToken = async () => {
   savingToken.value = true
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value })
     if (ack?.ok) {
       tokenInput.value = ''
       toast.add({ severity: 'success', summary: 'Saved', detail: 'Telegram token saved', life: 2500 })
@@ -104,7 +108,7 @@ const fetchBotUsers = async () => {
   loadingBotUsers.value = true
   botUsersError.value = ''
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
+    const ack = await emitWithAck<AckResponse & { users?: BotUser[] }>('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
     botUsersLoaded.value = true
     if (ack?.ok) {
       botUsers.value = ack.users || []
@@ -126,7 +130,7 @@ const fetchAlertSubscriptions = () => emit('displayhive:admin:alerting:cts:get_a
 const addUser = async (user: BotUser) => {
   addingChatId.value = String(user.id)
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:add_telegram_user', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:add_telegram_user', {
       name: user.title,
       chat_id: String(user.id),
     })
@@ -145,7 +149,7 @@ const addUser = async (user: BotUser) => {
 const removeUser = async (user: SavedUser) => {
   removingId.value = user.id
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id })
     if (!ack?.ok) {
       toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to remove', life: 4000 })
     }
@@ -159,7 +163,7 @@ const removeUser = async (user: SavedUser) => {
 const sendTest = async (user: SavedUser) => {
   testingId.value = user.id
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id })
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id })
     if (ack?.ok) {
       toast.add({ severity: 'success', summary: 'Sent', detail: `Test message sent to ${user.name}`, life: 2500 })
     } else {
@@ -184,7 +188,7 @@ const toggleSubscription = async (userId: number, alertKey: string) => {
   subscriptionSet.value = next
 
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:alerting:cts:toggle_alert_subscription', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:toggle_alert_subscription', {
       user_id: userId,
       alert_type: alertKey,
       enabled,
@@ -228,7 +232,7 @@ onUnmounted(() => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Alerting page.</p>
         </div>
       </template>
@@ -237,7 +241,7 @@ onUnmounted(() => {
   <div v-else class="alerting-view">
 
     <div v-if="loading" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+      <i class="pi pi-spin pi-spinner"></i>
       <p>Loading…</p>
     </div>
 
@@ -247,7 +251,7 @@ onUnmounted(() => {
       <Card>
         <template #title>
           <div class="card-header">
-            <i class="pi pi-send" />
+            <i class="pi pi-send card-header-icon" />
             <span>Telegram</span>
           </div>
         </template>
@@ -318,8 +322,8 @@ onUnmounted(() => {
                 </Column>
               </DataTable>
 
-              <div v-else class="empty-state">
-                <i class="pi pi-users" style="font-size: 1.5rem" />
+              <div v-else class="empty-state empty-state--compact">
+                <i class="pi pi-users" />
                 <p>No alert users configured. Add users from the list below.</p>
               </div>
 
@@ -370,8 +374,8 @@ onUnmounted(() => {
                   </Column>
                 </DataTable>
 
-                <div v-else class="empty-state">
-                  <i class="pi pi-comments" style="font-size: 1.5rem" />
+                <div v-else class="empty-state empty-state--compact">
+                  <i class="pi pi-comments" />
                   <p>No users found. Send a message to the bot first.</p>
                 </div>
               </template>
@@ -384,7 +388,7 @@ onUnmounted(() => {
       <Card v-if="showMatrix">
         <template #title>
           <div class="card-header">
-            <i class="pi pi-table" />
+            <i class="pi pi-table card-header-icon" />
             <span>Alert Routing</span>
           </div>
         </template>
@@ -430,13 +434,13 @@ onUnmounted(() => {
       <Card v-else-if="hasToken && savedUsers.length === 0">
         <template #title>
           <div class="card-header">
-            <i class="pi pi-table" />
+            <i class="pi pi-table card-header-icon" />
             <span>Alert Routing</span>
           </div>
         </template>
         <template #content>
-          <div class="empty-state">
-            <i class="pi pi-users" style="font-size: 1.5rem" />
+          <div class="empty-state empty-state--compact">
+            <i class="pi pi-users" />
             <p>Add alert users above to configure routing.</p>
           </div>
         </template>
@@ -446,13 +450,13 @@ onUnmounted(() => {
       <Card>
         <template #title>
           <div class="card-header">
-            <i class="pi pi-th-large" />
+            <i class="pi pi-th-large card-header-icon" />
             <span>Matrix</span>
           </div>
         </template>
         <template #content>
           <div class="coming-soon">
-            <i class="pi pi-clock" style="font-size: 2rem" />
+            <i class="pi pi-clock" />
             <p>Matrix integration coming soon.</p>
           </div>
         </template>
@@ -492,6 +496,10 @@ onUnmounted(() => {
   padding: 1.5rem 0;
   justify-content: center;
   text-align: center;
+}
+
+.coming-soon i {
+  font-size: 2rem;
 }
 
 .settings-form {
@@ -614,5 +622,14 @@ onUnmounted(() => {
 
 .matrix-check-cell {
   width: 80px;
+}
+
+/* Dark mode: --p-surface-50 is a fixed ramp point (always pale gray, in both
+   themes), not a semantic token — see docs/developer/styleguide.md. Give the
+   header columns and zebra-striping an explicit dark surface instead. */
+.dark-mode .matrix-label-col,
+.dark-mode .matrix-user-col,
+.dark-mode .matrix-table tbody tr:nth-child(even) {
+  background: var(--p-surface-800, #1e293b);
 }
 </style>

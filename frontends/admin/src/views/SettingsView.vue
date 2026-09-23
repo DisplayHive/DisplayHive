@@ -39,7 +39,7 @@ const displayedServerTime = ref('')
 const selectedTimezone = ref('UTC')
 const correctedTime = ref('')
 
-const timezoneOptions = (Intl as any).supportedValuesOf('timeZone').map((tz: string) => ({
+const timezoneOptions = Intl.supportedValuesOf('timeZone').map((tz: string) => ({
   label: tz,
   value: tz,
 }))
@@ -75,7 +75,19 @@ const updateDisplayedTimes = () => {
 
 watch(selectedTimezone, updateDisplayedTimes)
 
-const handleSettings = (data: any) => {
+interface SystemSettings {
+  welcome_headline?: string
+  welcome_text?: string
+  hide_community_links?: boolean | string
+  hide_helping_hand?: boolean | string
+  hide_powered_by?: boolean | string
+  hide_demo_mode?: boolean | string
+  content_edit_preview_size?: number | string
+  content_list_preview_size?: number | string
+  timezone?: string
+}
+
+const handleSettings = (data: { system_settings?: SystemSettings; server_time?: string }) => {
   loading.value = false
   const sys = data?.system_settings || {}
   welcomeHeadline.value = sys.welcome_headline ?? 'Welcome to DisplayHive Admin'
@@ -188,7 +200,7 @@ const saveTimeSettings = async () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Settings page.</p>
         </div>
       </template>
@@ -197,13 +209,18 @@ const saveTimeSettings = async () => {
   <div v-else class="settings-view">
 
     <div v-if="loading" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+      <i class="pi pi-spin pi-spinner"></i>
       <p>Loading settings…</p>
     </div>
 
     <template v-else>
       <Card>
-        <template #title>Dashboard</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-home card-header-icon" />
+            <span>Dashboard</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">
@@ -258,7 +275,12 @@ const saveTimeSettings = async () => {
       </Card>
 
       <Card>
-        <template #title>Content Editor</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-file-edit card-header-icon" />
+            <span>Content Editor</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">
@@ -301,7 +323,12 @@ const saveTimeSettings = async () => {
       </Card>
 
       <Card>
-        <template #title>Time</template>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-clock card-header-icon" />
+            <span>Time</span>
+          </div>
+        </template>
         <template #content>
           <div class="settings-form">
             <div class="field">

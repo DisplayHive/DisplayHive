@@ -2,6 +2,7 @@
 <html lang="de" translate="no" class="notranslate">
 <head>
     <title>DisplayHive</title>
+    <link rel="icon" href="/favicon.ico" sizes="any">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="DisplayHive - Home of digital signage">
     <meta name="theme-color" content="#000000">
@@ -46,7 +47,17 @@
         <div class="registration-text">Device Adoption Required</div>
         <div id="qr-code-container">
             <div id="qr-code"></div>
+            <div id="token-row">
+                <span id="token-value" class="token-masked" data-token=""></span>
+                <button id="token-toggle" type="button" class="icon-btn" title="Show token" aria-label="Show token">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 3C4.5 3 1.5 5.5 0 8c1.5 2.5 4.5 5 8 5s6.5-2.5 8-5c-1.5-2.5-4.5-5-8-5zm0 8.5A3.5 3.5 0 1 1 8 4.5a3.5 3.5 0 0 1 0 7zm0-1.5A2 2 0 1 0 8 6a2 2 0 0 0 0 4z"/></svg>
+                </button>
+                <button id="token-copy" type="button" class="icon-btn" title="Copy token" aria-label="Copy token">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M4 2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h1V4h6a1 1 0 0 0-1-1H4zm3 2h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
+                </button>
+            </div>
             <p style="color: #000; margin-top: 10px; font-size: 16px; font-weight: normal; letter-spacing: normal; text-transform: none;">Scan this QR code in the admin panel to adopt this device</p>
+            <a id="manual-adopt-link" href="/admin/manualadopt" target="_blank" rel="noopener">Or adopt manually in the admin panel</a>
         </div>
         <div class="registration-status">Waiting for adoption...</div>
     </div>

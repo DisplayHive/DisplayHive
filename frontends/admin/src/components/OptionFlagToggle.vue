@@ -53,10 +53,10 @@ const emit = defineEmits<{
   justify-content: center;
   width: 1.4rem;
   height: 1.4rem;
-  border: 1px solid var(--p-surface-300, #cbd5e1);
+  border: 1px solid var(--p-content-border-color, #cbd5e1);
   border-radius: 4px;
-  background: white;
-  color: #94a3b8;
+  background: var(--p-content-background, white);
+  color: var(--p-text-muted-color, #94a3b8);
   cursor: pointer;
   font-size: 0.7rem;
   padding: 0;

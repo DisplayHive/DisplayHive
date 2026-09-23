@@ -20,23 +20,14 @@ import Popover from 'primevue/popover'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 import type { OptionFlags } from '../utils/optionFlags'
-
-interface ContentElement {
-  id: number
-  title: string
-  active: boolean
-  duration: number
-  start_time?: string | null
-  end_time?: string | null
-  contenttypeName: string
-  screengroups?: Array<{ id: number; name: string }>
-}
+import type { DefaultColor } from '../types/models'
 
 interface ContentType {
   id: number
   name: string
   description?: string
   html?: string
+  tagconfigs?: RawTagConfig[]
 }
 
 interface TagConfig {
@@ -49,6 +40,20 @@ interface TagConfig {
 }
 
 interface ScreengroupOption { id: number; name: string; screen_ids: number[] }
+
+// Raw TagConfig as the backend sends it (snake_case, JSON-encoded
+// option_flags/default_value) — mapped into the camelCase `TagConfig` above.
+interface RawTagConfig {
+  field_handler?: string
+  field_name?: string
+  name?: string
+  field_label?: string
+  title?: string
+  description?: string
+  max_length?: number
+  option_flags?: string
+  default_value?: string
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -76,18 +81,28 @@ const handleContentTypesList = (data: { data?: ContentType[]; contenttypes?: Con
   contentTypes.value = data.data || data.contenttypes || []
 }
 
-const handleAllScreengroups = (data: any) => {
+// Wire shape pushed by 'upd_screengroups' — either flat or JSON:API-style
+// (attributes/relationships), depending on which backend path produced it.
+interface RawScreengroup {
+  id: number | string
+  name?: string
+  is_one_screen?: boolean
+  attributes?: { name?: string; is_one_screen?: boolean }
+  relationships?: { screens?: { data?: Array<{ id: number | string }> } }
+}
+
+const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
   const arr = data?.screengroups || data?.data || []
-  const toOption = (sg: any): ScreengroupOption => ({
+  const toOption = (sg: RawScreengroup): ScreengroupOption => ({
     id: Number(sg.id),
     name: sg.attributes?.name || sg.name || '',
-    screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
+    screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
   })
   allScreengroups.value = arr
-    .filter((sg: any) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
   oneScreenGroups.value = arr
-    .filter((sg: any) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
 }
 
@@ -99,7 +114,21 @@ const pendingKeepOpen = ref(false)
 const contentDetailReceived = ref(false)
 const loadingContentTypeDetail = ref(false)
 const selectedContentType = ref<ContentType | null>(null)
-const pendingContentDetail = ref<any | null>(null)
+
+// Raw content-element payload from get_content_element_detail: the known
+// metadata fields plus arbitrary per-tag field values (indexed dynamically
+// by tag name, see the merge loop in handleContentTypeDetail below).
+interface RawContentDetail {
+  id: number
+  title: string
+  duration: number
+  contenttype_id: number
+  screengroups?: Array<{ id: number }>
+  start_time?: string | null
+  end_time?: string | null
+  [key: string]: unknown
+}
+const pendingContentDetail = ref<RawContentDetail | null>(null)
 
 const createForm = ref({
   id: null as number | null,
@@ -146,6 +175,10 @@ let previewTimer: ReturnType<typeof setTimeout> | null = null
 const handleContentPreview = (data: PreviewData) => {
   previewData.value = data
 }
+
+// Active Design's color palette, from the preview payload — offered as
+// quick-pick swatches by the icon handler's color picker.
+const designPalette = computed<DefaultColor[]>(() => previewData.value?.design?.default_colors ?? [])
 
 const requestPreview = () => {
   if (!createForm.value.contenttype_id) {
@@ -442,7 +475,7 @@ const doSubmitCreateContent = () => {
     createForm.value.end_time = null
   }
 
-  const payload: any = {
+  const payload: Record<string, unknown> = {
     title: createForm.value.title,
     duration: createForm.value.duration,
     start_time: fmtDt(createForm.value.start_time),
@@ -474,9 +507,9 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     selectedContentType.value = data.contenttype
     // Fields (TagConfig) belong to the Contenttype itself — each one maps
     // directly to one of its Layout's containers.
-    const serverTagConfigs: any[] = (data.contenttype as any).tagconfigs || []
+    const serverTagConfigs: RawTagConfig[] = data.contenttype.tagconfigs || []
     if (serverTagConfigs && serverTagConfigs.length > 0) {
-      tagConfigs.value = serverTagConfigs.map((t: any) => {
+      tagConfigs.value = serverTagConfigs.map((t) => {
         const fieldHandler = (t.field_handler as string) ?? 'textklein'
         return {
           name: t.field_name || t.name || '',
@@ -545,7 +578,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           tagConfigs.value.forEach(tag => {
             const v = pending[tag.name]
             if (v !== undefined && v !== null) {
-              createForm.value.fields[tag.name] = v
+              createForm.value.fields[tag.name] = v as string | number | boolean
             }
           })
           // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`,
@@ -553,7 +586,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
           const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
           for (const k of Object.keys(pending)) {
             if (!pendingIgnore.has(k) && !tagConfigs.value.some(t => t.name === k)) {
-              createForm.value.fields[k] = pending[k]
+              createForm.value.fields[k] = pending[k] as string | number | boolean
             }
           }
           // start_time / end_time are not tag fields — apply them explicitly
@@ -564,7 +597,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
         }
       }
     } else {
-      extractTagConfigs((data.contenttype as any).html || '')
+      extractTagConfigs(data.contenttype.html || '')
     }
 
     // Locked/hidden individual sub-options always show (and, when locked,
@@ -577,12 +610,12 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
     tagConfigs.value.forEach(tag => {
       const flags = tag.optionFlags
       if (!flags) return
-      const raw = serverTagConfigs.find((t: any) => (t.field_name || t.name) === tag.name)?.default_value
-      let preset: Record<string, any> = {}
+      const raw = serverTagConfigs.find((t) => (t.field_name || t.name) === tag.name)?.default_value
+      let preset: Record<string, unknown> = {}
       try { preset = raw ? JSON.parse(raw) : {} } catch { preset = {} }
       for (const [key, flag] of Object.entries(flags)) {
         if ((flag.locked || flag.hidden) && key in preset) {
-          createForm.value.fields[key] = preset[key]
+          createForm.value.fields[key] = preset[key] as string | number | boolean
         }
       }
     })
@@ -599,7 +632,7 @@ const handleContentTypeDetail = (data: { contenttype: ContentType }) => {
  * handleContentTypeDetail's pendingContentDetail merge once get_contenttype
  * (fired from here) resolves the field list.
  */
-const handleContentDetail = (data: { content: any }) => {
+const handleContentDetail = (data: { content: RawContentDetail }) => {
   if (!data.content || !editMode.value) return
   const content = data.content
 
@@ -608,7 +641,7 @@ const handleContentDetail = (data: { content: any }) => {
   createForm.value.duration = content.duration
   createForm.value.contenttype_id = content.contenttype_id
 
-  const sgIds = (content.screengroups || []).map((sg: any) => sg.id)
+  const sgIds = (content.screengroups || []).map((sg) => sg.id)
   formScreengroupIds.value = [...sgIds]
   originalScreengroupIds.value = [...sgIds]
 
@@ -693,10 +726,15 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   <!-- Step 1: Select Content Type -->
   <Dialog
     v-model:visible="showSelectContentTypeDialog"
-    header="Select Content Type"
     modal
     :style="{ width: '600px' }"
   >
+    <template #header>
+      <div class="dialog-title">
+        <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
+        <span class="p-dialog-title">Select Content Type</span>
+      </div>
+    </template>
     <div class="contenttype-list">
       <Card
         v-for="ct in contentTypes"
@@ -725,7 +763,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
   <div class="content-edit-page">
     <div v-if="loadingContentTypeDetail" class="loading-state">
-      <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+      <i class="pi pi-spin pi-spinner"></i>
       <p>Loading content type...</p>
     </div>
     <div v-else class="content-edit-columns">
@@ -791,7 +829,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
           >
             <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
             <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
-            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :option-flags="tag.optionFlags" />
+            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :palette="designPalette" :option-flags="tag.optionFlags" />
           </div>
         </div>
       </section>
@@ -929,7 +967,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
     <div class="content-edit-preview" :style="{ flex: `0 0 ${settingsStore.contentEditPreviewSize}%` }">
       <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
-        <i class="pi pi-eye" style="font-size: 2rem"></i>
+        <i class="pi pi-eye"></i>
         <p>Preview will appear here once a content type is selected.</p>
       </div>
       <iframe
@@ -985,7 +1023,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 .content-edit-preview-iframe {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--p-surface-border, #ccc);
+  border: 1px solid var(--p-content-border-color, #ccc);
   border-radius: 6px;
 }
 
@@ -996,9 +1034,13 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   justify-content: center;
   gap: 0.5rem;
   aspect-ratio: 16 / 9;
-  border: 1px dashed var(--p-surface-border, #ccc);
+  border: 1px dashed var(--p-content-border-color, #ccc);
   border-radius: 6px;
   color: var(--p-text-muted-color, #6b7280);
+}
+
+.content-edit-preview-empty i {
+  font-size: 2rem;
 }
 
 .content-type-banner {
@@ -1006,7 +1048,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   align-items: flex-start;
   gap: 0.75rem;
   background: var(--p-content-background, #f8f9fa);
-  border: 1px solid var(--p-surface-border, #e5e7eb);
+  border: 1px solid var(--p-content-border-color, #e5e7eb);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-bottom: 1.25rem;
@@ -1031,7 +1073,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 .form-section-title {
   margin: 0 0 0.75rem 0;
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
   font-size: 0.95rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1079,6 +1121,27 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   font-size: 0.85rem !important;
   font-weight: 400 !important;
   color: #92400e !important;
+}
+
+/* Dark mode: the light-mode pale-amber banner (background/text all fixed
+   dark-on-light amber tones, meant for a light page) needs the pairing
+   inverted rather than just a background swap — light-mode dark-amber text
+   would be unreadable against a dark card. */
+.dark-mode .multi-screen-warning {
+  background: var(--p-surface-800, #1e293b);
+  border-color: var(--p-amber-600, #d97706);
+}
+
+.dark-mode .multi-screen-warning > i {
+  color: var(--p-amber-400, #fbbf24);
+}
+
+.dark-mode .multi-screen-warning p {
+  color: var(--p-amber-200, #fde68a);
+}
+
+.dark-mode .multi-screen-warning-help {
+  color: var(--p-amber-300, #fcd34d) !important;
 }
 
 .duration-fields {
@@ -1131,7 +1194,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
   flex-direction: column;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--p-content-border-color, #ddd);
 }
 
 .tag-fields-section h4 {
@@ -1141,7 +1204,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
 .tag-fields-section .field {
   padding: 1.5rem 0;
-  border-bottom: 1px solid var(--p-surface-border, #e5e7eb);
+  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
 }
 
 .tag-fields-section .field:last-child {
@@ -1204,7 +1267,7 @@ details[open] .scheduling-summary::before {
 .screengroup-assignment-section {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--p-content-border-color, #ddd);
 }
 
 .screengroup-assignment-section h4 {

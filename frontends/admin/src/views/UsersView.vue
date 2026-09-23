@@ -656,7 +656,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Users &amp; Rights page.</p>
         </div>
       </template>
@@ -682,7 +682,18 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
               </div>
             </template>
             <template #content>
-              <DataTable :value="users" :loading="usersLoading" data-key="id" responsive-layout="scroll">
+              <DataTable
+                :value="users"
+                :loading="usersLoading"
+                data-key="id"
+                sortField="username"
+                :sortOrder="1"
+                stripedRows
+                size="small"
+                :paginator="users.length > 10"
+                :rows="10"
+                responsive-layout="scroll"
+              >
                 <Column field="username" header="Username" sortable />
                 <Column field="is_active" header="Active" style="width: 6rem">
                   <template #body="{ data }">
@@ -701,7 +712,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                         :key="gid"
                         :value="groupById.get(gid)?.name || `#${gid}`"
                         :severity="groupById.get(gid)?.is_superadmin ? 'danger' : 'secondary'"
-                        style="margin-right: 0.3rem"
+                        class="mr-1"
                       />
                     </template>
                     <span v-else class="muted">none</span>
@@ -786,7 +797,14 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
               </div>
             </template>
             <template #content>
-              <DataTable :value="orderedGroups" :loading="rightsLoading" data-key="id" responsive-layout="scroll">
+              <DataTable
+                :value="orderedGroups"
+                :loading="rightsLoading"
+                data-key="id"
+                stripedRows
+                size="small"
+                responsive-layout="scroll"
+              >
                 <Column field="name" header="Name">
                   <template #body="{ data }">
                     <span
@@ -795,7 +813,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                     >
                       <i v-if="data.depth > 0" class="pi pi-angle-right tree-branch-icon"></i>
                       <span>{{ data.name }}</span>
-                      <Tag v-if="data.is_superadmin" value="Superadmin" severity="danger" style="margin-left: 0.4rem" />
+                      <Tag v-if="data.is_superadmin" value="Superadmin" severity="danger" class="ml-2" />
                     </span>
                   </template>
                 </Column>
@@ -862,10 +880,15 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <!-- Create/Edit account dialog -->
     <Dialog
       v-model:visible="showAccountDialog"
-      :header="isNewAccount ? 'Add User' : 'Edit User'"
       modal
-      style="width: 26rem"
+      :style="{ width: '420px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-user dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNewAccount ? 'Add User' : 'Edit User' }}</span>
+        </div>
+      </template>
       <div class="dialog-form">
         <label for="user-username">Username</label>
         <InputText id="user-username" v-model="accountForm.username" autofocus :disabled="!isNewAccount && !canEdit" />
@@ -885,7 +908,13 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     </Dialog>
 
     <!-- Create/Rename group dialog -->
-    <Dialog v-model:visible="showGroupDialog" :header="isGroupNew ? 'Add Group' : 'Edit Group'" modal style="width: 26rem">
+    <Dialog v-model:visible="showGroupDialog" modal :style="{ width: '420px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-users dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isGroupNew ? 'Add Group' : 'Edit Group' }}</span>
+        </div>
+      </template>
       <div class="dialog-form">
         <label for="group-name">Name</label>
         <InputText id="group-name" v-model="groupForm.name" autofocus />
@@ -907,10 +936,15 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <!-- Group rights matrix dialog -->
     <Dialog
       v-model:visible="showGroupRightsDialog"
-      :header="`Rights — ${editingGroup?.name ?? ''}`"
       modal
-      style="width: 32rem"
+      :style="{ width: '512px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-shield dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Rights — {{ editingGroup?.name ?? '' }}</span>
+        </div>
+      </template>
       <p class="muted">
         Grants are additive: subgroups also hold everything granted here — rights inherited
         from a parent group are marked "inherited" and stay in effect even while unchecked
@@ -959,10 +993,15 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <!-- Per-user rights dialog -->
     <Dialog
       v-model:visible="showUserRightsDialog"
-      :header="`Rights — ${editingUser?.username ?? ''}`"
       modal
-      style="width: 36rem"
+      :style="{ width: '576px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-shield dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Rights — {{ editingUser?.username ?? '' }}</span>
+        </div>
+      </template>
       <template v-if="editingUser">
         <div class="dialog-form">
           <label>Group membership</label>
@@ -974,7 +1013,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
               option-value="value"
               display="chip"
               placeholder="No groups"
-              style="flex: 1"
+              class="flex-1"
               :disabled="!canManageRights"
             />
             <Button
@@ -987,7 +1026,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           </div>
         </div>
 
-        <p class="muted" style="margin-top: 1rem">
+        <p class="muted mt-4">
           Allow/deny always win over group membership; deny cannot be overridden by any group,
           including Superadmin. "Inherit" falls through to the resolved group value shown below.
           Denying (or losing) a section's "page" right hides and clears the rest of that
@@ -1064,7 +1103,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 .dialog-form label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-color-secondary);
+  color: var(--p-text-muted-color, #6b7280);
   margin-top: 0.5rem;
 }
 

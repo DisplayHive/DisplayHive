@@ -167,7 +167,7 @@ async function addUrl() {
   if (!name || !url) return
   addLoading.value = true
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:add_url', { name, url })
+    const ack = await emitWithAck<AckResponse & { is_valid?: boolean }>('displayhive:admin:pretalx:cts:add_url', { name, url })
     addDialogVisible.value = false
     if (ack?.ok) {
       if (ack.is_valid) {
@@ -199,7 +199,7 @@ async function saveEdit(keepOpen = false) {
   if (!editId.value || !editName.value.trim()) return
   editLoading.value = true
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:update_url', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:update_url', {
       id: editId.value,
       name: editName.value.trim(),
       polling_interval: editInterval.value,
@@ -220,7 +220,7 @@ async function saveEdit(keepOpen = false) {
 // ── Polling toggle (inline) ───────────────────────────────────────────────────
 
 async function onPollingToggle(url: PretalxUrl, val: boolean) {
-  const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:update_url', {
+  const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:update_url', {
     id: url.id,
     polling_enabled: val,
   })
@@ -240,7 +240,7 @@ function deleteUrl(url: PretalxUrl) {
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Delete', severity: 'danger' },
     accept: async () => {
-      const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:delete_url', { id: url.id })
+      const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:delete_url', { id: url.id })
       if (!ack?.ok) {
         toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Delete failed', life: 4000 })
       }
@@ -256,24 +256,37 @@ function viewCache(url: PretalxUrl) {
 
 // ── Socket handlers ───────────────────────────────────────────────────────────
 
-const handleUrls = (data: any) => { urls.value = data?.urls || [] }
+// Shape shared by every emitWithAck() response below: a success flag plus an
+// optional error message, and (per-call) whatever payload it carries.
+interface AckResponse { ok?: boolean; error?: string }
 
-const handleCache = (data: any) => {
+const handleUrls = (data: { urls?: PretalxUrl[] }) => { urls.value = data?.urls || [] }
+
+const handleCache = (data: AckResponse & { name?: string; fetched_at?: string; cached_json?: string }) => {
   if (!data?.ok) {
     toast.add({ severity: 'error', summary: 'Error', detail: data?.error || 'No cache available', life: 3000 })
     return
   }
-  cacheTitle.value = data.name
+  cacheTitle.value = data.name || ''
   cacheFetchedAt.value = data.fetched_at ? new Date(data.fetched_at).toLocaleString() : '—'
   try {
-    cacheContent.value = JSON.stringify(JSON.parse(data.cached_json), null, 2)
+    cacheContent.value = JSON.stringify(JSON.parse(data.cached_json || ''), null, 2)
   } catch {
     cacheContent.value = data.cached_json || ''
   }
   cacheDialogVisible.value = true
 }
 
-const handlePretalxSettings = (data: any) => {
+interface PretalxSettings {
+  time_format?: string
+  end_of_day?: string
+  no_session_text?: string
+  coming_up_text?: string
+  invalid_data_text?: string
+  sim_datetime?: string
+}
+
+const handlePretalxSettings = (data: { settings?: PretalxSettings }) => {
   const s = data?.settings || {}
   pretalxTimeFormat.value      = s.time_format      ?? 'HH:mm'
   pretalxEndOfDay.value        = s.end_of_day       ?? '23:59'
@@ -283,7 +296,7 @@ const handlePretalxSettings = (data: any) => {
   pretalxSimDatetime.value     = s.sim_datetime ? new Date(s.sim_datetime) : null
 }
 
-const handleAdminSettingsForTimezone = (data: any) => {
+const handleAdminSettingsForTimezone = (data: { system_settings?: { timezone?: string } }) => {
   const tz = data?.system_settings?.timezone
   if (tz) previewTimezone.value = tz
 }
@@ -296,7 +309,7 @@ const savePretalxSettings = async () => {
     const simIso = _d
       ? `${_d.getFullYear()}-${pad(_d.getMonth() + 1)}-${pad(_d.getDate())}T${pad(_d.getHours())}:${pad(_d.getMinutes())}`
       : ''
-    const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:save_settings', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:save_settings', {
       time_format:   pretalxTimeFormat.value,
       end_of_day:    pretalxEndOfDay.value,
       sim_datetime:  simIso,
@@ -316,7 +329,7 @@ const savePretalxSettings = async () => {
 const savePretalxTexts = async () => {
   textsSaving.value = true
   try {
-    const ack = await emitWithAck<any>('displayhive:admin:pretalx:cts:save_settings', {
+    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:save_settings', {
       no_session_text:   pretalxNoSessionText.value,
       coming_up_text:    pretalxComingUpText.value,
       invalid_data_text: pretalxInvalidDataText.value,
@@ -358,7 +371,7 @@ onUnmounted(() => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Pretalx page.</p>
         </div>
       </template>
@@ -368,7 +381,7 @@ onUnmounted(() => {
     <Card>
       <template #title>
         <div class="card-header">
-          <i class="pi pi-calendar" />
+          <i class="pi pi-calendar card-header-icon" />
           <span>Pretalx API Endpoints</span>
           <Button v-if="canManage" label="Add URL" icon="pi pi-plus" size="small" class="add-btn" @click="openAddDialog" />
         </div>
@@ -376,8 +389,8 @@ onUnmounted(() => {
       <template #content>
         <DataTable :value="urls" stripedRows size="small">
           <template #empty>
-            <div class="empty-state">
-              <i class="pi pi-calendar" style="font-size: 1.5rem" />
+            <div class="empty-state empty-state--compact">
+              <i class="pi pi-calendar" />
               <p>No API URLs configured. Click "Add URL" to get started.</p>
             </div>
           </template>
@@ -458,18 +471,24 @@ onUnmounted(() => {
     </Card>
 
     <!-- Add dialog -->
-    <Dialog v-model:visible="addDialogVisible" header="Add Pretalx API URL" :modal="true" style="width: 480px">
+    <Dialog v-model:visible="addDialogVisible" modal :style="{ width: '480px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-link dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Add Pretalx API URL</span>
+        </div>
+      </template>
       <div class="edit-form">
         <div class="field">
           <label>Name</label>
-          <InputText v-model="newName" placeholder="e.g. Main Conference" style="width: 100%" autofocus />
+          <InputText v-model="newName" placeholder="e.g. Main Conference" class="w-full" autofocus />
         </div>
         <div class="field">
           <label>API URL</label>
           <InputText
             v-model="newUrl"
             placeholder="https://pretalx.example.com/api/events/conf/talks/"
-            style="width: 100%"
+            class="w-full"
             @keydown.enter="addUrl"
           />
           <small class="hint">The URL is fetched immediately — it must return JSON to be marked as valid.</small>
@@ -488,20 +507,26 @@ onUnmounted(() => {
     </Dialog>
 
     <!-- Edit dialog -->
-    <Dialog v-model:visible="editDialogVisible" header="Edit Pretalx API URL" :modal="true" style="width: 480px">
+    <Dialog v-model:visible="editDialogVisible" modal :style="{ width: '480px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-link dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Edit Pretalx API URL</span>
+        </div>
+      </template>
       <div class="edit-form">
         <div class="field">
           <label>Name</label>
-          <InputText v-model="editName" style="width: 100%" autofocus />
+          <InputText v-model="editName" class="w-full" autofocus />
         </div>
         <div class="field">
           <label>API URL</label>
-          <InputText v-model="editUrl" style="width: 100%" disabled />
+          <InputText v-model="editUrl" class="w-full" disabled />
           <small class="hint">URL cannot be changed after creation. Delete and re-add to use a different URL.</small>
         </div>
         <div class="field">
           <label>Polling Interval (seconds)</label>
-          <InputNumber v-model="editInterval" :min="30" :max="86400" style="width: 100%" />
+          <InputNumber v-model="editInterval" :min="30" :max="86400" class="w-full" />
         </div>
       </div>
       <template #footer>
@@ -514,10 +539,15 @@ onUnmounted(() => {
     <!-- Cache viewer dialog -->
     <Dialog
       v-model:visible="cacheDialogVisible"
-      :header="`Cached Response — ${cacheTitle}`"
-      :modal="true"
-      style="width: min(900px, 95vw)"
+      modal
+      :style="{ width: '900px', maxWidth: '95vw' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-database dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Cached Response — {{ cacheTitle }}</span>
+        </div>
+      </template>
       <div class="cache-meta">Fetched at: {{ cacheFetchedAt }}</div>
       <pre class="cache-json">{{ cacheContent }}</pre>
     </Dialog>
@@ -526,7 +556,7 @@ onUnmounted(() => {
     <Card>
       <template #title>
         <div class="card-header">
-          <i class="pi pi-comment" />
+          <i class="pi pi-comment card-header-icon" />
           <span>Default Texts</span>
         </div>
       </template>
@@ -556,7 +586,7 @@ onUnmounted(() => {
     <Card>
       <template #title>
         <div class="card-header">
-          <i class="pi pi-clock" />
+          <i class="pi pi-clock card-header-icon" />
           <span>Date / Time Settings</span>
         </div>
       </template>
@@ -695,6 +725,24 @@ onUnmounted(() => {
   font-size: 0.74rem;
 }
 
+/* Dark mode: --p-surface-100..300 are fixed ramp points, kept as the
+   light-mode shades above — see docs/developer/styleguide.md. */
+.dark-mode .datetime-preview {
+  background: var(--p-surface-800, #1e293b);
+}
+
+.dark-mode .token-table th {
+  border-bottom-color: var(--p-surface-600, #475569);
+}
+
+.dark-mode .token-table td {
+  border-bottom-color: var(--p-surface-700, #334155);
+}
+
+.dark-mode .token-table td code {
+  background: var(--p-surface-700, #334155);
+}
+
 .settings-hint {
   font-size: 0.82rem;
   color: var(--p-text-muted-color, #6b7280);
@@ -749,7 +797,7 @@ onUnmounted(() => {
 }
 .validity-icon.valid   { color: #22c55e; }
 .validity-icon.invalid { color: #ef4444; }
-.validity-icon.unknown { color: #94a3b8; }
+.validity-icon.unknown { color: var(--p-text-muted-color, #94a3b8); }
 
 .row-actions {
   display: flex;

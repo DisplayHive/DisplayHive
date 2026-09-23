@@ -21,6 +21,11 @@ export interface IconPickerValue {
   icon: string
   /** Rendered height, in vh. */
   size: number
+  /** Icon color: a literal CSS color, a "@default:<id>" reference into the
+   * active Design's palette (resolved server-side, see render_content_fields
+   * in application/admin/content/helper.py), or '' to keep the icon's own
+   * intrinsic colors. */
+  color: string
 }
 
 export interface IconLibraryMeta {

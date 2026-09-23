@@ -98,7 +98,7 @@ const executeCopyLayout = async () => {
 
 // --- Data loading ---------------------------------------------------------
 
-const handleLayoutsList = (data: any) => {
+const handleLayoutsList = (data: { data?: Layout[] }) => {
   layouts.value = data?.data || []
   loading.value = false
 }
@@ -123,7 +123,7 @@ const refreshData = () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Layouts page.</p>
         </div>
       </template>
@@ -131,15 +131,15 @@ const refreshData = () => {
   </div>
   <div v-else class="layouts-view">
     <Card>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter layouts..." class="filter-input" />
+      <template #title>
+        <div class="card-header">
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Layout" @click="openNewPage" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-
+      </template>
+      <template #content>
         <DataTable
           :value="filteredLayouts"
           :loading="loading"
@@ -151,6 +151,13 @@ const refreshData = () => {
           :rows="10"
           responsiveLayout="scroll"
         >
+          <template #header>
+            <div class="dt-header">
+              <div class="dt-left">
+                <InputText v-model="filterText" placeholder="Filter layouts..." class="filter-input" />
+              </div>
+            </div>
+          </template>
           <Column field="id" header="ID" style="width: 60px" sortable />
           <Column field="name" header="Name" sortable />
           <Column field="description" header="Description">
@@ -184,7 +191,13 @@ const refreshData = () => {
     </Card>
 
     <!-- Clone Layout Dialog -->
-    <Dialog v-model:visible="showCopyDialog" header="Clone Layout" modal :style="{ width: '400px' }">
+    <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Clone Layout</span>
+        </div>
+      </template>
       <div class="field">
         <label for="copy-layout-name">New Name</label>
         <InputText id="copy-layout-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyLayout" />
@@ -204,11 +217,10 @@ const refreshData = () => {
   gap: 1rem;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .field {

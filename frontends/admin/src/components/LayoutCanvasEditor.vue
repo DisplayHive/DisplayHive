@@ -22,6 +22,7 @@ import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
+import type { DefaultColor } from '../types/models'
 import { getEffectDefinition } from '../utils/backgroundEffects'
 import { resolveIconPlaceholders, type PreviewContainer } from '../utils/designPreview'
 // `?raw` inlines the pre-built bundle's source as a string at build time.
@@ -42,6 +43,20 @@ import bbScriptSource from 'beautiful-backgrounds?raw'
 // match for the parser while remaining valid (harmless) JS if it happens to
 // land inside a string/regex in the source itself.
 const bbScriptSourceSafe = bbScriptSource.replace(/<\/script/gi, '<\\/script')
+
+// Same underlying problem as above, but for the wrapper tags this file writes
+// around bbScriptSourceSafe (below). A closing script tag typed directly,
+// verbatim, into this .vue file's own <script> block — even inside a JS
+// template literal — confuses the SFC compiler's block locator: it scans the
+// raw file text for that exact byte sequence without understanding it's
+// sitting inside a string, and ends this file's own script block right
+// there, corrupting everything parsed after it (see the build error this
+// caused: a "Duplicate attribute" / "Element is missing end tag" deep in the
+// unrelated code that follows). Concatenating the tag name keeps the closing
+// sequence from ever appearing literally in this file's source while still
+// producing the intended string at runtime.
+const SCRIPT_OPEN_TAG = '<' + 'script type="module">'
+const SCRIPT_CLOSE_TAG = '<' + '/script>'
 
 interface MediaItem { id: number; url: string }
 
@@ -95,6 +110,9 @@ interface DesignPreview {
   html: string
   css: string
   background_effect: { name: string; settings: Record<string, unknown> } | null
+  /** Active Design's color palette — offered as quick-pick swatches by the
+   * container-default icon handler's color picker. */
+  default_colors?: DefaultColor[]
 }
 const designPreview = ref<DesignPreview | null>(null)
 
@@ -153,7 +171,7 @@ const effectFragment = computed(() => {
   return (
     `<div id="design-effect-background" style="position:absolute;inset:0;overflow:hidden;">` +
     `<${def.tag} style="display:block;width:100%;height:100%;" ${attrs}></${def.tag}></div>` +
-    `<script type="module">${bbScriptSourceSafe}<\/script>`
+    SCRIPT_OPEN_TAG + bbScriptSourceSafe + SCRIPT_CLOSE_TAG
   )
 })
 
@@ -754,15 +772,15 @@ const onDefaultImagePicked = (item: MediaItem) => {
   setImageData({ url: item.url, size: imageSize.value })
 }
 
-// --- 'icon' handler: {icon, size}, packed as JSON into default_content ----
+// --- 'icon' handler: {icon, size, color}, packed as JSON into default_content
 const iconValue = computed<IconPickerValue>(() => {
   try {
     const parsed = JSON.parse(containerEditForm.default_content || '{}')
     if (parsed && typeof parsed === 'object' && 'icon' in parsed) {
-      return { icon: parsed.icon || '', size: parsed.size ?? 5 }
+      return { icon: parsed.icon || '', size: parsed.size ?? 5, color: parsed.color || '' }
     }
   } catch { /* not JSON yet */ }
-  return { icon: '', size: 5 }
+  return { icon: '', size: 5, color: '' }
 })
 const setIconData = (v: IconPickerValue) => {
   containerEditForm.default_content = JSON.stringify(v)
@@ -796,7 +814,7 @@ const onDefaultHandlerChange = (newHandler: string) => {
   } else if (newHandler === 'image') {
     containerEditForm.default_content = JSON.stringify({ url: '', size: null })
   } else if (newHandler === 'icon') {
-    containerEditForm.default_content = JSON.stringify({ icon: '', size: 5 })
+    containerEditForm.default_content = JSON.stringify({ icon: '', size: 5, color: '' })
   } else if (newHandler === 'table') {
     containerEditForm.default_content = JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] })
   } else if (newHandler === 'pretalx_table') {
@@ -1004,7 +1022,12 @@ const toggleSelectedLayoutMembership = () => {
 <template>
   <div class="layout-editor">
     <Card class="editor-options-card">
-      <template #title>Preview &amp; Guides</template>
+      <template #title>
+        <div class="card-header-title">
+          <i class="pi pi-eye card-header-icon" />
+          <span>Preview &amp; Guides</span>
+        </div>
+      </template>
       <template #content>
         <div class="preview-toggles">
           <div class="filter-toggle">
@@ -1141,7 +1164,13 @@ const toggleSelectedLayoutMembership = () => {
     </div>
 
     <!-- Container Edit Modal -->
-    <Dialog v-model:visible="showContainerEditModal" :header="`Edit Container #${containerEditForm.id}`" modal :style="{ width: '480px' }">
+    <Dialog v-model:visible="showContainerEditModal" modal :style="{ width: '480px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Edit Container #{{ containerEditForm.id }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label>Name</label>
@@ -1221,7 +1250,7 @@ const toggleSelectedLayoutMembership = () => {
               </div>
             </div>
             <div v-else class="image-field-empty" @click="showImagePickerDialog = true">
-              <i class="pi pi-image" style="font-size: 2rem; color: #94a3b8" />
+              <i class="pi pi-image" />
               <span>Click to select an image</span>
             </div>
             <div class="image-size-row">
@@ -1239,7 +1268,7 @@ const toggleSelectedLayoutMembership = () => {
 
           <div v-else-if="containerEditForm.default_field_handler === 'icon'" class="field">
             <label>Default Content</label>
-            <IconPickerField :model-value="iconValue" @update:model-value="setIconData" />
+            <IconPickerField :model-value="iconValue" @update:model-value="setIconData" :palette="designPreview?.default_colors ?? []" />
           </div>
 
           <div v-else-if="containerEditForm.default_field_handler === 'arrows'" class="field arrow-picker-wrapper">
@@ -1314,7 +1343,7 @@ const toggleSelectedLayoutMembership = () => {
           <div v-else-if="containerEditForm.default_field_handler === 'marquee'" class="field">
             <label>Lauftext</label>
             <InputText :model-value="marqueeText" size="small" class="w-full" placeholder="Dein Lauftext…" @update:model-value="(v) => (marqueeText = String(v ?? ''))" />
-            <div class="arrow-size-row" style="margin-top:0.5rem;">
+            <div class="arrow-size-row">
               <label class="arrow-size-label">Geschwindigkeit (s)</label>
               <InputNumber
                 :model-value="marqueeSpeed"
@@ -1330,9 +1359,9 @@ const toggleSelectedLayoutMembership = () => {
           <div v-else-if="containerEditForm.default_field_handler === 'countdown'" class="field">
             <label>Target Date &amp; Time</label>
             <DatePicker v-model="countdownTargetDate" showTime hourFormat="24" showClear dateFormat="dd.mm.yy" placeholder="Pick a date" class="w-full" />
-            <label style="margin-top:0.5rem;display:block;">Format</label>
+            <label class="mt-2 d-block">Format</label>
             <InputText v-model="countdownFormat" size="small" placeholder="DD:HH:mm:ss" style="width: 160px" />
-            <label style="margin-top:0.5rem;display:block;">Finished Text</label>
+            <label class="mt-2 d-block">Finished Text</label>
             <InputText v-model="countdownFinishedText" size="small" class="w-full" placeholder="Optional text shown once the countdown ends" />
             <small class="hint">Tokens: DD/D days, HH/H hours, mm/m minutes, ss/s seconds — remaining until the target.</small>
           </div>
@@ -1412,7 +1441,7 @@ const toggleSelectedLayoutMembership = () => {
 .filter-toggle label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .snapline-bar {
@@ -1476,7 +1505,7 @@ const toggleSelectedLayoutMembership = () => {
     repeating-linear-gradient(
       90deg, rgba(128, 128, 128, 0.08) 0, rgba(128, 128, 128, 0.08) 1px, transparent 1px, transparent 10%
     );
-  border: 1px solid var(--p-surface-border, #ccc);
+  border: 1px solid var(--p-content-border-color, #ccc);
   border-radius: 6px;
   overflow: hidden;
   touch-action: none;
@@ -1631,7 +1660,7 @@ const toggleSelectedLayoutMembership = () => {
 }
 
 .hint {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   font-size: 0.75rem;
   margin: 0;
 }
@@ -1651,7 +1680,7 @@ const toggleSelectedLayoutMembership = () => {
 .field label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #666;
+  color: var(--p-text-muted-color, #666);
 }
 
 .position-grid {
@@ -1669,7 +1698,7 @@ const toggleSelectedLayoutMembership = () => {
 .editor-sidebar {
   width: 240px;
   flex-shrink: 0;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 6px;
   padding: 0.75rem;
   display: flex;
@@ -1690,7 +1719,7 @@ const toggleSelectedLayoutMembership = () => {
 
 .sidebar-item {
   padding: 0.4rem 0.6rem;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 4px;
   cursor: grab;
   font-size: 0.85rem;
@@ -1727,7 +1756,7 @@ const toggleSelectedLayoutMembership = () => {
   justify-content: center;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--p-text-muted-color, #666);
   cursor: pointer;
   border-radius: 3px;
   font-size: 0.7rem;
@@ -1739,13 +1768,13 @@ const toggleSelectedLayoutMembership = () => {
 }
 
 .sidebar-icon-btn.disabled {
-  color: #ccc;
+  color: var(--p-text-muted-color, #ccc);
   cursor: not-allowed;
 }
 
 .sidebar-icon-btn.disabled:hover {
   background: transparent;
-  color: #ccc;
+  color: var(--p-text-muted-color, #ccc);
 }
 
 .default-table-editor {
@@ -1756,7 +1785,7 @@ const toggleSelectedLayoutMembership = () => {
 
 .default-table-editor th,
 .default-table-editor td {
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   padding: 0.25rem;
   text-align: left;
 }
@@ -1776,13 +1805,17 @@ const toggleSelectedLayoutMembership = () => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--p-content-border-color, #cbd5e1);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--p-text-muted-color, #94a3b8);
   font-size: 0.875rem;
   transition: border-color 0.2s, background 0.2s;
+}
+
+.image-field-empty i {
+  font-size: 2rem;
 }
 
 .image-field-empty:hover {
@@ -1801,7 +1834,7 @@ const toggleSelectedLayoutMembership = () => {
   height: 60px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
 }
 
 .image-field-actions {
@@ -1819,8 +1852,8 @@ const toggleSelectedLayoutMembership = () => {
   flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0.5rem;
-  background: var(--p-surface-50, #f8fafc);
-  border: 1px solid var(--p-surface-200, #e2e8f0);
+  background: var(--p-content-background, #f8fafc);
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
 }
 
@@ -1831,9 +1864,9 @@ const toggleSelectedLayoutMembership = () => {
   width: 2.4rem;
   height: 2.4rem;
   font-size: 1.4rem;
-  border: 1px solid var(--p-surface-300, #cbd5e1);
+  border: 1px solid var(--p-content-border-color, #cbd5e1);
   border-radius: 6px;
-  background: white;
+  background: var(--p-content-background, white);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   line-height: 1;

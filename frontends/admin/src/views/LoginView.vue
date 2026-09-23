@@ -124,7 +124,7 @@ const submit = async () => {
 .login-form label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-color-secondary);
+  color: var(--p-text-muted-color, #6b7280);
   margin-top: 0.5rem;
 }
 
@@ -135,5 +135,13 @@ const submit = async () => {
 
 .login-form .p-button {
   margin-top: 1rem;
+}
+
+/* Dark mode: this wrapper covers the full viewport and otherwise hides
+   App.vue's own `.dark-mode body` background beneath it. useTheme() runs
+   before login (system/cached preference), so the login screen needs its
+   own dark background too. */
+.dark-mode .login-view {
+  background-color: #14181c;
 }
 </style>

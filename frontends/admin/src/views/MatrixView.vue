@@ -23,6 +23,26 @@ interface Screengroup {
   screen_ids: number[]
 }
 
+// Wire shape for a Screen/Screengroup item — either flat (helper payloads)
+// or JSON:API-style (attributes/relationships), depending on which backend
+// path produced it. normalizeScreen/normalizeScreengroup below accept
+// either.
+interface RawItem {
+  id: number | string
+  name?: string
+  title?: string
+  attached_device?: { is_online?: boolean } | null
+  device?: { is_online?: boolean } | null
+  screen_ids?: number[]
+  screens?: number[]
+  is_one_screen?: boolean
+  attributes?: { name?: string; is_one_screen?: boolean }
+  relationships?: {
+    device?: { data?: { is_online?: boolean } | null }
+    screens?: { data?: Array<{ id: number | string }> }
+  }
+}
+
 const toast = useToast()
 const { on, off, emit } = useSocket()
 const rightsStore = useRightsStore()
@@ -35,7 +55,7 @@ const loading = ref(true)
 // Track changes locally
 const matrixState = ref<Map<string, boolean>>(new Map())
 
-const normalizeScreen = (item: any): Screen => {
+const normalizeScreen = (item: RawItem): Screen => {
   // Support either helper payloads ({ id, name, attached_device })
   // or JSON:API style ({ id, attributes: { name }, relationships })
   try {
@@ -52,26 +72,26 @@ const normalizeScreen = (item: any): Screen => {
     const name = item.name || item.title || String(item.id)
     const attached = item.attached_device || item.device || null
     return { id, name, hasDevice: !!attached, online: !!attached?.is_online }
-  } catch (e) {
+  } catch {
     return { id: Number(item.id || 0), name: String(item.name || item.id || 'unknown'), hasDevice: false, online: false }
   }
 }
 
-const handleScreensList = (data: any) => {
+const handleScreensList = (data: { screens?: RawItem[]; data?: RawItem[] }) => {
   const arr = data?.screens || data?.data || []
   screens.value = (arr || []).map(normalizeScreen)
   updateMatrixState()
   loading.value = false
 }
 
-const normalizeScreengroup = (item: any): Screengroup => {
+const normalizeScreengroup = (item: RawItem): Screengroup => {
   try {
     if (item && item.attributes) {
       const id = Number(item.id)
       const name = item.attributes.name || String(item.id)
       const rel = item.relationships || {}
       const screen_refs = (rel.screens && rel.screens.data) || []
-      const screen_ids = (screen_refs || []).map((s: any) => Number(s.id))
+      const screen_ids = (screen_refs || []).map((s) => Number(s.id))
       return { id, name, screen_ids }
     }
 
@@ -79,15 +99,15 @@ const normalizeScreengroup = (item: any): Screengroup => {
     const name = item.name || String(item.id)
     const screen_ids = item.screen_ids || item.screens || []
     return { id, name, screen_ids }
-  } catch (e) {
+  } catch {
     return { id: Number(item.id || 0), name: String(item.name || item.id || 'group'), screen_ids: [] }
   }
 }
 
-const handleScreengroupsList = (data: any) => {
+const handleScreengroupsList = (data: { screengroups?: RawItem[]; data?: RawItem[] }) => {
   const arr = data?.screengroups || data?.data || []
   screengroups.value = (arr || [])
-    .filter((item: any) => {
+    .filter((item) => {
       const attrs = item.attributes || item
       return !(attrs.is_one_screen ?? false)
     })
@@ -176,7 +196,7 @@ const refreshData = () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Matrix page.</p>
         </div>
       </template>
@@ -242,18 +262,18 @@ const refreshData = () => {
           </table>
 
           <div v-if="screens.length === 0" class="empty-state">
-            <i class="pi pi-desktop" style="font-size: 3rem"></i>
+            <i class="pi pi-desktop"></i>
             <p>No screens available</p>
           </div>
 
           <div v-if="screengroups.length === 0" class="empty-state">
-            <i class="pi pi-th-large" style="font-size: 3rem"></i>
+            <i class="pi pi-th-large"></i>
             <p>No screengroups defined</p>
           </div>
         </div>
 
         <div class="loading-state" v-if="loading">
-          <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+          <i class="pi pi-spin pi-spinner"></i>
           <p>Loading matrix...</p>
         </div>
       </template>
@@ -277,7 +297,7 @@ const refreshData = () => {
 }
 
 .matrix-description {
-  color: #666;
+  color: var(--p-text-muted-color, #666);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -290,24 +310,25 @@ const refreshData = () => {
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
+  color: var(--p-text-color, #1f2937);
 }
 
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--p-content-border-color, #e0e0e0);
   padding: 0.75rem;
   text-align: center;
 }
 
 .screen-header {
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   text-align: left;
   min-width: 200px;
 }
 
 .group-header {
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   min-width: 120px;
 }
@@ -337,7 +358,14 @@ const refreshData = () => {
 }
 
 .matrix-cell:hover {
-  background-color: #f0f0f0;
+  background-color: var(--p-content-hover-background, #f0f0f0);
+}
+
+/* Dark mode: --p-surface-100 is a fixed ramp point, kept as the light-mode
+   header shade above — see docs/developer/styleguide.md. */
+.dark-mode .screen-header,
+.dark-mode .group-header {
+  background: var(--p-surface-800, #1e293b);
 }
 
 </style>

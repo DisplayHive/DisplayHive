@@ -23,6 +23,68 @@ function generateUUID(): string {
   });
 }
 
+// Placeholder shown in place of the token until the eye icon reveals it.
+const TOKEN_MASK = "•".repeat(36); // matches a UUID's character length
+
+/** Reset the token display to masked and point it at the given token. */
+function renderTokenDisplay(token: string): void {
+  const valueEl = document.getElementById("token-value");
+  const toggleBtn = document.getElementById("token-toggle") as HTMLButtonElement | null;
+  if (!valueEl) return;
+
+  valueEl.dataset.token = token;
+  valueEl.textContent = TOKEN_MASK;
+  valueEl.classList.remove("revealed");
+
+  if (toggleBtn) {
+    toggleBtn.disabled = false;
+    toggleBtn.title = "Show token";
+    toggleBtn.setAttribute("aria-label", "Show token");
+  }
+
+  const manualAdoptLink = document.getElementById("manual-adopt-link") as HTMLAnchorElement | null;
+  if (manualAdoptLink) {
+    manualAdoptLink.href = `/admin/manualadopt?token=${encodeURIComponent(token)}`;
+  }
+}
+
+/** Wire up the reveal (eye) and copy icon buttons. Idempotent. */
+function wireTokenControls(): void {
+  const valueEl = document.getElementById("token-value");
+  const toggleBtn = document.getElementById("token-toggle") as HTMLButtonElement | null;
+  const copyBtn = document.getElementById("token-copy") as HTMLButtonElement | null;
+  if (!valueEl) return;
+
+  // The eye icon only reveals the token - it does not re-mask it afterwards.
+  if (toggleBtn && !toggleBtn.dataset.wired) {
+    toggleBtn.dataset.wired = "true";
+    toggleBtn.addEventListener("click", () => {
+      const token = valueEl.dataset.token;
+      if (!token) return;
+      valueEl.textContent = token;
+      valueEl.classList.add("revealed");
+      toggleBtn.disabled = true;
+      toggleBtn.title = "Token shown";
+      toggleBtn.setAttribute("aria-label", "Token shown");
+    });
+  }
+
+  if (copyBtn && !copyBtn.dataset.wired) {
+    copyBtn.dataset.wired = "true";
+    copyBtn.addEventListener("click", async () => {
+      const token = valueEl.dataset.token;
+      if (!token) return;
+      try {
+        await navigator.clipboard.writeText(token);
+        copyBtn.classList.add("copied");
+        setTimeout(() => copyBtn.classList.remove("copied"), 1500);
+      } catch (e) {
+        console.error("[Adoption] Failed to copy token", e);
+      }
+    });
+  }
+}
+
 /**
  * Generate and render a QR code into the `#qr-code` element.
  * Polls at 100 ms intervals until the QRCode.js CDN library is available.
@@ -33,6 +95,9 @@ export function generateQRCode(text: string): void {
     console.error("[Adoption] QR code container not found");
     return;
   }
+
+  renderTokenDisplay(text);
+  wireTokenControls();
 
   qrContainer.innerHTML = "";
 

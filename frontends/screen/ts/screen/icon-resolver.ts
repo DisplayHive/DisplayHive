@@ -8,13 +8,28 @@
 
 import { loadIcon } from './icon-libraries.js';
 
-/** Strip any hardcoded width/height off the SVG root so it scales to its wrapper. */
-function sizeToFit(svg: string): string {
-  return svg.replace(
-    /<svg\b([^>]*)>/i,
-    (_match, attrs: string) =>
-      `<svg${attrs.replace(/\s+(width|height)="[^"]*"/gi, '')} style="height:100%;width:auto;display:block;">`,
-  );
+/**
+ * Strip any hardcoded width/height off the SVG root so it scales to its
+ * wrapper, and — when a color was configured (data-dh-icon-color, already
+ * resolved to a literal CSS color server-side) — force that color onto the
+ * icon. Most icon sets draw with `currentColor`, so setting `color` on the
+ * root covers them; libraries that hardcode `fill`/`stroke` on the root are
+ * overridden too (a `none` value is kept, so outline icons stay outlines).
+ */
+function styleSvg(svg: string, color: string | null): string {
+  return svg.replace(/<svg\b([^>]*)>/i, (_match, rawAttrs: string) => {
+    let attrs = rawAttrs.replace(/\s+(width|height)="[^"]*"/gi, '');
+    let style = 'height:100%;width:auto;display:block;';
+    if (color) {
+      style += `color:${color};`;
+      attrs = attrs.replace(
+        /\s+(fill|stroke)="([^"]*)"/gi,
+        (m: string, prop: string, val: string) =>
+          val.trim().toLowerCase() === 'none' ? m : ` ${prop}="${color}"`,
+      );
+    }
+    return `<svg${attrs} style="${style}">`;
+  });
 }
 
 export async function resolveIcons(root: ParentNode = document): Promise<void> {
@@ -25,7 +40,7 @@ export async function resolveIcons(root: ParentNode = document): Promise<void> {
       const name = el.getAttribute('data-dh-icon-name');
       if (!library || !name) return;
       const svg = await loadIcon(library, name);
-      if (svg) el.innerHTML = sizeToFit(svg);
+      if (svg) el.innerHTML = styleSvg(svg, el.getAttribute('data-dh-icon-color'));
     }),
   );
 }

@@ -61,7 +61,7 @@ const pick = (color: DefaultColor, e: Event) => {
   width: 24px;
   height: 24px;
   border-radius: 5px;
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   cursor: pointer;
   padding: 0;
 }

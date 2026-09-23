@@ -17,7 +17,6 @@ import InputText from 'primevue/inputtext'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Badge from 'primevue/badge'
-import MultiSelect from 'primevue/multiselect'
 
 // Dialog-local screen shape (backend sends flat is_online, not nested in attached_device)
 interface DialogScreen {
@@ -103,9 +102,9 @@ const filteredAvailableContent = computed(() => {
 })
 
 // Dialog-specific: receives assigned screens for the open screengroup
-const handleScreenGroupScreens = (data: any) => {
+const handleScreenGroupScreens = (data: { screens?: DialogScreen[] }) => {
   if (data && data.screens) {
-    assignedScreens.value = data.screens.map((s: any) => ({
+    assignedScreens.value = data.screens.map((s) => ({
       id: s.id,
       name: s.name,
       resolution: s.resolution || 'n/a',
@@ -125,9 +124,9 @@ const handleScreenGroupScreens = (data: any) => {
 }
 
 // Dialog-specific: receives assigned content for the open screengroup
-const handleScreenGroupContent = (data: any) => {
+const handleScreenGroupContent = (data: { content?: Array<{ id: number; title: string; type?: string; contenttype_name?: string }> }) => {
   if (data && data.content) {
-    assignedContent.value = data.content.map((c: any) => ({
+    assignedContent.value = data.content.map((c) => ({
       id: c.id,
       title: c.title,
       contenttype_name: c.type || c.contenttype_name,
@@ -138,7 +137,9 @@ const handleScreenGroupContent = (data: any) => {
   contentLoading.value = false
 }
 
-const handleScreenGroupCreated = (data: any) => {
+interface ActionResult { success?: boolean; error?: string }
+
+const handleScreenGroupCreated = (data: ActionResult) => {
   if (data.success) {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group created', life: 3000 })
     screengroupsStore.fetch()
@@ -147,7 +148,7 @@ const handleScreenGroupCreated = (data: any) => {
   }
 }
 
-const handleScreenGroupDeleted = (data: any) => {
+const handleScreenGroupDeleted = (data: ActionResult) => {
   if (data.success) {
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group deleted', life: 3000 })
     screengroupsStore.fetch()
@@ -323,7 +324,7 @@ const removeAllContentFromGroup = () => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Screen Groups page.</p>
         </div>
       </template>
@@ -331,15 +332,15 @@ const removeAllContentFromGroup = () => {
   </div>
   <div v-else class="screengroups-view">
     <Card>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter screen groups..." class="filter-input" />
+      <template #title>
+        <div class="card-header">
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Screen Group" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-
+      </template>
+      <template #content>
         <DataTable
           :value="filteredScreenGroups"
           :loading="screengroupsStore.loading"
@@ -350,6 +351,13 @@ const removeAllContentFromGroup = () => {
           :paginator="filteredScreenGroups.length > 10"
           :rows="10"
         >
+          <template #header>
+            <div class="dt-header">
+              <div class="dt-left">
+                <InputText v-model="filterText" placeholder="Filter screen groups..." class="filter-input" />
+              </div>
+            </div>
+          </template>
           <Column field="id" header="ID" style="width: 60px" sortable />
           <Column field="name" header="Name" sortable />
           <Column header="Screens" style="width: 120px">
@@ -397,10 +405,15 @@ const removeAllContentFromGroup = () => {
     <!-- Edit/Create Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
-      :header="isNew ? 'New Screen Group' : 'Edit Screen Group'"
       modal
       :style="{ width: '500px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-th-large dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNew ? 'New Screen Group' : 'Edit Screen Group' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div class="field">
           <label for="sg-name">Name</label>
@@ -417,13 +430,18 @@ const removeAllContentFromGroup = () => {
     <!-- Screens Management Dialog -->
     <Dialog
       v-model:visible="showScreensDialog"
-      :header="`Screens in ${selectedScreenGroup?.name || ''}`"
       modal
       :style="{ width: '900px', maxHeight: '90vh' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Screens in {{ selectedScreenGroup?.name || '' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div v-if="screensLoading" class="loading-state">
-          <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+          <i class="pi pi-spin pi-spinner"></i>
           <p>Loading screens...</p>
         </div>
         <div v-else class="screens-container">
@@ -439,7 +457,7 @@ const removeAllContentFromGroup = () => {
               <p class="text-muted">No assigned screens{{ assignedScreensFilter ? ' matching filter' : '' }}.</p>
             </div>
             <div v-else>
-              <DataTable :value="filteredAssignedScreens" sortField="name" :sortOrder="1" :paginator="filteredAssignedScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
+              <DataTable :value="filteredAssignedScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAssignedScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
                 <Column field="name" header="Name" />
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
@@ -470,7 +488,7 @@ const removeAllContentFromGroup = () => {
               <p class="text-muted">No available screens{{ availableScreensFilter ? ' matching filter' : '' }}.</p>
             </div>
             <div v-else>
-              <DataTable :value="filteredAvailableScreens" sortField="name" :sortOrder="1" :paginator="filteredAvailableScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
+              <DataTable :value="filteredAvailableScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAvailableScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
                 <Column field="name" header="Name" />
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
@@ -504,13 +522,18 @@ const removeAllContentFromGroup = () => {
     <!-- Content Management Dialog -->
     <Dialog
       v-model:visible="showContentDialog"
-      :header="`Content in ${selectedScreenGroup?.name || ''}`"
       modal
       :style="{ width: '900px', maxHeight: '90vh' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-file dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Content in {{ selectedScreenGroup?.name || '' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div v-if="contentLoading" class="loading-state">
-          <i class="pi pi-spin pi-spinner" style="font-size: 2rem"></i>
+          <i class="pi pi-spin pi-spinner"></i>
           <p>Loading content...</p>
         </div>
         <div v-else class="content-container">
@@ -526,7 +549,7 @@ const removeAllContentFromGroup = () => {
               <p class="text-muted">No assigned content{{ assignedContentFilter ? ' matching filter' : '' }}.</p>
             </div>
             <div v-else>
-              <DataTable :value="filteredAssignedContent" :paginator="filteredAssignedContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
+              <DataTable :value="filteredAssignedContent" stripedRows :paginator="filteredAssignedContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
                 <Column field="title" header="Title" />
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
@@ -552,7 +575,7 @@ const removeAllContentFromGroup = () => {
               <p class="text-muted">No available content{{ availableContentFilter ? ' matching filter' : '' }}.</p>
             </div>
             <div v-else>
-              <DataTable :value="filteredAvailableContent" :paginator="filteredAvailableContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
+              <DataTable :value="filteredAvailableContent" stripedRows :paginator="filteredAvailableContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
                 <Column field="title" header="Title" />
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
@@ -587,11 +610,10 @@ const removeAllContentFromGroup = () => {
   gap: 1rem;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .screens-container {
@@ -616,12 +638,12 @@ const removeAllContentFromGroup = () => {
   font-size: 1rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--p-text-color, #333);
 }
 
 .divider {
   height: 1px;
-  background: #e0e0e0;
+  background: var(--p-content-border-color, #e0e0e0);
   margin: 1rem 0;
 }
 
@@ -638,8 +660,8 @@ const removeAllContentFromGroup = () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
+  background: var(--p-content-background, #f9f9f9);
+  border: 1px solid var(--p-content-border-color, #e0e0e0);
   border-radius: 4px;
 }
 
@@ -702,7 +724,7 @@ const removeAllContentFromGroup = () => {
 .screen-resolution,
 .content-type {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--p-text-muted-color, #666);
 }
 
 .online-badge {
@@ -717,11 +739,11 @@ const removeAllContentFromGroup = () => {
   gap: 1rem;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--p-content-border-color, #e0e0e0);
 }
 
 .pagination-info {
   font-size: 0.875rem;
-  color: #666;
+  color: var(--p-text-muted-color, #666);
 }
 </style>

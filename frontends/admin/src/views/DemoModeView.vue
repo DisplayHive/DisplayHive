@@ -90,7 +90,7 @@ const confirmImport = (pkg: DemoPackage) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to Demo Mode.</p>
         </div>
       </template>
@@ -102,7 +102,7 @@ const confirmImport = (pkg: DemoPackage) => {
       everything except your user accounts.
     </Message>
 
-    <ProgressBar v-if="loading" mode="indeterminate" style="height: 6px" />
+    <ProgressBar v-if="loading" mode="indeterminate" class="thin-progress" />
     <Message v-if="loadError" severity="error" :closable="false">
       Failed to load demo content: {{ loadError }}
     </Message>
@@ -200,6 +200,12 @@ const confirmImport = (pkg: DemoPackage) => {
 
 .description {
   margin-bottom: 1rem;
-  color: var(--text-color-secondary);
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+/* Dark mode: --p-surface-100 is a fixed ramp point, kept as the light-mode
+   shade above — see docs/developer/styleguide.md. */
+.dark-mode .demo-logo {
+  background: var(--p-surface-700, #334155);
 }
 </style>

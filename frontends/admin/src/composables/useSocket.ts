@@ -1,5 +1,11 @@
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 import { io, type Socket } from 'socket.io-client'
+
+// Test-only globals injected by Playwright fixtures (see connect() below).
+interface TestWindow extends Window {
+  __DISPLAYHIVE_TEST_BACKEND_URL__?: string
+  __displayhive_socket__?: Socket
+}
 
 // Singleton socket instance shared across all composable calls
 let socket: Socket | null = null
@@ -47,8 +53,9 @@ export function useSocket() {
     // During Playwright tests (Option B), global-setup injects
     // `window.__DISPLAYHIVE_TEST_BACKEND_URL__` so each worker connects to
     // its own Flask instance with an isolated database.
+    const testWindow = window as TestWindow
     const url =
-      (window as any).__DISPLAYHIVE_TEST_BACKEND_URL__ ||
+      testWindow.__DISPLAYHIVE_TEST_BACKEND_URL__ ||
       (import.meta.env.VITE_SOCKET_URL as string) ||
       window.location.origin
     // JWT issued by POST /admin/api/auth/login (see stores/auth.ts, which
@@ -69,8 +76,8 @@ export function useSocket() {
     // Expose the socket on window during E2E tests so Playwright's page.evaluate
     // helpers (e.g. seedDevice in device-active.spec.ts) can emit events directly.
     // The flag is injected by the loginAsAdmin fixture via addInitScript.
-    if ((window as any).__DISPLAYHIVE_TEST_BACKEND_URL__) {
-      ;(window as any).__displayhive_socket__ = socket
+    if (testWindow.__DISPLAYHIVE_TEST_BACKEND_URL__) {
+      testWindow.__displayhive_socket__ = socket
     }
 
     // Register any listeners that were queued before the socket existed —

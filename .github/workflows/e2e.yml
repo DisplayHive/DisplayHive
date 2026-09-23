@@ -1,0 +1,58 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # Both frontends are built up front: the admin SPA is served via
+      # `vite preview` (started by Playwright's webServer, see
+      # testing/playwright.config.ts), and the screen client's dist/ is
+      # served by Flask itself, so both need a prior `npm run build`.
+      - name: Install and build admin frontend
+        working-directory: frontends/admin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install and build screen frontend
+        working-directory: frontends/screen
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install e2e test dependencies
+        working-directory: testing
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: testing
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run Playwright e2e tests
+        working-directory: testing
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: testing/playwright-report/
+          retention-days: 14

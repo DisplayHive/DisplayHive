@@ -132,6 +132,64 @@ body {
     display: block;
 }
 
+/* ── Adoption token row — masked token text plus reveal/copy icon buttons ── */
+#token-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.token-masked {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #333;
+    letter-spacing: 1px;
+}
+
+.token-masked.revealed {
+    color: #000;
+    letter-spacing: normal;
+}
+
+.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #555;
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    color: #000;
+}
+
+.icon-btn:disabled {
+    cursor: default;
+    color: #aaa;
+}
+
+.icon-btn.copied {
+    color: #0a0;
+}
+
+#manual-adopt-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: #0d6efd;
+    font-size: 14px;
+    text-decoration: underline;
+}
+
+#manual-adopt-link:hover {
+    color: #0a58ca;
+}
+
 
 
 #main-container {

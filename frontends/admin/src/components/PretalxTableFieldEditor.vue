@@ -48,7 +48,7 @@ const isFieldLocked = (key: string) => props.mode === 'edit' && !!props.optionFl
 const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
 const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
   const current = flagsFor(key)
-  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+  emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
 }
 
 const { emit: socketEmit, emitWithAck: socketEmitWithAck, on, off } = useSocket()
@@ -63,8 +63,8 @@ interface PretalxApiUrlOption {
 const pretalxApiUrls = ref<PretalxApiUrlOption[]>([])
 const pretalxRoomsCache = ref<Record<string, string[]>>({})
 
-const handlePretalxUrls = (data: any) => {
-  pretalxApiUrls.value = (data?.urls || []).map((u: any) => ({
+const handlePretalxUrls = (data: { urls?: PretalxApiUrlOption[] }) => {
+  pretalxApiUrls.value = (data?.urls || []).map((u) => ({
     id: u.id,
     name: u.name,
     url: u.url,
@@ -77,7 +77,7 @@ async function fetchPretalxRooms(urlId: string) {
   if (!urlId || urlId in pretalxRoomsCache.value) return
   pretalxRoomsCache.value[urlId] = []
   try {
-    const ack = await socketEmitWithAck<any>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
+    const ack = await socketEmitWithAck<{ ok?: boolean; rooms?: string[] }>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
     if (ack?.ok) pretalxRoomsCache.value[urlId] = ack.rooms || []
   } catch { /* keep empty */ }
 }
@@ -275,7 +275,7 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
             <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateEventFieldLabel(idx, v ?? '')" size="small" class="w-full" />
             <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeEventField(idx)" />
           </div>
-          <Button label="Add Field" icon="pi pi-plus" size="small" text @click="addEventField" style="margin-top:0.25rem;" />
+          <Button label="Add Field" icon="pi pi-plus" size="small" text class="mt-1" @click="addEventField" />
         </div>
       </div>
       <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('fields')" @toggle-locked="toggleFlag('fields', 'locked')" @toggle-hidden="toggleFlag('fields', 'hidden')" />
@@ -356,7 +356,7 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
             <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateTracklistLabel(idx, v ?? '')" size="small" class="w-full" />
             <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeTracklistColumn(idx)" />
           </div>
-          <Button label="Add Column" icon="pi pi-plus" size="small" text @click="addTracklistColumn" style="margin-top:0.25rem;" />
+          <Button label="Add Column" icon="pi pi-plus" size="small" text class="mt-1" @click="addTracklistColumn" />
         </div>
       </div>
       <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('tracklist_columns')" @toggle-locked="toggleFlag('tracklist_columns', 'locked')" @toggle-hidden="toggleFlag('tracklist_columns', 'hidden')" />
@@ -489,7 +489,7 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
 .tracklist-cols-header {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-color-secondary, #6b7280);
+  color: var(--p-text-muted-color, #6b7280);
   padding: 0 0 0.25rem 0;
   border-bottom: 1px solid var(--p-inputtext-border-color, #d1d5db);
 }

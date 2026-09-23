@@ -16,6 +16,11 @@
  * serialized_input or (for a Contenttype field preset) a TagConfig's
  * default_value.
  */
+/* eslint-disable vue/no-mutating-props -- `fields` is intentionally a mutable
+ * bag this component writes to directly (see the file-level doc comment
+ * above); Vue's reactivity tracks the mutation through the shared object
+ * reference, so there's no missing event, just a pattern the default rule
+ * doesn't know is deliberate here. */
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 
@@ -33,6 +38,7 @@ import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
 import type { IconPickerValue } from '../utils/iconLibraries'
+import type { DefaultColor } from '../types/models'
 import OptionFlagToggle from './OptionFlagToggle.vue'
 import type { OptionFlags } from '../utils/optionFlags'
 
@@ -48,7 +54,7 @@ interface MediaItem {
 
 const props = withDefaults(defineProps<{
   tag: { name: string; fieldHandler: string; max_length?: number }
-  fields: Record<string, any>
+  fields: Record<string, unknown>
   disabled?: boolean
   /**
    * 'edit' (default): a real Content Editor — hides/disables individual
@@ -59,10 +65,14 @@ const props = withDefaults(defineProps<{
    */
   mode?: 'edit' | 'preset'
   optionFlags?: OptionFlags
+  /** Active Design's color palette — forwarded to the icon handler's color
+   * picker for quick-pick swatches. */
+  palette?: DefaultColor[]
 }>(), {
   disabled: false,
   mode: 'edit',
   optionFlags: undefined,
+  palette: () => [],
 })
 
 const emit = defineEmits<{
@@ -72,7 +82,7 @@ const emit = defineEmits<{
 const { on, off, emit: socketEmit } = useSocket()
 
 const getFieldValue = (tagName: string): string | number | boolean => {
-  return props.fields[tagName] ?? ''
+  return (props.fields[tagName] as string | number | boolean | undefined) ?? ''
 }
 const setFieldValue = (tagName: string, value: string | number | boolean) => {
   props.fields[tagName] = value
@@ -84,7 +94,7 @@ const isLocked = (key: string) => props.mode === 'edit' && !!props.optionFlags?.
 const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
 const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
   const current = flagsFor(key)
-  emit('update:optionFlags', { ...(props.optionFlags || {}), [key]: { ...current, [kind]: !current[kind] } })
+  emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
 }
 
 // --- pretalx_table field adapter ------------------------------------------
@@ -150,7 +160,7 @@ const pretalxOptionFlags = computed<OptionFlags>(() => {
 })
 
 const onPretalxOptionFlagsUpdate = (localFlags: OptionFlags) => {
-  const next = { ...(props.optionFlags || {}) }
+  const next = { ...props.optionFlags }
   for (const [local, flag] of Object.entries(localFlags)) {
     next[pretalxWireKey(props.tag.name, local)] = flag
   }
@@ -161,28 +171,34 @@ const onPretalxOptionFlagsUpdate = (localFlags: OptionFlags) => {
 const getIconValue = (name: string): IconPickerValue => ({
   icon: String(props.fields[name] ?? ''),
   size: Number(props.fields[name + '__size']) || 5,
+  color: String(props.fields[name + '__color'] ?? ''),
 })
 
 const setIconValue = (name: string, v: IconPickerValue) => {
   props.fields[name] = v.icon
   props.fields[name + '__size'] = v.size
+  props.fields[name + '__color'] = v.color
 }
 
-// Icon's two local keys ('icon', 'size') map onto wire keys `<name>` and
-// `<name>__size` — same translation purpose as the pretalx one above.
+// Icon's local keys ('icon', 'size', 'color') map onto wire keys `<name>`,
+// `<name>__size` and `<name>__color` — same translation purpose as the
+// pretalx one above.
 const iconOptionFlags = computed<OptionFlags>(() => {
   const out: OptionFlags = {}
   const iconFlag = props.optionFlags?.[props.tag.name]
   if (iconFlag) out.icon = iconFlag
   const sizeFlag = props.optionFlags?.[`${props.tag.name}__size`]
   if (sizeFlag) out.size = sizeFlag
+  const colorFlag = props.optionFlags?.[`${props.tag.name}__color`]
+  if (colorFlag) out.color = colorFlag
   return out
 })
 
 const onIconOptionFlagsUpdate = (localFlags: OptionFlags) => {
-  const next = { ...(props.optionFlags || {}) }
+  const next = { ...props.optionFlags }
   if (localFlags.icon) next[props.tag.name] = localFlags.icon
   if (localFlags.size) next[`${props.tag.name}__size`] = localFlags.size
+  if (localFlags.color) next[`${props.tag.name}__color`] = localFlags.color
   emit('update:optionFlags', next)
 }
 
@@ -193,7 +209,14 @@ const onIconOptionFlagsUpdate = (localFlags: OptionFlags) => {
 const editorReady = ref(false)
 onMounted(() => { nextTick(() => { editorReady.value = true }) })
 
-const onEditorLoad = (fieldName: string, event: { instance: any }) => {
+// No @types/quill installed (see the same rationale in main.ts) — only the
+// bit of the Quill instance actually touched here is typed.
+interface QuillInstance {
+  clipboard?: { convert: (html: string) => unknown }
+  setContents: (delta: unknown, source: string) => void
+}
+
+const onEditorLoad = (fieldName: string, event: { instance: QuillInstance }) => {
   const quill = event.instance
   const html = String(props.fields[fieldName] || '')
   if (html && quill && quill.clipboard) {
@@ -502,7 +525,7 @@ const parseCountdownDate = (raw: string): Date | null => {
   return isNaN(d.getTime()) ? null : d
 }
 
-const handleAdminSettingsForPreview = (data: any) => {
+const handleAdminSettingsForPreview = (data: { system_settings?: { timezone?: string } }) => {
   const tz = data?.system_settings?.timezone
   if (tz) previewTimezone.value = tz
 }
@@ -551,6 +574,7 @@ onUnmounted(() => {
       :model-value="getIconValue(tag.name)"
       @update:model-value="(v) => setIconValue(tag.name, v)"
       :mode="mode"
+      :palette="palette"
       :option-flags="iconOptionFlags"
       @update:option-flags="onIconOptionFlagsUpdate"
     />
@@ -607,7 +631,7 @@ onUnmounted(() => {
           @update:modelValue="(v: string | undefined) => setFieldValue(tag.name, v ?? '')"
           editorStyle="height: 220px"
           :readonly="isLocked(tag.name)"
-          @load="(e: any) => onEditorLoad(tag.name, e)"
+          @load="(e: { instance: QuillInstance }) => onEditorLoad(tag.name, e)"
         />
         <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
       </div>
@@ -638,7 +662,7 @@ onUnmounted(() => {
             </div>
           </div>
           <div v-else class="image-field-empty" @click="openImagePicker(tag.name)">
-            <i class="pi pi-image" style="font-size: 2rem; color: #94a3b8" />
+            <i class="pi pi-image" />
             <span>Click to select an image</span>
           </div>
         </div>
@@ -686,7 +710,7 @@ onUnmounted(() => {
     <!-- Arrow picker -->
     <div v-else-if="tag.fieldHandler === 'arrows'" class="arrow-picker-wrapper">
       <div v-if="mode !== 'edit' || !isHidden(tag.name)" class="fve-slot">
-        <div :class="['fve-slot-control', { 'fve-disabled': isLocked(tag.name) }]" style="width:100%;">
+        <div :class="['fve-slot-control', 'w-full', { 'fve-disabled': isLocked(tag.name) }]">
           <div class="arrow-grid">
             <button
               v-for="arrow in [
@@ -757,7 +781,7 @@ onUnmounted(() => {
 
     <!-- Table editor -->
     <div v-else-if="tag.fieldHandler === 'table' && (mode !== 'edit' || !isHidden(tag.name))" class="fve-slot">
-      <div :class="['fve-slot-control', 'table-editor-wrapper', { 'fve-disabled': isLocked(tag.name) }]" style="width:100%;">
+      <div :class="['fve-slot-control', 'table-editor-wrapper', { 'fve-disabled': isLocked(tag.name) }]">
         <div class="table-editor-scroll">
           <table class="table-editor-tbl">
             <thead>
@@ -830,7 +854,7 @@ onUnmounted(() => {
             </tbody>
           </table>
         </div>
-        <Button label="Add Row" icon="pi pi-plus" size="small" text @click="addTableRow(tag.name)" style="margin-top:0.4rem;" />
+        <Button label="Add Row" icon="pi pi-plus" size="small" text class="mt-2" @click="addTableRow(tag.name)" />
       </div>
       <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name)" @toggle-locked="toggleFlag(tag.name, 'locked')" @toggle-hidden="toggleFlag(tag.name, 'hidden')" />
     </div>
@@ -1008,20 +1032,25 @@ onUnmounted(() => {
     <!-- Image Picker Dialog -->
     <Dialog
       v-model:visible="showImagePickerDialog"
-      header="Select Image"
       modal
       :style="{ width: '860px', maxWidth: '95vw' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-image dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Select Image</span>
+        </div>
+      </template>
       <div class="picker-toolbar">
         <InputText v-model="pickerSearchText" placeholder="Search images…" class="picker-search" />
         <Tag :value="`${pickerFiltered.length} images`" />
       </div>
       <div v-if="pickerLoading" class="loading-state">
-        <i class="pi pi-spin pi-spinner" style="font-size: 2rem" />
+        <i class="pi pi-spin pi-spinner" />
         <p>Loading media…</p>
       </div>
       <div v-else-if="pickerFiltered.length === 0" class="empty-state">
-        <i class="pi pi-images" style="font-size: 3rem" />
+        <i class="pi pi-images" />
         <p>No images found</p>
       </div>
       <div v-else class="picker-grid">
@@ -1080,6 +1109,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
 }
 
 .table-editor-scroll {
@@ -1157,13 +1187,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--p-content-border-color, #cbd5e1);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--p-text-muted-color, #94a3b8);
   font-size: 0.875rem;
   transition: border-color 0.2s, background 0.2s;
+}
+
+.image-field-empty i {
+  font-size: 2rem;
 }
 
 .image-field-empty:hover {
@@ -1182,7 +1216,7 @@ onUnmounted(() => {
   height: 60px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
 }
 
 .image-field-actions {
@@ -1191,20 +1225,20 @@ onUnmounted(() => {
 }
 
 .image-tags-cloud {
-  border: 1px solid var(--p-surface-200, #e2e8f0);
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
   padding: 0.75rem;
-  background: var(--p-surface-50, #f8fafc);
+  background: var(--p-content-background, #f8fafc);
 }
 
 .image-tags-hint {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--p-text-muted-color, #64748b);
   margin: 0 0 0.6rem;
 }
 
 .image-tags-empty {
-  color: #94a3b8;
+  color: var(--p-text-muted-color, #94a3b8);
   font-size: 0.85rem;
 }
 
@@ -1220,8 +1254,8 @@ onUnmounted(() => {
   align-items: center;
   padding: 0.25rem 0.7rem;
   border-radius: 999px;
-  border: 1px solid var(--p-surface-300, #cbd5e1);
-  background: white;
+  border: 1px solid var(--p-content-border-color, #cbd5e1);
+  background: var(--p-content-background, white);
   font-size: 0.8rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -1244,7 +1278,7 @@ onUnmounted(() => {
 
 .image-tags-selected-summary {
   font-size: 0.78rem;
-  color: #475569;
+  color: var(--p-text-muted-color, #475569);
   display: block;
   margin-top: 0.25rem;
 }
@@ -1259,8 +1293,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0.5rem;
-  background: var(--p-surface-50, #f8fafc);
-  border: 1px solid var(--p-surface-200, #e2e8f0);
+  background: var(--p-content-background, #f8fafc);
+  border: 1px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
 }
 
@@ -1271,9 +1305,9 @@ onUnmounted(() => {
   width: 2.4rem;
   height: 2.4rem;
   font-size: 1.4rem;
-  border: 1px solid var(--p-surface-300, #cbd5e1);
+  border: 1px solid var(--p-content-border-color, #cbd5e1);
   border-radius: 6px;
-  background: white;
+  background: var(--p-content-background, white);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   line-height: 1;
@@ -1353,7 +1387,7 @@ onUnmounted(() => {
 }
 
 .picker-item {
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--p-content-border-color, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -1373,7 +1407,7 @@ onUnmounted(() => {
 .picker-thumb {
   width: 100%;
   height: 90px;
-  background: #f1f5f9;
+  background: var(--p-content-background, #f1f5f9);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1392,7 +1426,7 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: white;
+  background: var(--p-content-background, white);
 }
 
 .marquee-field-wrapper {
@@ -1507,5 +1541,27 @@ onUnmounted(() => {
   padding: 0 0.3rem;
   border-radius: 3px;
   font-size: 0.74rem;
+}
+
+/* Dark mode: --p-surface-100..300 are fixed ramp points (always pale, in
+   both themes), not semantic tokens — see docs/developer/styleguide.md.
+   These shade a header/stripe distinguishable from its surrounding panel,
+   so (unlike the content-background swaps above) they need an explicit
+   dark surface rather than matching the panel exactly. */
+.dark-mode .table-editor-tbl th,
+.dark-mode .datetime-preview {
+  background: var(--p-surface-800, #1e293b);
+}
+
+.dark-mode .token-table th {
+  border-bottom-color: var(--p-surface-600, #475569);
+}
+
+.dark-mode .token-table td {
+  border-bottom-color: var(--p-surface-700, #334155);
+}
+
+.dark-mode .token-table td code {
+  background: var(--p-surface-700, #334155);
 }
 </style>

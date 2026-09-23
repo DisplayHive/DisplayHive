@@ -380,6 +380,18 @@ def logo_bl():
     return send_from_directory(dist_dir, 'logo_bl.png')
 
 # =====================================================
+# Favicon: served from root (browsers request /favicon.ico regardless of
+# path) as well as the other sizes index.html links to directly.
+# =====================================================
+@app.route('/favicon.ico')
+@app.route('/favicon-32x32.png')
+@app.route('/favicon-16x16.png')
+@app.route('/apple-touch-icon.png')
+def favicon():
+    dist_dir = os.path.join(os.path.dirname(__file__), 'dist', 'admin')
+    return send_from_directory(dist_dir, os.path.basename(request.path))
+
+# =====================================================
 # Admin SPA: Vue 3 + PrimeVue (served under /admin/)
 # =====================================================
 @app.route('/admin/')

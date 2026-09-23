@@ -27,7 +27,7 @@ interface ContentElement {
   end_time?: string | null
   contenttypeName: string
   screengroups?: Array<{ id: number; name: string }>
-  [key: string]: any
+  [key: string]: unknown
 }
 
 const props = withDefaults(defineProps<{
@@ -108,15 +108,6 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
   </div>
 
   <template v-else>
-    <div class="search-box">
-      <InputText
-        :modelValue="search"
-        @update:modelValue="(v: string | undefined) => emit('update:search', v ?? '')"
-        placeholder="Search title or content..."
-        class="search-input"
-      />
-    </div>
-
     <DataTable
       v-model:expandedRows="expandedRows"
       :value="items"
@@ -127,6 +118,18 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
       responsiveLayout="scroll"
       dataKey="id"
     >
+      <template #header>
+        <div class="dt-header">
+          <div class="dt-left">
+            <InputText
+              :modelValue="search"
+              @update:modelValue="(v: string | undefined) => emit('update:search', v ?? '')"
+              placeholder="Search title or content..."
+              class="filter-input"
+            />
+          </div>
+        </div>
+      </template>
       <template #empty>
         <div class="empty-state">
           <i class="pi pi-inbox"></i>
@@ -391,7 +394,7 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
 }
 
 .preview-frame-wrapper {
-  border: 1px solid var(--p-surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 4px;
   overflow: hidden;
   background: #000;

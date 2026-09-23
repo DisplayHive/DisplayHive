@@ -11,6 +11,7 @@
  */
 import { getEffectDefinition } from './backgroundEffects'
 import { loadIcon } from './iconLibraries'
+import type { DefaultColor } from '../types/models'
 // `?raw` inlines the pre-built bundle's source as a string at build time —
 // see LayoutCanvasEditor.vue for why this has to be literal <script> content
 // rather than a normal import/evaluation inside a sandboxed srcdoc iframe.
@@ -22,6 +23,10 @@ export interface DesignPreviewPayload {
   html: string
   css: string
   background_effect: { name: string; settings: Record<string, unknown> } | null
+  /** Active Design's color palette — used by the icon-color picker's
+   * swatches, not by rendering (icon colors arrive already resolved in the
+   * container HTML). */
+  default_colors?: DefaultColor[]
 }
 
 export interface PreviewContainer {
@@ -53,17 +58,27 @@ function buildEffectFragment(effect: DesignPreviewPayload['background_effect'] |
   return (
     `<div id="design-effect-background" style="position:absolute;inset:0;overflow:hidden;">` +
     `<${def.tag} style="display:block;width:100%;height:100%;" ${attrs}></${def.tag}></div>` +
-    `<script type="module">${bbScriptSourceSafe}<\/script>`
+    `<script type="module">${bbScriptSourceSafe}</script>`
   )
 }
 
-/** Strip any hardcoded width/height off the SVG root so it scales to its wrapper — mirrors icon-resolver.ts's sizeToFit. */
-function sizeIconSvgToFit(svg: string): string {
-  return svg.replace(
-    /<svg\b([^>]*)>/i,
-    (_match, attrs: string) =>
-      `<svg${attrs.replace(/\s+(width|height)="[^"]*"/gi, '')} style="height:100%;width:auto;display:block;">`,
-  )
+/** Strip hardcoded width/height off the SVG root so it scales to its wrapper,
+ * and force a configured color (already a literal CSS color) onto it —
+ * mirrors icon-resolver.ts's styleSvg on the screen client. */
+function styleIconSvg(svg: string, color: string | null): string {
+  return svg.replace(/<svg\b([^>]*)>/i, (_match, rawAttrs: string) => {
+    let attrs = rawAttrs.replace(/\s+(width|height)="[^"]*"/gi, '')
+    let style = 'height:100%;width:auto;display:block;'
+    if (color) {
+      style += `color:${color};`
+      attrs = attrs.replace(
+        /\s+(fill|stroke)="([^"]*)"/gi,
+        (m: string, prop: string, val: string) =>
+          val.trim().toLowerCase() === 'none' ? m : ` ${prop}="${color}"`,
+      )
+    }
+    return `<svg${attrs} style="${style}">`
+  })
 }
 
 // 'icon' fields render as a <div data-dh-icon-library data-dh-icon-name>
@@ -88,7 +103,7 @@ export async function resolveIconPlaceholders(html: string): Promise<string> {
       const name = el.getAttribute('data-dh-icon-name')
       if (!library || !name) return
       const svg = await loadIcon(library, name)
-      if (svg) el.innerHTML = sizeIconSvgToFit(svg)
+      if (svg) el.innerHTML = styleIconSvg(svg, el.getAttribute('data-dh-icon-color'))
     }),
   )
   return doc.body.firstElementChild?.innerHTML ?? html
@@ -162,7 +177,7 @@ const TICK_SCRIPT = `<script>
   tick();
   setInterval(tick, 1000);
 })();
-<\/script>`
+</script>`
 
 export async function buildDesignPreviewSrcdoc(
   design: DesignPreviewPayload | null | undefined,

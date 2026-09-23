@@ -24,6 +24,7 @@ interface ContentElement {
   end_time?: string | null
   contenttypeName: string
   screengroups?: Array<{ id: number; name: string }>
+  [key: string]: unknown
 }
 
 interface ContentField {
@@ -33,11 +34,11 @@ interface ContentField {
   order: number
 }
 
-const getContentFields = (content: any): ContentField[] => {
+const getContentFields = (content: ContentElement | null | undefined): ContentField[] => {
   if (!content) return []
   const ignore = new Set(['id', 'title', 'active', 'duration', 'contenttypeName', 'screengroups', 'contenttype_id', 'design', 'containers', '_field_metadata'])
   const fields: ContentField[] = []
-  const metadata = content._field_metadata || {}
+  const metadata = (content._field_metadata || {}) as Record<string, { label?: string; order?: number }>
 
   for (const k of Object.keys(content)) {
     if (ignore.has(k)) continue
@@ -179,18 +180,28 @@ const handleUnassignedContent = (data: { content: ContentElement[] }) => {
   unassignedContent.value = data.content || []
 }
 
-const handleAllScreengroups = (data: any) => {
+// Wire shape pushed by 'upd_screengroups' — either flat or JSON:API-style
+// (attributes/relationships), depending on which backend path produced it.
+interface RawScreengroup {
+  id: number | string
+  name?: string
+  is_one_screen?: boolean
+  attributes?: { name?: string; is_one_screen?: boolean }
+  relationships?: { screens?: { data?: Array<{ id: number | string }> } }
+}
+
+const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
   const arr = data?.screengroups || data?.data || []
-  const toOption = (sg: any): ScreengroupOption => ({
+  const toOption = (sg: RawScreengroup): ScreengroupOption => ({
     id: Number(sg.id),
     name: sg.attributes?.name || sg.name || '',
-    screen_ids: (sg.relationships?.screens?.data || []).map((s: any) => Number(s.id)),
+    screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
   })
   allScreengroups.value = arr
-    .filter((sg: any) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
   oneScreenGroups.value = arr
-    .filter((sg: any) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
+    .filter((sg) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
     .map(toOption)
 }
 
@@ -278,7 +289,7 @@ const copyContent = (content: ContentElement) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Content page.</p>
         </div>
       </template>
@@ -414,7 +425,7 @@ const copyContent = (content: ContentElement) => {
 .filter-toggle label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--p-text-muted-color, #6b7280);
   white-space: nowrap;
 }
 

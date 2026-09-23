@@ -5,7 +5,7 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
-import type { Layout, ContentContainer } from '../types/models'
+import type { Layout, ContentContainer, DefaultColor } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -29,7 +29,7 @@ interface TagConfig {
   // Preset value for this field — same flat key-shape (field_name plus its
   // handler-specific suffixes) FieldValueEditor.vue's `fields` prop expects,
   // scoped to just this one field.
-  default_value: Record<string, any>
+  default_value: Record<string, unknown>
   // One entry per individual sub-setting the field exposes (e.g. an 'image'
   // field's mode/value/size are each independently lockable/hideable) —
   // keyed the same way as default_value. See FieldValueEditor.vue.
@@ -229,20 +229,47 @@ const filteredContentTypes = computed(() => {
   )
 })
 
-const handleContentTypesList = (data: any) => {
+const handleContentTypesList = (data: { data?: ContentType[]; contenttypes?: ContentType[] }) => {
   contentTypes.value = data?.data || data?.contenttypes || []
   loading.value = false
 }
 
-const handleLayoutsList = (data: any) => {
+const handleLayoutsList = (data: { data?: Layout[] }) => {
   layouts.value = data?.data || []
 }
 
-const handleContainersList = (data: any) => {
+const handleContainersList = (data: { data?: ContentContainer[] }) => {
   containers.value = data?.data || []
 }
 
-const handleContentTypeDetail = async (data: any) => {
+// Active Design's palette — passed to the preset panel's icon-color picker
+// for "@default:<id>" quick-pick swatches.
+const designPalette = ref<DefaultColor[]>([])
+const handleActiveDesignColors = (data: { colors?: DefaultColor[] }) => {
+  designPalette.value = Array.isArray(data?.colors) ? data.colors : []
+}
+
+// Raw tagconfig row as the backend sends it (snake_case, JSON-encoded
+// default_value/option_flags) — mirrors ContentEditView.vue's RawTagConfig.
+interface RawTagConfig {
+  id?: number
+  field_name?: string
+  field_label?: string
+  field_handler?: string
+  contentcontainer_id?: number | null
+  order?: number
+  default_value?: string
+  option_flags?: string
+}
+
+interface RawContentTypeDetail {
+  id: number
+  description?: string
+  layout_id: number | null
+  tagconfigs?: RawTagConfig[]
+}
+
+const handleContentTypeDetail = async (data: { contenttype?: RawContentTypeDetail; data?: RawContentTypeDetail }) => {
   const ct = data?.contenttype || data?.data || null
   if (!ct) return
 
@@ -250,7 +277,7 @@ const handleContentTypeDetail = async (data: any) => {
   if (pendingCopyName.value) {
     const name = pendingCopyName.value
     pendingCopyName.value = ''
-    const tagconfigs = (ct.tagconfigs || []).map((t: any) => ({
+    const tagconfigs = (ct.tagconfigs || []).map((t) => ({
       name: t.field_name, title: t.field_label, field_handler: t.field_handler,
       contentcontainer_id: t.contentcontainer_id, order: t.order,
       default_value: t.default_value, option_flags: t.option_flags,
@@ -275,17 +302,17 @@ const handleContentTypeDetail = async (data: any) => {
     editForm.value.layout_id = ct.layout_id
     editForm.value.tagconfigs = (ct.tagconfigs || [])
       .slice()
-      .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      .map((t: any) => {
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((t) => {
         const c = containers.value.find(x => x.id === t.contentcontainer_id)
-        let default_value: Record<string, any> = {}
+        let default_value: Record<string, unknown> = {}
         try { default_value = t.default_value ? JSON.parse(t.default_value) : {} } catch { default_value = {} }
         let option_flags: OptionFlags = {}
         try { option_flags = t.option_flags ? JSON.parse(t.option_flags) : {} } catch { option_flags = {} }
         return {
           id: t.id,
-          name: c?.name || t.field_name,
-          title: t.field_label || c?.name || t.field_name,
+          name: c?.name || t.field_name || '',
+          title: t.field_label || c?.name || t.field_name || '',
           field_handler: t.field_handler ?? 'textklein',
           contentcontainer_id: t.contentcontainer_id ?? null,
           default_value,
@@ -310,16 +337,19 @@ onMounted(() => {
   on('displayhive:admin:stc:contenttype_detail', handleContentTypeDetail)
   on('displayhive:admin:stc:upd_layouts', handleLayoutsList)
   on('displayhive:admin:stc:upd_containers', handleContainersList)
+  on('displayhive:admin:stc:active_design_colors', handleActiveDesignColors)
 
   emit('displayhive:admin:cts:get_contenttypes')
   emit('displayhive:admin:cts:get_layouts')
   emit('displayhive:admin:cts:get_containers')
+  emit('displayhive:admin:cts:get_active_design_colors')
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_contenttypes', handleContentTypesList)
   off('displayhive:admin:stc:upd_layouts', handleLayoutsList)
   off('displayhive:admin:stc:upd_containers', handleContainersList)
+  off('displayhive:admin:stc:active_design_colors', handleActiveDesignColors)
 })
 
 const refreshData = () => {
@@ -346,7 +376,7 @@ const openEditDialog = (ct: ContentType) => {
       loadingContentTypeError.value = 'Timed out while fetching content type detail.'
       contentTypeLoadTimer = null
     }, 8000)
-  } catch (e) {}
+  } catch {}
   showEditDialog.value = true
 }
 
@@ -433,7 +463,7 @@ const deleteContentType = (ct: ContentType) => {
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Content Types page.</p>
         </div>
       </template>
@@ -441,15 +471,15 @@ const deleteContentType = (ct: ContentType) => {
   </div>
   <div v-else class="contenttypes-view">
     <Card>
-      <template #content>
-        <div class="filter-bar">
-          <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+      <template #title>
+        <div class="card-header">
           <div class="header-actions">
             <Button v-if="canCreate" icon="pi pi-plus" label="New Content Type" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
-
+      </template>
+      <template #content>
         <DataTable
           :value="filteredContentTypes"
           :loading="loading"
@@ -461,6 +491,13 @@ const deleteContentType = (ct: ContentType) => {
           :rows="10"
           responsiveLayout="scroll"
         >
+          <template #header>
+            <div class="dt-header">
+              <div class="dt-left">
+                <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+              </div>
+            </div>
+          </template>
           <Column field="id" header="ID" style="width: 60px" sortable />
           <Column field="name" header="Name" sortable />
           <Column field="description" header="Description">
@@ -496,7 +533,13 @@ const deleteContentType = (ct: ContentType) => {
     </Card>
 
     <!-- Copy Dialog -->
-    <Dialog v-model:visible="showCopyDialog" header="Copy Content Type" modal :style="{ width: '400px' }">
+    <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Copy Content Type</span>
+        </div>
+      </template>
       <div class="field">
         <label for="copy-ct-name">New Name</label>
         <InputText id="copy-ct-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyContentType" />
@@ -510,10 +553,15 @@ const deleteContentType = (ct: ContentType) => {
     <!-- Edit Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
-      :header="isNew ? 'New Content Type' : 'Edit Content Type'"
       modal
       :style="{ width: '90vw', maxWidth: '1200px' }"
     >
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
+          <span class="p-dialog-title">{{ isNew ? 'New Content Type' : 'Edit Content Type' }}</span>
+        </div>
+      </template>
       <div class="dialog-content">
         <div v-if="loadingContentType" class="tpl-loading">
           Loading content type…
@@ -622,6 +670,7 @@ const deleteContentType = (ct: ContentType) => {
                   :tag="{ name: t.name, fieldHandler: t.field_handler }"
                   :fields="t.default_value"
                   mode="preset"
+                  :palette="designPalette"
                   :option-flags="t.option_flags"
                   @update:option-flags="(v) => { t.option_flags = v }"
                 />
@@ -646,15 +695,14 @@ const deleteContentType = (ct: ContentType) => {
   gap: 1rem;
 }
 
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+/* No title text left in the card header — keep the action buttons
+   right-aligned instead of collapsing to the start. */
+.card-header {
+  justify-content: flex-end;
 }
 
 .hint {
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   font-size: 0.75rem;
 }
 
@@ -673,11 +721,11 @@ const deleteContentType = (ct: ContentType) => {
 }
 
 .tpl-loading {
-  background: var(--surface-b);
-  border: 1px dashed var(--surface-d);
+  background: var(--p-content-background, #f5f5f5);
+  border: 1px dashed var(--p-content-border-color, #ccc);
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  color: var(--text-color, #333);
+  color: var(--p-text-color, #333);
   font-style: italic;
   margin-bottom: 0.5rem;
 }
@@ -692,7 +740,7 @@ const deleteContentType = (ct: ContentType) => {
 .tagconfigs-table {
   display: flex;
   flex-direction: column;
-  border: 1px solid #ddd;
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -702,10 +750,10 @@ const deleteContentType = (ct: ContentType) => {
   grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
-  background: #f5f5f5;
+  background: var(--p-surface-100, #f5f5f5);
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid var(--p-content-border-color, #ddd);
 }
 
 .tagconfig-row {
@@ -713,13 +761,13 @@ const deleteContentType = (ct: ContentType) => {
   grid-template-columns: 28px 160px 1fr 1fr 40px;
   gap: 0.5rem;
   padding: 0.5rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--p-content-border-color, #eee);
   align-items: center;
   transition: background 0.2s;
 }
 
 .tagconfig-row:hover {
-  background: #f9f9f9;
+  background: var(--p-content-hover-background, #f9f9f9);
 }
 
 .tagconfig-row:last-child {
@@ -738,7 +786,7 @@ const deleteContentType = (ct: ContentType) => {
   align-items: center;
   justify-content: center;
   cursor: grab;
-  color: #999;
+  color: var(--p-text-muted-color, #999);
 }
 
 .tagconfig-col-preset {
@@ -774,18 +822,19 @@ const deleteContentType = (ct: ContentType) => {
   flex-direction: column;
   gap: 0.6rem;
   padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-  background: var(--surface-b, #fafafa);
-  border-bottom: 1px solid #eee;
+  background: var(--p-content-background, #fafafa);
+  border-bottom: 1px solid var(--p-content-border-color, #eee);
 }
 
 .preset-panel-label {
   font-weight: 600;
   font-size: 0.8rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .preset-panel-label small {
   font-weight: 400;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   margin-left: 0.3rem;
 }
 
@@ -799,11 +848,18 @@ const deleteContentType = (ct: ContentType) => {
 .fields-section > label {
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .fields-section > label small {
   font-weight: 400;
-  color: #888;
+  color: var(--p-text-muted-color, #888);
   margin-left: 0.3rem;
+}
+
+/* Dark mode: --p-surface-100 is a fixed ramp point, kept as the light-mode
+   header shade above — see docs/developer/styleguide.md. */
+.dark-mode .tagconfig-header {
+  background: var(--p-surface-800, #1e293b);
 }
 </style>

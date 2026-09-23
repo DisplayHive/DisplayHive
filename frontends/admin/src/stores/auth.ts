@@ -4,6 +4,21 @@ import { useSocket } from '../composables/useSocket'
 
 const TOKEN_STORAGE_KEY = 'displayhive_admin_token'
 const USERNAME_STORAGE_KEY = 'displayhive_admin_username'
+// Cached copy of the DB-backed preferences, so the theme can be applied
+// before login()/restore() completes its round-trip (avoids a flash of the
+// wrong theme). The DB stays the source of truth; this is just a paint cache.
+const PREFERENCES_STORAGE_KEY = 'displayhive_admin_preferences'
+
+export type UserPreferences = { theme?: 'light' | 'dark' | 'system' }
+
+const readCachedPreferences = (): UserPreferences => {
+  try {
+    const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
 // Set only while impersonating: the admin's own token/username, stashed so
 // "stop impersonating" can restore it without a fresh login.
 const ORIGINAL_TOKEN_STORAGE_KEY = 'displayhive_admin_original_token'
@@ -42,6 +57,7 @@ const decodeExpiryMs = (token: string): number | null => {
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem(TOKEN_STORAGE_KEY))
   const username = ref<string | null>(localStorage.getItem(USERNAME_STORAGE_KEY))
+  const preferences = ref<UserPreferences>(readCachedPreferences())
   // Starts true whenever a token is present so the app doesn't flash the
   // login form while `restore()` confirms the token is still valid.
   const restoring = ref(!!token.value)
@@ -76,11 +92,19 @@ export const useAuthStore = defineStore('auth', () => {
     expiryTimer = setTimeout(() => logout(), delay)
   }
 
-  const setSession = (newToken: string, newUsername: string) => {
+  const cachePreferences = (newPreferences: UserPreferences) => {
+    preferences.value = newPreferences
+    localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(newPreferences))
+  }
+
+  const setSession = (newToken: string, newUsername: string, newPreferences?: UserPreferences) => {
     token.value = newToken
     username.value = newUsername
     localStorage.setItem(TOKEN_STORAGE_KEY, newToken)
     localStorage.setItem(USERNAME_STORAGE_KEY, newUsername)
+    // Impersonation/restore may not carry preferences (e.g. /auth/me on a
+    // stale tab) — only overwrite the cache when the caller actually has them.
+    if (newPreferences) cachePreferences(newPreferences)
     scheduleExpiry(newToken)
   }
 
@@ -94,8 +118,10 @@ export const useAuthStore = defineStore('auth', () => {
   const clearSession = () => {
     token.value = null
     username.value = null
+    preferences.value = {}
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem(USERNAME_STORAGE_KEY)
+    localStorage.removeItem(PREFERENCES_STORAGE_KEY)
     clearExpiryTimer()
     // A full logout always ends any impersonation too — there is no "original"
     // session left to fall back to once the whole thing is logged out.
@@ -153,7 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!response.ok || !result.success) {
         return result.error || 'Login failed'
       }
-      setSession(result.token, result.username)
+      setSession(result.token, result.username, result.preferences || {})
       return null
     } catch (e) {
       return `Could not reach server: ${e}`
@@ -186,6 +212,7 @@ export const useAuthStore = defineStore('auth', () => {
       } else {
         const result = await response.json()
         if (result.username) username.value = result.username
+        if (result.preferences) cachePreferences(result.preferences)
         scheduleExpiry(token.value)
       }
     } catch {
@@ -193,6 +220,29 @@ export const useAuthStore = defineStore('auth', () => {
       // will fail/retry, and the header check above will run again on reload.
     } finally {
       restoring.value = false
+    }
+  }
+
+  /**
+   * Persist one or more preferences (e.g. { theme: 'dark' }) to the backend
+   * and update the local cache optimistically-on-success. Returns an error
+   * message on failure, or null on success.
+   */
+  const setPreferences = async (updates: UserPreferences): Promise<string | null> => {
+    try {
+      const response = await fetch('/admin/api/auth/me/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ preferences: updates }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        return result.error || 'Failed to save preference'
+      }
+      cachePreferences(result.preferences)
+      return null
+    } catch (e) {
+      return `Could not reach server: ${e}`
     }
   }
 
@@ -235,6 +285,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token,
     username,
+    preferences,
     restoring,
     isAuthenticated,
     originalUsername,
@@ -244,6 +295,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     restore,
+    setPreferences,
     authHeader,
   }
 })

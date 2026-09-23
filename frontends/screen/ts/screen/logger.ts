@@ -48,7 +48,6 @@ export function log(
   }
 
   // Always log locally
-  // eslint-disable-next-line no-console
   console.log(...(actualArgs as any));
 
   // Forward to remote logger if connected
@@ -67,7 +66,6 @@ export function log(
     }
   } catch (err) {
     // Swallow logging errors to avoid affecting runtime
-    // eslint-disable-next-line no-console
     console.warn("log: failed to forward to remote logger", err);
   }
 }

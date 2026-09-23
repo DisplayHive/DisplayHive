@@ -325,18 +325,26 @@ onRightsReady(loadExportTree)
     <Card>
       <template #content>
         <div class="empty-state">
-          <i class="pi pi-lock" style="font-size: 3rem"></i>
+          <i class="pi pi-lock"></i>
           <p>You don't have access to the Im-/Export page.</p>
         </div>
       </template>
     </Card>
   </div>
   <div v-else class="importexport-view">
+    <Message severity="warn" :closable="false" class="not-a-backup-notice">
+      <strong>This is not a full system backup.</strong> It exports/imports display content
+      (screens, designs, layouts, content, media, devices, magic tags) and general app settings
+      only. It never includes admin user accounts, API keys or tokens (Telegram bot token, Pretalx
+      credentials), or log files — restoring a file elsewhere will not recreate logins or
+      integration credentials.
+    </Message>
+
     <!-- Export -->
     <Card class="section-card">
       <template #title>
         <div class="card-header">
-          <i class="pi pi-upload" style="margin-right: 0.5rem" />
+          <i class="pi pi-upload card-header-icon" />
           <span>Export Database</span>
         </div>
       </template>
@@ -344,10 +352,12 @@ onRightsReady(loadExportTree)
         <p class="description">
           Pick exactly what to export — by type, or individual items within a type. Dependencies
           (e.g. a Content Type's Layout) are pulled in automatically. The download is a ZIP
-          archive containing <code>db.json</code> and a <code>media/</code> folder.
+          archive containing <code>db.json</code> and a <code>media/</code> folder. General app
+          settings (e.g. timezone, welcome text, branding toggles) are always included and aren't
+          shown in the tree below.
         </p>
         <template v-if="canExport">
-          <ProgressBar v-if="exportTreeLoading" mode="indeterminate" style="height: 6px; margin-bottom: 1rem" />
+          <ProgressBar v-if="exportTreeLoading" mode="indeterminate" class="thin-progress mb-4" />
           <Tree
             v-else-if="exportTreeLoaded"
             v-model:selectionKeys="exportSelectionKeys"
@@ -363,7 +373,7 @@ onRightsReady(loadExportTree)
             icon="pi pi-download"
             :loading="exporting"
             :disabled="exporting || !exportTreeLoaded"
-            style="margin-top: 1rem"
+            class="mt-4"
             @click="triggerExport"
           />
         </template>
@@ -375,7 +385,7 @@ onRightsReady(loadExportTree)
     <Card v-if="canImport" class="section-card">
       <template #title>
         <div class="card-header">
-          <i class="pi pi-download" style="margin-right: 0.5rem" />
+          <i class="pi pi-download card-header-icon" />
           <span>Import Database</span>
         </div>
       </template>
@@ -450,12 +460,12 @@ onRightsReady(loadExportTree)
               optionLabel="label"
               optionValue="value"
             />
-            <p class="description" style="margin-top: 0.5rem">
+            <p class="description mt-2">
               Use the per-item dropdown above to override the default for specific items.
             </p>
           </div>
 
-          <Message v-if="importMode === 'reset'" severity="warn" :closable="false" style="margin: 1rem 0">
+          <Message v-if="importMode === 'reset'" severity="warn" :closable="false" class="mt-4 mb-4">
             This permanently overwrites the entire database and media folder and cannot be undone.
           </Message>
 
@@ -479,13 +489,13 @@ onRightsReady(loadExportTree)
           </div>
         </div>
 
-        <ProgressBar v-if="previewing" mode="indeterminate" style="margin-top: 1rem; height: 6px" />
+        <ProgressBar v-if="previewing" mode="indeterminate" class="mt-4 thin-progress" />
 
         <!-- Result message -->
-        <div v-if="importResult" style="margin-top: 1rem">
+        <div v-if="importResult" class="mt-4">
           <Message v-if="importResult.success" severity="success" :closable="false">
             Import successful!
-            <ul v-if="importResult.counts" style="margin: 0.5rem 0 0 1rem; padding: 0">
+            <ul v-if="importResult.counts" class="import-counts-list">
               <li v-for="(count, key) in importResult.counts" :key="key">
                 {{ key }}: {{ count }}
               </li>
@@ -512,6 +522,10 @@ onRightsReady(loadExportTree)
   width: 100%;
 }
 
+.not-a-backup-notice {
+  width: 100%;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -522,13 +536,13 @@ onRightsReady(loadExportTree)
 
 .description {
   margin-bottom: 1rem;
-  color: var(--text-color-secondary);
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .importexport-tree {
   max-height: 360px;
   overflow-y: auto;
-  border: 1px solid var(--surface-border, #ddd);
+  border: 1px solid var(--p-content-border-color, #ddd);
   border-radius: 6px;
 }
 
@@ -555,11 +569,17 @@ onRightsReady(loadExportTree)
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .import-actions {
   display: flex;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.import-counts-list {
+  margin: 0.5rem 0 0 1rem;
+  padding: 0;
 }
 </style>
