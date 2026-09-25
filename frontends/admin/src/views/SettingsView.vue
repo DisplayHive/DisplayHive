@@ -2,7 +2,10 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
+import { useSettingsStore } from '../stores/settings'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -14,9 +17,13 @@ import InputNumber from 'primevue/inputnumber'
 
 const { on, off, emit, emitWithAck } = useSocket()
 const toast = useToast()
+const confirm = useConfirm()
+const authStore = useAuthStore()
 const rightsStore = useRightsStore()
+const settingsStore = useSettingsStore()
 
 const canEdit = computed(() => rightsStore.can('settings.edit'))
+const canImportTour = computed(() => rightsStore.can('importexport.import'))
 
 const loading = ref(true)
 const saving = ref(false)
@@ -193,6 +200,83 @@ const saveTimeSettings = async () => {
     timeSaving.value = false
   }
 }
+
+interface TourPackage {
+  id: number
+  filename: string
+  name: string
+  description: string
+  logo?: string
+}
+
+const tourPackages = ref<TourPackage[]>([])
+const tourPackagesLoading = ref(false)
+const importingTourFilename = ref<string | null>(null)
+
+const loadTourPackages = async () => {
+  tourPackagesLoading.value = true
+  try {
+    const response = await fetch('/admin/tour/list', { headers: authStore.authHeader() })
+    if (!response.ok) throw new Error(`Server error: ${response.status}`)
+    tourPackages.value = await response.json()
+  } catch {
+    tourPackages.value = []
+  } finally {
+    tourPackagesLoading.value = false
+  }
+}
+
+// rightsStore loads asynchronously (a socket round trip), so `canImportTour`
+// can still be false at onMounted time even for a user who does have the
+// right — watch it instead of a one-shot onMounted call, so the fetch runs
+// (once) as soon as the right actually resolves true.
+watch(
+  canImportTour,
+  (allowed) => {
+    if (allowed) loadTourPackages()
+  },
+  { immediate: true },
+)
+
+const runTourImport = async (pkg: TourPackage) => {
+  importingTourFilename.value = pkg.filename
+  try {
+    const response = await fetch('/admin/tour/import', {
+      method: 'POST',
+      headers: { ...authStore.authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: pkg.filename }),
+    })
+    const result = await response.json()
+    if (result.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Tour Content Loaded',
+        detail: `"${pkg.name}" loaded — the Tour badge now appears in the top bar.`,
+        life: 4000,
+      })
+    } else {
+      toast.add({ severity: 'error', summary: 'Import Failed', detail: result.error || 'Unknown error', life: 6000 })
+    }
+  } catch (e) {
+    toast.add({ severity: 'error', summary: 'Import Failed', detail: String(e), life: 6000 })
+  } finally {
+    importingTourFilename.value = null
+  }
+}
+
+const confirmTourImport = (pkg: TourPackage) => {
+  confirm.require({
+    message:
+      'WARNING, this will overwrite ALL the content in your Database except of the Useraccounts, replacing it with the tour\'s demo content. Continue?',
+    header: 'Confirm Tour Content Import',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Cancel',
+    acceptLabel: 'Load',
+    acceptClass: 'p-button-danger',
+    accept: () => runTourImport(pkg),
+  })
+}
+
 </script>
 
 <template>
@@ -375,6 +459,49 @@ const saveTimeSettings = async () => {
           </div>
         </template>
       </Card>
+
+      <Card v-if="canImportTour">
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-compass card-header-icon" />
+            <span>Guided Tour</span>
+          </div>
+        </template>
+        <template #content>
+          <p class="tour-intro">
+            Loading tour content replaces all existing content, screens, designs and media —
+            everything except your user accounts — with a defined demo state the Guided Tour's
+            mini-tours are built to walk through. Once loaded, a "Tour" badge appears next to
+            Demo Mode in the top bar.
+          </p>
+          <p v-if="settingsStore.tourContentImported" class="tour-status">
+            <i class="pi pi-check-circle"></i> Tour content is loaded.
+          </p>
+          <div v-if="tourPackagesLoading" class="tour-loading">
+            <i class="pi pi-spin pi-spinner"></i>
+          </div>
+          <p v-else-if="!tourPackages.length" class="tour-status tour-status--muted">
+            No tour content package is available on this server yet.
+          </p>
+          <div v-else class="tour-package-list">
+            <div v-for="pkg in tourPackages" :key="pkg.id" class="tour-package">
+              <div class="tour-package-main">
+                <strong>{{ pkg.name }}</strong>
+                <p class="description">{{ pkg.description }}</p>
+              </div>
+              <Button
+                label="Load Tour Content"
+                icon="pi pi-cloud-download"
+                severity="danger"
+                outlined
+                :loading="importingTourFilename === pkg.filename"
+                :disabled="importingTourFilename !== null"
+                @click="confirmTourImport(pkg)"
+              />
+            </div>
+          </div>
+        </template>
+      </Card>
     </template>
 
   </div>
@@ -425,5 +552,50 @@ const saveTimeSettings = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.tour-intro {
+  margin: 0 0 1rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.tour-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.tour-status--muted {
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.tour-loading {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.tour-package-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tour-package {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.tour-package-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.tour-package-main .description {
+  margin: 0.2rem 0 0;
+  color: var(--p-text-muted-color, #6b7280);
 }
 </style>

@@ -447,6 +447,28 @@ higher specificity than the sub-class that sets the status color
 `box-shadow: inset 0 0 0 1px ...` instead when you need a defining edge
 without touching an existing border side.
 
+### Third-party widgets mounted outside the component tree
+
+Some libraries (the Guided Tour's `driver.js`, for the arrow/popover
+overlays) append their DOM directly to `<body>` at runtime rather than
+rendering through Vue, so a component's `<style scoped>` block can never
+reach them — Vue's scoping attribute is never applied to elements it didn't
+render. These need the same treatment as the global `.p-card` fix above:
+plain, unscoped rules (in `src/assets/main.css`, since there's no single
+"owning" component), pairing a semantic-token default with an explicit
+`.dark-mode` override for anything the library pins to a light-only color:
+
+```css
+.dark-mode .driver-popover {
+  background: var(--p-surface-800, #1e293b);
+  color: var(--p-text-color, #f3f4f6);
+}
+```
+
+Same rule as everywhere else in this document: only override what's
+actually wrong (surface/text/button colors here) — the library's own
+layout/spacing/animation CSS is left alone.
+
 ### Form control borders
 
 Not every "too bright" border is a broken token — PrimeVue's own dark

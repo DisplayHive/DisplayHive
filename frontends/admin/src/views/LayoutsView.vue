@@ -134,13 +134,21 @@ const refreshData = () => {
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Layout" @click="openNewPage" size="small" />
+            <Button
+              v-if="canCreate"
+              data-tour="layouts-new"
+              icon="pi pi-plus"
+              label="New Layout"
+              @click="openNewPage"
+              size="small"
+            />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="layouts-table"
           :value="filteredLayouts"
           :loading="loading"
           sortField="name"

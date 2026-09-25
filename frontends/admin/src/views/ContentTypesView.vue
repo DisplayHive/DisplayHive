@@ -474,13 +474,21 @@ const deleteContentType = (ct: ContentType) => {
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Content Type" @click="openNewDialog" size="small" />
+            <Button
+              v-if="canCreate"
+              data-tour="contenttypes-new"
+              icon="pi pi-plus"
+              label="New Content Type"
+              @click="openNewDialog"
+              size="small"
+            />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="contenttypes-table"
           :value="filteredContentTypes"
           :loading="loading"
           sortField="name"
@@ -494,7 +502,12 @@ const deleteContentType = (ct: ContentType) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+                <InputText
+                  data-tour="contenttypes-filter"
+                  v-model="filterText"
+                  placeholder="Filter content types..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>

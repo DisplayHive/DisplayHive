@@ -429,6 +429,8 @@ def admin_spa(filename='index.html'):
 _MEDIA_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'media')
 _EXAMPLECONTENT_FOLDER = os.path.join(os.path.dirname(__file__), 'examplecontent')
 _EXAMPLECONTENT_DESC = os.path.join(_EXAMPLECONTENT_FOLDER, 'exampledesc.json')
+_TOURCONTENT_FOLDER = os.path.join(os.path.dirname(__file__), 'tourcontent')
+_TOURCONTENT_DESC = os.path.join(_TOURCONTENT_FOLDER, 'tourdesc.json')
 
 
 def _demo_mode_hidden() -> bool:
@@ -806,6 +808,136 @@ def admin_demo_import():
     except zipfile.BadZipFile:
         return jsonify({'success': False, 'error': 'Invalid ZIP file'}), 400
     return jsonify(result)
+
+
+def _mark_tour_imported():
+    """Flip the `tour_content_imported` system setting to 'true' and notify
+    already-connected admin tabs, so the Tour nav badge appears without a
+    manual reload.
+
+    Deliberately not exposed via the generic settings save endpoint
+    (ALLOWED_SETTING_KEYS in application/admin/settings/sockethandlers.py) —
+    it's a derived flag that should only ever be set here, by the importer.
+    """
+    from application.models import SystemSetting
+    from application.admin.settings.sockethandlers import broadcast_admin_settings
+
+    existing = db.session.execute(
+        db.select(SystemSetting).where(SystemSetting.key == 'tour_content_imported')
+    ).scalar_one_or_none()
+    if existing:
+        existing.value = 'true'
+    else:
+        db.session.add(SystemSetting(key='tour_content_imported', value='true'))
+    db.session.commit()
+
+    try:
+        broadcast_admin_settings(socketio, db)
+    except Exception:
+        logging.exception('Error broadcasting admin settings after tour import')
+
+
+@app.route('/admin/tour/list')
+@require_jwt_auth(app)
+@require_http_right(app, 'importexport.import')
+def admin_tour_list():
+    """List the available tour-content packages described in tourdesc.json.
+
+    Gated by importexport.import (not tour.page) since this is called from
+    the Settings page's "Load Tour Content" card — the same right that
+    gates the card's visibility and the actual import endpoint below.
+    tour.page instead gates who can view/run the Tour catalog page itself
+    (TourView.vue), an unrelated, non-destructive action.
+    """
+    if not os.path.isfile(_TOURCONTENT_DESC):
+        return jsonify([])
+    with open(_TOURCONTENT_DESC, 'r', encoding='utf-8') as f:
+        return jsonify(json.load(f))
+
+
+@app.route('/admin/tour/import', methods=['POST'])
+@require_jwt_auth(app)
+@require_http_right(app, 'importexport.import')
+def admin_tour_import():
+    """Wipe the database (except user accounts) and media, then import the
+    bundled tour-content package. Same full-reset mechanism as Demo Mode —
+    see _restore_from_zip_bytes."""
+    import zipfile
+
+    payload = request.get_json(silent=True) or {}
+    filename = payload.get('filename') or ''
+
+    if not os.path.isfile(_TOURCONTENT_DESC):
+        return jsonify({'success': False, 'error': 'No tour content available'}), 404
+
+    with open(_TOURCONTENT_DESC, 'r', encoding='utf-8') as f:
+        available = {entry['filename'] for entry in json.load(f)}
+
+    # Only allow filenames explicitly listed in tourdesc.json — guards
+    # against path traversal via an arbitrary `filename` value in the request.
+    if filename not in available:
+        return jsonify({'success': False, 'error': 'Unknown tour package'}), 400
+
+    zip_path = os.path.join(_TOURCONTENT_FOLDER, filename)
+    if not os.path.isfile(zip_path):
+        return jsonify({'success': False, 'error': 'Tour package file missing on server'}), 404
+
+    with open(zip_path, 'rb') as f:
+        raw = f.read()
+
+    try:
+        result = _restore_from_zip_bytes(raw)
+    except zipfile.BadZipFile:
+        return jsonify({'success': False, 'error': 'Invalid ZIP file'}), 400
+
+    if result.get('success'):
+        _mark_tour_imported()
+    return jsonify(result)
+
+
+def _maybe_auto_import_tour_content():
+    """First-boot convenience: if a tour package is bundled and this looks
+    like a genuinely fresh install (no screens/content yet), auto-import it
+    so a brand-new deployment already has the Guided Tour ready to go.
+
+    Conservative on purpose: only touches a database that has *nothing* in
+    it yet, so it can never clobber a real deployment's data. Everything
+    else (a later, manually-triggered load) goes through admin_tour_import.
+    """
+    from application.models import SystemSetting, Screen, ContentElement
+
+    already = db.session.execute(
+        db.select(SystemSetting).where(SystemSetting.key == 'tour_content_imported')
+    ).scalar_one_or_none()
+    if already and already.value == 'true':
+        return
+    if not os.path.isfile(_TOURCONTENT_DESC):
+        return
+    with open(_TOURCONTENT_DESC, 'r', encoding='utf-8') as f:
+        packages = json.load(f)
+    if not packages:
+        return
+
+    has_screens = db.session.execute(db.select(Screen.id).limit(1)).first() is not None
+    has_content = db.session.execute(db.select(ContentElement.id).limit(1)).first() is not None
+    if has_screens or has_content:
+        return
+
+    zip_path = os.path.join(_TOURCONTENT_FOLDER, packages[0]['filename'])
+    if not os.path.isfile(zip_path):
+        return
+
+    with open(zip_path, 'rb') as f:
+        raw = f.read()
+    result = _restore_from_zip_bytes(raw)
+    if result.get('success'):
+        _mark_tour_imported()
+    else:
+        logging.warning('Auto-import of tour content failed: %s', result.get('error'))
+
+
+with app.app_context():
+    _startup_step('auto-import tour content', _maybe_auto_import_tour_content)
 
 
 # End of application routes

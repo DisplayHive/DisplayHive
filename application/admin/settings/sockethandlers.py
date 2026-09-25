@@ -20,35 +20,45 @@ ALLOWED_SETTING_KEYS = {
 }
 
 
+def _get_system_settings(db):
+    """Return all system settings as a {key: value} dict."""
+    from application.models import SystemSetting
+    rows = db.session.execute(db.select(SystemSetting)).scalars().all()
+    return {row.key: row.value for row in rows}
+
+
+def broadcast_admin_settings(socketio, db, sid=None):
+    """Build the full settings payload and emit it.
+
+    Also called from outside this module (e.g. app.py after a tour-content
+    import flips `tour_content_imported`) so already-connected admin tabs
+    pick up the new system_settings without a manual reload.
+    """
+    from application.models import Design
+    from datetime import datetime, timezone
+    designs = db.session.execute(db.select(Design)).scalars().all()
+    design_list = [
+        {'id': d.id, 'name': d.name, 'isDefault': bool(getattr(d, 'isDefault', False))}
+        for d in designs
+    ]
+    default_design_id = next(
+        (d.id for d in designs if getattr(d, 'isDefault', False)), None
+    )
+    payload = {
+        'designs': design_list,
+        'default_design_id': default_design_id,
+        'system_settings': _get_system_settings(db),
+        'server_time': datetime.now(timezone.utc).isoformat(),
+    }
+    socketio.emit('displayhive:admin:stc:admin_settings', payload, room=sid or None)
+
+
 def register_admin_settings_handlers(socketio, app, db):
     """Register socket handlers for the admin Settings page."""
     from application.socketio_handlers.auth import require_right
 
-    def _get_system_settings():
-        """Return all system settings as a {key: value} dict."""
-        from application.models import SystemSetting
-        rows = db.session.execute(db.select(SystemSetting)).scalars().all()
-        return {row.key: row.value for row in rows}
-
     def _emit_settings(sid=None):
-        """Build the full settings payload and emit it."""
-        from application.models import Design
-        from datetime import datetime, timezone
-        designs = db.session.execute(db.select(Design)).scalars().all()
-        design_list = [
-            {'id': d.id, 'name': d.name, 'isDefault': bool(getattr(d, 'isDefault', False))}
-            for d in designs
-        ]
-        default_design_id = next(
-            (d.id for d in designs if getattr(d, 'isDefault', False)), None
-        )
-        payload = {
-            'designs': design_list,
-            'default_design_id': default_design_id,
-            'system_settings': _get_system_settings(),
-            'server_time': datetime.now(timezone.utc).isoformat(),
-        }
-        socketio.emit('displayhive:admin:stc:admin_settings', payload, room=sid or None)
+        broadcast_admin_settings(socketio, db, sid)
 
     @socketio.on('displayhive:admin:cts:get_admin_settings')
     @require_right('settings.page')

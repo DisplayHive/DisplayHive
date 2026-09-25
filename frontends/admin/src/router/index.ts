@@ -104,6 +104,11 @@ const router = createRouter({
       component: () => import('../views/DemoModeView.vue'),
     },
     {
+      path: '/tour',
+      name: 'tour',
+      component: () => import('../views/TourView.vue'),
+    },
+    {
       path: '/importexport',
       name: 'importexport',
       component: () => import('../views/ImportExportView.vue'),

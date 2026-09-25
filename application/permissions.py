@@ -102,6 +102,8 @@ RIGHTS = [
     ('importexport.export', 'importexport', 'Export the full database'),
     ('importexport.import', 'importexport', 'Import / overwrite the full database'),
 
+    ('tour.page', 'tour', 'View Guided Tour page'),
+
     ('pretalx.page', 'pretalx', 'View Pretalx page'),
     ('pretalx.manage', 'pretalx', 'Manage Pretalx settings / API URLs'),
 

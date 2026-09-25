@@ -17,6 +17,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // Height (vh) of the preview frame in a content row's expanded detail
   // view (ContentTable.vue) — same card, second field.
   const contentListPreviewSize = ref(20)
+  // Whether the bundled tour-content package has been imported — drives the
+  // "Tour" badge next to Demo Mode in App.vue. Set server-side only (see
+  // _mark_tour_imported in app.py), never through the generic settings save.
+  const tourContentImported = ref(false)
   const loaded = ref(false)
   let listening = false
 
@@ -27,6 +31,7 @@ export const useSettingsStore = defineStore('settings', () => {
     contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
     const listPreviewSize = Number(sys.content_list_preview_size)
     contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
+    tourContentImported.value = sys.tour_content_imported === true || sys.tour_content_imported === 'true'
     loaded.value = true
   }
 
@@ -39,5 +44,12 @@ export const useSettingsStore = defineStore('settings', () => {
     emit('displayhive:admin:cts:get_admin_settings')
   }
 
-  return { hideDemoMode, contentEditPreviewSize, contentListPreviewSize, loaded, fetchSettings }
+  return {
+    hideDemoMode,
+    contentEditPreviewSize,
+    contentListPreviewSize,
+    tourContentImported,
+    loaded,
+    fetchSettings,
+  }
 })

@@ -65,3 +65,53 @@ a,
     width: 100%;
   }
 }
+
+/* Guided Tour (driver.js) popover theming — global, not scoped, since
+   driver.js appends its popover/overlay directly to <body>, outside any
+   Vue component's DOM tree, so a component-scoped <style> block can never
+   reach it. Light mode inherits driver.js's own default look; only the
+   dark-mode surface/text/button colors are overridden here, using the same
+   --p-surface-800/700 "raised card" pair as the rest of the app's dark
+   cards (see docs/developer/styleguide.md > Dark mode) rather than
+   driver.js's own light-only defaults. */
+.dark-mode .driver-popover {
+  background: var(--p-surface-800, #1e293b);
+  color: var(--p-text-color, #f3f4f6);
+}
+
+.dark-mode .driver-popover-title,
+.dark-mode .driver-popover-description {
+  color: var(--p-text-color, #f3f4f6);
+}
+
+.dark-mode .driver-popover-close-btn {
+  color: var(--p-text-muted-color, #9ca3af);
+}
+
+.dark-mode .driver-popover-footer .driver-popover-progress-text {
+  color: var(--p-text-muted-color, #9ca3af);
+}
+
+.dark-mode .driver-popover-footer button {
+  background: var(--p-surface-700, #334155);
+  color: var(--p-text-color, #f3f4f6);
+  border: 1px solid var(--p-surface-600, #4b5563);
+  text-shadow: none;
+}
+
+.dark-mode .driver-popover-footer button:hover {
+  background: var(--p-surface-600, #4b5563);
+}
+
+.dark-mode .driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: var(--p-surface-800, #1e293b);
+}
+.dark-mode .driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: var(--p-surface-800, #1e293b);
+}
+.dark-mode .driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: var(--p-surface-800, #1e293b);
+}
+.dark-mode .driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: var(--p-surface-800, #1e293b);
+}

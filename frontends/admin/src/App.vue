@@ -167,6 +167,15 @@ watch(
   },
 )
 
+watch(
+  () => [settingsStore.tourContentImported, route.name] as const,
+  ([imported, name]) => {
+    if (!imported && name === 'tour') {
+      router.replace('/')
+    }
+  },
+)
+
 onMounted(async () => {
   await authStore.restore()
   if (authStore.isAuthenticated) {
@@ -378,6 +387,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     home: 'Dashboard',
     demo: 'Demo Mode',
+    tour: 'Guided Tour',
     devices: 'Adopted Devices',
     screens: 'Screens',
     screengroups: 'Screen Groups',
@@ -407,6 +417,7 @@ const pageIcon = computed(() => {
   const icons: Record<string, string> = {
     home: 'pi pi-home',
     demo: 'pi pi-sparkles',
+    tour: 'pi pi-compass',
     devices: 'pi pi-desktop',
     screens: 'pi pi-window-maximize',
     screengroups: 'pi pi-clone',
@@ -498,6 +509,16 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           >
             <i class="pi pi-sparkles"></i>
             Demo Mode
+          </span>
+          <span
+            v-if="settingsStore.tourContentImported && rightsStore.can('tour.page')"
+            class="demo-mode-badge"
+            :class="{ active: route.name === 'tour' }"
+            data-testid="tour-badge"
+            @click="router.push('/tour')"
+          >
+            <i class="pi pi-compass"></i>
+            Tour
           </span>
         </div>
         <div class="header-controls">

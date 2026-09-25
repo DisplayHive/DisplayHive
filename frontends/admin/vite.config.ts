@@ -103,6 +103,17 @@ export default defineConfig({
         target: backendUrl,
         changeOrigin: true,
       },
+      // Forward the tour-content REST endpoints, same rationale as above —
+      // must not be a shorter prefix like `/admin/tour`, which would also
+      // match (and hijack) the `/admin/tour` SPA page route (TourView.vue).
+      '/admin/tour/list': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/admin/tour/import': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       // Forward the admin auth REST endpoints (login/session-check) to the
       // Flask backend, same rationale as export/download and import/upload above.
       '/admin/api': {
