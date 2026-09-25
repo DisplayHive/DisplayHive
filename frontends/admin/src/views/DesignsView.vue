@@ -323,7 +323,21 @@ type GradientLike = { type: string; repeating: boolean; angle: number; shape: st
 // opacity (0-100, default 100/opaque) becomes an 8-digit hex alpha channel
 // so a fully opaque top layer doesn't always hide gradients listed after it.
 const stopColorWithAlpha = (s: GradientStop): string => {
-  const color = `#${resolveStopColorHex(s)}`
+  // resolveStopColorHex()'s contract (see its own doc comment) is "return
+  // stop.color as-is, resolving a same-Design ref first" — it makes no
+  // promise about a leading '#', and callers disagree on it: the Color
+  // Stops editor below strips it (gradientEditForm's stops are always
+  // hash-less), but a Gradient fetched straight from the server (the list
+  // swatch here, and the Backdrop's applied-gradient preview) keeps
+  // whatever's in the DB, which always has one (see saveGradientEdit,
+  // which sends `#${stop.color}`). Blindly prepending '#' as this used to
+  // do doubled it for that second case ("##eeff00"), an invalid CSS color
+  // that silently dropped the *entire* background-image — hence a blank
+  // swatch. Strip first so this works for both cases, matching the
+  // backend's gradient_css_value()/_stop_color(), which never had this bug
+  // since it just uses the DB value directly.
+  const hex = resolveStopColorHex(s).replace(/^#/, '')
+  const color = `#${hex}`
   const opacity = s.opacity ?? 100
   if (opacity >= 100 || !color.startsWith('#') || color.length !== 7) return color
   const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255)
@@ -460,6 +474,38 @@ const deleteGradient = (g: Gradient) => {
       toast.add({ severity: 'success', summary: 'Success', detail: 'Gradient deleted', life: 3000 })
     },
   })
+}
+
+// Copy: duplicates a Gradient's type/angle/position and stops (including
+// each stop's Default Color `ref`, same as any other Design using it —
+// see resolveStopColorHex's doc comment) as a brand new, independent one.
+const showCopyGradientDialog = ref(false)
+const copyGradientSource = ref<Gradient | null>(null)
+const copyGradientNewName = ref('')
+
+const openCopyGradientDialog = (g: Gradient) => {
+  copyGradientSource.value = g
+  copyGradientNewName.value = `Copy of ${g.name}`
+  showCopyGradientDialog.value = true
+}
+
+const executeCopyGradient = () => {
+  const source = copyGradientSource.value
+  const name = copyGradientNewName.value.trim()
+  if (!source || !name) return
+  emit('displayhive:admin:cts:create_gradient', {
+    name,
+    type: source.type,
+    repeating: source.repeating,
+    angle: source.angle,
+    shape: source.shape,
+    size: source.size,
+    position_x: source.position_x,
+    position_y: source.position_y,
+    stops: source.stops,
+  })
+  toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
+  showCopyGradientDialog.value = false
 }
 
 const toast = useToast()
@@ -1430,12 +1476,37 @@ const deleteDesign = (design: Design) => {
           <div class="gradient-list-label">{{ g.name }} <small class="hint">({{ g.type }})</small></div>
           <div class="action-buttons">
             <Button v-if="canEdit" icon="pi pi-pencil" size="small" outlined title="Edit" @click="openEditGradientDialog(g)" />
+            <Button v-if="canCreate" icon="pi pi-copy" size="small" outlined title="Copy" @click="openCopyGradientDialog(g)" />
             <Button v-if="canDelete" icon="pi pi-trash" size="small" severity="danger" outlined title="Delete" @click="deleteGradient(g)" />
           </div>
         </div>
       </div>
       <template #footer>
         <Button label="Close" @click="showGradientManageDialog = false" />
+      </template>
+    </Dialog>
+
+    <!-- Copy Gradient Dialog -->
+    <Dialog v-model:visible="showCopyGradientDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Copy Gradient</span>
+        </div>
+      </template>
+      <div class="field">
+        <label for="copy-gradient-name">New Name</label>
+        <InputText
+          id="copy-gradient-name"
+          v-model="copyGradientNewName"
+          class="w-full"
+          autofocus
+          @keyup.enter="executeCopyGradient"
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" @click="showCopyGradientDialog = false" text />
+        <Button label="Copy" icon="pi pi-copy" @click="executeCopyGradient" :disabled="!copyGradientNewName.trim()" />
       </template>
     </Dialog>
 
