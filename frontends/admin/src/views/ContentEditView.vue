@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -140,6 +140,13 @@ const createForm = ref({
   fields: {} as Record<string, string | number | boolean>
 })
 const tagConfigs = ref<TagConfig[]>([])
+// Per-tag "does its FieldValueEditor actually render an editable control"
+// flag, reported by FieldValueEditor's `update:hasVisibleControl` — a field
+// whose only control(s) are all hidden via the per-field "hide" option flag
+// renders nothing, so its label/description row is hidden too rather than
+// showing a bare headline over empty space. Defaults to visible so a field
+// isn't hidden before its FieldValueEditor has reported in.
+const tagHasVisibleControl = reactive<Record<string, boolean>>({})
 
 const formScreengroupIds = ref<number[]>([])
 const originalScreengroupIds = ref<number[]>([])
@@ -823,13 +830,20 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         <div v-if="tagConfigs.length > 0" class="tag-fields-section">
           <div
             v-for="tag in tagConfigs"
-            v-show="tag.fieldHandler !== ''"
+            v-show="tag.fieldHandler !== '' && tagHasVisibleControl[tag.name] !== false"
             :key="tag.name"
             class="field"
           >
             <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
             <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
-            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :palette="designPalette" :option-flags="tag.optionFlags" />
+            <FieldValueEditor
+              :tag="tag"
+              :fields="createForm.fields"
+              mode="edit"
+              :palette="designPalette"
+              :option-flags="tag.optionFlags"
+              @update:has-visible-control="(v) => (tagHasVisibleControl[tag.name] = v)"
+            />
           </div>
         </div>
       </section>
@@ -911,7 +925,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
           <div class="scheduling-fields">
             <!-- Screengroup assignment -->
             <div class="screengroup-assignment-section">
-              <h4>Screen Groups</h4>
+              <h4 v-if="allScreengroups.length > 0">Screen Groups</h4>
               <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
               <template v-else>
                 <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />

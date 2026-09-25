@@ -447,6 +447,23 @@ higher specificity than the sub-class that sets the status color
 `box-shadow: inset 0 0 0 1px ...` instead when you need a defining edge
 without touching an existing border side.
 
+A small interactive control (not a `<Card>`) can fall into the same trap
+even using a correctly-adapting semantic token, if it happens to share that
+exact token with its own containing element — `OptionFlagToggle.vue`'s
+idle-state button used `background: var(--p-content-background, ...)`
+while sitting inside `ContentTypesView.vue`'s `.tagconfig-preset-panel`,
+which sets its own background from that *same* token. Both resolve to the
+same color in both themes, so the button was only distinguishable by a
+faint 1px border — easy to miss entirely, especially in dark mode and next
+to little else (e.g. `FieldValueEditor.vue`'s image field "Size (vh)"
+row). Fix: use `--p-content-hover-background` for this kind of small
+control's idle fill instead — a token that stays visually close to
+`--p-content-background` but is deliberately offset from it, already used
+this way by `IconPickerField.vue`/`ContentTypesView.vue`/`MatrixView.vue`.
+The lesson generalizes: matching tokens exactly between a small control and
+its immediate container is itself a contrast bug, even when both tokens
+individually adapt correctly.
+
 ### Third-party widgets mounted outside the component tree
 
 Some libraries (the Guided Tour's `driver.js`, for the arrow/popover
