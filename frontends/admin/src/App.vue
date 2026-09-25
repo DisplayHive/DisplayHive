@@ -501,7 +501,13 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           </span>
         </div>
         <div class="header-controls">
-          <Menubar :model="menuItems" class="app-menubar" breakpoint="600px" />
+          <Menubar
+            :model="menuItems"
+            class="app-menubar"
+            :class="{ 'app-menubar--disabled': !isConnected }"
+            :aria-disabled="!isConnected"
+            breakpoint="600px"
+          />
           <span class="current-user" data-testid="current-username">
             <i class="pi pi-user"></i>
             {{ authStore.username }}
@@ -731,6 +737,14 @@ body {
 .app-menubar {
   background: transparent !important;
   border: none !important;
+}
+
+/* Navigating while the socket is down would just dead-end on pages that
+   can't fetch anything — grey the toolbar out and block clicks until the
+   connection (and with it, the disconnect-overlay below) comes back. */
+.app-menubar--disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .header-controls {
