@@ -105,7 +105,16 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if isinstance(flag, dict) and (flag.get('locked') or flag.get('hidden')) and key in preset:
                 ctx[key] = preset[key]
 
-    # Resolve random_tags image fields to a concrete URL before rendering
+    # Collect random_tags image fields' full candidate lists — the actual
+    # pick happens client-side, fresh on every display, not here (see the
+    # `image` rendering branch below and
+    # frontends/screen/ts/screen/random-image-resolver.ts). Picking once
+    # server-side and baking a single URL into the (shared, per-
+    # ContentElement) rendered HTML meant every screen showing this content
+    # saw the same image, it only changed on the next display after a
+    # throttled server round trip, and that round trip silently failed
+    # offline, repeating the same image forever.
+    random_pools: dict = {}
     if db is not None and field_handlers:
         from application.models.content import Media
         image_mode_keys = [k for k in ctx if k.endswith('__image_mode') and ctx[k] == 'random_tags']
@@ -126,7 +135,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                     file_rel = (folder + '/' + m.filename) if folder else m.filename
                     candidates.append(f'/static/media/{file_rel}')
             if candidates:
-                ctx[field_name] = _random.choice(candidates)
+                random_pools[field_name] = candidates
 
     # Inject magic tags so {{ var_<name> }} typed into a text field's stored
     # value gets substituted before that value is escaped/wrapped below.
@@ -141,7 +150,19 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     # Transform each field's raw value according to its field_handler.
     # Values are HTML-escaped to prevent XSS from stored field data.
     for field_name, ftype in field_handlers.items():
-        if ftype == 'image' and field_name in ctx and ctx[field_name]:
+        if ftype == 'image' and field_name in random_pools:
+            # Same size/style logic as a normal image field below, just no
+            # `src` — the screen client fills it in from the candidate pool.
+            # See frontends/screen/ts/screen/random-image-resolver.ts.
+            size = ctx.get(f'{field_name}__size')
+            try:
+                size = float(size)
+            except (TypeError, ValueError):
+                size = 0
+            style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+            pool_json = _html_escape(json.dumps(random_pools[field_name]))
+            ctx[field_name] = Markup(f"<img data-dh-random-pool='{pool_json}' style=\"{style}\" />")
+        elif ftype == 'image' and field_name in ctx and ctx[field_name]:
             url = str(ctx[field_name]).strip()
             parsed_scheme = urllib.parse.urlparse(url).scheme.lower()
             if parsed_scheme not in ('', 'http', 'https', 'data'):

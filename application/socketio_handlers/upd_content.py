@@ -27,7 +27,6 @@ owns advancing through it by `duration` and creating/positioning each scene's
 container divs from the per-scene `containers` map (vh/vw top/left/width/height).
 """
 
-import json
 import logging
 from typing import List, Optional
 
@@ -127,16 +126,20 @@ def _build_payload(db, screen):
         if mc.end_time is not None:
             scene['end_time'] = mc.end_time.isoformat()
         try:
-            si = json.loads(mc.serialized_input or '{}')
-            if any(v == 'random_tags' for k, v in si.items() if k.endswith('__image_mode')):
-                scene['update_after_show'] = True
-            elif any(
+            # random_tags image fields no longer need this: the candidate
+            # pool is rendered straight into the HTML as a
+            # data-dh-random-pool placeholder (render_content_fields) and
+            # the screen client picks a fresh one client-side on every
+            # display — see frontends/screen/ts/screen/random-image-resolver.ts.
+            # pretalx_table is the only handler left that genuinely needs a
+            # server-side re-render (live schedule data).
+            if any(
                 getattr(tc, 'field_handler', '') == 'pretalx_table'
                 for tc in (getattr(mc.contenttype, 'tagconfigs', None) or [])
             ):
                 scene['update_after_show'] = True
         except Exception:
-            logger.debug('Failed to parse serialized_input for content_element id=%s', mc.id, exc_info=True)
+            logger.debug('Failed to check tagconfigs for content_element id=%s', mc.id, exc_info=True)
 
         scenes.append(scene)
 

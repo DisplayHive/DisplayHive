@@ -13,6 +13,7 @@ import type { Scene } from "./types.js";
 import { tickNow } from "./clock.js";
 import { tickCountdown } from "./countdown.js";
 import { resolveIcons } from "./icon-resolver.js";
+import { resolveRandomImages } from "./random-image-resolver.js";
 import { log } from "./logger.js";
 
 // Optional emitter injected by socket setup so this module does not
@@ -182,6 +183,15 @@ export function renderScene(scene: Scene): void {
   for (const id of changedIds) {
     const el = containerElements[id];
     if (el) void resolveIcons(el);
+  }
+  // Unlike icons, a random-image placeholder must resolve to a *new* pick
+  // every time this scene is shown — including repeat/unchanged displays,
+  // where the HTML string is byte-identical to last time and so never made
+  // it into changedIds — so this runs for every active container, not just
+  // the ones above.
+  for (const id of activeIds) {
+    const el = containerElements[id];
+    if (el) void resolveRandomImages(el);
   }
   log(
     "info", "renderScene",

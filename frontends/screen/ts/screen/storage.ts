@@ -58,3 +58,18 @@ export function setAdoptionToken(token: string): void {
 export function clearAdoptionToken(): void {
   safeRemove("adoptionToken");
 }
+
+// ── Random-tag image cache manifest ──────────────────────────────────────────
+// The image bytes themselves live in the Cache Storage API (see
+// random-image-cache.ts); this is just the small bookkeeping list (url,
+// size, lastUsed per entry) needed to enforce a size/count budget and pick
+// only among what's actually cached — cheap enough for localStorage, and
+// persists across reloads/restarts the same way the device key does.
+
+export function getRandomImageManifest(): string | null {
+  return safeGet("randomImageManifest");
+}
+
+export function setRandomImageManifest(json: string): void {
+  safeSet("randomImageManifest", json);
+}
