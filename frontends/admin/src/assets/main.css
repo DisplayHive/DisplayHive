@@ -115,3 +115,49 @@ a,
 .dark-mode .driver-popover-arrow-side-bottom.driver-popover-arrow {
   border-bottom-color: var(--p-surface-800, #1e293b);
 }
+
+/* Guided Tour (driver.js) vs. small PrimeVue overlay panels (DatePicker/
+   Select/MultiSelect/ColorPicker/Popover/...): PrimeVue teleports these
+   directly onto <body>, not into the highlighted step's element, and sets
+   their z-index via inline style (around 1000-1100). driver.js's own
+   dimming overlay sits at z-index 10000, and driver.css's blanket
+   ".driver-active *{pointer-events: none}" strips interaction from
+   everything except the highlighted element and driver's own popover — so
+   opening e.g. the Scheduling step's date picker mid-tour rendered it
+   visually greyed-out (under the dark overlay) and unclickable. Restore
+   both for any other direct child of <body> PrimeVue portals this way.
+   !important is needed to beat PrimeVue's own inline z-index.
+
+   Excluded: #app (the whole app — would cancel the dimming effect
+   everywhere else) and driver's own two elements, same as always; also
+   .p-dialog-mask (a real modal Dialog's backdrop, e.g. the Select Content
+   Type dialog a tour step can itself be highlighting something inside of)
+   — elevating it pulls its whole subtree, including the dialog, above
+   driver's own popover too, blocking clicks on the tour's own Next/Prev/
+   Close buttons. Its target element still gets pointer-events restored
+   individually by driver.css's own ".driver-active-element" rule, so
+   nothing inside the dialog becomes unclickable by leaving the mask out
+   of this. */
+body.driver-active > :not(#app):not(.driver-overlay):not(.driver-popover):not(.p-dialog-mask) {
+  pointer-events: auto !important;
+  z-index: 1000000001 !important;
+}
+
+/* Content edit page: keep the Live Preview panel visible above driver.js's
+   dimming overlay specifically during createEditContentTour's "Content
+   type fields" step, which highlights .tag-fields-section but still wants
+   the preview visible as a passive reference alongside it — without also
+   being interactive, unlike the PrimeVue overlay-panel rule above.
+   Deliberately no pointer-events here: it isn't this step's actual target
+   (that's the later "Preset by an admin" step, which highlights
+   .content-edit-preview directly and needs no help from this rule).
+   .content-edit-preview already has `position: sticky`
+   (ContentEditView.vue), so it can take a z-index directly.
+
+   Scoped to .tour-preview-elevated (toggled by that one step's `before`/
+   the next step's `before` in createEditContent.ts) rather than applying
+   for the whole body.driver-active session, so every other step on this
+   page dims the preview normally like any other unhighlighted content. */
+body.driver-active .content-edit-preview.tour-preview-elevated {
+  z-index: 1000000001;
+}

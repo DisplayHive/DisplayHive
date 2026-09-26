@@ -67,14 +67,24 @@ export function useTourRunner() {
 
     const isFirst = index === 0
     const isLast = index === tour.steps.length - 1
+    // 'next' must always be included, even on the last step — it's the
+    // button showing "Exit Tour" there. Excluding it (as this used to do,
+    // matching its unused nextBtnText value against nothing) left the last
+    // step with no bottom-row way to finish at all, only the small × icon.
     const buttons: Array<'next' | 'previous' | 'close'> = [
       ...(isFirst ? [] : (['previous'] as const)),
-      ...(isLast ? [] : (['next'] as const)),
+      'next',
       'close',
     ]
 
+    const exitToTourPage = () => {
+      stop()
+      router.push('/tour')
+    }
+
     driverObj!.highlight({
       element: step.selector,
+      advanceOnClick: step.advanceOnClick,
       popover: {
         title: step.title,
         description: step.description,
@@ -87,8 +97,8 @@ export function useTourRunner() {
         // route changes between them) passes progressText straight through
         // unmodified, so the numbers are interpolated here instead.
         progressText: `Step ${index + 1} of ${tour.steps.length}`,
-        nextBtnText: isLast ? 'Finish' : 'Next',
-        onNextClick: () => goToStep(index + 1),
+        nextBtnText: isLast ? 'Exit Tour' : 'Next',
+        onNextClick: isLast ? exitToTourPage : () => goToStep(index + 1),
         onPrevClick: () => goToStep(index - 1),
         onCloseClick: () => stop(),
       },

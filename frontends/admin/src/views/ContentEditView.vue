@@ -746,6 +746,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <Card
         v-for="ct in contentTypes"
         :key="ct.id"
+        :data-tour="`contenttype-card-${ct.id}`"
         class="contenttype-card"
         @click="selectContentType(ct)"
       >
@@ -852,7 +853,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         <h3 class="form-section-title">Delivery settings</h3>
 
         <!-- Scheduling -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-scheduling">
           <summary class="scheduling-summary">
             <i class="pi pi-clock summary-icon"></i>
             Scheduling
@@ -889,7 +890,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </details>
 
         <!-- Duration -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-duration">
           <summary class="scheduling-summary">
             <i class="pi pi-stopwatch summary-icon"></i>
             Duration
@@ -916,7 +917,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </details>
 
         <!-- Screen Groups & Screens -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-screens">
           <summary class="scheduling-summary">
             <i class="pi pi-desktop summary-icon"></i>
             Screen Groups &amp; Screens
@@ -973,9 +974,9 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     </div>
 
     <div class="content-edit-form-actions">
-      <Button label="Cancel" @click="goBack" text />
+      <Button data-tour="content-cancel" label="Cancel" @click="goBack" text />
       <Button v-if="editMode && createForm.id" label="Update" severity="secondary" outlined @click="submitCreateContent(true)" :disabled="loadingContentTypeDetail" />
-      <Button :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />
+      <Button data-tour="content-save" :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />
     </div>
     </div>
 
