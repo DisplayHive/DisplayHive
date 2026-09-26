@@ -93,6 +93,15 @@ def register_admin_designs_handlers(socketio, app, db):
             default_colors=data.get('default_colors') or None,
         )
         db.session.add(design)
+        db.session.flush()  # assigns design.id, needed for the global style row below
+
+        # A brand-new Design has no CSS/global styles at all yet, so its
+        # `.dh-container` text would render at the browser's default color —
+        # black — which is unreadable against most backdrops. Seed a bright,
+        # clearly-visible default (not white, so it still reads as "styled"
+        # rather than a placeholder) that the Global Styles panel lets the
+        # admin override immediately.
+        db.session.add(DesignGlobalStyle(design_id=design.id, property='color', value='#ffff00'))
         db.session.commit()
         _emit_designs()
 
