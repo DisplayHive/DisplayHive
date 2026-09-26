@@ -601,7 +601,10 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
         <RouterView />
       </main>
 
-      <div class="git-commit-badge">Commit: {{ gitCommit }}</div>
+      <div class="git-commit-badge">
+        <a href="https://docs.displayhive.org/" target="_blank" rel="noopener" class="docs-link">DisplayHive Documentation</a>
+        · Commit: {{ gitCommit }}
+      </div>
     </template>
   </div>
 </template>
@@ -1077,6 +1080,18 @@ body {
   font-family: monospace;
   pointer-events: none;
   z-index: 9999;
+}
+
+/* The badge itself is pointer-events: none (sits over page content without
+   intercepting clicks near the corner) — restore it just for the link. */
+.docs-link {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: underline;
+}
+
+.docs-link:hover {
+  color: var(--p-primary-color, #667eea);
 }
 
 /* Tablet styles */
