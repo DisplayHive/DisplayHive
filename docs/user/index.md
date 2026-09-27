@@ -51,8 +51,7 @@ roughly in order:
 5. **[Screens, devices & groups](screens-devices-groups.md)** — register a
    physical/browser display and point it at your content.
 
-Once the basics are running, see [Magic tags](magic-tags.md) for reusable
-placeholder values, and [Pretalx](pretalx.md) / [Alerting](alerting.md) for
-optional integrations. [Import & export](import-export.md) covers backups,
+Once the basics are running, see [Pretalx](pretalx.md) / [Alerting](alerting.md)
+for optional integrations. [Import & export](import-export.md) covers backups,
 and [Settings](settings.md) covers instance-wide options. If something's
 unclear, check the [FAQ](faq.md) first.

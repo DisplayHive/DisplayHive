@@ -137,16 +137,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if candidates:
                 random_pools[field_name] = candidates
 
-    # Inject magic tags so {{ var_<name> }} typed into a text field's stored
-    # value gets substituted before that value is escaped/wrapped below.
-    tvars: dict = {}
-    if db is not None:
-        try:
-            from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-            tvars = load_magic_tags(db)
-        except Exception:
-            tvars = {}
-
     # Transform each field's raw value according to its field_handler.
     # Values are HTML-escaped to prevent XSS from stored field data.
     for field_name, ftype in field_handlers.items():
@@ -303,9 +293,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             ctx[field_name] = Markup(str(ctx[field_name]))
         elif ftype == 'marquee' and field_name in ctx:
             text = str(ctx.get(field_name, '')).strip()
-            if tvars:
-                from application.admin.magictags.helper import substitute_magic_tags
-                text = substitute_magic_tags(text, tvars)
             speed = ctx.get(f'{field_name}__speed', 20)
             try:
                 speed = float(speed)
@@ -322,8 +309,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             )
         elif ftype in ('textklein', 'textbig', 'link') and field_name in ctx:
             raw = str(ctx[field_name])
-            if tvars:
-                raw = substitute_magic_tags(raw, tvars)
             escaped = _html_escape(raw)
             ctx[field_name] = Markup(escaped.replace('\n', '<br>'))
         elif ftype == 'table':

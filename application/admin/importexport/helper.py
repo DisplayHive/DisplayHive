@@ -56,13 +56,13 @@ def _exportable_setting_keys():
 
 
 def _support_models():
-    from application.models import TagConfig, MagicTagValueListEntry
+    from application.models import TagConfig
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import (
         layout_container, DesignGradient, DesignContainerStyle, DesignGlobalStyle,
     )
     return dict(
-        TagConfig=TagConfig, MagicTagValueListEntry=MagicTagValueListEntry,
+        TagConfig=TagConfig,
         screengroup_screen=screengroup_screen, content_element_screengroup=content_element_screengroup,
         layout_container=layout_container, DesignGradient=DesignGradient,
         DesignContainerStyle=DesignContainerStyle, DesignGlobalStyle=DesignGlobalStyle,
@@ -165,21 +165,6 @@ def _row_device(d, selected_screen_ids):
     }
 
 
-def _row_magic_tag_value_list(l):
-    return {
-        'id': l.id, 'uuid': l.uuid, 'name': l.name,
-        'entries': [{'id': e.id, 'key': e.key, 'value': e.value} for e in l.entries],
-    }
-
-
-def _row_magic_tag(v):
-    return {
-        'id': v.id, 'uuid': v.uuid,
-        'name': v.name, 'value': v.value, 'description': v.description or '',
-        'type': v.type or 'text', 'value_list_id': v.value_list_id,
-    }
-
-
 def _resolve_export_selection(db, selection):
     """selection: dict[key, list[uuid]] or None (-> everything).
 
@@ -268,12 +253,6 @@ def _resolve_export_selection(db, selection):
                     selected['contenttypes'].add(ce.contenttype_id)
                     changed = True
                 if ce and _pull_in_media_referenced_by(f"{ce.serialized_input or ''} {ce.html or ''}"):
-                    changed = True
-        if selected['magic_tags']:
-            for mt_id in list(selected['magic_tags']):
-                mt = by_id['magic_tags'].get(mt_id)
-                if mt and mt.value_list_id and mt.value_list_id not in selected['magic_tag_value_lists']:
-                    selected['magic_tag_value_lists'].add(mt.value_list_id)
                     changed = True
 
     return selected, all_rows
@@ -364,8 +343,6 @@ def export_database(app, db, selection=None):
             'content_element_screengroup': content_element_screengroup_rows,
             'media': [_row_media(med) for med in rows_of('media')],
             'devices': [_row_device(d, selected['screens']) for d in rows_of('devices')],
-            'magic_tag_value_lists': [_row_magic_tag_value_list(l) for l in rows_of('magic_tag_value_lists')],
-            'magic_tags': [_row_magic_tag(v) for v in rows_of('magic_tags')],
         }
 
 
@@ -532,12 +509,6 @@ def _resolve_import_selection(data: dict, selection):
                     changed = True
                 if ce and _pull_in_media_referenced_by(f"{ce.get('serialized_input') or ''} {ce.get('html') or ''}"):
                     changed = True
-        if selected['magic_tags']:
-            for mt_id in list(selected['magic_tags']):
-                mt = by_id['magic_tags'].get(mt_id)
-                if mt and mt.get('value_list_id') and mt['value_list_id'] not in selected['magic_tag_value_lists']:
-                    selected['magic_tag_value_lists'].add(mt['value_list_id'])
-                    changed = True
 
     return selected, all_rows
 
@@ -584,7 +555,6 @@ def _reset_postgres_sequences(db):
         ('design_gradient', 'id'), ('design_container_style', 'id'), ('design_global_style', 'id'),
         ('layout', 'id'), ('contenttype', 'id'), ('tagconfig', 'id'), ('contentcontainer', 'id'),
         ('content_element', 'id'), ('media', 'id'), ('device', 'id'),
-        ('magic_tag_value_list', 'id'), ('magic_tag_value_list_entry', 'id'), ('magic_tag', 'id'),
     ]
     for table, col in sequences:
         db.session.execute(db.text(
@@ -597,8 +567,7 @@ def _clear_all_tables(db, models):
     """Delete all rows from every importable table, most-dependent first."""
     (content_element_screengroup, screengroup_screen, layout_container, TagConfig,
      ContentElement, Device, Screen, Screengroup, DesignContainerStyle, DesignGlobalStyle,
-     ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media,
-     MagicTag, MagicTagValueListEntry, MagicTagValueList) = models
+     ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media) = models
 
     db.session.execute(db.delete(content_element_screengroup))
     db.session.execute(db.delete(screengroup_screen))
@@ -617,9 +586,6 @@ def _clear_all_tables(db, models):
     db.session.execute(db.delete(Design))
     db.session.execute(db.delete(Gradient))
     db.session.execute(db.delete(Media))
-    db.session.execute(db.delete(MagicTag))
-    db.session.execute(db.delete(MagicTagValueListEntry))
-    db.session.execute(db.delete(MagicTagValueList))
     db.session.commit()
 
 
@@ -844,34 +810,6 @@ def _import_devices(ctx):
     ))
 
 
-def _import_magic_tag_value_lists(ctx):
-    sm = _support_models()
-    db = ctx.db
-    ctx.upsert('magic_tag_value_lists', lambda row: dict(name=row['name']))
-
-    for file_id, local_id in ctx.id_map['magic_tag_value_lists'].items():
-        action = ctx.action['magic_tag_value_lists'][file_id]
-        if action == 'skipped':
-            continue
-        if action == 'overwritten':
-            db.session.execute(db.delete(sm['MagicTagValueListEntry']).where(sm['MagicTagValueListEntry'].value_list_id == local_id))
-        row = next(r for r in ctx.data.get('magic_tag_value_lists', []) if r['id'] == file_id)
-        for entry in row.get('entries', []):
-            extra = {'id': entry['id']} if ctx.mode == 'reset' else {}
-            db.session.add(sm['MagicTagValueListEntry'](
-                **extra, value_list_id=local_id, key=entry['key'], value=entry.get('value') or '',
-            ))
-    db.session.flush()
-
-
-def _import_magic_tags(ctx):
-    ctx.upsert('magic_tags', lambda row: dict(
-        name=row['name'], value=row['value'], description=row.get('description') or '',
-        type=row.get('type') or 'text',
-        value_list_id=ctx.id_map['magic_tag_value_lists'].get(row.get('value_list_id')),
-    ))
-
-
 def _import_system_settings(ctx):
     """Upsert the exported 'system_settings' blob (present since export_version
     10) by key, ignoring any key outside the current export allowlist — a
@@ -978,8 +916,6 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             _import_content_elements(ctx)
             _import_media(ctx)
             _import_devices(ctx)
-            _import_magic_tag_value_lists(ctx)
-            _import_magic_tags(ctx)
             _import_soft_associations(ctx)
             _import_system_settings(ctx)
 
@@ -1011,8 +947,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
 def _clear_all_models():
     from application.models import (
         Screen, Screengroup, ContentElement, Design, Layout, Contenttype,
-        ContentContainer, TagConfig, Media, Device, MagicTag,
-        MagicTagValueList, MagicTagValueListEntry,
+        ContentContainer, TagConfig, Media, Device,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import (
@@ -1022,5 +957,4 @@ def _clear_all_models():
         content_element_screengroup, screengroup_screen, layout_container, TagConfig,
         ContentElement, Device, Screen, Screengroup, DesignContainerStyle, DesignGlobalStyle,
         ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media,
-        MagicTag, MagicTagValueListEntry, MagicTagValueList,
     )

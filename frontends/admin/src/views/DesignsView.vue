@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
 import type { Design, ContentContainer, Gradient, GradientStop, DefaultColor } from '../types/models'
 import ColorPalettePicker from '../components/ColorPalettePicker.vue'
@@ -40,14 +39,6 @@ import { EditorView } from '@codemirror/view'
 
 const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
 const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
-
-const htmlEditorRef = ref<{ view: EditorView } | null>(null)
-const cssEditorRef = ref<{ view: EditorView } | null>(null)
-const lastFocusedEditor = ref<'html' | 'css'>('html')
-
-const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
-  e.dataTransfer?.setData('text/plain', `{{ var_${tagName} }}`)
-}
 
 // --- Collapsible Panel state ------------------------------------------------
 // PrimeVue's Panel only toggles from its small chevron button, not the
@@ -511,13 +502,11 @@ const executeCopyGradient = () => {
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit } = useSocket()
-const magicTagsStore = useMagicTagsStore()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('designs.create'))
 const canEdit = computed(() => rightsStore.can('designs.edit'))
 const canDelete = computed(() => rightsStore.can('designs.delete'))
-const canMagicTagsPage = computed(() => rightsStore.can('magictags.page'))
 
 const designs = ref<Design[]>([])
 const loading = ref(true)
@@ -830,7 +819,6 @@ onMounted(() => {
   refreshData()
   emit('displayhive:admin:cts:get_containers')
   emit('displayhive:admin:cts:get_gradients')
-  magicTagsStore.fetch()
 })
 
 onUnmounted(() => {
@@ -1409,10 +1397,9 @@ const deleteDesign = (design: Design) => {
               </div>
             </template>
             <div class="code-editors-row">
-              <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">
+              <div class="code-editor-field">
                 <label>Background HTML</label>
                 <Codemirror
-                  ref="htmlEditorRef"
                   v-model="editForm.html"
                   :extensions="cmHtmlExtensions"
                   :style="{ height: '400px' }"
@@ -1422,10 +1409,9 @@ const deleteDesign = (design: Design) => {
                 />
                 <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
               </div>
-              <div class="code-editor-field" @focusin="lastFocusedEditor = 'css'">
+              <div class="code-editor-field">
                 <label>CSS Styles</label>
                 <Codemirror
-                  ref="cssEditorRef"
                   v-model="editForm.css"
                   :extensions="cmCssExtensions"
                   :style="{ height: '400px' }"
@@ -1433,19 +1419,6 @@ const deleteDesign = (design: Design) => {
                   :indent-with-tab="true"
                   :tab-size="2"
                 />
-              </div>
-            </div>
-            <div v-if="canMagicTagsPage && magicTagsStore.magicTags.length" class="var-tags-section">
-              <label>Magic Tags</label>
-              <div class="var-chips">
-                <span
-                  v-for="v in magicTagsStore.magicTags"
-                  :key="v.id"
-                  class="var-chip"
-                  draggable="true"
-                  @dragstart="onMagicTagDragStart($event, v.name)"
-                  :title="v.description ? `${v.description}\n\nDrag {{ var_${v.name} }} into the editor` : `Drag {{ var_${v.name} }} into the editor`"
-                >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
               </div>
             </div>
           </Panel>
@@ -1668,44 +1641,6 @@ const deleteDesign = (design: Design) => {
   color: var(--error-color, #c62828);
   margin-top: 0.25rem;
   font-size: 0.85rem;
-}
-
-.var-tags-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
-}
-
-.var-tags-section label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color, #6b7280);
-}
-
-.var-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.var-chip {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  background: #1e3a5f;
-  color: #7dd3fc;
-  border: 1px solid #2563ab;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s, color 0.15s;
-}
-
-.var-chip:hover {
-  background: #2563ab;
-  color: #e0f2fe;
 }
 
 .container-styles-section {

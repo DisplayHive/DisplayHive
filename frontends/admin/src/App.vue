@@ -271,15 +271,6 @@ const contentStructureGroupItems = computed(() => [
         },
       ]
     : []),
-  ...(rightsStore.can('magictags.page') || rightsStore.can('magictagvaluelists.page')
-    ? [
-        {
-          label: 'Magic Tags',
-          icon: 'pi pi-tags',
-          command: () => router.push('/magictags'),
-        },
-      ]
-    : []),
 ])
 
 const integrationsGroupItems = computed(() => (rightsStore.can('pretalx.page')
@@ -400,7 +391,6 @@ const pageTitle = computed(() => {
     layouts: 'Layouts',
     'layout-new': 'New Layout',
     'layout-edit': 'Edit Layout',
-    magictags: 'Magic Tags',
     settings: 'Settings',
     logger: 'Logger',
     media: 'Media',
@@ -430,7 +420,6 @@ const pageIcon = computed(() => {
     layouts: 'pi pi-th-large',
     'layout-new': 'pi pi-plus',
     'layout-edit': 'pi pi-pencil',
-    magictags: 'pi pi-tags',
     settings: 'pi pi-cog',
     logger: 'pi pi-list',
     media: 'pi pi-images',

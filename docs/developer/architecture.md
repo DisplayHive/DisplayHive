@@ -59,7 +59,7 @@ Defined under `application/models/`:
   handler/content), `Contenttype` (bound to one `Layout`; a reusable field
   schema), `TagConfig` (one field definition on a `Contenttype`, targeting
   one container, with `default_value` and per-sub-setting `option_flags`
-  for locking/hiding), `MagicTag` / `MagicTagValueList`, `SystemSetting`,
+  for locking/hiding), `SystemSetting`,
   Telegram alerting models (`AlertSubscription`, `TelegramUser`), `Media`,
   and the Pretalx models (`PretalxApiUrl`, `PretalxApiCache`,
   `PretalxSettings`).
@@ -96,7 +96,6 @@ panel feature, using a `displayhive:admin:<feature>:cts:*` (client-to-server)
 | `devices` | Connection/adoption handshake (`connection.py`) and management: list, ping, update, assign to screen, find, delete (`management.py`) |
 | `importexport` | Selective DB + media export/import as a zip (type/item tree selection, uuid-based dependency closure, reset/merge import modes) — no Socket.IO handlers of its own; the actual file transfer and selection endpoints are plain `@app.route`s in `app.py` |
 | `layouts` | CRUD for `Layout` and `ContentContainer` positioning/assignment |
-| `magictags` | CRUD for `MagicTag` and `MagicTagValueList` |
 | `matrix` | No handlers of its own — the Matrix page calls the same `screens`/`screengroups` mutations directly |
 | `media` | Media library CRUD, folders, uploads |
 | `pretalx` | Pretalx URL/settings/room config, cache; triggers a content push when data refreshes |
@@ -135,8 +134,8 @@ admin panel features:
 **Admin panel** (`frontends/admin/src`) — Vue 3 SPA:
 
 - `stores/` — one Pinia store per domain (`auth`, `content`, `devices`,
-  `magicTags`, `magicTagValueLists`, `media`, `rights`, `screengroups`,
-  `screens`, `settings`). Designs, layouts, and content types talk to their
+  `media`, `rights`, `screengroups`, `screens`, `settings`). Designs,
+  layouts, and content types talk to their
   sockets directly from their views rather than through a dedicated store.
   Stores emit `displayhive:admin:...:cts:*` events and listen for the
   matching `:stc:*` responses.

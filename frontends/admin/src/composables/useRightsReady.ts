@@ -12,9 +12,9 @@ import { useRightsStore } from '../stores/rights'
  * separately, in App.vue) resolves. A fetch that only checks `can()` once at
  * mount time can lose that race — it silently no-ops if it runs before rights
  * have loaded, and nothing retries it afterwards. This was the cause of the
- * Users and Magic Tags pages coming up empty on a direct/first load, fixed
- * only by navigating away and back (which remounts the component after
- * rights had already loaded).
+ * Users page coming up empty on a direct/first load, fixed only by
+ * navigating away and back (which remounts the component after rights had
+ * already loaded).
  */
 export function onRightsReady(callback: () => void) {
   const rightsStore = useRightsStore()

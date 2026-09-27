@@ -64,11 +64,6 @@ const router = createRouter({
       component: () => import('../views/LayoutEditView.vue'),
     },
     {
-      path: '/magictags',
-      name: 'magictags',
-      component: () => import('../views/MagicTagsView.vue'),
-    },
-    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),

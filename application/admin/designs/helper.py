@@ -217,7 +217,7 @@ def build_design_payload(db) -> dict:
     to screens as `upd_content`'s `design` field — the currently active/
     default Design's HTML, its fully-layered CSS (global/container styles,
     Backdrop, then its own hand-written CSS last), and its animated
-    background effect (if any), with magic tags substituted into html/css.
+    background effect (if any).
 
     Also used by the admin Layout editor to preview the active Design behind
     the container-positioning canvas — see
@@ -281,20 +281,6 @@ def build_design_payload(db) -> dict:
         }
     else:
         design_payload['background_effect'] = None
-
-    # Load magic tags once; applied to Design HTML/CSS.
-    _tvars: dict = {}
-    try:
-        from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-        _tvars = load_magic_tags(db)
-    except Exception:
-        logger.debug('Failed to load magic tags for design payload', exc_info=True)
-
-    if _tvars:
-        if design_payload['html']:
-            design_payload['html'] = substitute_magic_tags(design_payload['html'], _tvars)
-        if design_payload['css']:
-            design_payload['css'] = substitute_magic_tags(design_payload['css'], _tvars)
 
     return design_payload
 

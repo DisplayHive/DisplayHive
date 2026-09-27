@@ -11,9 +11,8 @@ limited to an all-or-nothing dump.
 
 The Export panel shows a tree of everything currently in the instance,
 grouped by type (Screens, Screen Groups, Designs, Gradients, Layouts,
-Content Containers, Content Types, Content Elements, Media, Devices, Magic
-Tags, Magic Tag Value Lists). Check the types or individual items you want,
-then click **Download Export**.
+Content Containers, Content Types, Content Elements, Media, Devices). Check
+the types or individual items you want, then click **Download Export**.
 
 - If something you selected depends on something else (a Content Type's
   Layout, a container's styling Design, an image a Content Element

@@ -147,8 +147,8 @@ classes from `assets/views.css`:
 <template #title>
   <div class="card-header">
     <div class="card-header-title">
-      <i class="pi pi-tags card-header-icon" />
-      <span>Magic Tags</span>
+      <i class="pi pi-clone card-header-icon" />
+      <span>Screen Groups</span>
     </div>
     <div class="header-actions">
       <Button ... />
@@ -253,7 +253,7 @@ match — the two are meant to always be identical.
 ### Standard props
 
 The dominant convention, followed by most list pages (`ContentTypesView`,
-`DesignsView`, `DevicesView`, `LayoutsView`, `MagicTagsView`, `ScreenGroupsView`,
+`DesignsView`, `DevicesView`, `LayoutsView`, `ScreenGroupsView`,
 `ScreensView`, `PretalxView`, `AlertingView`):
 
 ```html

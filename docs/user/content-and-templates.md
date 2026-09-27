@@ -96,10 +96,7 @@ panels, layered in this order (later panels win over earlier ones):
    autosave.
 6. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
    structured options above don't cover; it always renders last and wins
-   over every other panel. You can drag or click [Magic Tags](magic-tags.md)
-   chips into this HTML/CSS to insert instance-wide `{{ var_name }}`
-   placeholders (e.g. a Wi-Fi password or venue name) — this is the only
-   place in a design where magic tags apply.
+   over every other panel.
 
 ## Content types
 

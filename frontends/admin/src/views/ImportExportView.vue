@@ -36,8 +36,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   content_elements: 'Content Elements',
   media: 'Media',
   devices: 'Devices',
-  magic_tag_value_lists: 'Magic Tag Value Lists',
-  magic_tags: 'Magic Tags',
 }
 const ENTITY_TYPE_ORDER = Object.keys(ENTITY_TYPE_LABELS)
 
@@ -334,7 +332,7 @@ onRightsReady(loadExportTree)
   <div v-else class="importexport-view">
     <Message severity="warn" :closable="false" class="not-a-backup-notice">
       <strong>This is not a full system backup.</strong> It exports/imports display content
-      (screens, designs, layouts, content, media, devices, magic tags) and general app settings
+      (screens, designs, layouts, content, media, devices) and general app settings
       only. It never includes admin user accounts, API keys or tokens (Telegram bot token, Pretalx
       credentials), or log files — restoring a file elsewhere will not recreate logins or
       integration credentials.
