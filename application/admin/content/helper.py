@@ -16,6 +16,29 @@ from application.admin.content.pretalx_render import (
 logger = logging.getLogger(__name__)
 
 
+def _image_style(ctx: dict, field_name: str) -> str:
+    """CSS for an image field, from its `__fit` / `__size` sub-settings.
+
+    `__fit` ('height'/'width'/'stretch') takes priority and ignores
+    `__size` entirely; unset, falls back to the vh-based fixed-height
+    behavior (explicit height keeps it consistent regardless of the
+    container's own height; 0/blank just scales to fit as before).
+    """
+    fit = str(ctx.get(f'{field_name}__fit') or '').strip()
+    if fit == 'height':
+        return 'height:100%;width:auto;max-width:100%;'
+    if fit == 'width':
+        return 'width:100%;height:auto;'
+    if fit == 'stretch':
+        return 'width:100%;height:100%;'
+    size = ctx.get(f'{field_name}__size')
+    try:
+        size = float(size)
+    except (TypeError, ValueError):
+        size = 0
+    return f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+
+
 def _resolve_icon_color(raw, db=None) -> str:
     """Resolve an `icon` field's color value to a literal CSS color.
 
@@ -144,12 +167,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             # Same size/style logic as a normal image field below, just no
             # `src` — the screen client fills it in from the candidate pool.
             # See frontends/screen/ts/screen/random-image-resolver.ts.
-            size = ctx.get(f'{field_name}__size')
-            try:
-                size = float(size)
-            except (TypeError, ValueError):
-                size = 0
-            style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+            style = _image_style(ctx, field_name)
             pool_json = _html_escape(json.dumps(random_pools[field_name]))
             ctx[field_name] = Markup(f"<img data-dh-random-pool='{pool_json}' style=\"{style}\" />")
         elif ftype == 'image' and field_name in ctx and ctx[field_name]:
@@ -158,15 +176,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if parsed_scheme not in ('', 'http', 'https', 'data'):
                 ctx[field_name] = ''
             elif url:
-                # An explicit size (vh) fixes the image's height so it stays
-                # consistent regardless of its container's own height; left
-                # unset, it just scales to fit the container as before.
-                size = ctx.get(f'{field_name}__size')
-                try:
-                    size = float(size)
-                except (TypeError, ValueError):
-                    size = 0
-                style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+                style = _image_style(ctx, field_name)
                 ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="{style}" />')
         elif ftype == 'icon' and field_name in ctx and ctx[field_name]:
             # The value is "<library>/<icon-name>" — the backend has no
@@ -361,7 +371,11 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
         except Exception:
             parsed = None
         if isinstance(parsed, dict) and 'url' in parsed:
-            ctx = {'default': parsed.get('url', ''), 'default__size': parsed.get('size') or 0}
+            ctx = {
+                'default': parsed.get('url', ''),
+                'default__size': parsed.get('size') or 0,
+                'default__fit': parsed.get('fit') or '',
+            }
     elif field_handler == 'icon':
         try:
             parsed = json.loads(content)

@@ -276,6 +276,25 @@ const setImageSize = (fieldName: string, v: number | null) => {
   props.fields[`${fieldName}__size`] = v ?? ''
 }
 
+// How the image fills its container, as an alternative to a fixed Size
+// (vh): '' keeps today's behavior (Size field, or natural scaling if
+// unset); the other three ignore Size entirely and are computed
+// server-side the same way — see _image_style() in
+// application/admin/content/helper.py.
+const imageFitOptions = [
+  { label: 'Fixed height (vh)', value: '' },
+  { label: 'Full height of container (keep ratio)', value: 'height' },
+  { label: 'Full width of container (keep ratio)', value: 'width' },
+  { label: 'Full width & height (stretch)', value: 'stretch' },
+]
+
+const getImageFit = (fieldName: string): string =>
+  String(props.fields[`${fieldName}__fit`] || '')
+
+const setImageFit = (fieldName: string, v: string) => {
+  props.fields[`${fieldName}__fit`] = v
+}
+
 const showImagePickerDialog = ref(false)
 const pickerMediaItems = ref<MediaItem[]>([])
 const pickerSearchText = ref('')
@@ -727,7 +746,22 @@ watch(hasVisibleControl, (v) => emit('update:hasVisibleControl', v), { immediate
         <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__image_tags')" @toggle-locked="toggleFlag(tag.name + '__image_tags', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__image_tags', 'hidden')" />
       </div>
 
-      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__size')" class="fve-slot image-size-row">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__fit')" class="fve-slot image-size-row">
+        <label :for="`field-${tag.name}-fit`" class="image-size-label">Fit</label>
+        <Select
+          :id="`field-${tag.name}-fit`"
+          :modelValue="getImageFit(tag.name)"
+          @update:modelValue="(v: string) => setImageFit(tag.name, v)"
+          :options="imageFitOptions"
+          optionLabel="label"
+          optionValue="value"
+          :disabled="isLocked(tag.name + '__fit')"
+          style="width: 260px"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__fit')" @toggle-locked="toggleFlag(tag.name + '__fit', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__fit', 'hidden')" />
+      </div>
+
+      <div v-if="!getImageFit(tag.name) && (mode !== 'edit' || !isHidden(tag.name + '__size'))" class="fve-slot image-size-row">
         <label :for="`field-${tag.name}-size`" class="image-size-label">Size (vh)</label>
         <InputNumber
           :id="`field-${tag.name}-size`"
