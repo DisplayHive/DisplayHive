@@ -253,13 +253,14 @@ const resetScreenSize = (screen: Screen) => {
       </template>
     </Card>
   </div>
-  <div v-else class="screens-view">
+  <div v-else data-tour="screens-page" class="screens-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
             <Button
               v-if="canCreate"
+              data-tour="screens-new"
               icon="pi pi-plus"
               label="Add Screen"
               @click="openCreateDialog"
@@ -267,6 +268,7 @@ const resetScreenSize = (screen: Screen) => {
             />
             <Button
               v-if="canReloadAll"
+              data-tour="screens-reload-all"
               icon="pi pi-refresh"
               label="Reload All"
               @click="reloadAllScreens"
@@ -284,6 +286,7 @@ const resetScreenSize = (screen: Screen) => {
       </template>
       <template #content>
         <DataTable
+          data-tour="screens-table"
           :value="filteredScreens"
           :loading="screensStore.loading"
           sortField="name"
@@ -298,9 +301,14 @@ const resetScreenSize = (screen: Screen) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter screens..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="screens-filter"
+                  placeholder="Filter screens..."
+                  class="filter-input"
+                />
               </div>
-              <div class="dt-right">
+              <div class="dt-right" data-tour="screens-status-filters">
                 <div class="filter-row">
                   <Tag
                     severity="warn"
@@ -364,6 +372,7 @@ const resetScreenSize = (screen: Screen) => {
               <div class="action-buttons">
                 <Button
                   v-if="canPreview"
+                  data-tour="screens-preview-button"
                   icon="pi pi-play"
                   @click="previewScreen(data)"
                   size="small"
@@ -373,6 +382,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canEdit"
+                  data-tour="screens-row-rename"
                   icon="pi pi-pencil"
                   @click="openRenameDialog(data)"
                   size="small"
@@ -381,6 +391,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canReload"
+                  data-tour="screens-row-reload"
                   icon="pi pi-refresh"
                   @click="reloadScreen(data)"
                   size="small"
@@ -398,6 +409,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canDebug"
+                  data-tour="screens-row-debug"
                   icon="pi pi-wrench"
                   @click="toggleDebug(data)"
                   size="small"
@@ -407,6 +419,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canMonitor"
+                  data-tour="screens-row-monitor"
                   :icon="data.monitoring_enabled !== false ? 'pi pi-eye' : 'pi pi-eye-slash'"
                   @click="toggleMonitoring(data)"
                   size="small"
@@ -439,13 +452,13 @@ const resetScreenSize = (screen: Screen) => {
         </div>
       </template>
       <div class="dialog-content">
-        <div class="field">
+        <div class="field" data-tour="screen-name-field">
           <label for="create-name">Screen Name</label>
           <InputText id="create-name" v-model="createForm.name" class="w-full" placeholder="e.g. Lobby-Display" />
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
+        <Button data-tour="screens-create-cancel" label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
         <Button label="Create" @click="createScreen" :loading="isCreating" :disabled="isCreating" />
       </template>
     </Dialog>
@@ -463,7 +476,7 @@ const resetScreenSize = (screen: Screen) => {
           <label for="rename-name">Screen Name</label>
           <InputText id="rename-name" v-model="renameForm.name" class="w-full" />
         </div>
-        <div class="field">
+        <div class="field" data-tour="rename-screengroups-field">
           <label>Screengroups</label>
           <div class="screengroup-checkboxes">
             <div v-for="sg in screengroupsStore.screengroups.filter(sg => !sg.is_one_screen)" :key="sg.id" class="checkbox-item">

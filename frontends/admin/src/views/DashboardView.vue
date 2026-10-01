@@ -157,10 +157,10 @@ const debugWarn = computed(() => screensInDebug.value > 0)
     </Card>
 
     <!-- Status cards grid -->
-    <div class="stats-grid">
+    <div class="stats-grid" data-tour="dashboard-stats-grid">
 
       <!-- Screens -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-screens" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-desktop stat-icon"></i>
@@ -186,7 +186,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Devices -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/devices')">
+      <Card v-if="rightsStore.can('device.page')" data-tour="stat-devices" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/devices')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-tablet stat-icon"></i>
@@ -205,7 +205,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Content -->
-      <Card v-if="rightsStore.can('content.page')" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
+      <Card v-if="rightsStore.can('content.page')" data-tour="stat-content" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-file stat-icon"></i>
@@ -221,7 +221,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screen Groups -->
-      <Card v-if="rightsStore.can('screengroups.page')" class="stat-card stat-card--ok" @click="router.push('/screengroups')">
+      <Card v-if="rightsStore.can('screengroups.page')" data-tour="stat-screengroups" class="stat-card stat-card--ok" @click="router.push('/screengroups')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-th-large stat-icon"></i>
@@ -233,7 +233,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Media -->
-      <Card v-if="rightsStore.can('media.page')" class="stat-card stat-card--ok" @click="router.push('/media')">
+      <Card v-if="rightsStore.can('media.page')" data-tour="stat-media" class="stat-card stat-card--ok" @click="router.push('/media')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-images stat-icon"></i>
@@ -245,7 +245,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Find Mode -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('device.page')" data-tour="stat-find" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-search stat-icon"></i>
@@ -261,7 +261,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Debug Mode -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-debug" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-wrench stat-icon"></i>

@@ -286,15 +286,16 @@ const copyUrl = (url: string) => {
       </template>
     </Card>
   </div>
-  <div v-else class="media-view">
+  <div v-else data-tour="media-page" class="media-view">
     <div class="media-content">
       <Card>
         <template #title>
           <div class="card-header">
             <div class="header-actions">
-              <Button v-if="canUpload" icon="pi pi-upload" label="Upload" @click="showUploadDialog = true" size="small" />
+              <Button v-if="canUpload" data-tour="media-upload" icon="pi pi-upload" label="Upload" @click="showUploadDialog = true" size="small" />
               <Button
                 v-if="canUpload"
+                data-tour="media-sync-previews"
                 icon="pi pi-sync"
                 label="Sync Previews"
                 @click="syncPreviews"
@@ -308,7 +309,7 @@ const copyUrl = (url: string) => {
           </div>
         </template>
         <template #content>
-          <div class="tag-cloud">
+          <div class="tag-cloud" data-tour="media-tag-cloud">
             <div class="tag-cloud-list">
               <span
                 v-for="t in mediaStore.allTags"
@@ -329,11 +330,11 @@ const copyUrl = (url: string) => {
           </div>
 
           <div class="filter-bar">
-            <InputText v-model="filterText" placeholder="Search media..." class="filter-input" />
+            <InputText v-model="filterText" data-tour="media-search-field" placeholder="Search media..." class="filter-input" />
             <Tag :value="`${filteredMedia.length} items`" />
           </div>
 
-          <div class="media-grid" v-if="!mediaStore.loading">
+          <div class="media-grid" data-tour="media-grid" v-if="!mediaStore.loading">
             <div
               v-for="item in filteredMedia"
               :key="item.id"
@@ -351,7 +352,7 @@ const copyUrl = (url: string) => {
                 <span class="media-filename">{{ item.filename }}</span>
                 <span v-if="item.url" class="media-url-row">
                   <a :href="item.url" class="media-url" target="_blank" :title="item.url">{{ item.url }}</a>
-                  <i class="pi pi-copy media-url-copy" :title="'Copy URL'" @click.prevent="copyUrl(item.url)" />
+                  <i class="pi pi-copy media-url-copy" data-tour="media-item-url-copy" :title="'Copy URL'" @click.prevent="copyUrl(item.url)" />
                 </span>
                 <div class="media-tags" v-if="item.tags?.length">
                   <Tag v-for="(tag, ti) in item.tags" :key="tag + ti" :value="tag" severity="secondary" />
@@ -360,8 +361,8 @@ const copyUrl = (url: string) => {
                 </div>
               </div>
               <div class="media-actions">
-                <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditDialog(item)" size="small" outlined title="Edit" />
-                <Button v-if="canDelete" icon="pi pi-trash" @click="deleteMedia(item)" size="small" severity="danger" outlined title="Delete" />
+                <Button v-if="canEdit" data-tour="media-item-edit" icon="pi pi-pencil" @click="openEditDialog(item)" size="small" outlined title="Edit" />
+                <Button v-if="canDelete" data-tour="media-item-delete" icon="pi pi-trash" @click="deleteMedia(item)" size="small" severity="danger" outlined title="Delete" />
               </div>
             </div>
           </div>
@@ -412,13 +413,13 @@ const copyUrl = (url: string) => {
         </div>
 
         <!-- Title field -->
-        <div class="field">
+        <div class="field" data-tour="media-edit-title-field">
           <label for="media-title">Title</label>
           <InputText id="media-title" v-model="editForm.title" class="w-full" :disabled="!canRename" />
         </div>
 
         <!-- Tag clouds -->
-        <div class="edit-tag-area">
+        <div class="edit-tag-area" data-tour="media-edit-tags">
           <!-- Assigned tags -->
           <div class="edit-tag-panel">
             <div class="edit-tag-panel-header">
@@ -491,7 +492,7 @@ const copyUrl = (url: string) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showEditDialog = false" text :disabled="isSavingMedia" />
+        <Button data-tour="media-edit-cancel" label="Cancel" @click="showEditDialog = false" text :disabled="isSavingMedia" />
         <Button label="Update" severity="secondary" outlined @click="saveMedia(true)" :loading="isSavingMedia" :disabled="isSavingMedia" />
         <Button label="Save" @click="saveMedia()" :loading="isSavingMedia" :disabled="isSavingMedia" />
       </template>
@@ -514,6 +515,7 @@ const copyUrl = (url: string) => {
       <!-- Drop zone -->
       <div
         class="upload-drop-zone"
+        data-tour="media-upload-dropzone"
         :class="{ 'drop-active': uploadDropActive }"
         @dragover.prevent="uploadDropActive = true"
         @dragleave.prevent="uploadDropActive = false"
@@ -561,7 +563,7 @@ const copyUrl = (url: string) => {
       <ProgressBar v-if="isUploading" mode="indeterminate" class="mt-4 thin-progress" />
 
       <template #footer>
-        <Button label="Cancel" text :disabled="isUploading" @click="closeUploadDialog" />
+        <Button data-tour="media-upload-cancel" label="Cancel" text :disabled="isUploading" @click="closeUploadDialog" />
         <Button
           label="Upload"
           icon="pi pi-upload"

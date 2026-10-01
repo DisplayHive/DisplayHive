@@ -122,6 +122,11 @@ pulled from the existing tours (`contentTypes.ts`, `createEditContent.ts`,
   real element again in a `before()` hook — it's a no-op once the dialog's
   already in the right state. See `ensureContentTypeSelected` in
   `createEditContent.ts` and `closeDialogIfStillOpen` in `contentTypes.ts`.
+- `runner.ts` skips an unresolvable step in whichever direction the person
+  was already travelling (Next vs. Previous), not always forward — this is
+  what makes Previous work correctly back through dialog-dependent steps.
+  You don't need to do anything for this yourself; it's automatic as long
+  as you don't call `goToStep` directly from a tour file.
 
 ## 6. Scope and coherence
 

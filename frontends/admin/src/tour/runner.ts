@@ -43,12 +43,16 @@ export function useTourRunner() {
     activeTour = null
   }
 
-  const goToStep = async (index: number) => {
+  const goToStep = async (index: number, direction: 1 | -1 = 1) => {
     const tour = activeTour
     if (!tour) return
     const step = tour.steps[index]
     if (!step) {
-      stop()
+      // Ran off the end going forward: finish normally. Ran off the start
+      // going backward (every earlier step unresolvable, vanishingly
+      // unlikely): there's nothing earlier to fall back to, so just leave
+      // the current highlight as-is rather than wrongly ending the tour.
+      if (direction === 1) stop()
       return
     }
 
@@ -59,9 +63,15 @@ export function useTourRunner() {
 
     const el = await waitForElement(step.selector)
     if (!el) {
-      // Target vanished (renamed class, moved element, ...) — skip it
-      // rather than leaving the tour stuck on a step it can't show.
-      await goToStep(index + 1)
+      // Target vanished (renamed class, moved element, ...), or — for a
+      // step whose element only exists inside a dialog — the dialog isn't
+      // open from this direction (e.g. going back after a later step's
+      // own `before()` already closed it). Either way, skip past it in
+      // whichever direction we were already travelling, rather than
+      // hardcoding "forward": skipping forward while the person clicked
+      // "Previous" would silently undo their click and leave Back/Next
+      // looking broken.
+      await goToStep(index + direction, direction)
       return
     }
 
@@ -98,8 +108,8 @@ export function useTourRunner() {
         // unmodified, so the numbers are interpolated here instead.
         progressText: `Step ${index + 1} of ${tour.steps.length}`,
         nextBtnText: isLast ? 'Exit Tour' : 'Next',
-        onNextClick: isLast ? exitToTourPage : () => goToStep(index + 1),
-        onPrevClick: () => goToStep(index - 1),
+        onNextClick: isLast ? exitToTourPage : () => goToStep(index + 1, 1),
+        onPrevClick: () => goToStep(index - 1, -1),
         onCloseClick: () => stop(),
       },
     })
