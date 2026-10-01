@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRightsStore } from '../stores/rights'
+import { useSettingsStore } from '../stores/settings'
 import { useTourRunner } from '../tour/runner'
 import { toursByCategory } from '../tour/tours'
 import type { TourDefinition } from '../tour/types'
@@ -9,10 +10,11 @@ import Card from 'primevue/card'
 import Button from 'primevue/button'
 
 const rightsStore = useRightsStore()
+const settingsStore = useSettingsStore()
 const { start } = useTourRunner()
 
-const userTours = computed(() => toursByCategory('user'))
-const adminTours = computed(() => toursByCategory('admin'))
+const userTours = computed(() => (settingsStore.hideUserTours ? [] : toursByCategory('user')))
+const adminTours = computed(() => (settingsStore.hideAdminTours ? [] : toursByCategory('admin')))
 
 const runTour = (tour: TourDefinition) => start(tour)
 </script>

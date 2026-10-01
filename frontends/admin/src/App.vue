@@ -168,9 +168,9 @@ watch(
 )
 
 watch(
-  () => [settingsStore.tourContentImported, route.name] as const,
-  ([imported, name]) => {
-    if (!imported && name === 'tour') {
+  () => [settingsStore.hideUserTours, settingsStore.hideAdminTours, route.name] as const,
+  ([hideUser, hideAdmin, name]) => {
+    if (hideUser && hideAdmin && name === 'tour') {
       router.replace('/')
     }
   },
@@ -500,7 +500,7 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
             Demo Mode
           </span>
           <span
-            v-if="settingsStore.tourContentImported && rightsStore.can('tour.page')"
+            v-if="!(settingsStore.hideUserTours && settingsStore.hideAdminTours) && rightsStore.can('tour.page')"
             class="demo-mode-badge"
             :class="{ active: route.name === 'tour' }"
             data-testid="tour-badge"

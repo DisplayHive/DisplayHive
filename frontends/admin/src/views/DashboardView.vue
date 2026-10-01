@@ -12,20 +12,17 @@ import { isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 
 // PrimeVue components
 import Card from 'primevue/card'
-import ToggleSwitch from 'primevue/toggleswitch'
 
 const router = useRouter()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
 const rightsStore = useRightsStore()
 const canSeeDemo = computed(() => rightsStore.can('importexport.page'))
-const canEditSettings = computed(() => rightsStore.can('settings.edit'))
 
 const welcomeHeadline = ref('Welcome to DisplayHive Admin')
 const welcomeText = ref('Use the navigation menu to manage your digital signage system.')
 const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
 const hideDemoMode = ref(false)
-const demoModeSaving = ref(false)
 
 interface SystemSettings {
   welcome_headline?: string
@@ -44,27 +41,7 @@ const handleSettings = (data: { system_settings?: SystemSettings }) => {
   if (sys.hide_demo_mode !== undefined) hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
 }
 
-const demoModeEnabled = computed({
-  get: () => !hideDemoMode.value,
-  set: async (value: boolean) => {
-    const previous = hideDemoMode.value
-    hideDemoMode.value = !value
-    demoModeSaving.value = true
-    try {
-      const ack = await emitWithAck<{ success: boolean; error?: string }>(
-        'displayhive:admin:cts:set_system_settings',
-        { settings: { hide_demo_mode: hideDemoMode.value ? 'true' : 'false' } },
-      )
-      if (!ack?.success) {
-        hideDemoMode.value = previous
-      }
-    } catch {
-      hideDemoMode.value = previous
-    } finally {
-      demoModeSaving.value = false
-    }
-  },
-})
+const demoModeEnabled = computed(() => !hideDemoMode.value)
 const devicesStore = useDevicesStore()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
@@ -124,7 +101,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
         <div class="demo-hint-body">
           <i class="pi pi-sparkles demo-hint-icon"></i>
           <div class="demo-hint-text">
-            <div class="demo-hint-title">Demo mode is active on this instance</div>
+            <div class="demo-hint-title">Demo mode and Guided Tours are available on this instance</div>
             <p>
               You can import example configurations from the
               <a href="#" @click.prevent="router.push('/demo')">Demo page</a>.
@@ -133,13 +110,12 @@ const debugWarn = computed(() => screensInDebug.value > 0)
               You can back up your current data beforehand via
               <a href="#" @click.prevent="router.push('/importexport')">Import / Export</a>.
             </p>
+            <p>
+              The <a href="#" @click.prevent="router.push('/tour')">Guided Tours</a> walk through
+              the admin UI step by step. Demo projects and Guided Tours can each be disabled from
+              <a href="#" @click.prevent="router.push('/settings')">Settings</a>.
+            </p>
           </div>
-        </div>
-        <div v-if="canEditSettings" class="demo-hint-footer">
-          <ToggleSwitch v-model="demoModeEnabled" :disabled="demoModeSaving" class="demo-hint-switch" />
-          <span class="demo-hint-switch-desc">
-            Turn off to disable access to demo mode. It can be re-enabled later in Settings.
-          </span>
         </div>
       </template>
     </Card>
@@ -524,25 +500,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   margin-bottom: 0;
 }
 
-.demo-hint-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--p-amber-200, #fde68a);
-}
-
-.demo-hint-switch {
-  flex-shrink: 0;
-}
-
-.demo-hint-switch-desc {
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color, #6b7280);
-  line-height: 1.4;
-}
-
 .welcome-card :deep(.p-card-body) {
   padding: 1.25rem 1.5rem;
 }
@@ -796,10 +753,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 .dark-mode .demo-hint-card {
   background: var(--p-surface-800, #1e293b);
   border-color: var(--p-amber-700, #b45309);
-}
-
-.dark-mode .demo-hint-footer {
-  border-top-color: var(--p-surface-700, #334155);
 }
 
 .dark-mode .link-card {

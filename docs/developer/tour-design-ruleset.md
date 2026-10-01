@@ -45,9 +45,9 @@ pulled from the existing tours (`contentTypes.ts`, `createEditContent.ts`,
 
 - **Never hardcode a specific row's ID or name** in a step's `route` or
   `selector` (a particular content type, a particular content element).
-  A tour must work against whatever's actually in the database — including
-  one that's empty, or one shaped nothing like `tourcontent/tour.zip` —
-  not only after the tour content package has been imported.
+  A tour must work against whatever's actually in the database, including
+  one that's completely empty — there is no bundled tour-content package
+  to rely on having been imported first.
 - Where a step needs to show *some* real example of a repeated kind (a
   content type card, a table row), target it **generically** rather than
   by identity:
@@ -156,9 +156,10 @@ pulled from the existing tours (`contentTypes.ts`, `createEditContent.ts`,
 
 Before registering it:
 
-- Walk through the tour manually in the admin UI, starting from a DB that
-  actually has `tour.zip` imported — not just whatever's in your dev
-  database.
+- Walk through the tour manually in the admin UI, including once against a
+  genuinely empty database — not only your already-populated dev one — to
+  confirm the steps that need a real example row degrade gracefully
+  (skip) rather than hang or error.
 - Confirm every step's element resolves within `ELEMENT_WAIT_MS` (4s) —
   if a step silently skips, its selector or hardcoded route/id is wrong.
 - Click (don't just "Next") through every `advanceOnClick` step to confirm

@@ -15,6 +15,7 @@ ALLOWED_SETTING_KEYS = {
     'welcome_headline', 'welcome_text',
     'hide_community_links', 'hide_helping_hand',
     'hide_demo_mode',
+    'hide_user_tours', 'hide_admin_tours',
     'content_edit_preview_size',
     'content_list_preview_size',
 }
@@ -28,12 +29,7 @@ def _get_system_settings(db):
 
 
 def broadcast_admin_settings(socketio, db, sid=None):
-    """Build the full settings payload and emit it.
-
-    Also called from outside this module (e.g. app.py after a tour-content
-    import flips `tour_content_imported`) so already-connected admin tabs
-    pick up the new system_settings without a manual reload.
-    """
+    """Build the full settings payload and emit it."""
     from application.models import Design
     from datetime import datetime, timezone
     designs = db.session.execute(db.select(Design)).scalars().all()
