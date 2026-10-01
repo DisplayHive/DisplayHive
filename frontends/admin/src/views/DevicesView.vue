@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
+import { getScreenBaseUrl, openDevicePreview } from '../composables/useDevicePreview'
 import type { Device } from '../types/models'
 import { useDevicesStore } from '../stores/devices'
 import { useScreensStore } from '../stores/screens'
@@ -267,21 +268,6 @@ const toggleActiveDevice = (device: Device, val: boolean) => {
   toast.add({ severity: 'success', summary: 'Updated', detail: `Device ${device.name} ${val ? 'activated' : 'deactivated'}`, life: 2000 })
 }
 
-// Allow overriding screen URL via Vite env `VITE_SCREEN_URL`. Otherwise:
-// - In dev (`npm run dev`), the admin SPA is served by its own Vite dev
-//   server (e.g. :5173), which is NOT where Flask renders the screen/
-//   handles the devicekey socket auth — default to the Flask backend URL
-//   instead (same fallback used for the socket connection).
-// - In production, admin + screen are both served by Flask on the same
-//   origin, so `window.location.origin` is correct.
-const getScreenBaseUrl = (): string => {
-  const env = import.meta.env || {}
-  return (
-    (env.VITE_SCREEN_URL as string) ||
-    (env.DEV ? (env.VITE_BACKEND_URL as string) || (env.VITE_SOCKET_URL as string) || 'http://localhost:5000' : window.location.origin)
-  )
-}
-
 const playDevice = (device: Device) => {
   if (!device.devicekey) {
     toast.add({
@@ -293,12 +279,7 @@ const playDevice = (device: Device) => {
     return
   }
   try {
-    const base = getScreenBaseUrl()
-    const key = device.devicekey || ''
-    const separator = base.includes('?') ? '&' : '?'
-    const url = `${base}${separator}impersonate=true&devicekey=${encodeURIComponent(key)}`
-    // Open in new tab/window safely
-    window.open(url, '_blank', 'noopener')
+    openDevicePreview(device.devicekey)
   } catch (e) {
     console.error('[DevicesView] playDevice error', e)
   }

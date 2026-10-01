@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
+import { openDevicePreview } from '../composables/useDevicePreview'
 import { useMaximizedFilter, isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -33,6 +34,7 @@ const canCreate = computed(() => rightsStore.can('screens.create'))
 const canEdit = computed(() => rightsStore.can('screens.edit'))
 const canDelete = computed(() => rightsStore.can('screens.delete'))
 const canMonitor = computed(() => rightsStore.can('screens.monitor'))
+const canPreview = computed(() => rightsStore.can('device.preview'))
 const canResize = computed(() => rightsStore.can('screens.resize'))
 const canDebug = computed(() => rightsStore.can('screens.debug'))
 const canReload = computed(() => rightsStore.can('screens.reload'))
@@ -51,8 +53,6 @@ const isCreating = ref(false)
 const showCreateDialog = ref(false)
 const createForm = ref({
   name: '',
-  width: null as string | null,
-  height: null as string | null,
 })
 
 // Rename screen dialog
@@ -110,7 +110,7 @@ onUnmounted(() => {
 const refreshScreens = () => screensStore.fetch()
 
 const openCreateDialog = () => {
-  createForm.value = { name: '', width: null, height: null }
+  createForm.value = { name: '' }
   showCreateDialog.value = true
 }
 
@@ -121,12 +121,7 @@ const createScreen = async () => {
   }
   isCreating.value = true
   try {
-    const payload: { name: string; width?: string | null; height?: string | null } = { name: createForm.value.name }
-    if (createForm.value.width && createForm.value.height) {
-      payload.width = createForm.value.width
-      payload.height = createForm.value.height
-    }
-    screensStore.createScreen(payload)
+    screensStore.createScreen({ name: createForm.value.name })
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen created', life: 3000 })
     showCreateDialog.value = false
   } finally {
@@ -170,6 +165,32 @@ const toggleDebug = (screen: Screen) => {
 const reloadScreen = (screen: Screen) => {
   screensStore.reloadScreen(screen.name)
   toast.add({ severity: 'info', summary: 'Reloading', detail: `Reload command sent to ${screen.name}`, life: 2000 })
+}
+
+// A screen previews via its attached device's live connection — content is
+// only ever pushed to a screen's actual devices (see _emit_to_screen in
+// application/socketio_handlers/upd_content.py), there's no standalone
+// "preview a screen with no device" delivery path. So this is disabled,
+// not hidden, whenever that device or its key isn't available — hiding it
+// would look like Screens can't be previewed at all, when really it's
+// just this one screen's setup.
+const previewUnavailableReason = (screen: Screen): string | null => {
+  if (!screen.attached_device) return 'No device is attached to this screen'
+  if (!screen.attached_device.devicekey) return 'Device key is not visible to this account (requires device.showkey)'
+  return null
+}
+
+const previewScreen = (screen: Screen) => {
+  const reason = previewUnavailableReason(screen)
+  if (reason) {
+    toast.add({ severity: 'error', summary: 'Cannot preview', detail: reason, life: 4000 })
+    return
+  }
+  try {
+    openDevicePreview(screen.attached_device!.devicekey!)
+  } catch (e) {
+    console.error('[ScreensView] previewScreen error', e)
+  }
 }
 
 const reloadAllScreens = () => {
@@ -338,9 +359,18 @@ const resetScreenSize = (screen: Screen) => {
               <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
             </template>
           </Column>
-          <Column header="Actions" style="width: 300px">
+          <Column header="Actions" style="width: 340px">
             <template #body="{ data }">
               <div class="action-buttons">
+                <Button
+                  v-if="canPreview"
+                  icon="pi pi-play"
+                  @click="previewScreen(data)"
+                  size="small"
+                  outlined
+                  :disabled="!!previewUnavailableReason(data)"
+                  :title="previewUnavailableReason(data) || 'Preview'"
+                />
                 <Button
                   v-if="canEdit"
                   icon="pi pi-pencil"
@@ -412,14 +442,6 @@ const resetScreenSize = (screen: Screen) => {
         <div class="field">
           <label for="create-name">Screen Name</label>
           <InputText id="create-name" v-model="createForm.name" class="w-full" placeholder="e.g. Lobby-Display" />
-        </div>
-        <div class="field">
-          <label for="create-width">Width (optional)</label>
-          <InputText id="create-width" v-model="createForm.width" class="w-full" placeholder="1920" type="number" />
-        </div>
-        <div class="field">
-          <label for="create-height">Height (optional)</label>
-          <InputText id="create-height" v-model="createForm.height" class="w-full" placeholder="1080" type="number" />
         </div>
       </div>
       <template #footer>
