@@ -1,10 +1,5 @@
 import type { TourDefinition } from '../types'
 
-// Assumes the tour-content package's fixed IDs: contenttype 5 = "DHcon
-// Title", content_element 13 = "DHCON Intropage" — see tourcontent/tour.zip.
-const DHCON_TITLE_CONTENTTYPE_ID = 5
-const DHCON_INTROPAGE_CONTENT_ID = 13
-
 // Opens a <details class="scheduling-collapsible"> section (Scheduling /
 // Duration / Screen Groups & Screens on the Content edit page) before
 // highlighting it, so the tour shows its actual fields instead of just the
@@ -12,6 +7,19 @@ const DHCON_INTROPAGE_CONTENT_ID = 13
 const openDetails = (dataTour: string) => () => {
   const el = document.querySelector<HTMLDetailsElement>(`[data-tour="${dataTour}"]`)
   if (el) el.open = true
+}
+
+// If the person clicked the tour's own "Next" instead of an actual content
+// type card, selectContentType() never ran and the Select Content Type
+// dialog is still open — but the create form underneath (incl.
+// .content-edit-preview, the very next step's target) is already mounted
+// regardless of the dialog, so waitForElement would find it immediately
+// and highlight it *behind* the still-open dialog instead of skipping.
+// Clicking the first card here closes the dialog exactly like a real click
+// would, so the next step's precondition holds either way. No-ops (nothing
+// to click) if a content type was already picked for real.
+const ensureContentTypeSelected = () => {
+  document.querySelector<HTMLElement>('[data-tour^="contenttype-card-"]')?.click()
 }
 
 // Toggles the marker class main.css keys its "keep the preview visible
@@ -26,7 +34,7 @@ const setPreviewElevated = (elevated: boolean) => () => {
 export const createEditContentTour: TourDefinition = {
   id: 'create-edit-content',
   title: 'Creating & Editing Content',
-  description: 'Start a new content element, then edit an existing one with the live preview, scheduling, and screen assignment.',
+  description: 'Start a new content element, picking any content type, and fill it in with the live preview, scheduling, and screen assignment.',
   icon: 'pi pi-box',
   category: 'user',
   steps: [
@@ -40,48 +48,39 @@ export const createEditContentTour: TourDefinition = {
     },
     {
       route: '/content/new',
-      selector: `[data-tour="contenttype-card-${DHCON_TITLE_CONTENTTYPE_ID}"]`,
+      // Matches whichever content type card appears first — any content
+      // type works to demonstrate the flow, so this doesn't depend on a
+      // specific one existing (see docs/developer/tour-design-ruleset.md).
+      selector: '[data-tour^="contenttype-card-"]',
       title: 'Pick a content type',
-      description: 'A content type defines which fields you fill in. Click "DHcon Title" to see its fields.',
+      description: 'A content type defines which fields you fill in. Click one to see its fields.',
       side: 'bottom',
       advanceOnClick: true,
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
       selector: '.content-edit-preview',
       title: 'Live Preview',
       description:
         'This shows exactly what this content looks like on screen, updating as you type — no need to save first to check your work.',
       side: 'left',
+      before: ensureContentTypeSelected,
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
-      selector: '#create-title',
+      selector: '[data-tour="content-title-field"]',
       title: 'Title',
       description: 'Only shown here in the admin backend, never on screen — just to help you keep an overview of your content list.',
       side: 'bottom',
       before: setPreviewElevated(false),
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
       selector: '.tag-fields-section',
       title: 'Content type fields',
       description:
-        'The actual per-field values this content type defines — these are what show up on screen. Watch the Live Preview on the right as you fill them in.',
+        'The actual per-field values this content type defines — these are what show up on screen. Watch the Live Preview on the right as you fill them in. An admin may have already locked or pre-filled some of these; anything not locked can still be overwritten.',
       side: 'top',
       before: setPreviewElevated(true),
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
-      selector: '.content-edit-preview',
-      title: 'Preset by an admin',
-      description:
-        'An admin has already decided which of these fields you can edit here, and may have pre-filled some with default values — anything not locked can still be overwritten.',
-      side: 'left',
-      before: setPreviewElevated(false),
-    },
-    {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
       selector: '[data-tour="content-scheduling"]',
       title: 'Scheduling',
       description: 'Optionally restrict this content to a start and/or end date — outside that window it\'s simply skipped.',
@@ -89,7 +88,6 @@ export const createEditContentTour: TourDefinition = {
       before: openDetails('content-scheduling'),
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
       selector: '[data-tour="content-duration"]',
       title: 'Duration',
       description: 'How long this content stays on screen before the next piece of content takes its turn.',
@@ -97,7 +95,6 @@ export const createEditContentTour: TourDefinition = {
       before: openDetails('content-duration'),
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
       selector: '[data-tour="content-screens"]',
       title: 'Screen Groups & Screens',
       description: 'Which screens actually show this content — assign it to one or more screen groups, or individual screens.',
@@ -105,8 +102,7 @@ export const createEditContentTour: TourDefinition = {
       before: openDetails('content-screens'),
     },
     {
-      route: `/content/${DHCON_INTROPAGE_CONTENT_ID}/edit`,
-      selector: '.content-edit-form-actions',
+      selector: '[data-tour="content-form-actions"]',
       title: 'Save your changes',
       description:
         'Save writes immediately and returns to the Content list; Update writes immediately too but keeps you here. Either way, every screen this content is currently assigned to updates right away — no manual refresh needed.',

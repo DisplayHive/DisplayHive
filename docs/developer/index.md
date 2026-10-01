@@ -17,5 +17,8 @@ organized.
 - **[Admin panel styleguide](styleguide.md)** — colors, type scale, spacing,
   card patterns, icon usage, and the dark-mode rules that keep new views
   from repeating past contrast bugs.
+- **[Guided Tour design ruleset](tour-design-ruleset.md)** — checklist for
+  writing a new mini-tour: category, element targeting, `advanceOnClick`,
+  and verifying it against the tour content package.
 - **[Contributing](contributing.md)** — conventions and expectations for
   changes, including AI-assisted ones.

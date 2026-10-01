@@ -146,7 +146,7 @@ watch(layouts, () => {
   </Teleport>
 
   <div class="layout-edit-page">
-    <div class="field">
+    <div class="field" data-tour="layout-name-field">
       <label for="l-name">Name</label>
       <InputText id="l-name" v-model="layoutForm.name" class="w-full" autofocus />
     </div>
@@ -164,7 +164,7 @@ watch(layouts, () => {
 
     <LayoutCanvasEditor v-if="editingLayout" ref="canvasEditorRef" :layout="editingLayout" :containers="containers" :layouts="layouts" />
 
-    <div class="layout-edit-actions">
+    <div class="layout-edit-actions" data-tour="layout-create-actions">
       <Button v-if="isNewLayout ? canCreate : canEdit" :label="isNewLayout ? 'Create' : 'Save'" :disabled="isNewLayout && !layoutForm.name.trim()" @click="saveLayout" />
       <Button
         v-if="canDelete && editingLayout"

@@ -129,7 +129,7 @@ const refreshData = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="layouts-view">
+  <div v-else data-tour="layouts-page" class="layouts-view">
     <Card>
       <template #title>
         <div class="card-header">
@@ -162,7 +162,12 @@ const refreshData = () => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter layouts..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="layouts-filter"
+                  placeholder="Filter layouts..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -178,7 +183,7 @@ const refreshData = () => {
           </Column>
           <Column header="Actions" style="width: 180px">
             <template #body="{ data }">
-              <div class="action-buttons">
+              <div class="action-buttons" data-tour="layouts-row-actions">
                 <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditPage(data)" size="small" outlined title="Edit" />
                 <Button v-if="canCreate" icon="pi pi-copy" @click="openCopyDialog(data)" size="small" outlined title="Clone" />
                 <Button

@@ -806,7 +806,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <section class="form-section">
         <h3 class="form-section-title">Content</h3>
 
-        <div class="field">
+        <div class="field" data-tour="content-title-field">
           <label for="create-title">
             Title *
             <i
@@ -973,7 +973,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       </section>
     </div>
 
-    <div class="content-edit-form-actions">
+    <div class="content-edit-form-actions" data-tour="content-form-actions">
       <Button data-tour="content-cancel" label="Cancel" @click="goBack" text />
       <Button v-if="editMode && createForm.id" label="Update" severity="secondary" outlined @click="submitCreateContent(true)" :disabled="loadingContentTypeDetail" />
       <Button data-tour="content-save" :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />

@@ -469,7 +469,7 @@ const deleteContentType = (ct: ContentType) => {
       </template>
     </Card>
   </div>
-  <div v-else class="contenttypes-view">
+  <div v-else data-tour="contenttypes-page" class="contenttypes-view">
     <Card>
       <template #title>
         <div class="card-header">
@@ -588,7 +588,7 @@ const deleteContentType = (ct: ContentType) => {
           <label for="ct-description">Description</label>
           <Textarea id="ct-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
-        <div class="field">
+        <div class="field" data-tour="contenttype-layout-field">
           <label for="ct-layout">
             Layout
             <i
@@ -627,7 +627,7 @@ const deleteContentType = (ct: ContentType) => {
              the label shown in the Content Editor form. Drag rows by the
              handle to reorder — this order is what the Content Editor and
              the rendered content element use. -->
-        <div class="fields-section">
+        <div class="fields-section" data-tour="contenttype-fields-section">
           <label>Fields <small>one per container of the selected Layout &mdash; drag to reorder</small></label>
           <p v-if="!editForm.layout_id" class="hint">Select a Layout above to see its containers.</p>
           <p v-else-if="!editForm.tagconfigs.length" class="hint">This Layout has no containers yet.</p>
@@ -693,9 +693,11 @@ const deleteContentType = (ct: ContentType) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeDialog" text />
-        <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveContentType(true)" :disabled="loadingContentType" />
-        <Button label="Save" @click="saveContentType()" :disabled="loadingContentType" />
+        <div class="dialog-footer-actions" data-tour="contenttype-dialog-footer">
+          <Button label="Cancel" @click="closeDialog" text />
+          <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveContentType(true)" :disabled="loadingContentType" />
+          <Button label="Save" @click="saveContentType()" :disabled="loadingContentType" />
+        </div>
       </template>
     </Dialog>
   </div>
@@ -712,6 +714,16 @@ const deleteContentType = (ct: ContentType) => {
    right-aligned instead of collapsing to the start. */
 .card-header {
   justify-content: flex-end;
+}
+
+/* PrimeVue's own .p-dialog-footer flex styling applies to this slot's
+   direct children — wrapping the buttons in a div (so the tour has one
+   element to highlight/advanceOnClick regardless of which button is
+   clicked) needs the same layout repeated on the wrapper. */
+.dialog-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .hint {
