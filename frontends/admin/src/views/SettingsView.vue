@@ -3,7 +3,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useRightsStore } from '../stores/rights'
-import { useSettingsStore } from '../stores/settings'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -16,7 +15,6 @@ import InputNumber from 'primevue/inputnumber'
 const { on, off, emit, emitWithAck } = useSocket()
 const toast = useToast()
 const rightsStore = useRightsStore()
-const settingsStore = useSettingsStore()
 
 const canEdit = computed(() => rightsStore.can('settings.edit'))
 
