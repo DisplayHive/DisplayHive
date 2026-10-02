@@ -17,6 +17,23 @@ const closeScreensManagementDialogIfStillOpen = () => {
   document.querySelector<HTMLElement>('[data-tour="screengroups-screens-dialog-close"]')?.click()
 }
 
+// If the person clicked "Next" instead of the real "screens count" badge,
+// the Screens-in-group dialog never opened, so this step's target (inside
+// it) wouldn't exist. Clicking the badge here opens it for real either
+// way; re-opening an already-open dialog just re-fetches/resets its data,
+// so this is safe to run unconditionally.
+const ensureScreensDialogOpen = () => {
+  document.querySelector<HTMLElement>('[data-tour="screengroups-screens-badge"]')?.click()
+}
+
+// Same reasoning as ensureScreensDialogOpen, for the content-count badge
+// and its dialog — this is also the tour's *last* step's dependency, so
+// without this, clicking only "Next" the whole way through would silently
+// end the tour instead of reaching "Exit Tour".
+const ensureContentDialogOpen = () => {
+  document.querySelector<HTMLElement>('[data-tour="screengroups-content-badge"]')?.click()
+}
+
 export const screengroupsTour: TourDefinition = {
   id: 'screengroups',
   title: 'Screen Groups',
@@ -72,6 +89,7 @@ export const screengroupsTour: TourDefinition = {
       description:
         'Add any of your registered screens to this group from here — the same membership you can also set from a screen\'s own Rename dialog.',
       side: 'top',
+      before: ensureScreensDialogOpen,
     },
     {
       selector: '[data-tour="screengroups-content-badge"]',
@@ -87,6 +105,7 @@ export const screengroupsTour: TourDefinition = {
       description:
         'Add any existing content element to this group — once added, it joins the shared rotation every screen in this group plays.',
       side: 'top',
+      before: ensureContentDialogOpen,
     },
   ],
 }

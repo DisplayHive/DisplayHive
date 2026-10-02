@@ -10,6 +10,17 @@ const closeScreenCreateDialogIfStillOpen = () => {
   document.querySelector<HTMLElement>('[data-tour="screens-create-cancel"]')?.click()
 }
 
+// If the person clicked "Next" instead of the real "Rename & group"
+// button, the Rename dialog never opened, so this step's target (a field
+// inside it) wouldn't exist — and since this is the tour's *last* step,
+// that would silently end the tour instead of reaching "Exit Tour".
+// Clicking the button here opens it for real either way; re-opening an
+// already-open rename dialog just resets its form, so this is safe to
+// run unconditionally.
+const ensureRenameDialogOpen = () => {
+  document.querySelector<HTMLElement>('[data-tour="screens-row-rename"]')?.click()
+}
+
 export const screensTour: TourDefinition = {
   id: 'screens',
   title: 'Screens',
@@ -105,6 +116,7 @@ export const screensTour: TourDefinition = {
       description:
         'Tick the groups this screen should belong to — it immediately starts sharing whatever content rotation those groups define. Save to apply. See the Screen Groups tour for how groups themselves work.',
       side: 'top',
+      before: ensureRenameDialogOpen,
     },
   ],
 }

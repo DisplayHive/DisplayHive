@@ -145,11 +145,11 @@ const sendTestLog = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="logger-view">
+  <div v-else data-tour="logger-page" class="logger-view">
     <Card>
       <template #title>
         <div class="card-header">
-          <div class="header-actions">
+          <div class="header-actions" data-tour="logger-controls">
             <Button
               :icon="autoScroll ? 'pi pi-lock' : 'pi pi-lock-open'"
               :label="autoScroll ? 'Auto-scroll On' : 'Auto-scroll Off'"
@@ -164,7 +164,7 @@ const sendTestLog = () => {
         </div>
       </template>
       <template #content>
-        <div class="filter-bar">
+        <div class="filter-bar" data-tour="logger-filters">
           <div class="filter-item">
             <label>Severity</label>
             <Select
@@ -192,7 +192,7 @@ const sendTestLog = () => {
           </div>
         </div>
 
-        <div class="log-container" ref="logContainer">
+        <div class="log-container" data-tour="logger-log-container" ref="logContainer">
           <div
             v-for="(log, index) in filteredLogs"
             :key="index"

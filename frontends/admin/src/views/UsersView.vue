@@ -662,11 +662,11 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
       </template>
     </Card>
   </div>
-  <div v-else class="users-view">
+  <div v-else data-tour="users-page" class="users-view">
     <Tabs :value="defaultTab">
       <TabList>
         <Tab v-if="canViewUsers" value="accounts">Accounts</Tab>
-        <Tab v-if="canViewRights" value="groups">Groups</Tab>
+        <Tab v-if="canViewRights" data-tour="users-tab-groups" value="groups">Groups</Tab>
       </TabList>
       <TabPanels>
         <!-- Accounts -->
@@ -678,11 +678,12 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <Card>
             <template #title>
               <div class="card-header">
-                <Button v-if="canCreate" label="Add User" icon="pi pi-plus" size="small" @click="openCreateAccountDialog" />
+                <Button v-if="canCreate" data-tour="users-add-user" label="Add User" icon="pi pi-plus" size="small" @click="openCreateAccountDialog" />
               </div>
             </template>
             <template #content>
               <DataTable
+                data-tour="users-table"
                 :value="users"
                 :loading="usersLoading"
                 data-key="id"
@@ -755,6 +756,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                     />
                     <Button
                       v-if="canViewRights"
+                      data-tour="users-row-manage-rights"
                       icon="pi pi-shield"
                       text
                       rounded
@@ -789,6 +791,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
               <div class="card-header">
                 <Button
                   v-if="canManageRights"
+                  data-tour="users-add-group"
                   label="Add Group"
                   icon="pi pi-plus"
                   size="small"
@@ -798,6 +801,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
             </template>
             <template #content>
               <DataTable
+                data-tour="users-groups-table"
                 :value="orderedGroups"
                 :loading="rightsLoading"
                 data-key="id"
@@ -835,6 +839,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                     />
                     <Button
                       v-if="canManageRights"
+                      data-tour="users-row-edit-rights"
                       icon="pi pi-shield"
                       text
                       rounded
@@ -889,7 +894,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <span class="p-dialog-title">{{ isNewAccount ? 'Add User' : 'Edit User' }}</span>
         </div>
       </template>
-      <div class="dialog-form">
+      <div class="dialog-form" data-tour="users-account-fields">
         <label for="user-username">Username</label>
         <InputText id="user-username" v-model="accountForm.username" autofocus :disabled="!isNewAccount && !canEdit" />
 
@@ -902,7 +907,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
       </div>
 
       <template #footer>
-        <Button label="Cancel" text @click="showAccountDialog = false" />
+        <Button data-tour="users-account-cancel" label="Cancel" text @click="showAccountDialog = false" />
         <Button label="Save" icon="pi pi-check" :loading="isSavingAccount" @click="saveAccount" />
       </template>
     </Dialog>
@@ -915,7 +920,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <span class="p-dialog-title">{{ isGroupNew ? 'Add Group' : 'Edit Group' }}</span>
         </div>
       </template>
-      <div class="dialog-form">
+      <div class="dialog-form" data-tour="users-group-fields">
         <label for="group-name">Name</label>
         <InputText id="group-name" v-model="groupForm.name" autofocus />
         <label for="group-parent">Parent group</label>
@@ -928,7 +933,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         />
       </div>
       <template #footer>
-        <Button label="Cancel" text @click="showGroupDialog = false" />
+        <Button data-tour="users-group-cancel" label="Cancel" text @click="showGroupDialog = false" />
         <Button label="Save" icon="pi pi-check" :loading="isSavingGroup" @click="saveGroup" />
       </template>
     </Dialog>
@@ -953,7 +958,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         grant covering it) hides and clears the rest of that section, since it's unreachable
         without page access.
       </p>
-      <div v-if="canManageRights" class="rights-global-actions">
+      <div v-if="canManageRights" class="rights-global-actions" data-tour="users-rights-matrix">
         <span class="rights-global-label">All rights</span>
         <Button label="All" size="small" text @click="bulkSetGroupRights(catalog.map((r) => r.key), true)" />
         <Button label="None" size="small" text @click="bulkSetGroupRights(catalog.map((r) => r.key), false)" />
@@ -986,7 +991,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         </template>
       </div>
       <template #footer>
-        <Button label="Close" @click="showGroupRightsDialog = false" />
+        <Button data-tour="users-rights-matrix-close" label="Close" @click="showGroupRightsDialog = false" />
       </template>
     </Dialog>
 
@@ -1003,7 +1008,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         </div>
       </template>
       <template v-if="editingUser">
-        <div class="dialog-form">
+        <div class="dialog-form" data-tour="users-rights-group-membership">
           <label>Group membership</label>
           <div class="user-groups-row">
             <MultiSelect
@@ -1071,7 +1076,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
         </div>
       </template>
       <template #footer>
-        <Button label="Close" @click="showUserRightsDialog = false" />
+        <Button data-tour="users-rights-dialog-close" label="Close" @click="showUserRightsDialog = false" />
       </template>
     </Dialog>
   </div>

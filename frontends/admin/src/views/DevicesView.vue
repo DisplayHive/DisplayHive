@@ -358,13 +358,14 @@ const deleteDevice = (device: Device) => {
       </template>
     </Card>
   </div>
-  <div v-else class="devices-view">
+  <div v-else data-tour="devices-page" class="devices-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
             <Button
               v-if="canAdopt"
+              data-tour="devices-adopt"
               icon="pi pi-plus"
               label="Adopt Device"
               @click="openAdoptDialog"
@@ -381,6 +382,7 @@ const deleteDevice = (device: Device) => {
       </template>
       <template #content>
         <DataTable
+          data-tour="devices-table"
           :value="filteredDevices"
           :loading="devicesStore.loading"
           sortField="name"
@@ -395,7 +397,12 @@ const deleteDevice = (device: Device) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter devices..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="devices-filter"
+                  placeholder="Filter devices..."
+                  class="filter-input"
+                />
               </div>
               <div class="dt-right">
                 <Tag
@@ -451,7 +458,7 @@ const deleteDevice = (device: Device) => {
               </Popover>
             </template>
             <template #body="{ data }">
-              <div class="key-cell">
+              <div class="key-cell" data-tour="devices-key-column">
                 <Button class="key-button" icon="pi pi-key" size="small" outlined @click="() => copyDeviceKey(data)" :title="'Copy key'">
                 </Button>
                 <Button class="key-button" icon="pi pi-share-alt" size="small" outlined @click="() => copyDeviceUrl(data)" :title="'Copy dynamic device URL'">
@@ -513,6 +520,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="canRename"
+                  data-tour="devices-row-rename"
                   icon="pi pi-pencil"
                   @click="openRenameDialog(data)"
                   size="small"
@@ -521,6 +529,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="canAssign"
+                  data-tour="devices-row-assign"
                   icon="pi pi-desktop"
                   @click="openAssignDialog(data)"
                   size="small"
@@ -529,6 +538,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="data.is_online"
+                  data-tour="devices-row-locate"
                   icon="pi pi-map-marker"
                   @click="toggleFind(data)"
                   size="small"
@@ -561,18 +571,18 @@ const deleteDevice = (device: Device) => {
         </div>
       </template>
       <div class="dialog-content">
-        <div class="field">
+        <div class="field" data-tour="devices-adopt-name-field">
           <label for="adopt-name">Device Name</label>
           <InputText id="adopt-name" v-model="adoptForm.name" class="w-full" />
         </div>
-          <div class="field">
+          <div class="field" data-tour="devices-adopt-qr">
             <label for="adopt-key">Adoptiontoken</label>
             <div class="key-input-group">
               <InputText id="adopt-key" v-model="adoptForm.adoptiontoken" class="w-full" placeholder="Enter or scan adoption token" />
-            <Button 
+            <Button
               v-if="!scannerActive"
-              icon="pi pi-camera" 
-              @click="startQRScanner" 
+              icon="pi pi-camera"
+              @click="startQRScanner"
               outlined
               title="Scan QR Code"
             />
@@ -602,7 +612,7 @@ const deleteDevice = (device: Device) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeAdoptDialog" text :disabled="isAdopting" />
+        <Button data-tour="devices-adopt-cancel" label="Cancel" @click="closeAdoptDialog" text :disabled="isAdopting" />
         <Button label="Adopt" @click="adoptDevice" :loading="isAdopting" :disabled="isAdopting" />
       </template>
     </Dialog>
@@ -650,7 +660,7 @@ const deleteDevice = (device: Device) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showAssignDialog = false" text :disabled="isSavingAssign" />
+        <Button data-tour="devices-assign-cancel" label="Cancel" @click="showAssignDialog = false" text :disabled="isSavingAssign" />
         <Button label="Save" @click="saveAssign()" :loading="isSavingAssign" :disabled="isSavingAssign" />
       </template>
     </Dialog>

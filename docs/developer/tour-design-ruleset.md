@@ -166,6 +166,22 @@ Before registering it:
   the popover follows correctly rather than desyncing.
 - Confirm the last step is *not* `advanceOnClick`, and that "Exit Tour"
   lands back on `/tour`.
+- **Click only "Next" from the first step to the last, never the real
+  elements — confirm you reach "Exit Tour".** This is a hard rule, not
+  optional: a tour that only *looks* fine because a dialog-gated step
+  skips cleanly can still silently die off the end of the array if the
+  skip cascades all the way past the last step (see §5's closing point
+  and `CLAUDE.md` point 8) — `stop()` runs with no navigation back to
+  `/tour`, and nothing in the UI tells you the tour ended early. A
+  cleanly-skipping middle step and a tour that's about to die this way
+  look identical until you actually reach the end, so this check can't
+  be skipped on the assumption that skipping "looked graceful" earlier.
+- **Then click "Previous" from that last step all the way back to the
+  first, confirming each one lands on the step actually before it, not
+  stuck or jumping forward.** This is also a hard rule — the direction-
+  preserving skip in `runner.ts` (point 7) makes this correct by
+  construction, but a new tour is still what exercises it, so verify it
+  rather than assuming it.
 - If the tour's styling needed any override in `main.css`, follow
   [Styleguide: Third-party widgets mounted outside the component
   tree](styleguide.md) and its dark-mode rules.

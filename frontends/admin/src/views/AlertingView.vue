@@ -238,7 +238,7 @@ onUnmounted(() => {
       </template>
     </Card>
   </div>
-  <div v-else class="alerting-view">
+  <div v-else data-tour="alerting-page" class="alerting-view">
 
     <div v-if="loading" class="loading-state">
       <i class="pi pi-spin pi-spinner"></i>
@@ -257,7 +257,7 @@ onUnmounted(() => {
         </template>
         <template #content>
           <div class="settings-form">
-            <div class="field">
+            <div class="field" data-tour="alerting-token-field">
               <label for="telegram-token">Bot Token</label>
               <div class="token-row">
                 <InputText
@@ -291,6 +291,7 @@ onUnmounted(() => {
                 size="small"
                 stripedRows
                 class="users-table"
+                data-tour="alerting-saved-users"
               >
                 <Column field="name" header="Name" />
                 <Column field="chat_id" header="Chat ID" style="width: 130px" />
@@ -328,7 +329,7 @@ onUnmounted(() => {
               </div>
 
               <!-- Users detected from bot -->
-              <div class="section-header">
+              <div class="section-header" data-tour="alerting-bot-users">
                 <span class="section-label">Users who messaged the bot</span>
                 <Button
                   icon="pi pi-refresh"
@@ -394,7 +395,7 @@ onUnmounted(() => {
         </template>
         <template #content>
           <p class="matrix-hint">Check which alerts each user should receive.</p>
-          <div class="matrix-wrapper">
+          <div class="matrix-wrapper" data-tour="alerting-matrix">
             <table class="matrix-table">
               <thead>
                 <tr>

@@ -217,7 +217,7 @@ const saveTimeSettings = async () => {
       </template>
     </Card>
   </div>
-  <div v-else class="settings-view">
+  <div v-else data-tour="settings-page" class="settings-view">
 
     <div v-if="loading" class="loading-state">
       <i class="pi pi-spin pi-spinner"></i>
@@ -234,6 +234,7 @@ const saveTimeSettings = async () => {
         </template>
         <template #content>
           <div class="settings-form">
+            <div class="field-group" data-tour="settings-welcome-fields">
             <div class="field">
               <label for="welcome-headline">Welcome headline</label>
               <InputText
@@ -256,6 +257,8 @@ const saveTimeSettings = async () => {
                 :disabled="!canEdit"
               />
             </div>
+            </div>
+            <div class="toggle-group" data-tour="settings-visibility-toggles">
             <div class="field toggle-field">
               <label for="hide-community-links">Hide community links</label>
               <ToggleSwitch id="hide-community-links" v-model="hideCommunityLinks" :disabled="!canEdit" />
@@ -280,7 +283,8 @@ const saveTimeSettings = async () => {
               <label for="hide-admin-tours">Hide Admin Path tours (removes the "Admin Path" section from the Guided Tour page)</label>
               <ToggleSwitch id="hide-admin-tours" v-model="hideAdminTours" :disabled="!canEdit" />
             </div>
-            <div class="field-actions">
+            </div>
+            <div class="field-actions" data-tour="settings-dashboard-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -302,6 +306,7 @@ const saveTimeSettings = async () => {
         </template>
         <template #content>
           <div class="settings-form">
+            <div class="field-group" data-tour="settings-content-preview-fields">
             <div class="field">
               <label for="content-edit-preview-size">Preview size on the Content edit page</label>
               <div class="flex align-items-center gap-2">
@@ -328,7 +333,8 @@ const saveTimeSettings = async () => {
                 />
               </div>
             </div>
-            <div class="field-actions">
+            </div>
+            <div class="field-actions" data-tour="settings-content-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -359,7 +365,7 @@ const saveTimeSettings = async () => {
                 tabindex="-1"
               />
             </div>
-            <div class="field">
+            <div class="field" data-tour="settings-timezone-field">
               <label for="timezone">Timezone</label>
               <Select
                 id="timezone"
@@ -382,7 +388,7 @@ const saveTimeSettings = async () => {
                 tabindex="-1"
               />
             </div>
-            <div class="field-actions">
+            <div class="field-actions" data-tour="settings-time-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -418,6 +424,13 @@ const saveTimeSettings = async () => {
 }
 
 .settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field-group,
+.toggle-group {
   display: flex;
   flex-direction: column;
   gap: 1rem;

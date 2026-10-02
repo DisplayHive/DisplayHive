@@ -965,18 +965,19 @@ const deleteDesign = (design: Design) => {
       </template>
     </Card>
   </div>
-  <div v-else class="designs-view">
+  <div v-else data-tour="designs-page" class="designs-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
+            <Button v-if="canCreate" data-tour="designs-new" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="designs-table"
           :value="filteredDesigns"
           :loading="loading"
           sortField="name"
@@ -990,7 +991,12 @@ const deleteDesign = (design: Design) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="designs-filter"
+                  placeholder="Filter designs..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -1009,9 +1015,10 @@ const deleteDesign = (design: Design) => {
           <Column header="Actions" style="width: 200px">
             <template #body="{ data }">
               <div class="action-buttons">
-                <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditDialog(data)" size="small" outlined title="Edit" />
+                <Button v-if="canEdit" data-tour="designs-row-edit" icon="pi pi-pencil" @click="openEditDialog(data)" size="small" outlined title="Edit" />
                 <Button
                   v-if="canEdit && !data.isDefault"
+                  data-tour="designs-row-make-active"
                   icon="pi pi-check"
                   @click="setDefault(data)"
                   size="small"
@@ -1063,7 +1070,7 @@ const deleteDesign = (design: Design) => {
           Loading design HTML/CSS…
           <div v-if="loadingDesignError" class="tpl-loading-error">{{ loadingDesignError }}</div>
         </div>
-        <div class="field">
+        <div class="field" data-tour="designs-name-fields">
           <label for="design-name">Name</label>
           <InputText id="design-name" v-model="editForm.name" class="w-full" />
         </div>
@@ -1074,7 +1081,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="defaultColorsCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-default-colors-header" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
                 <span class="panel-header-title">Default Colors</span>
                 <small class="panel-header-desc">A named palette for this Design — pick the palette icon next to any color field below to reuse one of these.</small>
               </div>
@@ -1092,7 +1099,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="backdropCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="backdropCollapsed = !backdropCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-backdrop-header" @click="backdropCollapsed = !backdropCollapsed">
                 <span class="panel-header-title">Backdrop</span>
                 <small class="panel-header-desc">The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor below, so a manual edit there still wins.</small>
               </div>
@@ -1207,7 +1214,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="effectPanelCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="effectPanelCollapsed = !effectPanelCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-effect-header" @click="effectPanelCollapsed = !effectPanelCollapsed">
                 <span class="panel-header-title">Background Effect</span>
                 <small class="panel-header-desc">An animated canvas effect rendered behind the Backdrop. Runs continuously on the screen client — test on real display hardware before relying on it, it has a real CPU/GPU cost.</small>
               </div>
@@ -1277,7 +1284,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="globalStylesCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="globalStylesCollapsed = !globalStylesCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-global-styles-header" @click="globalStylesCollapsed = !globalStylesCollapsed">
                 <span class="panel-header-title">Global Styles</span>
                 <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to a per-container override below, and to anything in the CSS editor below.</small>
               </div>
@@ -1391,7 +1398,7 @@ const deleteDesign = (design: Design) => {
         <div class="container-styles-section">
           <Panel v-model:collapsed="customHtmlCssCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-custom-html-header" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
                 <span class="panel-header-title">Custom HTML and CSS</span>
                 <small class="panel-header-desc">Hand-written background HTML/CSS — rendered last, so it always wins over every collapsible above.</small>
               </div>
@@ -1425,7 +1432,7 @@ const deleteDesign = (design: Design) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeDialog" text />
+        <Button data-tour="designs-dialog-cancel" label="Cancel" @click="closeDialog" text />
         <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveDesign(true)" :disabled="loadingDesign" />
         <Button label="Save" @click="saveDesign()" :disabled="loadingDesign" />
       </template>

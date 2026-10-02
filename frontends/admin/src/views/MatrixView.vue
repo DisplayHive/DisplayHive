@@ -202,7 +202,7 @@ const refreshData = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="matrix-view">
+  <div v-else data-tour="matrix-page" class="matrix-view">
     <Card>
       <template #content>
         <div class="matrix-info-row">
@@ -248,6 +248,7 @@ const refreshData = () => {
                   v-for="sg in screengroups"
                   :key="sg.id"
                   class="matrix-cell"
+                  data-tour="matrix-checkbox-cell"
                   @click="rightsStore.can('screengroups.manage_screens') && toggleAssignment(screen.id, sg.id)"
                 >
                   <Checkbox
