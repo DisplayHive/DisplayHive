@@ -10,7 +10,7 @@
  * "relative to the stage" must swap axes: the stage's 1vh (1% of its height)
  * is the viewport's 1vw. adaptCss/adaptHtml/containerGeometry do that for
  * everything the server sends (Design CSS/HTML, container CSS/HTML and
- * positions). Body selectors in CSS are retargeted to the stage too, so a
+ * positions). The "Powered by" badge is moved into the stage so it turns too. Body selectors in CSS are retargeted to the stage too, so a
  * Backdrop (gradient/image on `body`) turns with everything else.
  */
 
@@ -74,6 +74,17 @@ export function applyStageTransform(): void {
   if (typeof document === "undefined") return;
   const stage = document.getElementById("main-container");
   if (!stage) return;
+
+  // The "Powered by" badge is `position: fixed` outside the stage. A transformed
+  // ancestor becomes the containing block of fixed descendants, so living
+  // inside the stage it keeps its bottom-right corner *of the rotated stage*
+  // and turns with everything else; unrotated it goes back to the body.
+  const badge = document.getElementById("powered-by-badge");
+  if (badge) {
+    if (rotation !== 0 && badge.parentElement !== stage) stage.appendChild(badge);
+    else if (rotation === 0 && badge.parentElement === stage) document.body.appendChild(badge);
+  }
+
   const s = stage.style;
   if (rotation === 0) {
     s.position = s.top = s.left = s.width = s.height = s.transform = s.transformOrigin = s.flex = "";
