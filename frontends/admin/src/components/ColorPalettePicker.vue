@@ -35,7 +35,8 @@ const pick = (color: DefaultColor, e: Event) => {
         type="button"
         class="color-palette-swatch"
         :style="{ backgroundColor: c.hex }"
-        :title="`${c.name} (${c.hex})`"
+        v-tooltip.top="c.name ? `${c.name} (${c.hex})` : c.hex"
+        :aria-label="c.name || c.hex"
         @click="(e) => pick(c, e)"
       />
     </div>

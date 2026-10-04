@@ -176,6 +176,10 @@ class ContentContainer(db.Model):
     # unlocked again — a shared, persisted property (not per-Layout), since
     # the container itself is the standalone entity being positioned.
     locked: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    # When true, the container is sent to screens (and so its Container Design
+    # background/border etc. is visible) even when it has no content at all;
+    # otherwise an empty container is omitted entirely, as before.
+    show_when_empty: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # Fallback content shown when no active scene's field currently targets
     # this container. Reuses the same field_handler transform as TagConfig
     # (textklein, image, pretalx_table, etc); null field_handler means no

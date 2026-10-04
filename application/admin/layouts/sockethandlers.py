@@ -15,7 +15,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     Layout" meaning.
     """
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
-    from application.socketio_handlers.auth import require_right
+    from application.socketio_handlers.auth import require_right, require_any_right
     from application.models import Layout, ContentContainer, Contenttype, TagConfig
     from application.utils import push_content_list_to_all_screens
 
@@ -93,6 +93,68 @@ def register_admin_layouts_handlers(socketio, app, db):
         from application.admin.designs.helper import build_design_payload
         payload = build_design_payload(db)
         socketio.emit('displayhive:admin:stc:design_preview', payload, room=request.sid)
+
+    # --- Container design (active Design's per-container styles) ----------
+    # Surfaced as the Layout editor's "Container Design". Operates on the *active*
+    # Design only (the one the canvas previews), gated by designs.edit OR the
+    # narrower contenttypes.edit_design, so a Layout editor can restyle a
+    # container without being granted the whole Designs page.
+
+    @socketio.on('displayhive:admin:cts:get_container_design')
+    @require_any_right('designs.edit', 'contenttypes.edit_design')
+    def get_container_design(message=None):
+        """Emit the active Design's id and per-container style overrides.
+
+        Payload: {design_id, data: {contentcontainer_id: {property: value}}}
+        (design_id is null if no Design is active).
+        """
+        from application.models import DesignContainerStyle
+        from application.utils.design import get_default_design
+        design = get_default_design(db)
+        by_container: dict = {}
+        if design is not None:
+            rows = db.session.execute(
+                db.select(DesignContainerStyle).where(DesignContainerStyle.design_id == design.id)
+            ).scalars().all()
+            for row in rows:
+                by_container.setdefault(str(row.contentcontainer_id), {})[row.property] = row.value or ''
+        socketio.emit('displayhive:admin:stc:container_design', {
+            'design_id': design.id if design is not None else None,
+            'data': by_container,
+        }, room=request.sid)
+
+    @socketio.on('displayhive:admin:cts:save_container_design')
+    @require_any_right('designs.edit', 'contenttypes.edit_design')
+    def save_container_design(data=None):
+        """Upsert one container's style overrides on the active Design.
+
+        Payload: {contentcontainer_id, styles: {property: value}}. Refreshes
+        the caller's design preview and reloads screens (the active Design is
+        what screens show).
+        """
+        from application.admin.designs.helper import build_design_payload, upsert_container_styles
+        from application.utils.design import get_default_design
+        if not data or not isinstance(data, dict):
+            return {'ok': False, 'error': 'Invalid payload'}
+        contentcontainer_id = data.get('contentcontainer_id')
+        styles = data.get('styles')
+        if not contentcontainer_id or not isinstance(styles, dict):
+            return {'ok': False, 'error': 'Missing contentcontainer_id or styles'}
+        design = get_default_design(db)
+        if design is None:
+            return {'ok': False, 'error': 'No active design'}
+        if db.session.get(ContentContainer, int(contentcontainer_id)) is None:
+            return {'ok': False, 'error': 'Container not found'}
+
+        upsert_container_styles(db, design.id, int(contentcontainer_id), styles)
+        db.session.commit()
+        try:
+            from application.utils import reload_devices_on_all_screens
+            reload_devices_on_all_screens(socketio, db)
+        except Exception:
+            logger.exception('Failed to reload screens after container design change')
+        socketio.emit('displayhive:admin:stc:design_preview', build_design_payload(db), room=request.sid)
+        return {'ok': True}
 
     @socketio.on('displayhive:admin:cts:get_layout_default_content_preview')
     @require_right('layouts.page')
@@ -270,6 +332,7 @@ def register_admin_layouts_handlers(socketio, app, db):
             height=float(data.get('height') or 100),
             default_field_handler=data.get('default_field_handler') or None,
             default_content=data.get('default_content') or None,
+            show_when_empty=bool(data.get('show_when_empty')),
         )
         db.session.add(container)
         db.session.commit()
@@ -313,6 +376,8 @@ def register_admin_layouts_handlers(socketio, app, db):
             container.default_field_handler = data.get('default_field_handler') or None
         if 'default_content' in data:
             container.default_content = data.get('default_content') or None
+        if 'show_when_empty' in data:
+            container.show_when_empty = bool(data.get('show_when_empty'))
 
         db.session.add(container)
         db.session.commit()

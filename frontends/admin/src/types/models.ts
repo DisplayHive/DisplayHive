@@ -133,6 +133,8 @@ export interface ContentContainer {
   default_field_handler?: string | null
   /** Shown (via default_field_handler's transform) when no active scene targets this container. */
   default_content?: string | null
+  /** When true, screens show this container (its Container Design background/border) even with no content. */
+  show_when_empty?: boolean
   /** True if at least one Contenttype field (TagConfig) renders into it. */
   in_use?: boolean
 }

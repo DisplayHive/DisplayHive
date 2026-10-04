@@ -150,3 +150,23 @@ def test_gradient_css_value_alpha_hex_for_partial_opacity():
 def test_gradient_css_value_unknown_type_returns_empty():
     g = _gradient(type='not-a-real-gradient-type')
     assert gradient_css_value(g) == ''
+
+
+# --- container style value/property sanity filter --------------------------------
+
+
+@pytest.mark.parametrize('value', [
+    'red; } body { display: none', '#fff}', 'url(http://x/y.png)', '@import "x"',
+    '</style><script>', 'a /* c */', 'back\\slash',
+])
+def test_container_style_value_filter_rejects_rule_breakouts(value):
+    from application.admin.designs.helper import _STYLE_VALUE_FORBIDDEN
+    assert _STYLE_VALUE_FORBIDDEN.search(value)
+
+
+@pytest.mark.parametrize('value', [
+    '"Segoe UI", sans-serif', '0 0.3vh 0.8vh rgba(0,0,0,0.35)', '@default:abc', 'blur(2vh)', '-0.02em',
+])
+def test_container_style_value_filter_allows_normal_values(value):
+    from application.admin.designs.helper import _STYLE_VALUE_FORBIDDEN
+    assert not _STYLE_VALUE_FORBIDDEN.search(value)

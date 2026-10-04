@@ -22,7 +22,7 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
-import ColorPicker from 'primevue/colorpicker'
+import ColorPicker from './ColorPicker.vue'
 import OptionFlagToggle from './OptionFlagToggle.vue'
 import ColorPalettePicker from './ColorPalettePicker.vue'
 
@@ -246,7 +246,7 @@ const showLicenseDialog = ref(false)
       <div :class="['icon-picker-color field icon-picker-option-content', { 'icon-picker-disabled': isLocked('color') }]">
         <label>Color</label>
         <div class="icon-picker-color-controls">
-          <ColorPicker :modelValue="colorHex" @update:modelValue="(v: string) => setColorHex(v)" />
+          <ColorPicker :modelValue="colorHex" @update:modelValue="(v: string | undefined) => setColorHex(v)" />
           <ColorPalettePicker :palette="palette" @select="setColorRef" />
           <span class="icon-picker-color-label">{{ colorLabel }}</span>
           <Button

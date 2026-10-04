@@ -465,10 +465,10 @@ def combine_layout_containers(layout_containers, rendered_by_container: dict, db
     containers = {}
     for c in (layout_containers or []):
         html = rendered_by_container.get(str(c.id)) or render_container_default(c, db=db)
-        if not html:
+        if not html and not c.show_when_empty:
             continue
         containers[str(c.id)] = {
-            'top': c.top, 'left': c.left, 'width': c.width, 'height': c.height, 'html': html,
+            'top': c.top, 'left': c.left, 'width': c.width, 'height': c.height, 'html': html or '',
         }
     return containers
 

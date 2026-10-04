@@ -21,6 +21,7 @@ def _serialize_container(c, used_container_ids: set) -> dict:
         'width': c.width,
         'height': c.height,
         'locked': c.locked,
+        'show_when_empty': c.show_when_empty,
         'default_field_handler': c.default_field_handler,
         'default_content': c.default_content,
         # In use = at least one Contenttype field (TagConfig) renders into it.

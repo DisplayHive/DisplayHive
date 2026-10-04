@@ -105,6 +105,7 @@ def _row_container(c):
         'name': c.name, 'order': c.order, 'top': c.top, 'left': c.left,
         'width': c.width, 'height': c.height,
         'default_field_handler': c.default_field_handler, 'default_content': c.default_content,
+        'show_when_empty': c.show_when_empty,
     }
 
 
@@ -685,6 +686,7 @@ def _import_contentcontainers(ctx):
         top=row.get('top', 0) or 0, left=row.get('left', 0) or 0,
         width=row.get('width', 100) or 100, height=row.get('height', 100) or 100,
         default_field_handler=row.get('default_field_handler'), default_content=row.get('default_content'),
+        show_when_empty=bool(row.get('show_when_empty')),
     ))
 
 

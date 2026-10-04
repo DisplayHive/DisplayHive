@@ -5,6 +5,7 @@ Provides helper to emit the designs list payload to admin clients.
 
 import json
 import logging
+import re
 from typing import Optional
 
 from application.models import Design
@@ -210,6 +211,49 @@ def gradient_css_value(gradient, design=None) -> str:
         return f'{prefix}conic-gradient(from {int(gradient.angle or 0)}deg at {x}% {y}%, {stop_str})'
 
     return ''
+
+
+_STYLE_PROP_RE = re.compile(r'^[a-z][a-z-]*$')
+# Values are written verbatim into `.dh-container-<id> { prop: value; }`, so
+# anything that could close the rule or pull in external resources is dropped.
+_STYLE_VALUE_FORBIDDEN = re.compile(r'[{};<>\\]|/\*|url\(|@import', re.IGNORECASE)
+
+
+def upsert_container_styles(db, design_id: int, contentcontainer_id: int, styles: dict) -> None:
+    """Upsert every (property, value) pair for one container on one Design.
+
+    A blank value deletes that property's row (the UI's "not set") instead
+    of storing an empty string. Does not commit — the caller does. Shared by
+    the Designs page and the Layout editor's "Container Design" card.
+    """
+    from application.models import DesignContainerStyle
+
+    existing = {
+        row.property: row
+        for row in db.session.execute(
+            db.select(DesignContainerStyle).where(
+                DesignContainerStyle.design_id == design_id,
+                DesignContainerStyle.contentcontainer_id == contentcontainer_id,
+            )
+        ).scalars().all()
+    }
+    for prop, value in styles.items():
+        value = (value or '').strip()
+        if not _STYLE_PROP_RE.match(prop or '') or _STYLE_VALUE_FORBIDDEN.search(value):
+            continue
+        row = existing.get(prop)
+        if not value:
+            if row:
+                db.session.delete(row)
+            continue
+        if row:
+            row.value = value
+            db.session.add(row)
+        else:
+            db.session.add(DesignContainerStyle(
+                design_id=design_id, contentcontainer_id=contentcontainer_id,
+                property=prop, value=value,
+            ))
 
 
 def build_design_payload(db) -> dict:

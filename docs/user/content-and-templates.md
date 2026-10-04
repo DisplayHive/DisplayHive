@@ -89,12 +89,10 @@ panels, layered in this order (later panels win over earlier ones):
 4. **Global Styles** — font and layout properties (family from a websafe
    list, variant, weight, stretch, size in vh, line-height, style, color,
    text-align, display, justify-content, align-items) applied to every
-   container by default.
-5. **Per-Container Styles** — the same property set as Global Styles, but
-   scoped to one specific container at a time (one collapsible panel per
-   container), overriding the global values just for it. Changes here
-   autosave.
-6. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
+   container by default. Styling for a single container (font, background,
+   border, padding …) is done in the Layout editor's **Container Design**
+   card instead.
+5. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
    structured options above don't cover; it always renders last and wins
    over every other panel.
 

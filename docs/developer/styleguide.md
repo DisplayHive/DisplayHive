@@ -464,6 +464,15 @@ The lesson generalizes: matching tokens exactly between a small control and
 its immediate container is itself a contrast bug, even when both tokens
 individually adapt correctly.
 
+### Empty color fields (checkerboard)
+
+PrimeVue's `ColorPicker` paints an unset value as red, which reads as a real
+choice. Always import `components/ColorPicker.vue` (a thin wrapper) instead of
+`primevue/colorpicker`: an empty value shows a checkerboard built from
+`--p-surface-300` / `--p-content-background`, so it works in light and dark
+mode without a `.dark-mode` override. It needs `!important` only because
+PrimeVue sets the preview's `background-color` inline.
+
 ### Third-party widgets mounted outside the component tree
 
 Some libraries (the Guided Tour's `driver.js`, for the arrow/popover

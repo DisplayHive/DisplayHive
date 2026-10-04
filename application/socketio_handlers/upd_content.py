@@ -100,13 +100,13 @@ def _build_payload(db, screen):
             if str(container.id) in scene_containers:
                 continue
             html = render_container_default(container, db=db)
-            if not html:
+            if not html and not container.show_when_empty:
                 continue
             scene_containers[str(container.id)] = {
                 'name': container.name,
                 'top': container.top, 'left': container.left,
                 'width': container.width, 'height': container.height,
-                'html': html,
+                'html': html or '',
             }
 
         if not scene_containers:

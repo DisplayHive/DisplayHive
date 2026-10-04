@@ -61,6 +61,7 @@ RIGHTS = [
     ('contenttypes.create', 'contenttypes', 'Create contenttype'),
     ('contenttypes.edit', 'contenttypes', 'Edit contenttype'),
     ('contenttypes.delete', 'contenttypes', 'Delete contenttype'),
+    ('contenttypes.edit_design', 'contenttypes', 'Edit container design (Layout editor)'),
 
     ('designs.page', 'designs', 'View Designs page'),
     ('designs.create', 'designs', 'Create design'),

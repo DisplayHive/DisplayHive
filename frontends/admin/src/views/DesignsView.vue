@@ -4,7 +4,7 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
-import type { Design, ContentContainer, Gradient, GradientStop, DefaultColor } from '../types/models'
+import type { Design, Gradient, GradientStop, DefaultColor } from '../types/models'
 import ColorPalettePicker from '../components/ColorPalettePicker.vue'
 import {
   BACKGROUND_EFFECTS,
@@ -27,9 +27,10 @@ import Panel from 'primevue/panel'
 import Dropdown from 'primevue/dropdown'
 import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
-import ColorPicker from 'primevue/colorpicker'
+import ColorPicker from '../components/ColorPicker.vue'
 import Checkbox from 'primevue/checkbox'
 import MediaPickerDialog from '../components/MediaPickerDialog.vue'
+import { FONT_PROPERTIES, keywordOptions, type FontOption, type FontProperty } from '../utils/containerFontProperties'
 
 import { Codemirror } from 'vue-codemirror'
 import { html as cmHtml } from '@codemirror/lang-html'
@@ -50,14 +51,8 @@ const gradientPanelCollapsed = ref(true)
 const backgroundPanelCollapsed = ref(true)
 const effectPanelCollapsed = ref(true)
 const globalStylesCollapsed = ref(true)
-const perContainerSectionCollapsed = ref(true)
 const customHtmlCssCollapsed = ref(true)
 
-const containerPanelCollapsed = ref<Record<number, boolean>>({})
-const isContainerPanelCollapsed = (id: number) => containerPanelCollapsed.value[id] ?? true
-const toggleContainerPanel = (id: number) => {
-  containerPanelCollapsed.value[id] = !isContainerPanelCollapsed(id)
-}
 const resetPanelCollapseState = () => {
   defaultColorsCollapsed.value = true
   backdropCollapsed.value = true
@@ -65,97 +60,13 @@ const resetPanelCollapseState = () => {
   backgroundPanelCollapsed.value = true
   effectPanelCollapsed.value = true
   globalStylesCollapsed.value = true
-  perContainerSectionCollapsed.value = true
   customHtmlCssCollapsed.value = true
-  containerPanelCollapsed.value = {}
-}
-
-// --- Per-container "Font" style overrides ----------------------------------
-// A generic (property, value) key/value row per container per Design (see
-// DesignContainerStyle on the backend) — starting with this one "Font"
-// group. Blank/"(not set)" means the property is omitted from the generated
-// CSS entirely, not rendered as `prop: ;`.
-
-interface FontOption { label: string; value: string }
-interface FontProperty {
-  key: string
-  label: string
-  /** 'dropdown' (editable Dropdown, default) | 'vh-number' (numeric vh input) | 'color' (ColorPicker) */
-  type?: 'dropdown' | 'vh-number' | 'color'
-  options?: FontOption[]
-}
-
-const NOT_SET: FontOption = { label: '(not set)', value: '' }
-
-const WEB_SAFE_FONTS: FontOption[] = [
-  { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Arial Black', value: '"Arial Black", sans-serif' },
-  { label: 'Verdana', value: 'Verdana, sans-serif' },
-  { label: 'Tahoma', value: 'Tahoma, sans-serif' },
-  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
-  { label: 'Impact', value: 'Impact, sans-serif' },
-  { label: 'Segoe UI', value: '"Segoe UI", sans-serif' },
-  { label: 'Times New Roman', value: '"Times New Roman", serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Garamond', value: 'Garamond, serif' },
-  { label: 'Courier New', value: '"Courier New", monospace' },
-  { label: 'Lucida Console', value: '"Lucida Console", monospace' },
-  { label: 'Monaco', value: 'Monaco, monospace' },
-  { label: 'Brush Script MT', value: '"Brush Script MT", cursive' },
-  { label: 'Comic Sans MS', value: '"Comic Sans MS", cursive' },
-  { label: 'Sans-serif (generic)', value: 'sans-serif' },
-  { label: 'Serif (generic)', value: 'serif' },
-  { label: 'Monospace (generic)', value: 'monospace' },
-  { label: 'Cursive (generic)', value: 'cursive' },
-  { label: 'Fantasy (generic)', value: 'fantasy' },
-  { label: 'System UI (generic)', value: 'system-ui' },
-]
-
-const keywordOptions = (...values: string[]): FontOption[] => values.map((v) => ({ label: v, value: v }))
-
-const FONT_PROPERTIES: FontProperty[] = [
-  { key: 'font-family', label: 'Font Family', options: [NOT_SET, ...WEB_SAFE_FONTS] },
-  { key: 'font-variant', label: 'Font Variant', options: [NOT_SET, ...keywordOptions(
-    'normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps',
-  )] },
-  { key: 'font-weight', label: 'Font Weight', options: [NOT_SET, ...keywordOptions(
-    'normal', 'bold', 'bolder', 'lighter', '100', '200', '300', '400', '500', '600', '700', '800', '900',
-  )] },
-  { key: 'font-stretch', label: 'Font Stretch', options: [NOT_SET, ...keywordOptions(
-    'normal', 'ultra-condensed', 'extra-condensed', 'condensed', 'semi-condensed',
-    'semi-expanded', 'expanded', 'extra-expanded', 'ultra-expanded',
-  )] },
-  { key: 'font-size', label: 'Font Size', type: 'vh-number' },
-  { key: 'line-height', label: 'Line Height', options: [NOT_SET, ...keywordOptions('normal')] },
-  { key: 'font-style', label: 'Font Style', options: [NOT_SET, ...keywordOptions('normal', 'italic', 'oblique')] },
-  { key: 'color', label: 'Color', type: 'color' },
-  // Alignment: text-align always applies (block or flex); the other three
-  // only take effect once `display` is switched to flex/grid — harmless
-  // no-ops otherwise, so they're safe to leave "(not set)" by default.
-  { key: 'text-align', label: 'Text Align', options: [NOT_SET, ...keywordOptions('left', 'center', 'right', 'justify')] },
-  { key: 'display', label: 'Display (for content alignment)', options: [NOT_SET, ...keywordOptions('flex', 'grid', 'block')] },
-  { key: 'justify-content', label: 'Justify Content (horizontal)', options: [NOT_SET, ...keywordOptions(
-    'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly',
-  )] },
-  { key: 'align-items', label: 'Align Items (vertical)', options: [NOT_SET, ...keywordOptions(
-    'flex-start', 'center', 'flex-end', 'stretch', 'baseline',
-  )] },
-]
-
-const containers = ref<ContentContainer[]>([])
-// contentcontainer id -> { property: value }
-const containerStyles = ref<Record<number, Record<string, string>>>({})
-
-const handleContainersList = (data: { data?: ContentContainer[] }) => {
-  containers.value = data?.data || []
 }
 
 // A stored value that no longer matches its property's current input type
 // (e.g. "xx-small" for font-size after it changed from a keyword dropdown to
-// a vh number) can't be shown OR cleared by that control — it would just
-// look blank/unset while actually still being sent back unchanged on every
-// autosave. Discarding it here, once, on load turns "invisible stale value"
-// into a real, visible "not set" the moment the Design is opened.
+// a vh number) can't be shown OR cleared by that control. Discarding it on
+// load turns "invisible stale value" into a visible "not set".
 const isValidForType = (type: FontProperty['type'], value: string): boolean => {
   if (!value) return true
   if (type === 'vh-number') return /^-?\d+(\.\d+)?vh$/.test(value)
@@ -163,79 +74,10 @@ const isValidForType = (type: FontProperty['type'], value: string): boolean => {
   return true
 }
 
-const handleDesignContainerStyles = (data: { design_id?: number; data?: Record<string, unknown> }) => {
-  if (!data || data.design_id !== editForm.value.id) return
-  const loaded: Record<number, Record<string, string>> = {}
-  for (const [idStr, rawStyles] of Object.entries(data.data || {})) {
-    const styles = { ...(rawStyles as Record<string, string>) }
-    for (const p of FONT_PROPERTIES) {
-      const v = styles[p.key]
-      if (v && !isValidForType(p.type, v)) {
-        delete styles[p.key]
-      }
-    }
-    loaded[Number(idStr)] = styles
-  }
-  containerStyles.value = loaded
-}
-
-const getStyleValue = (containerId: number, prop: string): string =>
-  containerStyles.value[containerId]?.[prop] ?? ''
-
-const saveDebounce: Record<number, ReturnType<typeof setTimeout>> = {}
-
-const setStyleValue = (containerId: number, prop: string, value: string | undefined) => {
-  const current = { ...containerStyles.value[containerId] }
-  current[prop] = value || ''
-  containerStyles.value = { ...containerStyles.value, [containerId]: current }
-
-  if (!editForm.value.id) return
-  if (saveDebounce[containerId]) clearTimeout(saveDebounce[containerId])
-  saveDebounce[containerId] = setTimeout(() => {
-    const styles: Record<string, string> = {}
-    for (const p of FONT_PROPERTIES) styles[p.key] = containerStyles.value[containerId]?.[p.key] || ''
-    emit('displayhive:admin:cts:save_design_container_styles', {
-      design_id: editForm.value.id, contentcontainer_id: containerId, styles,
-    })
-  }, 400)
-}
-
-// font-size: stored as a plain CSS value (e.g. "5vh"); the input only ever
-// deals in the numeric vh amount.
-const getVhNumber = (containerId: number, prop: string): number | null => {
-  const raw = getStyleValue(containerId, prop)
-  if (!raw) return null
-  const n = parseFloat(raw)
-  return isNaN(n) ? null : n
-}
-
-const setVhValue = (containerId: number, prop: string, n: number | null | undefined) => {
-  setStyleValue(containerId, prop, n == null ? '' : `${n}vh`)
-}
-
-// color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
-// CSS value needs the leading "#" — unless it's a "@default:<id>" reference
-// (see resolveColorRef below), in which case the ColorPicker just shows
-// that reference's *current* resolved hex.
-const getColorHex = (containerId: number, prop: string): string => {
-  const raw = getStyleValue(containerId, prop)
-  return raw ? resolveColorRef(raw).replace(/^#/, '') : ''
-}
-
-// Manual ColorPicker interaction always stores a literal — this is how a
-// field detaches from a default-color reference it may have held before.
-const setColorHex = (containerId: number, prop: string, hex: string | undefined) => {
-  setStyleValue(containerId, prop, hex ? `#${hex}` : '')
-}
-
-const setColorRef = (containerId: number, prop: string, ref: string) => {
-  setStyleValue(containerId, prop, ref)
-}
-
 // --- Global font styles (applied to every container via `.dh-container`) ---
-// Same (property, value) shape as the per-container ones above, just not
-// keyed by container id. Precedence: these global ones < per-container
-// overrides < the Design's own hand-written CSS (see upd_content.py).
+// A (property, value) pair per Design, not keyed by container. Precedence:
+// these global ones < per-container overrides (Layout editor) < the Design's
+// own hand-written CSS (see upd_content.py).
 const globalStyles = ref<Record<string, string>>({})
 
 const handleDesignGlobalStyles = (data: { design_id?: number; data?: Record<string, string> }) => {
@@ -811,21 +653,16 @@ const handleDesignDetail = (data: { design?: Design }) => {
 onMounted(() => {
   on('displayhive:admin:stc:upd_designs', handleDesignsList)
   on('displayhive:admin:stc:design_detail', handleDesignDetail)
-  on('displayhive:admin:stc:upd_containers', handleContainersList)
-  on('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   on('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
   on('displayhive:admin:stc:upd_gradients', handleGradientsList)
   on('displayhive:admin:stc:design_gradients', handleDesignGradients)
   refreshData()
-  emit('displayhive:admin:cts:get_containers')
   emit('displayhive:admin:cts:get_gradients')
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_designs', handleDesignsList)
   off('displayhive:admin:stc:design_detail', handleDesignDetail)
-  off('displayhive:admin:stc:upd_containers', handleContainersList)
-  off('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   off('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
   off('displayhive:admin:stc:upd_gradients', handleGradientsList)
   off('displayhive:admin:stc:design_gradients', handleDesignGradients)
@@ -845,7 +682,6 @@ const openNewDialog = () => {
     default_colors: [],
     gradient_ids: [],
   }
-  containerStyles.value = {}
   globalStyles.value = {}
   resetPanelCollapseState()
   showEditDialog.value = true
@@ -869,14 +705,12 @@ const openEditDialog = (design: Design) => {
     default_colors: [],
     gradient_ids: [],
   }
-  containerStyles.value = {}
   globalStyles.value = {}
   resetPanelCollapseState()
   try {
     loadingDesign.value = true
     loadingDesignError.value = ''
     emit('displayhive:admin:cts:get_design', { id: design.id })
-    emit('displayhive:admin:cts:get_design_container_styles', { design_id: design.id })
     emit('displayhive:admin:cts:get_design_global_styles', { design_id: design.id })
     emit('displayhive:admin:cts:get_design_gradients', { design_id: design.id })
     if (designLoadTimer) clearTimeout(designLoadTimer)
@@ -1286,7 +1120,7 @@ const deleteDesign = (design: Design) => {
             <template #header>
               <div class="panel-header-clickable" data-tour="designs-global-styles-header" @click="globalStylesCollapsed = !globalStylesCollapsed">
                 <span class="panel-header-title">Global Styles</span>
-                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to a per-container override below, and to anything in the CSS editor below.</small>
+                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to anything in the CSS editor below. Per-container styling is edited in the Layout editor's Container Design card.</small>
               </div>
             </template>
             <div class="font-properties-grid">
@@ -1327,71 +1161,6 @@ const deleteDesign = (design: Design) => {
                 />
               </div>
             </div>
-          </Panel>
-        </div>
-
-        <div v-if="!isNew && containers.length" class="container-styles-section">
-          <Panel v-model:collapsed="perContainerSectionCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" @click="perContainerSectionCollapsed = !perContainerSectionCollapsed">
-                <span class="panel-header-title">Per-Container Styles</span>
-                <small class="panel-header-desc">Style an individual container's overlay by its stable .dh-container-&lt;id&gt; class. Changes save automatically. "(not set)" leaves that CSS property out entirely.</small>
-              </div>
-            </template>
-            <Panel
-              v-for="c in containers"
-              :key="c.id"
-              :collapsed="isContainerPanelCollapsed(c.id)"
-              toggleable
-              class="container-style-panel nested-panel"
-            >
-              <template #header>
-                <div class="panel-header-clickable" @click="toggleContainerPanel(c.id)">
-                  <span class="panel-header-title">{{ c.name }} #{{ c.id }}</span>
-                </div>
-              </template>
-              <details class="font-collapsible">
-                <summary>Font</summary>
-                <div class="font-properties-grid">
-                <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
-                  <label>{{ p.label }}</label>
-                  <InputNumber
-                    v-if="p.type === 'vh-number'"
-                    :model-value="getVhNumber(c.id, p.key)"
-                    :min="0" :max="50" :step="0.1" :max-fraction-digits="2"
-                    suffix=" vh"
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v) => setVhValue(c.id, p.key, v)"
-                  />
-                  <div v-else-if="p.type === 'color'" class="color-field-row">
-                    <ColorPicker
-                      :model-value="getColorHex(c.id, p.key)"
-                      @update:model-value="(v) => setColorHex(c.id, p.key, v)"
-                    />
-                    <ColorPalettePicker :palette="editForm.default_colors" @select="(color) => setColorRef(c.id, p.key, colorRefFor(color.id))" />
-                    <span class="color-field-value">{{ colorDisplayLabel(getStyleValue(c.id, p.key)) }}</span>
-                    <Button
-                      v-if="getColorHex(c.id, p.key)"
-                      icon="pi pi-times" text size="small" title="Clear"
-                      @click="setColorHex(c.id, p.key, '')"
-                    />
-                  </div>
-                  <Dropdown
-                    v-else
-                    :model-value="getStyleValue(c.id, p.key)"
-                    :options="p.options"
-                    optionLabel="label"
-                    optionValue="value"
-                    editable
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v: string | undefined) => setStyleValue(c.id, p.key, v)"
-                  />
-                </div>
-              </div>
-            </details>
-            </Panel>
           </Panel>
         </div>
 
@@ -1685,18 +1454,6 @@ const deleteDesign = (design: Design) => {
   font-weight: 400;
   font-size: 0.78rem;
   color: var(--p-text-muted-color, #777);
-}
-
-.font-collapsible {
-  border: 1px dashed var(--p-content-border-color, #ddd);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-}
-
-.font-collapsible summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
 }
 
 .font-properties-grid {

@@ -20,6 +20,9 @@ import MediaPickerDialog from './MediaPickerDialog.vue'
 import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 import { blankPretalxTableValue, type PretalxTableValue } from '../utils/pretalxTable'
 import IconPickerField from './IconPickerField.vue'
+import ContainerDesignFields from './ContainerDesignFields.vue'
+import { useRightsStore } from '../stores/rights'
+import { ALL_CONTAINER_STYLE_PROPERTIES } from '../utils/containerFontProperties'
 import type { IconPickerValue } from '../utils/iconLibraries'
 import type { DefaultColor } from '../types/models'
 import { getEffectDefinition } from '../utils/backgroundEffects'
@@ -103,6 +106,17 @@ const selectedId = ref<number | null>(null)
 // full explanation and the rest of this mechanism (posFor, flush/discard, etc).
 const draft = reactive<Record<number, { top: number; left: number; width: number; height: number }>>({})
 
+// Staged settings-card edits (see "Staged settings" below); declared this early
+// because the preview watcher reads it live.
+interface ContentDraftEntry { name: string; default_field_handler: string; default_content: string; show_when_empty: boolean }
+const contentDraft = reactive<Record<number, ContentDraftEntry>>({})
+
+// Staged like position/settings edits: every change lands here and is
+// previewed live on the canvas, but nothing is sent until
+// flushPendingPositions() runs (the Layout's own Save). Holds the container's
+// complete property map once touched; absent = no staged change.
+const designDraft = reactive<Record<number, Record<string, string>>>({})
+
 // --- Design preview: the active Design, rendered behind the canvas so
 // containers can be positioned against how the screen will actually look.
 // Same {name, html, css, background_effect} shape/CSS-layering as what
@@ -127,6 +141,9 @@ const designPreview = ref<DesignPreview | null>(null)
 const disableAnimationsInPreview = ref(false)
 const disableBackdropInPreview = ref(false)
 const disableDefaultContentInPreview = ref(false)
+// Hides everything on the canvas that never reaches a screen: container
+// rectangles + handles, snaplines and the grid, leaving only the Design preview.
+const hideHandlerElements = ref(false)
 
 // Each placed container's own fallback content, already rendered through its
 // default_field_handler server-side (see render_container_default /
@@ -203,27 +220,33 @@ const rebuildDesignPreviewSrcdoc = async () => {
   const backdropOverride = disableBackdropInPreview.value
     ? 'body{background-color:transparent!important;background-image:none!important;}'
     : ''
-  const containersHtml = disableDefaultContentInPreview.value
-    ? ''
-    : (
-        await Promise.all(
-          Object.entries(layoutContainerPreviews.value).map(async ([id, c]) => {
-            const html = await resolveIconPlaceholders(c.html)
-            // Use the container's live (possibly still-unsaved) drag/resize
-            // position rather than this preview's own top/left/width/height
-            // — those came from the server as of the last save, so without
-            // this override the preview would stay put while its container
-            // rect moves on the canvas above it.
-            const pos = draft[Number(id)] || c
-            return `<div class="dh-container dh-container-${id}" style="position:absolute;top:${pos.top}vh;left:${pos.left}vw;width:${pos.width}vw;height:${pos.height}vh;">${html}</div>`
-          }),
-        )
-      ).join('')
-  designPreviewSrcdoc.value = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}${backdropOverride}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div>${containersHtml}</body></html>`
+  // Mirrors what screens do: a container is drawn if it has default content
+  // or "Show when empty" is on (including a still-unstaged edit of it), so
+  // its Container Design background/border is visible. "Disable default
+  // content" only hides the inner content, never the box itself.
+  const containersHtml = (
+    await Promise.all(
+      placedContainers.value.filter((container) => {
+        const showEmpty = contentDraft[container.id]?.show_when_empty ?? !!container.show_when_empty
+        return showEmpty || !!layoutContainerPreviews.value[String(container.id)]
+      }).map(async (container) => {
+        const preview = layoutContainerPreviews.value[String(container.id)]
+        const html = preview && !disableDefaultContentInPreview.value
+          ? await resolveIconPlaceholders(preview.html)
+          : ''
+        // Use the container's live (possibly still-unsaved) drag/resize
+        // position rather than the server's last-saved one, so the preview
+        // moves with its rect on the canvas above it.
+        const pos = draft[container.id] || container
+        return `<div class="dh-container dh-container-${container.id}" style="position:absolute;top:${pos.top}vh;left:${pos.left}vw;width:${pos.width}vw;height:${pos.height}vh;">${html}</div>`
+      }),
+    )
+  ).join('')
+  designPreviewSrcdoc.value = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${p.css}${stagedDesignCss()}${backdropOverride}</style></head><body>${effectFragment.value}<div style="position:relative;">${p.html}</div>${containersHtml}</body></html>`
 }
 
 watch(
-  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment, draft],
+  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment, draft, designDraft, contentDraft, () => props.containers, () => props.layout.container_ids],
   rebuildDesignPreviewSrcdoc,
   { deep: true },
 )
@@ -231,6 +254,71 @@ watch(
 const handleDesignPreview = (data: DesignPreview) => {
   designPreview.value = data
 }
+
+// --- Right-hand cards: collapsible ---------------------------------------
+// Local-only UI state (never persisted); all start expanded.
+const collapsedCards = reactive<Record<string, boolean>>({})
+const toggleCard = (key: string) => {
+  collapsedCards[key] = !collapsedCards[key]
+}
+
+// --- Container Design: the active Design's per-container styles ------------------
+// Same DesignContainerStyle rows the Designs page's "Per-Container Styles"
+// panel edits, scoped to the selected container and the active Design. Shown
+// to users with designs.edit or contenttypes.edit_design; the backend
+// handlers enforce the same either-right gate.
+const rightsStore = useRightsStore()
+const canEditContainerDesign = computed(
+  () => rightsStore.can('designs.edit') || rightsStore.can('contenttypes.edit_design'),
+)
+// contentcontainer id -> { property: value }
+const containerDesignStyles = ref<Record<number, Record<string, string>>>({})
+
+const handleContainerDesign = (data: { data?: Record<string, Record<string, string>> }) => {
+  const loaded: Record<number, Record<string, string>> = {}
+  for (const [id, styles] of Object.entries(data?.data || {})) loaded[Number(id)] = { ...styles }
+  containerDesignStyles.value = loaded
+}
+
+const selectedContainerDesignStyles = computed(() =>
+  selectedId.value != null
+    ? designDraft[selectedId.value] ?? containerDesignStyles.value[selectedId.value] ?? {}
+    : {},
+)
+
+const setContainerDesignStyle = (prop: string, value: string) => {
+  const id = selectedId.value
+  if (id == null) return
+  const next = { ...(designDraft[id] ?? containerDesignStyles.value[id]) }
+  if (value) next[prop] = value
+  else delete next[prop]
+  const saved = containerDesignStyles.value[id] ?? {}
+  const same = ALL_CONTAINER_STYLE_PROPERTIES.every((p) => (next[p.key] || '') === (saved[p.key] || ''))
+  if (same) delete designDraft[id]
+  else designDraft[id] = next
+}
+
+// CSS for the staged (unsaved) container designs, appended after the
+// server-rendered design CSS in the preview. Properties cleared relative to
+// the saved value are reset with `unset` since the saved rule is already in
+// the server CSS.
+const resolveStagedColor = (v: string): string => {
+  if (!v.startsWith('@default:')) return v
+  const id = v.slice('@default:'.length)
+  return designPreview.value?.default_colors?.find((c) => c.id === id)?.hex || ''
+}
+const stagedDesignCss = (): string =>
+  Object.entries(designDraft)
+    .map(([id, styles]) => {
+      const saved = containerDesignStyles.value[Number(id)] ?? {}
+      const decls = ALL_CONTAINER_STYLE_PROPERTIES.map((p) => {
+        const v = resolveStagedColor(styles[p.key] || '')
+        if (v) return `${p.key}:${v};`
+        return saved[p.key] ? `${p.key}:unset;` : ''
+      }).join('')
+      return decls ? `.dh-container-${id}{${decls}}` : ''
+    })
+    .join('')
 
 // Snaplines are global (shared across every Layout, not scoped to this one)
 // — loaded once here and kept live via the broadcast every save triggers, so
@@ -241,15 +329,18 @@ const handleLayoutSnaplines = (data: { snaplines?: Snapline[] }) => {
 
 onMounted(() => {
   on('displayhive:admin:stc:design_preview', handleDesignPreview)
+  on('displayhive:admin:stc:container_design', handleContainerDesign)
   on('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
   on('displayhive:admin:stc:layout_default_content_preview', handleLayoutDefaultContentPreview)
   socketEmit('displayhive:admin:cts:get_design_preview')
+  if (canEditContainerDesign.value) socketEmit('displayhive:admin:cts:get_container_design')
   socketEmit('displayhive:admin:cts:get_layout_snaplines')
   fetchLayoutDefaultContentPreview()
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:design_preview', handleDesignPreview)
+  off('displayhive:admin:stc:container_design', handleContainerDesign)
   off('displayhive:admin:stc:layout_snaplines', handleLayoutSnaplines)
   off('displayhive:admin:stc:layout_default_content_preview', handleLayoutDefaultContentPreview)
 })
@@ -331,11 +422,9 @@ const rectStyle = (c: ContentContainer) => {
 // default field handler/content) — edited live in the card, shown live on
 // the canvas (rect label), but likewise only sent to the server when the
 // Layout itself is saved.
-interface ContentDraftEntry { name: string; default_field_handler: string; default_content: string }
-const contentDraft = reactive<Record<number, ContentDraftEntry>>({})
 
 const contentFor = (c: ContentContainer): ContentDraftEntry =>
-  contentDraft[c.id] || { name: c.name, default_field_handler: c.default_field_handler || '', default_content: c.default_content || '' }
+  contentDraft[c.id] || { name: c.name, default_field_handler: c.default_field_handler || '', default_content: c.default_content || '', show_when_empty: !!c.show_when_empty }
 
 // Whether *c* has an unsaved staged move/resize — drives the "reset to
 // default position" button shown on its rect.
@@ -343,7 +432,8 @@ const hasPendingChange = (c: ContentContainer) => draft[c.id] !== undefined
 
 // Whether *c* has any unsaved staged edit at all (position or settings) —
 // drives the "Revert" button in the settings card.
-const hasAnyPendingChange = (c: ContentContainer) => draft[c.id] !== undefined || contentDraft[c.id] !== undefined
+const hasAnyPendingChange = (c: ContentContainer) =>
+  draft[c.id] !== undefined || contentDraft[c.id] !== undefined || designDraft[c.id] !== undefined
 
 // Sends every staged (drag/resize/settings-card) change to the server and
 // clears the local staging areas. Exposed so the parent can call it when the
@@ -352,7 +442,7 @@ const hasAnyPendingChange = (c: ContentContainer) => draft[c.id] !== undefined |
 // dragging) and lets the admin back out — returns false without sending
 // anything if they cancel.
 const flushPendingPositions = async (): Promise<boolean> => {
-  const ids = new Set([...Object.keys(draft), ...Object.keys(contentDraft)].map(Number))
+  const ids = new Set([...Object.keys(draft), ...Object.keys(contentDraft), ...Object.keys(designDraft)].map(Number))
   if (!ids.size) return true
 
   const affectedLines: string[] = []
@@ -383,15 +473,28 @@ const flushPendingPositions = async (): Promise<boolean> => {
   await Promise.all([...ids].map((id) => {
     const pos = draft[id]
     const content = contentDraft[id]
-    return emitWithAck('displayhive:admin:cts:update_container', {
-      id,
-      ...(pos ? { top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height) } : {}),
-      ...(content ? { name: content.name, default_field_handler: content.default_field_handler, default_content: content.default_content } : {}),
-    })
+    const design = designDraft[id]
+    const saves: Promise<unknown>[] = []
+    if (pos || content) {
+      saves.push(emitWithAck('displayhive:admin:cts:update_container', {
+        id,
+        ...(pos ? { top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height) } : {}),
+        ...(content ? { name: content.name, default_field_handler: content.default_field_handler, default_content: content.default_content, show_when_empty: content.show_when_empty } : {}),
+      }))
+    }
+    if (design) {
+      // Every known property is sent so cleared ones are deleted server-side.
+      const styles: Record<string, string> = {}
+      for (const p of ALL_CONTAINER_STYLE_PROPERTIES) styles[p.key] = design[p.key] || ''
+      saves.push(emitWithAck('displayhive:admin:cts:save_container_design', { contentcontainer_id: id, styles }))
+    }
+    return Promise.all(saves)
   }))
   for (const id of ids) {
+    if (designDraft[id]) containerDesignStyles.value = { ...containerDesignStyles.value, [id]: designDraft[id] }
     delete draft[id]
     delete contentDraft[id]
+    delete designDraft[id]
   }
   return true
 }
@@ -404,6 +507,7 @@ const flushPendingPositions = async (): Promise<boolean> => {
 const discardPendingPositions = () => {
   for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
   for (const idStr of Object.keys(contentDraft)) delete contentDraft[Number(idStr)]
+  for (const idStr of Object.keys(designDraft)) delete designDraft[Number(idStr)]
   confirm.close()
 }
 
@@ -651,6 +755,10 @@ let drawStartClientX = 0
 let drawStartClientY = 0
 
 const onCanvasPointerDown = (e: PointerEvent) => {
+  if (hideHandlerElements.value) { // rects are invisible: clicking empty space only deselects, no drawing
+    if (e.target === canvasEl.value) selectedId.value = null
+    return
+  }
   if (e.target !== canvasEl.value) return // ignore clicks that started on a rect
   if (!canvasEl.value) return
   selectedId.value = null
@@ -823,6 +931,7 @@ const containerEditForm = reactive({
   name: '',
   top: 0, left: 0, width: 20, height: 20,
   default_field_handler: '', default_content: '',
+  show_when_empty: false,
 })
 
 // --- 'image' handler: {url, size}, packed as JSON into default_content —
@@ -876,6 +985,7 @@ const seedEditForm = (c: ContentContainer) => {
   containerEditForm.height = p.height
   containerEditForm.default_field_handler = content.default_field_handler
   containerEditForm.default_content = content.default_content
+  containerEditForm.show_when_empty = content.show_when_empty
 }
 
 // Re-seeds the settings card whenever the SELECTION changes (not on every
@@ -905,12 +1015,14 @@ watch(containerEditForm, () => {
   const contentChanged =
     containerEditForm.name !== c.name ||
     containerEditForm.default_field_handler !== (c.default_field_handler || '') ||
-    containerEditForm.default_content !== (c.default_content || '')
+    containerEditForm.default_content !== (c.default_content || '') ||
+    containerEditForm.show_when_empty !== !!c.show_when_empty
   if (contentChanged) {
     contentDraft[id] = {
       name: containerEditForm.name,
       default_field_handler: containerEditForm.default_field_handler,
       default_content: containerEditForm.default_content,
+      show_when_empty: containerEditForm.show_when_empty,
     }
   } else {
     delete contentDraft[id]
@@ -941,6 +1053,8 @@ const revertContainerEdit = () => {
   containerEditForm.height = c.height
   containerEditForm.default_field_handler = c.default_field_handler || ''
   containerEditForm.default_content = c.default_content || ''
+  containerEditForm.show_when_empty = !!c.show_when_empty
+  delete designDraft[c.id]
 }
 
 // Switching the handler in the dropdown re-seeds default_content with a
@@ -1211,6 +1325,7 @@ const toggleSelectedLayoutMembership = () => {
         <div
           ref="canvasEl"
           class="editor-canvas"
+          :class="{ 'handles-hidden': hideHandlerElements }"
           @pointerdown="onCanvasPointerDown"
           @dragover.prevent
           @drop.prevent="onCanvasDrop"
@@ -1280,17 +1395,48 @@ const toggleSelectedLayoutMembership = () => {
         </div>
         <p class="hint">Drag a rectangle to move it, its corner handle to resize, or click-drag empty space to draw a new container.</p>
       </div>
+    <Card v-if="canEditContainerDesign" class="editor-design-card">
+      <template #title>
+        <div class="card-header-title card-header-collapsible" role="button" tabindex="0"
+          :aria-expanded="!collapsedCards.design"
+          @click="toggleCard('design')" @keydown.enter.prevent="toggleCard('design')" @keydown.space.prevent="toggleCard('design')">
+          <i class="pi pi-palette card-header-icon" />
+          <span>Container Design</span>
+          <i class="pi card-header-chevron" :class="collapsedCards.design ? 'pi-chevron-down' : 'pi-chevron-up'" />
+        </div>
+      </template>
+      <template #content>
+        <div v-show="!collapsedCards.design">
+          <div v-if="!selectedContainer" class="empty-state empty-state--compact">
+            <i class="pi pi-palette"></i>
+            <p>Select a container to edit its design.</p>
+          </div>
+          <template v-else>
+            <p class="hint">Font &amp; alignment for #{{ selectedContainer.id }} in the active Design. Previewed live; saved with the layout.</p>
+            <ContainerDesignFields
+              :styles="selectedContainerDesignStyles"
+              :palette="designPreview?.default_colors ?? []"
+              @change="setContainerDesignStyle"
+            />
+          </template>
+        </div>
+      </template>
+    </Card>
     </div>
 
     <div class="editor-right-column">
       <Card class="editor-options-card">
         <template #title>
-          <div class="card-header-title">
+          <div class="card-header-title card-header-collapsible" role="button" tabindex="0"
+            :aria-expanded="!collapsedCards.options"
+            @click="toggleCard('options')" @keydown.enter.prevent="toggleCard('options')" @keydown.space.prevent="toggleCard('options')">
             <i class="pi pi-eye card-header-icon" />
             <span>Preview &amp; Guides</span>
+            <i class="pi card-header-chevron" :class="collapsedCards.options ? 'pi-chevron-down' : 'pi-chevron-up'" />
           </div>
         </template>
         <template #content>
+          <div v-show="!collapsedCards.options">
           <div class="preview-toggles">
             <div class="filter-toggle">
               <label for="disable-animations-preview">Disable animations in Preview</label>
@@ -1303,6 +1449,10 @@ const toggleSelectedLayoutMembership = () => {
             <div class="filter-toggle">
               <label for="disable-default-content-preview">Disable default content in Preview</label>
               <ToggleSwitch id="disable-default-content-preview" v-model="disableDefaultContentInPreview" />
+            </div>
+            <div class="filter-toggle">
+              <label for="hide-handler-elements">Disable Handlerelements</label>
+              <ToggleSwitch id="hide-handler-elements" v-model="hideHandlerElements" />
             </div>
           </div>
 
@@ -1317,17 +1467,22 @@ const toggleSelectedLayoutMembership = () => {
               </Tag>
             </div>
           </div>
+          </div>
         </template>
       </Card>
 
       <Card class="editor-settings-card">
         <template #title>
-          <div class="card-header-title">
+          <div class="card-header-title card-header-collapsible" role="button" tabindex="0"
+            :aria-expanded="!collapsedCards.settings"
+            @click="toggleCard('settings')" @keydown.enter.prevent="toggleCard('settings')" @keydown.space.prevent="toggleCard('settings')">
             <i class="pi pi-sliders-h card-header-icon" />
             <span>Container Settings</span>
+            <i class="pi card-header-chevron" :class="collapsedCards.settings ? 'pi-chevron-down' : 'pi-chevron-up'" />
           </div>
         </template>
         <template #content>
+          <div v-show="!collapsedCards.settings">
           <div v-if="!selectedContainer" class="empty-state empty-state--compact">
             <i class="pi pi-th-large"></i>
             <p>Select a container to edit its settings.</p>
@@ -1356,6 +1511,12 @@ const toggleSelectedLayoutMembership = () => {
           </div>
         </div>
         <p class="hint">Changes here are shown live, but only saved to the server when you save this Layout.</p>
+
+        <div class="filter-toggle">
+          <label for="container-show-when-empty">Show when empty</label>
+          <ToggleSwitch id="container-show-when-empty" v-model="containerEditForm.show_when_empty" />
+        </div>
+        <p class="hint">Off: a container with no content is not shown on screens at all. On: it is, so its Container Design background and border still appear.</p>
 
         <div class="field">
           <label>Default Field Handler</label>
@@ -1561,6 +1722,7 @@ const toggleSelectedLayoutMembership = () => {
           />
         </div>
           </div>
+          </div>
         </template>
       </Card>
     </div>
@@ -1650,8 +1812,20 @@ const toggleSelectedLayoutMembership = () => {
 }
 
 .editor-options-card,
-.editor-settings-card {
+.editor-settings-card,
+.editor-design-card {
   width: 100%;
+}
+
+.card-header-collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-header-chevron {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .editor-main {
@@ -1718,6 +1892,27 @@ const toggleSelectedLayoutMembership = () => {
 .snapline-chip-remove {
   cursor: pointer;
   font-size: 0.7rem;
+}
+
+/* "Disable Handlerelements": show only what ends up on a screen. */
+.editor-canvas.handles-hidden {
+  background: none;
+}
+
+.editor-canvas.handles-hidden .canvas-snapline,
+.editor-canvas.handles-hidden .drawing-rect,
+.editor-canvas.handles-hidden .rect-label,
+.editor-canvas.handles-hidden .rect-toolbar,
+.editor-canvas.handles-hidden .lock-handle,
+.editor-canvas.handles-hidden .resize-handle {
+  display: none;
+}
+
+/* Rectangles stay in place and clickable (select / drag), just invisible. */
+.editor-canvas.handles-hidden .editor-rect,
+.editor-canvas.handles-hidden .editor-rect.selected {
+  background: transparent;
+  border-color: transparent;
 }
 
 .canvas-snapline {

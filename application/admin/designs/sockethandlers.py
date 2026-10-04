@@ -13,7 +13,7 @@ def register_admin_designs_handlers(socketio, app, db):
     application/admin/settings/sockethandlers.py). Containers/layout are
     a separate concern — see application/admin/layouts.
     """
-    from application.admin.designs.helper import emit_designs_update
+    from application.admin.designs.helper import emit_designs_update, upsert_container_styles
     from application.socketio_handlers.auth import require_right
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
@@ -180,88 +180,6 @@ def register_admin_designs_handlers(socketio, app, db):
                 logger.exception('delete_design: failed to reload screens')
 
     # --- Per-container style overrides (scoped key/value store) ----------
-
-    @socketio.on('displayhive:admin:cts:get_design_container_styles')
-    @require_right('designs.page')
-    def get_design_container_styles(message=None):
-        """Emit this Design's stored per-container style overrides.
-
-        Payload shape: {design_id, data: {contentcontainer_id: {property: value}}}
-        """
-        if not message or not isinstance(message, dict):
-            return
-        design_id = message.get('design_id') or message.get('id')
-        if not design_id:
-            return
-        design_id = int(design_id)
-
-        rows = db.session.execute(
-            db.select(DesignContainerStyle).where(DesignContainerStyle.design_id == design_id)
-        ).scalars().all()
-
-        by_container: dict = {}
-        for row in rows:
-            by_container.setdefault(str(row.contentcontainer_id), {})[row.property] = row.value or ''
-
-        socketio.emit(
-            'displayhive:admin:stc:design_container_styles',
-            {'design_id': design_id, 'data': by_container},
-            room=request.sid,
-        )
-
-    @socketio.on('displayhive:admin:cts:save_design_container_styles')
-    @require_right('designs.edit')
-    def save_design_container_styles(data=None):
-        """Upsert every (property, value) pair for one container on one Design.
-
-        Payload: {design_id, contentcontainer_id, styles: {property: value}}.
-        An empty/blank value deletes that property's row (equivalent to the
-        UI's "not set" option) instead of storing a blank string.
-        """
-        if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
-        design_id = data.get('design_id')
-        contentcontainer_id = data.get('contentcontainer_id')
-        styles = data.get('styles')
-        if not design_id or not contentcontainer_id or not isinstance(styles, dict):
-            return {'ok': False, 'error': 'Missing design_id, contentcontainer_id or styles'}
-
-        design = db.session.get(Design, int(design_id))
-        if not design:
-            return {'ok': False, 'error': 'Design not found'}
-
-        design_id = int(design_id)
-        contentcontainer_id = int(contentcontainer_id)
-
-        existing = {
-            row.property: row
-            for row in db.session.execute(
-                db.select(DesignContainerStyle).where(
-                    DesignContainerStyle.design_id == design_id,
-                    DesignContainerStyle.contentcontainer_id == contentcontainer_id,
-                )
-            ).scalars().all()
-        }
-
-        for prop, value in styles.items():
-            value = (value or '').strip()
-            row = existing.get(prop)
-            if not value:
-                if row:
-                    db.session.delete(row)
-                continue
-            if row:
-                row.value = value
-                db.session.add(row)
-            else:
-                db.session.add(DesignContainerStyle(
-                    design_id=design_id, contentcontainer_id=contentcontainer_id,
-                    property=prop, value=value,
-                ))
-
-        db.session.commit()
-        _push_screens_if_active(design)
-        return {'ok': True}
 
     # --- Gradients (reusable library, applied as a Design's body background) ---
 
