@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import type { Layout, ContentContainer } from '../types/models'
@@ -106,6 +107,36 @@ const selectedId = ref<number | null>(null)
 // full explanation and the rest of this mechanism (posFor, flush/discard, etc).
 const draft = reactive<Record<number, { top: number; left: number; width: number; height: number }>>({})
 
+// --- Aspect-ratio variations --------------------------------------------------
+// The Layout is edited one aspect-ratio variant at a time. 16:9 is the base
+// (membership = layout.container_ids, positions = the container's own
+// top/left/width/height); every other ratio is a variation with its own
+// member containers and per-container positions. Everything else about a
+// container (name, content, design, ...) is shared across ratios. `draft`
+// above always holds the staged positions of the ACTIVE ratio; those of the
+// others are parked in draftsByRatio while another ratio is shown.
+type Pos = { top: number; left: number; width: number; height: number }
+const { ratios: designRatios } = useAspectRatios()
+const activeRatio = ref(BASE_ASPECT_RATIO)
+const draftsByRatio: Record<string, Record<number, Pos>> = {}
+
+const layoutRatioList = computed(() => [
+  BASE_ASPECT_RATIO,
+  ...(props.layout.variations || []).map((v) => v.aspect_ratio),
+])
+const idsOfLayoutAt = (layout: Layout, ratio: string): number[] =>
+  ratio === BASE_ASPECT_RATIO
+    ? layout.container_ids || []
+    : (layout.variations || []).find((v) => v.aspect_ratio === ratio)?.container_ids || []
+const activeContainerIds = computed(() => idsOfLayoutAt(props.layout, activeRatio.value))
+
+/** A container's position/size at *ratio*: its own for that ratio, else the base. */
+const geometryOf = (c: ContentContainer, ratio: string = activeRatio.value): Pos => {
+  const own = ratio === BASE_ASPECT_RATIO ? undefined : c.positions?.[ratio]
+  return own ? { top: own.top, left: own.left, width: own.width, height: own.height }
+    : { top: c.top, left: c.left, width: c.width, height: c.height }
+}
+
 // Staged settings-card edits (see "Staged settings" below); declared this early
 // because the preview watcher reads it live.
 interface ContentDraftEntry { name: string; default_field_handler: string; default_content: string; show_when_empty: boolean }
@@ -153,14 +184,15 @@ const hideHandlerElements = ref(false)
 // here instead of an approximated client-side render.
 const layoutContainerPreviews = ref<Record<string, PreviewContainer>>({})
 
-const handleLayoutDefaultContentPreview = (data: { layout_id?: number; containers?: Record<string, PreviewContainer> }) => {
+const handleLayoutDefaultContentPreview = (data: { layout_id?: number; aspect_ratio?: string; containers?: Record<string, PreviewContainer> }) => {
   if (data?.layout_id !== props.layout.id) return
+  if ((data.aspect_ratio || BASE_ASPECT_RATIO) !== activeRatio.value) return
   layoutContainerPreviews.value = data.containers || {}
 }
 
 const fetchLayoutDefaultContentPreview = () => {
   if (!props.layout.id) return
-  socketEmit('displayhive:admin:cts:get_layout_default_content_preview', { layout_id: props.layout.id })
+  socketEmit('displayhive:admin:cts:get_layout_default_content_preview', { layout_id: props.layout.id, aspect_ratio: activeRatio.value })
 }
 
 // Attribute-value escaping for the effect's custom-element tag below — the
@@ -237,7 +269,7 @@ const rebuildDesignPreviewSrcdoc = async () => {
         // Use the container's live (possibly still-unsaved) drag/resize
         // position rather than the server's last-saved one, so the preview
         // moves with its rect on the canvas above it.
-        const pos = draft[container.id] || container
+        const pos = draft[container.id] || geometryOf(container)
         return `<div class="dh-container dh-container-${container.id}" style="position:absolute;top:${pos.top}vh;left:${pos.left}vw;width:${pos.width}vw;height:${pos.height}vh;">${html}</div>`
       }),
     )
@@ -246,7 +278,7 @@ const rebuildDesignPreviewSrcdoc = async () => {
 }
 
 watch(
-  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment, draft, designDraft, contentDraft, () => props.containers, () => props.layout.container_ids],
+  [designPreview, disableBackdropInPreview, disableDefaultContentInPreview, layoutContainerPreviews, effectFragment, draft, designDraft, contentDraft, () => props.containers, activeContainerIds, activeRatio],
   rebuildDesignPreviewSrcdoc,
   { deep: true },
 )
@@ -353,10 +385,10 @@ const round1 = (v: number) => Math.round(v * 10) / 10
 // rects — NOT filtered by containerFilterText, so searching the sidebar
 // never hides anything already placed on the canvas.
 const placedContainers = computed(() =>
-  props.containers.filter((c) => (props.layout.container_ids || []).includes(c.id))
+  props.containers.filter((c) => activeContainerIds.value.includes(c.id))
 )
 const availableContainers = computed(() =>
-  props.containers.filter((c) => !(props.layout.container_ids || []).includes(c.id))
+  props.containers.filter((c) => !activeContainerIds.value.includes(c.id))
 )
 
 // Search/filter for the two sidebar lists only — matches on name (including
@@ -379,6 +411,7 @@ const filteredAvailableContainers = computed(() => availableContainers.value.fil
 watch(
   () => [
     props.layout.id,
+    activeRatio.value,
     ...placedContainers.value.map((c) => `${c.id}:${c.default_field_handler || ''}:${c.default_content || ''}`),
   ],
   fetchLayoutDefaultContentPreview,
@@ -392,7 +425,7 @@ const selectedContainer = computed(() =>
 // container — since containers are shared, standalone entities, moving one
 // or deleting it affects every Layout in this list too.
 const otherLayoutsUsing = (containerId: number): Layout[] =>
-  props.layouts.filter((l) => l.id !== props.layout.id && (l.container_ids || []).includes(containerId))
+  props.layouts.filter((l) => l.id !== props.layout.id && idsOfLayoutAt(l, activeRatio.value).includes(containerId))
 
 const canDeleteContainer = (c: ContentContainer) => !c.in_use && otherLayoutsUsing(c.id).length === 0
 
@@ -406,7 +439,7 @@ const canDeleteContainer = (c: ContentContainer) => !c.in_use && otherLayoutsUsi
 // rebuildDesignPreviewSrcdoc's watcher, defined earlier in the file, also
 // reads it live so a container's default-content preview moves with it.
 
-const posFor = (c: ContentContainer) => draft[c.id] || { top: c.top, left: c.left, width: c.width, height: c.height }
+const posFor = (c: ContentContainer) => draft[c.id] || geometryOf(c)
 
 const rectStyle = (c: ContentContainer) => {
   const p = posFor(c)
@@ -441,8 +474,25 @@ const hasAnyPendingChange = (c: ContentContainer) =>
 // also used by another Layout, warns about that once here (not while
 // dragging) and lets the admin back out — returns false without sending
 // anything if they cancel.
+// Parks the active ratio's staged positions in draftsByRatio (copying, since
+// `draft` itself is cleared/reused when the ratio changes).
+const stashActiveDraft = () => {
+  const copy: Record<number, Pos> = {}
+  for (const [id, p] of Object.entries(draft)) copy[Number(id)] = { ...p }
+  if (Object.keys(copy).length) draftsByRatio[activeRatio.value] = copy
+  else delete draftsByRatio[activeRatio.value]
+}
+const clearAllPositionDrafts = () => {
+  for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
+  for (const r of Object.keys(draftsByRatio)) delete draftsByRatio[r]
+}
+
 const flushPendingPositions = async (): Promise<boolean> => {
-  const ids = new Set([...Object.keys(draft), ...Object.keys(contentDraft), ...Object.keys(designDraft)].map(Number))
+  stashActiveDraft()
+  const ids = new Set([
+    ...Object.values(draftsByRatio).flatMap((d) => Object.keys(d)),
+    ...Object.keys(contentDraft), ...Object.keys(designDraft),
+  ].map(Number))
   if (!ids.size) return true
 
   const affectedLines: string[] = []
@@ -471,16 +521,23 @@ const flushPendingPositions = async (): Promise<boolean> => {
   }
 
   await Promise.all([...ids].map((id) => {
-    const pos = draft[id]
     const content = contentDraft[id]
     const design = designDraft[id]
     const saves: Promise<unknown>[] = []
-    if (pos || content) {
+    const posPayload = (p: Pos) => ({ top: round1(p.top), left: round1(p.left), width: round1(p.width), height: round1(p.height) })
+    // Base position travels with the shared settings; each other ratio's
+    // position is its own call, tagged with that ratio.
+    const baseDraft = draftsByRatio[BASE_ASPECT_RATIO]?.[id]
+    if (baseDraft || content) {
       saves.push(emitWithAck('displayhive:admin:cts:update_container', {
         id,
-        ...(pos ? { top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height) } : {}),
+        ...(baseDraft ? posPayload(baseDraft) : {}),
         ...(content ? { name: content.name, default_field_handler: content.default_field_handler, default_content: content.default_content, show_when_empty: content.show_when_empty } : {}),
       }))
+    }
+    for (const [ratio, drafts] of Object.entries(draftsByRatio)) {
+      if (ratio === BASE_ASPECT_RATIO || !drafts[id]) continue
+      saves.push(emitWithAck('displayhive:admin:cts:update_container', { id, aspect_ratio: ratio, ...posPayload(drafts[id]) }))
     }
     if (design) {
       // Every known property is sent so cleared ones are deleted server-side.
@@ -492,10 +549,10 @@ const flushPendingPositions = async (): Promise<boolean> => {
   }))
   for (const id of ids) {
     if (designDraft[id]) containerDesignStyles.value = { ...containerDesignStyles.value, [id]: designDraft[id] }
-    delete draft[id]
     delete contentDraft[id]
     delete designDraft[id]
   }
+  clearAllPositionDrafts()
   return true
 }
 
@@ -505,7 +562,7 @@ const flushPendingPositions = async (): Promise<boolean> => {
 // affects layout Y" confirmation left open from an unfinished Save, so
 // switching away never leaves that dialog on screen.
 const discardPendingPositions = () => {
-  for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
+  clearAllPositionDrafts()
   for (const idStr of Object.keys(contentDraft)) delete contentDraft[Number(idStr)]
   for (const idStr of Object.keys(designDraft)) delete designDraft[Number(idStr)]
   confirm.close()
@@ -518,10 +575,11 @@ const discardPendingPositions = () => {
 const resetContainerPosition = (c: ContentContainer) => {
   delete draft[c.id]
   if (containerEditForm.id === c.id) {
-    containerEditForm.top = c.top
-    containerEditForm.left = c.left
-    containerEditForm.width = c.width
-    containerEditForm.height = c.height
+    const g = geometryOf(c)
+    containerEditForm.top = g.top
+    containerEditForm.left = g.left
+    containerEditForm.width = g.width
+    containerEditForm.height = g.height
   }
 }
 
@@ -836,18 +894,19 @@ const drawRectStyle = computed(() => {
 
 // --- Assign / unassign existing containers to this Layout -------------------
 const addContainerToLayout = async (containerId: number) => {
-  const ids = props.layout.container_ids || []
+  const ids = activeContainerIds.value
   if (ids.includes(containerId)) return
   await emitWithAck('displayhive:admin:cts:update_layout', {
     id: props.layout.id,
+    aspect_ratio: activeRatio.value,
     container_ids: [...ids, containerId],
   })
 }
 
 const removeFromLayout = async (containerId: number | null) => {
   if (containerId == null) return
-  const ids = (props.layout.container_ids || []).filter((id) => id !== containerId)
-  await emitWithAck('displayhive:admin:cts:update_layout', { id: props.layout.id, container_ids: ids })
+  const ids = activeContainerIds.value.filter((id) => id !== containerId)
+  await emitWithAck('displayhive:admin:cts:update_layout', { id: props.layout.id, aspect_ratio: activeRatio.value, container_ids: ids })
   if (selectedId.value === containerId) selectedId.value = null
 }
 
@@ -1000,6 +1059,90 @@ watch(selectedId, (id) => {
   if (c) seedEditForm(c)
 }, { immediate: true })
 
+// --- Ratio switching / variation management ----------------------------------
+const sameShape = (a: string, b: string) => {
+  const [aw = 1, ah = 1] = a.split(':').map(Number)
+  const [bw = 1, bh = 1] = b.split(':').map(Number)
+  return aw * bh === bw * ah
+}
+
+const selectRatio = (ratio: string) => {
+  if (ratio === activeRatio.value) return
+  // Park this ratio's staged positions and bring back the target's.
+  stashActiveDraft()
+  for (const idStr of Object.keys(draft)) delete draft[Number(idStr)]
+  Object.assign(draft, draftsByRatio[ratio] ?? {})
+  delete draftsByRatio[ratio]
+  activeRatio.value = ratio
+}
+
+// The selection / settings card follow the ratio: a container that isn't part
+// of the newly shown variation is deselected, otherwise its card is re-seeded
+// with that ratio's position.
+watch(activeRatio, () => {
+  const c = selectedContainer.value
+  if (!c) return
+  if (!activeContainerIds.value.includes(c.id)) selectedId.value = null
+  else seedEditForm(c)
+})
+
+// A variation just created (or removed, possibly from another tab): once the
+// layout broadcast arrives, jump to the new one / fall back to the base.
+const pendingRatio = ref<string | null>(null)
+watch(layoutRatioList, (list) => {
+  if (pendingRatio.value && list.includes(pendingRatio.value)) {
+    selectRatio(pendingRatio.value)
+    pendingRatio.value = null
+  } else if (!list.includes(activeRatio.value)) {
+    delete draftsByRatio[activeRatio.value]
+    selectRatio(BASE_ASPECT_RATIO)
+  }
+})
+
+const newVariationRatio = ref<string | null>(null)
+const addableRatios = computed(() =>
+  designRatios.value.filter((r) => !layoutRatioList.value.some((x) => sameShape(x, r))),
+)
+
+const addVariation = async () => {
+  const ratio = newVariationRatio.value
+  if (!ratio) return
+  try {
+    const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:create_layout_variation', {
+      layout_id: props.layout.id, aspect_ratio: ratio,
+    })
+    if (ack?.ok) {
+      pendingRatio.value = ratio
+      newVariationRatio.value = null
+    } else {
+      toast.add({ severity: 'error', summary: 'Could not add variation', detail: ack?.error || 'Unknown error', life: 4000 })
+    }
+  } catch {
+    toast.add({ severity: 'error', summary: 'Could not add variation', detail: 'Could not reach the server.', life: 4000 })
+  }
+}
+
+const confirmDeleteVariation = (ratio: string) => {
+  confirm.require({
+    message: `Remove the ${ratio} variation of this layout? Its container selection is dropped; container positions at ${ratio} are kept.`,
+    header: 'Remove variation',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:delete_layout_variation', {
+        layout_id: props.layout.id, aspect_ratio: ratio,
+      })
+      if (!ack?.ok) toast.add({ severity: 'error', summary: 'Could not remove variation', detail: ack?.error || 'Unknown error', life: 4000 })
+    },
+  })
+}
+
+const canvasStyle = computed(() => {
+  const [w = 16, h = 9] = activeRatio.value.split(':').map(Number)
+  // Keep tall (portrait) ratios from growing past ~75% of the viewport height.
+  return { aspectRatio: cssAspectRatio(activeRatio.value), width: `min(100%, ${((75 * w) / h).toFixed(3)}vh)`, marginInline: 'auto' }
+})
+
 // Every containerEditForm edit is staged live (into draft/contentDraft) as
 // it's made — there's no separate "Save" in the settings card; the whole
 // Layout's staged changes (this plus any drag/resize) are only sent to the
@@ -1028,9 +1171,10 @@ watch(containerEditForm, () => {
     delete contentDraft[id]
   }
 
+  const saved = geometryOf(c)
   const posChanged =
-    containerEditForm.top !== c.top || containerEditForm.left !== c.left ||
-    containerEditForm.width !== c.width || containerEditForm.height !== c.height
+    containerEditForm.top !== saved.top || containerEditForm.left !== saved.left ||
+    containerEditForm.width !== saved.width || containerEditForm.height !== saved.height
   if (posChanged) {
     draft[id] = {
       top: containerEditForm.top, left: containerEditForm.left,
@@ -1046,11 +1190,12 @@ watch(containerEditForm, () => {
 const revertContainerEdit = () => {
   const c = selectedContainer.value
   if (!c) return
+  const g = geometryOf(c)
   containerEditForm.name = c.name
-  containerEditForm.top = c.top
-  containerEditForm.left = c.left
-  containerEditForm.width = c.width
-  containerEditForm.height = c.height
+  containerEditForm.top = g.top
+  containerEditForm.left = g.left
+  containerEditForm.width = g.width
+  containerEditForm.height = g.height
   containerEditForm.default_field_handler = c.default_field_handler || ''
   containerEditForm.default_content = c.default_content || ''
   containerEditForm.show_when_empty = !!c.show_when_empty
@@ -1228,7 +1373,7 @@ const setPretalxTableData = (v: PretalxTableValue) => {
 // from the sidebar (not yet part of this Layout) — the settings card's
 // assign/remove button reflects and toggles whichever state it's currently in.
 const isSelectedPlaced = computed(() =>
-  selectedId.value != null && (props.layout.container_ids || []).includes(selectedId.value)
+  selectedId.value != null && activeContainerIds.value.includes(selectedId.value)
 )
 
 const toggleSelectedLayoutMembership = () => {
@@ -1326,6 +1471,7 @@ const toggleSelectedLayoutMembership = () => {
           ref="canvasEl"
           class="editor-canvas"
           :class="{ 'handles-hidden': hideHandlerElements }"
+          :style="canvasStyle"
           @pointerdown="onCanvasPointerDown"
           @dragover.prevent
           @drop.prevent="onCanvasDrop"
@@ -1425,6 +1571,57 @@ const toggleSelectedLayoutMembership = () => {
     </div>
 
     <div class="editor-right-column">
+      <Card class="editor-ratio-card" data-tour="layout-aspect-ratios">
+        <template #title>
+          <div class="card-header-title card-header-collapsible" role="button" tabindex="0"
+            :aria-expanded="!collapsedCards.ratios"
+            @click="toggleCard('ratios')" @keydown.enter.prevent="toggleCard('ratios')" @keydown.space.prevent="toggleCard('ratios')">
+            <i class="pi pi-arrows-h card-header-icon" />
+            <span>Aspect Ratio Variations</span>
+            <i class="pi card-header-chevron" :class="collapsedCards.ratios ? 'pi-chevron-down' : 'pi-chevron-up'" />
+          </div>
+        </template>
+        <template #content>
+          <div v-show="!collapsedCards.ratios">
+            <div class="ratio-list">
+              <div
+                v-for="r in layoutRatioList"
+                :key="r"
+                class="ratio-row"
+                :class="{ active: r === activeRatio }"
+                role="button"
+                tabindex="0"
+                @click="selectRatio(r)"
+                @keydown.enter.prevent="selectRatio(r)"
+              >
+                <span class="ratio-name">{{ r }}<span v-if="r === BASE_ASPECT_RATIO" class="hint"> (base)</span></span>
+                <Tag :value="`${idsOfLayoutAt(layout, r).length} containers`" severity="secondary" />
+                <Button
+                  v-if="r !== BASE_ASPECT_RATIO"
+                  icon="pi pi-trash" text size="small" severity="danger" title="Remove this variation"
+                  @click.stop="confirmDeleteVariation(r)"
+                />
+              </div>
+            </div>
+            <div class="ratio-add">
+              <Select
+                v-model="newVariationRatio"
+                :options="addableRatios"
+                placeholder="Add variation…"
+                :disabled="!addableRatios.length"
+                class="ratio-add-select"
+              />
+              <Button icon="pi pi-plus" label="Add" size="small" outlined :disabled="!newVariationRatio" @click="addVariation" />
+            </div>
+            <p class="hint">
+              A new variation starts as a copy of 16:9. Add or remove containers per variation; positions are per ratio,
+              everything else about a container is shared.
+              <template v-if="!addableRatios.length">More ratios are added on the Designs page.</template>
+            </p>
+          </div>
+        </template>
+      </Card>
+
       <Card class="editor-options-card">
         <template #title>
           <div class="card-header-title card-header-collapsible" role="button" tabindex="0"
@@ -1811,10 +2008,53 @@ const toggleSelectedLayoutMembership = () => {
   overflow-x: hidden;
 }
 
+.editor-ratio-card,
 .editor-options-card,
 .editor-settings-card,
 .editor-design-card {
   width: 100%;
+}
+
+.ratio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.ratio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--p-content-border-color, #ddd);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ratio-row:hover {
+  background: var(--p-content-hover-background, rgba(128, 128, 128, 0.1));
+}
+
+.ratio-row.active {
+  border-color: var(--p-primary-color, #6366f1);
+  background: var(--p-highlight-background, rgba(99, 102, 241, 0.12));
+}
+
+.ratio-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.ratio-add {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.ratio-add-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .card-header-collapsible {

@@ -29,6 +29,10 @@ export interface Screen {
   name: string
   resolution?: string
   timestr?: string
+  /** "W:H" — which Layout variation this screen is sent (best match); default 16:9. */
+  aspect_ratio?: string
+  /** Clockwise rotation of everything the screen renders, in degrees: 0, 90, 180 or 270 (-90). */
+  rotation?: number
   debug?: boolean
   monitoring_enabled?: boolean
   attached_device?: Device | null
@@ -64,6 +68,8 @@ export interface Design {
   background_effect_settings?: string
   /** JSON-encoded list of {name, hex} — a named color palette scoped to this Design, offered as quick-pick swatches by every other color field in its editor. */
   default_colors?: string
+  /** JSON-encoded list of extra aspect ratios ("W:H") — 16:9 is the implicit base. */
+  aspect_ratios?: string
   is_default?: boolean
 }
 
@@ -113,9 +119,26 @@ export interface Layout {
   id: number
   name: string
   description?: string
+  /** Member containers of the base (16:9) variant. */
   container_ids?: number[]
+  /** Per-aspect-ratio variants beyond the base, each with its own member containers. */
+  variations?: LayoutVariation[]
   /** True if at least one Contenttype is bound to this Layout. */
   in_use?: boolean
+}
+
+/** A Layout at one non-base aspect ratio. */
+export interface LayoutVariation {
+  aspect_ratio: string
+  container_ids: number[]
+}
+
+/** A container's position/size (vh/vw) at one aspect ratio. */
+export interface ContainerPositionData {
+  top: number
+  left: number
+  width: number
+  height: number
 }
 
 /** A standalone content container: a screen-relative position (vh/vw) and size. */
@@ -133,6 +156,8 @@ export interface ContentContainer {
   default_field_handler?: string | null
   /** Shown (via default_field_handler's transform) when no active scene targets this container. */
   default_content?: string | null
+  /** Dedicated positions at non-base aspect ratios, keyed by ratio ("4:3"); missing = falls back to the base top/left/width/height. */
+  positions?: Record<string, ContainerPositionData>
   /** When true, screens show this container (its Container Design background/border) even with no content. */
   show_when_empty?: boolean
   /** True if at least one Contenttype field (TagConfig) renders into it. */

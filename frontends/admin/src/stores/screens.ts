@@ -31,6 +31,8 @@ export const useScreensStore = defineStore('screens', () => {
     old_name: string
     new_name: string
     screengroup_ids: number[]
+    aspect_ratio?: string
+    rotation?: number
   }) => {
     emit('displayhive:screens:cts:rename_screen', payload)
   }

@@ -7,6 +7,8 @@ import urllib.parse
 from html import escape as _html_escape
 from markupsafe import Markup
 
+from application.aspect_ratio import BASE_RATIO
+
 from application.admin.content.pretalx_render import (
     _get_pretalx_data,
     _render_pretalx_table,
@@ -443,7 +445,7 @@ def render_container_default(container, db=None) -> str:
     return render_default_value(container.default_field_handler, container.default_content, db=db)
 
 
-def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None) -> dict:
+def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None, ratio: str = BASE_RATIO) -> dict:
     """Combine already-rendered per-container HTML (keyed by
     contentcontainer_id, e.g. from render_content_fields/parse_content_html)
     with each container's own Layout position, falling back to the
@@ -460,20 +462,22 @@ def combine_layout_containers(layout_containers, rendered_by_container: dict, db
     matching what real screen delivery does in
     application/socketio_handlers/upd_content.py's _build_payload.
 
+    *ratio* picks which aspect-ratio variant's position/size each container
+    is placed at (the caller passes that variant's own member containers).
+
     Returns {contentcontainer_id_str: {top, left, width, height, html}}.
     """
+    from application.admin.layouts.helper import container_geometry
     containers = {}
     for c in (layout_containers or []):
         html = rendered_by_container.get(str(c.id)) or render_container_default(c, db=db)
         if not html and not c.show_when_empty:
             continue
-        containers[str(c.id)] = {
-            'top': c.top, 'left': c.left, 'width': c.width, 'height': c.height, 'html': html or '',
-        }
+        containers[str(c.id)] = {**container_geometry(c, ratio), 'html': html or ''}
     return containers
 
 
-def build_scene_containers(contenttype, content_html: str, db=None) -> dict:
+def build_scene_containers(contenttype, content_html: str, db=None, ratio: str = BASE_RATIO) -> dict:
     """Combine a saved ContentElement's already-rendered per-field HTML
     (its `html` column) with its Contenttype's Layout container positions —
     see combine_layout_containers. Reused by admin previews (Content list,
@@ -488,7 +492,23 @@ def build_scene_containers(contenttype, content_html: str, db=None) -> dict:
         return {}
 
     rendered_by_container = parse_content_html(content_html, contenttype.tagconfigs or [])
-    return combine_layout_containers(contenttype.layout.contentcontainers, rendered_by_container, db=db)
+    from application.admin.layouts.helper import containers_for_ratio
+    return combine_layout_containers(
+        containers_for_ratio(contenttype.layout, ratio), rendered_by_container, db=db, ratio=ratio,
+    )
+
+
+def build_scene_containers_by_ratio(contenttype, content_html: str, db=None) -> dict:
+    """build_scene_containers for every aspect ratio the Contenttype's Layout
+    has a variant for: {ratio: {contentcontainer_id_str: {...}}}."""
+    from application.admin.layouts.helper import layout_ratios
+
+    if not contenttype or not contenttype.layout:
+        return {}
+    return {
+        r: build_scene_containers(contenttype, content_html, db=db, ratio=r)
+        for r in layout_ratios(contenttype.layout)
+    }
 
 
 def rerender_content_element_for_contenttype(db, contenttype_id: int) -> list[int]:

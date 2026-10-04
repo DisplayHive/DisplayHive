@@ -73,3 +73,17 @@ export function getRandomImageManifest(): string | null {
 export function setRandomImageManifest(json: string): void {
   safeSet("randomImageManifest", json);
 }
+
+// ── Screen rotation ──────────────────────────────────────────────────────────
+// Last rotation (0/90/180/270) the server configured for this screen, kept so
+// the stage can be turned on the very first paint after a reload instead of
+// flashing unrotated until the device config arrives.
+
+export function getStoredRotation(): number {
+  const n = parseInt(safeGet("screenRotation") || "0", 10);
+  return n === 90 || n === 180 || n === 270 ? n : 0;
+}
+
+export function setStoredRotation(deg: number): void {
+  safeSet("screenRotation", String(deg));
+}

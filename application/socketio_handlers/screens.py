@@ -93,6 +93,28 @@ def register_screen_handlers(socketio, app, db):
 
         screen.name = new_name
 
+        # Optional: which aspect ratio this screen gets (selects the best
+        # matching Layout variation). Ignored if invalid; only ratios the
+        # active Design offers (or the 16:9 base) are accepted.
+        ratio_changed = False
+        rotation_changed = False
+        if 'rotation' in message:
+            try:
+                rotation = int(message.get('rotation')) % 360
+            except (TypeError, ValueError):
+                rotation = None
+            if rotation in (0, 90, 180, 270):
+                rotation_changed = rotation != (screen.rotation or 0)
+                screen.rotation = rotation
+        if 'aspect_ratio' in message:
+            from application.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list
+            from application.utils.design import get_default_design
+            ratio = normalize_ratio(message.get('aspect_ratio'))
+            design = get_default_design(db)
+            if ratio and (ratio == BASE_RATIO or ratio in parse_ratio_list(getattr(design, 'aspect_ratios', None))):
+                ratio_changed = ratio != screen.aspect_ratio
+                screen.aspect_ratio = ratio
+
         if screengroup_ids:
             groups = db.session.execute(
                 db.select(Screengroup).where(Screengroup.id.in_(screengroup_ids))
@@ -135,5 +157,14 @@ def register_screen_handlers(socketio, app, db):
             send_upd_content(socketio, db, screens=[fresh_screen])
         except Exception:
             logger.exception('rename_screen: failed to push config/content')
+
+        # A new aspect ratio changes which Layout variation the screen renders,
+        # and a new rotation how the whole page is laid out, so reload the
+        # attached devices outright.
+        if ratio_changed or rotation_changed:
+            try:
+                _reload_devices_on_screen(screen)
+            except Exception:
+                logger.exception('rename_screen: failed to reload devices after aspect ratio/rotation change')
 
         logger.info("Screen renamed from '%s' to '%s' with %s screengroups", old_name, new_name, len(screengroup_ids))

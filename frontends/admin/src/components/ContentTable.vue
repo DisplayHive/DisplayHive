@@ -7,6 +7,8 @@ import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
+import { useAspectRatios, bestAspectRatio, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useRightsStore } from '../stores/rights'
 import { useSettingsStore } from '../stores/settings'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
@@ -85,18 +87,34 @@ const expandedRows = ref<Record<string, boolean>>({})
 // template on every render.
 const resolvedSrcdocs = ref<Record<number, string>>({})
 const resolvedSrcdocKeys: Record<number, string> = {}
-watch([expandedRows, () => props.items], async ([expanded, items]) => {
+
+// Which aspect ratio each expanded row previews (default 16:9). The row's
+// containers come per ratio its Layout has a variant for; like a screen of
+// that ratio, the best matching variant is shown.
+const { ratios: previewRatios } = useAspectRatios()
+const rowRatio = ref<Record<number, string>>({})
+const ratioOf = (id: number) => rowRatio.value[id] || BASE_ASPECT_RATIO
+type ContainerMap = Record<string, PreviewContainer>
+const containersFor = (row: ContentElement): ContainerMap => {
+  const byRatio = (row as unknown as { containers_by_ratio?: Record<string, ContainerMap> }).containers_by_ratio
+  const keys = Object.keys(byRatio || {})
+  if (!byRatio || !keys.length) return row.containers as ContainerMap
+  return byRatio[bestAspectRatio(ratioOf(row.id), keys)] ?? (row.containers as ContainerMap)
+}
+
+watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => {
   for (const row of items) {
     if (!expanded[row.id]) continue
-    const key = JSON.stringify([row.design, row.containers])
+    const containers = containersFor(row)
+    const key = JSON.stringify([row.design, containers])
     if (resolvedSrcdocKeys[row.id] === key) continue
     resolvedSrcdocKeys[row.id] = key
     resolvedSrcdocs.value[row.id] = await buildDesignPreviewSrcdoc(
       row.design as DesignPreviewPayload,
-      row.containers as Record<string, PreviewContainer>,
+      containers,
     )
   }
-}, { deep: false })
+}, { deep: true })
 
 </script>
 
@@ -205,7 +223,11 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
       <template #expansion="{ data }">
         <div class="content-expansion">
           <div v-if="data.containers && Object.keys(data.containers).length > 0" class="expansion-preview">
-            <div class="preview-frame-wrapper" :style="{ height: `${settingsStore.contentListPreviewSize}vh` }">
+            <div v-if="previewRatios.length > 1" class="preview-ratio">
+              <label :for="`preview-ratio-${data.id}`">Preview as</label>
+              <Select :id="`preview-ratio-${data.id}`" v-model="rowRatio[data.id]" :options="previewRatios" :placeholder="BASE_ASPECT_RATIO" size="small" />
+            </div>
+            <div class="preview-frame-wrapper" :style="{ height: `${settingsStore.contentListPreviewSize}vh`, aspectRatio: cssAspectRatio(ratioOf(data.id)) }">
               <iframe :srcdoc="resolvedSrcdocs[data.id] || ''" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
             </div>
           </div>
@@ -391,6 +413,19 @@ watch([expandedRows, () => props.items], async ([expanded, items]) => {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.preview-ratio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.preview-ratio label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .preview-frame-wrapper {

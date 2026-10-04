@@ -83,6 +83,8 @@ def _row_screen(s):
         'resolution_height': s.resolution_height,
         'debug': bool(s.debug),
         'monitoring_enabled': bool(s.monitoring_enabled),
+        'aspect_ratio': s.aspect_ratio,
+        'rotation': s.rotation,
     }
 
 
@@ -119,6 +121,7 @@ def _row_design(d):
         'background_opacity': d.background_opacity,
         'background_effect': d.background_effect, 'background_effect_settings': d.background_effect_settings,
         'default_colors': d.default_colors,
+        'aspect_ratios': d.aspect_ratios,
     }
 
 
@@ -241,6 +244,14 @@ def _resolve_export_selection(db, selection):
                 if cid not in selected['contentcontainers']:
                     selected['contentcontainers'].add(cid)
                     changed = True
+        if selected['layouts']:
+            # Aspect-ratio variants: their member containers come along too.
+            from application.models.content import LayoutVariation
+            for v in db.session.execute(db.select(LayoutVariation).where(LayoutVariation.layout_id.in_(selected['layouts']))).scalars():
+                for c in v.contentcontainers:
+                    if c.id not in selected['contentcontainers']:
+                        selected['contentcontainers'].add(c.id)
+                        changed = True
         if selected['contenttypes']:
             for ct_id in list(selected['contenttypes']):
                 ct = by_id['contenttypes'].get(ct_id)
@@ -294,6 +305,21 @@ def export_database(app, db, selection=None):
             for lid, cid in db.session.execute(db.select(sm['layout_container'])).fetchall()
             if lid in selected['layouts'] and cid in selected['contentcontainers']
         ]
+        from application.models.content import LayoutVariation, ContainerPosition
+        layout_variation_rows = [
+            {
+                'layout_id': v.layout_id, 'aspect_ratio': v.aspect_ratio,
+                'container_ids': [c.id for c in v.contentcontainers if c.id in selected['contentcontainers']],
+            }
+            for v in db.session.execute(db.select(LayoutVariation)).scalars()
+            if v.layout_id in selected['layouts']
+        ]
+        container_position_rows = [
+            {'contentcontainer_id': p.contentcontainer_id, 'aspect_ratio': p.aspect_ratio,
+             'top': p.top, 'left': p.left, 'width': p.width, 'height': p.height}
+            for p in db.session.execute(db.select(ContainerPosition)).scalars()
+            if p.contentcontainer_id in selected['contentcontainers']
+        ]
         tagconfigs = [
             {
                 'id': tc.id, 'contenttype_id': tc.contenttype_id, 'contentcontainer_id': tc.contentcontainer_id,
@@ -337,6 +363,8 @@ def export_database(app, db, selection=None):
             'design_global_styles': design_global_styles,
             'layouts': [_row_layout(lo) for lo in rows_of('layouts')],
             'layout_container': layout_container_rows,
+            'layout_variations': layout_variation_rows,
+            'container_positions': container_position_rows,
             'contentcontainers': [_row_container(c) for c in rows_of('contentcontainers')],
             'contenttypes': [_row_contenttype(ct) for ct in rows_of('contenttypes')],
             'tagconfigs': tagconfigs,
@@ -496,6 +524,13 @@ def _resolve_import_selection(data: dict, selection):
                 if r['layout_id'] in selected['layouts'] and r['contentcontainer_id'] not in selected['contentcontainers']:
                     selected['contentcontainers'].add(r['contentcontainer_id'])
                     changed = True
+        if selected['layouts']:
+            for v in data.get('layout_variations', []):
+                if v['layout_id'] in selected['layouts']:
+                    for cid in v.get('container_ids', []):
+                        if cid not in selected['contentcontainers']:
+                            selected['contentcontainers'].add(cid)
+                            changed = True
         if selected['contenttypes']:
             for ct_id in list(selected['contenttypes']):
                 ct = by_id['contenttypes'].get(ct_id)
@@ -570,6 +605,10 @@ def _clear_all_tables(db, models):
      ContentElement, Device, Screen, Screengroup, DesignContainerStyle, DesignGlobalStyle,
      ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media) = models
 
+    from application.models.content import LayoutVariation, ContainerPosition, layout_variation_container
+    db.session.execute(db.delete(layout_variation_container))
+    db.session.execute(db.delete(LayoutVariation))
+    db.session.execute(db.delete(ContainerPosition))
     db.session.execute(db.delete(content_element_screengroup))
     db.session.execute(db.delete(screengroup_screen))
     db.session.execute(db.delete(layout_container))
@@ -661,6 +700,8 @@ def _import_screens(ctx):
         resolution_height=row.get('resolution_height') or 0,
         debug=bool(row.get('debug', False)),
         monitoring_enabled=bool(row.get('monitoring_enabled', True)),
+        aspect_ratio=row.get('aspect_ratio') or '16:9',
+        rotation=row.get('rotation') or 0,
     ))
 
 
@@ -701,6 +742,7 @@ def _import_designs(ctx):
         background_opacity=row.get('background_opacity'), background_effect=row.get('background_effect'),
         background_effect_settings=row.get('background_effect_settings'),
         default_colors=row.get('default_colors'),
+        aspect_ratios=row.get('aspect_ratios'),
     ))
 
     for file_id, local_id in ctx.id_map['designs'].items():
@@ -750,6 +792,46 @@ def _import_layouts(ctx):
                 db.session.execute(sm['layout_container'].insert().values(
                     layout_id=local_id, contentcontainer_id=ctx.id_map['contentcontainers'][lc['contentcontainer_id']],
                 ))
+    db.session.flush()
+    _import_aspect_ratio_variants(ctx)
+
+
+def _import_aspect_ratio_variants(ctx):
+    """Per-ratio container positions, then each Layout's variations."""
+    from application.models import ContentContainer
+    from application.models.content import LayoutVariation, ContainerPosition
+    db = ctx.db
+
+    for file_id, local_id in ctx.id_map['contentcontainers'].items():
+        if ctx.action['contentcontainers'][file_id] == 'overwritten':
+            db.session.execute(db.delete(ContainerPosition).where(ContainerPosition.contentcontainer_id == local_id))
+    for r in ctx.data.get('container_positions', []):
+        local = ctx.id_map['contentcontainers'].get(r['contentcontainer_id'])
+        if local is None or ctx.action['contentcontainers'][r['contentcontainer_id']] == 'skipped':
+            continue
+        db.session.add(ContainerPosition(
+            contentcontainer_id=local, aspect_ratio=r['aspect_ratio'],
+            top=r['top'], left=r['left'], width=r['width'], height=r['height'],
+        ))
+    db.session.flush()
+
+    for file_id, local_id in ctx.id_map['layouts'].items():
+        action = ctx.action['layouts'][file_id]
+        if action == 'skipped':
+            continue
+        if action == 'overwritten':
+            for v in db.session.execute(db.select(LayoutVariation).where(LayoutVariation.layout_id == local_id)).scalars().all():
+                db.session.delete(v)
+            db.session.flush()
+        for v in ctx.data.get('layout_variations', []):
+            if v['layout_id'] != file_id:
+                continue
+            variation = LayoutVariation(layout_id=local_id, aspect_ratio=v['aspect_ratio'])
+            variation.contentcontainers = [
+                db.session.get(ContentContainer, ctx.id_map['contentcontainers'][cid])
+                for cid in v.get('container_ids', []) if cid in ctx.id_map['contentcontainers']
+            ]
+            db.session.add(variation)
     db.session.flush()
 
 

@@ -16,6 +16,12 @@ class Screen(db.Model):
     name: Mapped[str]
     resolution_width: Mapped[int] = mapped_column(Integer, nullable=True, default=0)
     resolution_height: Mapped[int] = mapped_column(Integer, nullable=True, default=0)
+    # "W:H"; selects which Layout variation this screen is sent (best match).
+    aspect_ratio: Mapped[str] = mapped_column(String(16), nullable=False, default='16:9', server_default='16:9')
+    # Clockwise rotation of the whole rendered stage in degrees: 0, 90, 180 or 270
+    # (270 = -90). For panels mounted sideways/upside-down; the stage is laid out
+    # at the screen's aspect ratio, then turned as one piece.
+    rotation: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
     debug: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
     monitoring_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='1')
     # a Screen can belong to multiple Screengroups

@@ -51,6 +51,19 @@ the same instance-wide design and shares the same layouts — there's no
 per-screen override. Multiple devices could point at the same screen, but
 typically it's one device per screen.
 
+Two per-screen settings are in the screen's edit dialog:
+
+- **Aspect Ratio** (default 16:9; the ratios come from the active design) —
+  decides which layout variation the screen is sent: the one closest to this
+  ratio.
+- **Rotation** (None, +90°, -90°, 180°) — turns everything the screen
+  renders as one piece, as if all of it sat on one rotated backdrop, for
+  displays mounted sideways or upside-down. The layout is laid out at the
+  screen's aspect ratio first and then rotated, so for a portrait-mounted
+  16:9 panel you'd pick a 9:16 ratio and rotate ±90°.
+
+Changing either one reloads the screen's devices.
+
 ## Screen groups
 
 Content is never assigned directly to a screen or device — it's assigned to

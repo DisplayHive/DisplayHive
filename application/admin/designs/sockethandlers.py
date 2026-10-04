@@ -17,6 +17,14 @@ def register_admin_designs_handlers(socketio, app, db):
     from application.socketio_handlers.auth import require_right
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
+    def _ratios_json(raw):
+        """Validated JSON list of the extra aspect ratios (base 16:9 excluded),
+        or None when there are none."""
+        import json
+        from application.aspect_ratio import parse_ratio_list
+        ratios = parse_ratio_list(raw)
+        return json.dumps(ratios) if ratios else None
+
     def _emit_designs(room=None):
         """Broadcast the current designs list."""
         emit_designs_update(socketio, app, db, room=room)
@@ -66,6 +74,7 @@ def register_admin_designs_handlers(socketio, app, db):
                 'background_effect': design.background_effect or '',
                 'background_effect_settings': design.background_effect_settings or '',
                 'default_colors': design.default_colors or '',
+                'aspect_ratios': design.aspect_ratios or '',
                 'is_default': bool(getattr(design, 'isDefault', False)),
             }
         }
@@ -91,6 +100,7 @@ def register_admin_designs_handlers(socketio, app, db):
             background_effect=data.get('background_effect') or None,
             background_effect_settings=data.get('background_effect_settings') or None,
             default_colors=data.get('default_colors') or None,
+            aspect_ratios=_ratios_json(data.get('aspect_ratios')),
         )
         db.session.add(design)
         db.session.flush()  # assigns design.id, needed for the global style row below
@@ -139,6 +149,8 @@ def register_admin_designs_handlers(socketio, app, db):
             design.background_effect_settings = data.get('background_effect_settings') or None
         if 'default_colors' in data:
             design.default_colors = data.get('default_colors') or None
+        if 'aspect_ratios' in data:
+            design.aspect_ratios = _ratios_json(data.get('aspect_ratios'))
 
         db.session.add(design)
         db.session.commit()

@@ -85,6 +85,7 @@ const executeCopyLayout = async () => {
       name,
       description: copySource.value.description || '',
       container_ids: copySource.value.container_ids || [],
+      variations: copySource.value.variations || [],
     },
   )
   if (ack?.ok) {

@@ -16,7 +16,9 @@ def register_admin_layouts_handlers(socketio, app, db):
     """
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
     from application.socketio_handlers.auth import require_right, require_any_right
-    from application.models import Layout, ContentContainer, Contenttype, TagConfig
+    from application.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list, same_ratio
+    from application.admin.layouts.helper import all_member_container_ids, container_geometry, containers_for_ratio
+    from application.models import Layout, LayoutVariation, ContainerPosition, ContentContainer, Contenttype, TagConfig
     from application.utils import push_content_list_to_all_screens
 
     def _prune_stale_tagconfigs(layout):
@@ -29,7 +31,8 @@ def register_admin_layouts_handlers(socketio, app, db):
         that container's old content even though it's no longer in the
         Layout — the field is kept, just unlinked from that container.
         """
-        allowed_ids = {c.id for c in layout.contentcontainers}
+        # A container is still "in" the Layout if any aspect-ratio variant has it.
+        allowed_ids = all_member_container_ids(layout)
         contenttype_ids = db.session.execute(
             db.select(Contenttype.id).where(Contenttype.layout_id == layout.id)
         ).scalars().all()
@@ -61,6 +64,81 @@ def register_admin_layouts_handlers(socketio, app, db):
             push_content_list_to_all_screens(socketio, app, db)
         except Exception:
             logger.exception('Failed to push content update to screens')
+
+    def _design_ratios():
+        """Ratios the active Design offers (base first)."""
+        from application.utils.design import get_default_design
+        design = get_default_design(db)
+        return [BASE_RATIO] + parse_ratio_list(getattr(design, 'aspect_ratios', None))
+
+    def _ensure_position(container, ratio):
+        """Give *container* its own position row at *ratio*, copied from its
+        base columns, unless it already has one (positions are per container
+        and ratio, shared by every Layout using the container)."""
+        if any(p.aspect_ratio == ratio for p in container.positions):
+            return
+        g = container_geometry(container, BASE_RATIO)
+        db.session.add(ContainerPosition(contentcontainer_id=container.id, aspect_ratio=ratio, **g))
+        db.session.flush()
+        db.session.refresh(container)
+
+    def _find_variation(layout, ratio):
+        return next((v for v in layout.variations if v.aspect_ratio == ratio), None)
+
+    @socketio.on('displayhive:admin:cts:get_aspect_ratios')
+    @require_any_right('layouts.page', 'screens.page', 'content.page', 'designs.page')
+    def get_aspect_ratios(message=None):
+        socketio.emit('displayhive:admin:stc:aspect_ratios', {'ratios': _design_ratios()}, room=request.sid)
+
+    @socketio.on('displayhive:admin:cts:create_layout_variation')
+    @require_right('layouts.edit')
+    def handle_create_layout_variation(data=None):
+        """Add a variation of a Layout at *aspect_ratio* (must be one of the
+        active Design's ratios). Starts as a copy of the base membership and
+        positions. Payload: {layout_id, aspect_ratio}."""
+        data = data if isinstance(data, dict) else {}
+        layout = db.session.get(Layout, int(data.get('layout_id') or 0))
+        if not layout:
+            return {'ok': False, 'error': 'Layout not found'}
+        ratio = normalize_ratio(data.get('aspect_ratio'))
+        if not ratio or ratio == BASE_RATIO:
+            return {'ok': False, 'error': 'Invalid aspect ratio'}
+        if ratio not in _design_ratios():
+            return {'ok': False, 'error': 'Aspect ratio is not defined in the active Design'}
+        if any(same_ratio(ratio, v.aspect_ratio) for v in layout.variations):
+            return {'ok': False, 'error': 'This variation already exists'}
+        variation = LayoutVariation(layout_id=layout.id, aspect_ratio=ratio)
+        variation.contentcontainers = list(layout.contentcontainers)
+        db.session.add(variation)
+        for c in layout.contentcontainers:
+            _ensure_position(c, ratio)
+        db.session.commit()
+        _emit_layouts()
+        _emit_containers()
+        _push_screens()
+        return {'ok': True}
+
+    @socketio.on('displayhive:admin:cts:delete_layout_variation')
+    @require_right('layouts.edit')
+    def handle_delete_layout_variation(data=None):
+        """Remove a Layout's variation. Payload: {layout_id, aspect_ratio}.
+        Container positions at that ratio are kept (they belong to the
+        containers, which other Layouts may still use)."""
+        data = data if isinstance(data, dict) else {}
+        layout = db.session.get(Layout, int(data.get('layout_id') or 0))
+        if not layout:
+            return {'ok': False, 'error': 'Layout not found'}
+        variation = _find_variation(layout, normalize_ratio(data.get('aspect_ratio')) or '')
+        if not variation:
+            return {'ok': False, 'error': 'Variation not found'}
+        db.session.delete(variation)
+        db.session.flush()
+        db.session.refresh(layout)
+        _prune_stale_tagconfigs(layout)
+        db.session.commit()
+        _emit_layouts()
+        _push_screens()
+        return {'ok': True}
 
     def _resolve_container_ids(container_ids):
         ids = list(dict.fromkeys(
@@ -174,9 +252,11 @@ def register_admin_layouts_handlers(socketio, app, db):
             return
 
         from application.admin.content.helper import combine_layout_containers
-        containers = combine_layout_containers(layout.contentcontainers, {}, db=db)
+        ratio = normalize_ratio((message or {}).get('aspect_ratio')) or BASE_RATIO
+        containers = combine_layout_containers(containers_for_ratio(layout, ratio), {}, db=db, ratio=ratio)
         socketio.emit('displayhive:admin:stc:layout_default_content_preview', {
             'layout_id': layout.id,
+            'aspect_ratio': ratio,
             'containers': containers,
         }, room=request.sid)
 
@@ -262,6 +342,22 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.add(layout)
         db.session.flush()
         layout.contentcontainers = _resolve_container_ids(data.get('container_ids'))
+        # Optional copy of aspect-ratio variations: [{aspect_ratio, container_ids}]
+        allowed_ratios = _design_ratios()
+        for item in (data.get('variations') or []):
+            if not isinstance(item, dict):
+                continue
+            ratio = normalize_ratio(item.get('aspect_ratio'))
+            if not ratio or ratio == BASE_RATIO or ratio not in allowed_ratios:
+                continue
+            if any(same_ratio(ratio, v.aspect_ratio) for v in layout.variations):
+                continue
+            variation = LayoutVariation(layout_id=layout.id, aspect_ratio=ratio)
+            variation.contentcontainers = _resolve_container_ids(item.get('container_ids'))
+            db.session.add(variation)
+            db.session.flush()
+            for c in variation.contentcontainers:
+                _ensure_position(c, ratio)
         db.session.commit()
         _emit_layouts()
         _push_screens()
@@ -283,7 +379,21 @@ def register_admin_layouts_handlers(socketio, app, db):
         layout.description = data.get('description', layout.description)
         container_ids = data.get('container_ids')
         if container_ids is not None:
-            layout.contentcontainers = _resolve_container_ids(container_ids)
+            # Membership of one aspect-ratio variant: the base (default) or,
+            # with `aspect_ratio`, that variation's own container set.
+            ratio = normalize_ratio(data.get('aspect_ratio')) or BASE_RATIO
+            containers = _resolve_container_ids(container_ids)
+            if ratio == BASE_RATIO:
+                layout.contentcontainers = containers
+            else:
+                variation = _find_variation(layout, ratio)
+                if not variation:
+                    return {'ok': False, 'error': 'Variation not found'}
+                variation.contentcontainers = containers
+                for c in containers:
+                    _ensure_position(c, ratio)
+            db.session.flush()
+            db.session.refresh(layout)
             _prune_stale_tagconfigs(layout)
 
         db.session.add(layout)
@@ -367,9 +477,21 @@ def register_admin_layouts_handlers(socketio, app, db):
         for field in ('order',):
             if data.get(field) is not None:
                 setattr(container, field, int(data[field]))
-        for field in position_fields:
-            if data.get(field) is not None:
-                setattr(container, field, float(data[field]))
+        # Position/size belong to one aspect ratio: the base (columns on the
+        # container) or, with `aspect_ratio`, that ratio's own ContainerPosition.
+        # Every other property above/below is shared across ratios.
+        ratio = normalize_ratio(data.get('aspect_ratio')) or BASE_RATIO
+        if ratio == BASE_RATIO:
+            for field in position_fields:
+                if data.get(field) is not None:
+                    setattr(container, field, float(data[field]))
+        elif any(data.get(f) is not None for f in position_fields):
+            _ensure_position(container, ratio)
+            pos = next(p for p in container.positions if p.aspect_ratio == ratio)
+            for field in position_fields:
+                if data.get(field) is not None:
+                    setattr(pos, field, float(data[field]))
+            db.session.add(pos)
         # Explicit keys (rather than "is not None") so clearing either field
         # back to "no default" by sending an empty value actually takes effect.
         if 'default_field_handler' in data:
@@ -389,6 +511,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     @require_right('layouts.delete')
     def handle_delete_container(data=None):
         from application.models import TagConfig, DesignContainerStyle
+        from application.models.content import layout_variation_container
 
         if not data or not isinstance(data, dict):
             return {'ok': False, 'error': 'Invalid payload'}
@@ -405,6 +528,11 @@ def register_admin_layouts_handlers(socketio, app, db):
             return {'ok': False, 'error': f'Container is used by {used_by} field(s)'}
         db.session.execute(
             db.delete(DesignContainerStyle).where(DesignContainerStyle.contentcontainer_id == container.id)
+        )
+        # Variation membership rows aren't covered by a relationship back to
+        # the container, and SQLite doesn't enforce the FK cascade here.
+        db.session.execute(
+            db.delete(layout_variation_container).where(layout_variation_container.c.contentcontainer_id == container.id)
         )
         db.session.delete(container)
         db.session.commit()

@@ -24,7 +24,9 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         emit_contenttypes_update(socketio, app, db, room=room)
 
     def _allowed_container_ids(ct):
-        return {c.id for c in (getattr(ct.layout, 'contentcontainers', None) or [])} if ct.layout else set()
+        # Any aspect-ratio variant of the Layout counts, not just the base.
+        from application.admin.layouts.helper import all_member_container_ids
+        return all_member_container_ids(ct.layout) if ct.layout else set()
 
     def _apply_tagconfigs(ct, tagcfgs):
         """Synchronise TagConfig rows on *ct*: upsert provided entries and delete any no longer present.

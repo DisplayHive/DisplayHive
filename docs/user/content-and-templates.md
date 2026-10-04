@@ -17,9 +17,29 @@ duplicates the current layout (its containers are shared with the original,
 not copied — see below), and **Delete Layout** removes it (blocked if a
 content type is currently bound to it).
 
-The canvas is a (for now) fixed 16:9 area, with every container's position stored as a
+The canvas is a 16:9 area by default, with every container's position stored as a
 percentage of it (top/left/width/height) so layouts scale to any screen
-resolution. The preview also renders the current default design live, so you're positioning containers against the real background rather than a blank grid.
+resolution. Other aspect ratios are handled as **variations** (below). The preview also renders the current default design live, so you're positioning containers against the real background rather than a blank grid.
+
+**Aspect ratio variations:**
+
+16:9 is the base. Extra ratios (4:3, 21:9, 9:16 …) are defined on the
+**Designs** page (*Aspect Ratios*), and each **Screen** gets a ratio in its
+edit dialog (default 16:9). In the layout editor, the **Aspect Ratio
+Variations** card on the right lists the layout's variations; pick one to
+edit it, or add one from the design's ratios (it starts as a copy of 16:9).
+
+- Each variation has its **own set of containers** — add or remove
+  containers per variation without touching the others.
+- A container's **position and size are per aspect ratio**, so a logo can sit
+  differently in 4:3 than in 16:9. Everything else about a container (name,
+  content, design, "show when empty" …) is shared across ratios.
+- A screen is sent the variation **closest to its own ratio** (16:10 gets
+  16:9 if there's no 16:10 variation; 5:4 gets 4:3 …). Content previews have
+  a *Preview as* switch that resolves the same way.
+- The content editor always shows **all** of a content type's fields,
+  whichever variation a field's container belongs to.
+- Removing a variation keeps the container positions stored for that ratio.
 
 **Adding containers:**
 

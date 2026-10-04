@@ -31,6 +31,7 @@ import { setDeviceKey, clearAdoptionToken } from "./storage";
 import { preloadIframesInHtml } from "./preload-iframes.js";
 import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
 import { applyBackgroundEffect } from "./background-effects.js";
+import { adaptCss, adaptHtml, setRotation } from "./rotation.js";
 
 // Track if device is deactivated (prevents hiding overlay on reconnect)
 let _isDeactivated = false;
@@ -289,6 +290,9 @@ export function setupSocketHandlers(socket: any): void {
     applyDebugState(cfg, prev);
     applyScreenName(cfg, prev);
     applyGlowState(cfg, prev);
+    // Normally already applied from storage at startup; the server reloads the
+    // page when it changes, so this only fixes up a stale/missing stored value.
+    setRotation(Number(cfg.rotation) || 0);
     window._lastDeviceConfig = cfg;
   });
 
@@ -359,11 +363,11 @@ export function setupSocketHandlers(socket: any): void {
         );
         if (typeof design.html === "string") {
           const backgroundEl = document.getElementById("design-background");
-          if (backgroundEl) backgroundEl.innerHTML = design.html;
+          if (backgroundEl) backgroundEl.innerHTML = adaptHtml(design.html);
         }
         if (typeof design.css === "string") {
           const styleEl = document.getElementById("design-css");
-          if (styleEl) styleEl.textContent = design.css;
+          if (styleEl) styleEl.textContent = adaptCss(design.css);
         }
         applyBackgroundEffect(design.background_effect || null).catch((err) => {
           log("error", "socket.on(upd_content)", "Failed to apply background effect", err);

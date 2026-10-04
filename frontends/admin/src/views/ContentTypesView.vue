@@ -69,7 +69,12 @@ const layoutOptions = computed(() => layouts.value.map(l => ({ label: l.name, va
 // in display order — each one gets exactly one field slot.
 const containersForLayout = computed(() => {
   const layout = layouts.value.find(l => l.id === editForm.value.layout_id)
-  const ids = new Set(layout?.container_ids || [])
+  // Any aspect-ratio variant counts — a container only present in, say, the
+  // 4:3 variation can still be targeted by a field.
+  const ids = new Set([
+    ...(layout?.container_ids || []),
+    ...(layout?.variations || []).flatMap(v => v.container_ids),
+  ])
   return containers.value
     .filter(c => ids.has(c.id))
     .slice()

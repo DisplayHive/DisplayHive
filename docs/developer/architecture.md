@@ -59,7 +59,13 @@ Defined under `application/models/`:
   handler/content), `Contenttype` (bound to one `Layout`; a reusable field
   schema), `TagConfig` (one field definition on a `Contenttype`, targeting
   one container, with `default_value` and per-sub-setting `option_flags`
-  for locking/hiding), `SystemSetting`,
+  for locking/hiding), `LayoutVariation` (a `Layout` at one non-base aspect
+  ratio: its own member containers) and `ContainerPosition` (a container's
+  position/size at one non-base ratio; 16:9 is the base and lives in
+  `layout_container` / the container's own columns — see
+  `application/aspect_ratio.py`; `Design.aspect_ratios` is the ratio list and
+  `Screen.aspect_ratio` picks the best-matching variation in `upd_content`),
+  `SystemSetting`,
   Telegram alerting models (`AlertSubscription`, `TelegramUser`), `Media`,
   and the Pretalx models (`PretalxApiUrl`, `PretalxApiCache`,
   `PretalxSettings`).

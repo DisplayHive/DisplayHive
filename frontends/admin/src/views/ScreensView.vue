@@ -21,6 +21,8 @@ import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
+import Select from 'primevue/select'
+import { useAspectRatios } from '../composables/useAspectRatios'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -62,7 +64,16 @@ const renamingScreen = ref<Screen | null>(null)
 const renameForm = ref({
   name: '',
   screengroup_ids: [] as number[],
+  aspect_ratio: '16:9',
+  rotation: 0,
 })
+const { ratios: aspectRatios } = useAspectRatios()
+const ROTATION_OPTIONS = [
+  { label: 'None (0°)', value: 0 },
+  { label: '+90° (clockwise)', value: 90 },
+  { label: '-90° (counter-clockwise)', value: 270 },
+  { label: '180°', value: 180 },
+]
 
 const windowedCount = computed(() => screensStore.screens.filter(isWindowed).length)
 const fullscreenCount = computed(() => screensStore.screens.filter(isFullscreen).length)
@@ -134,6 +145,8 @@ const openRenameDialog = (screen: Screen) => {
   renameForm.value = {
     name: screen.name,
     screengroup_ids: [],
+    aspect_ratio: screen.aspect_ratio || '16:9',
+    rotation: screen.rotation || 0,
   }
   emit('displayhive:screens:cts:get_screen_screengroups', { screen_id: screen.id })
   showRenameDialog.value = true
@@ -148,6 +161,8 @@ const saveRename = async (keepOpen = false) => {
       old_name: renamingScreen.value.name,
       new_name: renameForm.value.name,
       screengroup_ids: renameForm.value.screengroup_ids,
+      aspect_ratio: renameForm.value.aspect_ratio,
+      rotation: renameForm.value.rotation,
     })
     toast.add({ severity: 'success', summary: 'Screen saved', detail: renameForm.value.name, life: 3000 })
     if (!keepOpen) showRenameDialog.value = false
@@ -362,6 +377,7 @@ const resetScreenSize = (screen: Screen) => {
             </template>
           </Column>
           <Column field="resolution" header="Resolution" sortable />
+          <Column field="aspect_ratio" header="Ratio" sortable />
           <Column header="Status" style="width: 150px">
             <template #body="{ data }">
               <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
@@ -475,6 +491,28 @@ const resetScreenSize = (screen: Screen) => {
         <div class="field">
           <label for="rename-name">Screen Name</label>
           <InputText id="rename-name" v-model="renameForm.name" class="w-full" />
+        </div>
+        <div class="field">
+          <label for="rename-aspect-ratio">Aspect Ratio</label>
+          <Select
+            id="rename-aspect-ratio"
+            v-model="renameForm.aspect_ratio"
+            :options="aspectRatios.includes(renameForm.aspect_ratio) ? aspectRatios : [...aspectRatios, renameForm.aspect_ratio]"
+            class="w-full"
+          />
+          <small class="hint">The Layout variation closest to this ratio is sent to the screen. Ratios are added on the Designs page.</small>
+        </div>
+        <div class="field">
+          <label for="rename-rotation">Rotation</label>
+          <Select
+            id="rename-rotation"
+            v-model="renameForm.rotation"
+            :options="ROTATION_OPTIONS"
+            optionLabel="label"
+            optionValue="value"
+            class="w-full"
+          />
+          <small class="hint">Turns everything the screen shows, as one piece, for displays mounted sideways or upside-down. The layout is laid out at the aspect ratio above first, then rotated. The screen reloads when this changes.</small>
         </div>
         <div class="field" data-tour="rename-screengroups-field">
           <label>Screengroups</label>

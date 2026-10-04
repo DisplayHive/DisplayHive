@@ -17,6 +17,8 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
 import Popover from 'primevue/popover'
+import Select from 'primevue/select'
+import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 import type { OptionFlags } from '../utils/optionFlags'
@@ -175,7 +177,11 @@ const affectsMultipleScreens = computed(() => editMode.value && affectedScreenNa
 // it doesn't fire a server round trip on every keystroke. srcdoc assembly
 // itself lives in utils/designPreview.ts, shared with ContentTable.vue's
 // row-expansion preview for already-saved content. ---
-interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer> }
+interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer>; aspect_ratio?: string }
+// Which aspect ratio the preview shows (resolved server-side to the Layout's
+// best matching variation, like a screen of that ratio).
+const { ratios: previewRatios } = useAspectRatios()
+const previewRatio = ref(BASE_ASPECT_RATIO)
 const previewData = ref<PreviewData | null>(null)
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -194,9 +200,12 @@ const requestPreview = () => {
   }
   socketEmit('displayhive:admin:cts:preview_content_element', {
     contenttype_id: createForm.value.contenttype_id,
+    aspect_ratio: previewRatio.value,
     ...createForm.value.fields,
   })
 }
+
+watch(previewRatio, requestPreview)
 
 watch(
   () => [createForm.value.contenttype_id, createForm.value.fields],
@@ -981,7 +990,11 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     </div>
 
     <div class="content-edit-preview" :style="{ flex: `0 0 ${settingsStore.contentEditPreviewSize}%` }">
-      <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
+      <div v-if="previewRatios.length > 1" class="content-edit-preview-ratio">
+        <label for="preview-ratio">Preview as</label>
+        <Select id="preview-ratio" v-model="previewRatio" :options="previewRatios" size="small" />
+      </div>
+      <div v-if="!previewSrcdoc" class="content-edit-preview-empty" :style="{ aspectRatio: cssAspectRatio(previewRatio) }">
         <i class="pi pi-eye"></i>
         <p>Preview will appear here once a content type is selected.</p>
       </div>
@@ -990,6 +1003,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         :srcdoc="previewSrcdoc"
         sandbox="allow-scripts"
         class="content-edit-preview-iframe"
+        :style="{ aspectRatio: cssAspectRatio(previewRatio) }"
         title="Content preview"
       ></iframe>
     </div>
@@ -1033,6 +1047,19 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
 .content-edit-preview h4 {
   margin-top: 0;
+}
+
+.content-edit-preview-ratio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.content-edit-preview-ratio label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .content-edit-preview-iframe {
