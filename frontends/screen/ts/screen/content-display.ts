@@ -116,13 +116,12 @@ export function advanceScene(): void {
     return;
   }
 
+  // When the only active scene is the one already showing, its turn still
+  // comes around again: re-show it rather than skipping, so things that must
+  // be fresh on every display (a random-image pick, `update_after_show` live
+  // data) refresh at the end of its screen time. renderScene() only touches
+  // the DOM for whatever actually changed, so unchanged content doesn't flicker.
   const next = scenes[nextIdx];
-  if (next.id === currentSceneId) {
-    log("debug", "advanceScene", `Next scene (${next.id}) is already displayed — skipping re-render`);
-    scheduleAdvance();
-    return;
-  }
-
   displayScene(next.id);
   scheduleAdvance();
 }
