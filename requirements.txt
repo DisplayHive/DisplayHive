@@ -1,6 +1,9 @@
 flask
 flask-socketio
 flask-sqlalchemy
+# Stay on the 2.0 line: 2.1 makes psycopg 3 the default driver for plain
+# postgresql:// URLs, but this project ships psycopg2 (see application/db_url.py).
+sqlalchemy>=2.0,<2.1
 flask-cors
 alembic
 pillow

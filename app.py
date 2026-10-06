@@ -2,6 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 
 from application import media_renditions
+from application.db_url import normalize_database_url
 import os
 import json
 import logging
@@ -41,7 +42,7 @@ app = Flask(__name__,
 # TEST_DB_PATH lets each Playwright worker point at its own isolated SQLite file.
 _database_url = os.environ.get('DATABASE_URL')
 if _database_url:
-    app.config["SQLALCHEMY_DATABASE_URI"] = _database_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_url(_database_url)
 else:
     db_path = os.environ.get('TEST_DB_PATH') or os.path.join(app.root_path, 'project.db')
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
