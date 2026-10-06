@@ -10,6 +10,7 @@
 import type { Scene } from "./types.js";
 import { renderScene, clearAllContainers, getSocketEmitter } from "./container-manager.js";
 import { log } from "./logger.js";
+import { setIndicatorSuppressed, startIndicator, stopIndicator } from "./indicator.js";
 
 let scenes: Scene[] = [];
 let currentSceneId: number | null = null;
@@ -32,6 +33,11 @@ function isSceneActive(scene: Scene): boolean {
     if (!isNaN(end) && now >= end) return false;
   }
   return true;
+}
+
+/** The indicator bar only makes sense when the rotation actually has somewhere to go. */
+function syncIndicatorVisibility(): void {
+  setIndicatorSuppressed(scenes.filter(isSceneActive).length <= 1);
 }
 
 function clearAdvanceTimer(): void {
@@ -76,6 +82,8 @@ export function displayScene(sceneId: number): void {
   renderScene(scene);
   currentSceneId = sceneId;
   startTime = Date.now();
+  syncIndicatorVisibility();
+  startIndicator(scene.duration);
   pushDebugPlaylist();
 
   if (scene.update_after_show) {
@@ -182,6 +190,7 @@ export function patchCurrentScene(sceneId: number, containerHtml: Record<string,
  */
 export function startSceneRotation(newScenes: Scene[]): void {
   scenes = newScenes;
+  syncIndicatorVisibility();
 
   if (scenes.length === 0) {
     clearAdvanceTimer();
@@ -189,6 +198,7 @@ export function startSceneRotation(newScenes: Scene[]): void {
     log("info", "startSceneRotation", "No scenes to show");
     currentSceneId = null;
     clearAllContainers();
+    stopIndicator();
     return;
   }
 

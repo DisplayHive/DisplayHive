@@ -91,6 +91,9 @@
    <!-- Scene containers: absolutely-positioned (vh/vw) overlay divs created
         dynamically per the current scene — see container-manager.ts. -->
    <div id="scene-containers"></div>
+   <!-- Progress indicator: a bar along the bottom that fills over the time the
+        current scene is shown — configured per Design, see indicator.ts. -->
+   <div id="scene-indicator" hidden><div id="scene-indicator-bar"></div></div>
 </div>
 
 {%- if not hide_powered_by %}

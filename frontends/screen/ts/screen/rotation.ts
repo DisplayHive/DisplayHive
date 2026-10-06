@@ -61,6 +61,11 @@ export function adaptHtml(html: string): string {
   return swapViewportUnits(html);
 }
 
+/** The unit for lengths measured along the stage's height: `vh`, or `vw` for quarter turns. */
+export function stageHeightUnit(): "vh" | "vw" {
+  return isQuarterTurn() ? "vw" : "vh";
+}
+
 /** A container's position as CSS lengths, axis-swapped for quarter turns. */
 export function containerGeometry(c: { top: number; left: number; width: number; height: number }) {
   if (isQuarterTurn()) {

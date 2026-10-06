@@ -256,6 +256,48 @@ def upsert_container_styles(db, design_id: int, contentcontainer_id: int, styles
             ))
 
 
+INDICATOR_DEFAULT_COLOR = '#ffffff'
+INDICATOR_DEFAULT_HEIGHT = 0.8   # vh
+INDICATOR_MAX_HEIGHT = 10.0      # vh
+_INDICATOR_COLOR_RE = re.compile(r'^(#[0-9a-fA-F]{3,8}|@default:[\w-]+|[a-zA-Z]{3,20})$')
+
+
+def clean_indicator_color(value) -> Optional[str]:
+    """A valid indicator colour (hex, named colour or "@default:<id>" palette
+    reference) or None — nothing else is ever stored or sent to screens."""
+    value = (value or '').strip() if isinstance(value, str) else ''
+    return value if value and _INDICATOR_COLOR_RE.match(value) else None
+
+
+def clean_indicator_height(value) -> Optional[float]:
+    """Indicator height in vh, clamped to 0.1…10; None if not a number."""
+    try:
+        h = float(value)
+    except (TypeError, ValueError):
+        return None
+    if h != h:  # NaN
+        return None
+    return round(min(max(h, 0.1), INDICATOR_MAX_HEIGHT), 2)
+
+
+def clean_indicator_direction(value) -> Optional[str]:
+    return value if value in ('ltr', 'rtl') else None
+
+
+def indicator_payload(design) -> dict:
+    """The progress-indicator config sent to screens: {enabled, color (resolved
+    to a literal), height (vh), direction}. Disabled when there is no design."""
+    if design is None:
+        return {'enabled': False, 'color': INDICATOR_DEFAULT_COLOR, 'height': INDICATOR_DEFAULT_HEIGHT, 'direction': 'ltr'}
+    color = resolve_default_color(design, clean_indicator_color(getattr(design, 'indicator_color', None)) or '')
+    return {
+        'enabled': bool(getattr(design, 'indicator_enabled', False)),
+        'color': clean_indicator_color(color) or INDICATOR_DEFAULT_COLOR,
+        'height': clean_indicator_height(getattr(design, 'indicator_height', None)) or INDICATOR_DEFAULT_HEIGHT,
+        'direction': clean_indicator_direction(getattr(design, 'indicator_direction', None)) or 'ltr',
+    }
+
+
 def build_design_payload(db) -> dict:
     """Assemble the same `{name, html, css, background_effect}` shape pushed
     to screens as `upd_content`'s `design` field — the currently active/
@@ -301,6 +343,8 @@ def build_design_payload(db) -> dict:
         # but the admin's icon-color picker offers it as quick-pick swatches
         # and needs to resolve its own "@default:<id>" refs for the preview.
         'default_colors': _design_default_colors(design) if design is not None else [],
+        # Progress bar along the bottom of the screen (see frontends/screen indicator.ts)
+        'indicator': indicator_payload(design),
     }
 
     # Animated canvas background effect: not representable as CSS (see

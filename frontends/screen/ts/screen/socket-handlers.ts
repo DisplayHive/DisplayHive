@@ -33,6 +33,7 @@ import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
 import { applyBackgroundEffect } from "./background-effects.js";
 import { adaptCss, adaptHtml, setRotation } from "./rotation.js";
 import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
+import { applyIndicatorConfig } from "./indicator.js";
 
 // Track if device is deactivated (prevents hiding overlay on reconnect)
 let _isDeactivated = false;
@@ -380,6 +381,7 @@ export function setupSocketHandlers(socket: any): void {
             });
           }
         }
+        applyIndicatorConfig(design.indicator);
         applyBackgroundEffect(design.background_effect || null).catch((err) => {
           log("error", "socket.on(upd_content)", "Failed to apply background effect", err);
         });

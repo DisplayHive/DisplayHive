@@ -95,6 +95,13 @@ class Design(db.Model):
     # JSON list of extra aspect ratios ("W:H") offered for Screens and Layout
     # variations; 16:9 is the always-available base and is not listed here.
     aspect_ratios: Mapped[str] = mapped_column(Text, nullable=True)
+    # Progress indicator: a thin bar along the bottom of the screen that fills
+    # over the time the current content is shown. Colour is a literal or an
+    # "@default:<id>" palette reference; height in vh; direction 'ltr'|'rtl'.
+    indicator_enabled: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False, server_default=db.false())
+    indicator_color: Mapped[str] = mapped_column(String(64), nullable=True)
+    indicator_height: Mapped[float] = mapped_column(Float, nullable=True)
+    indicator_direction: Mapped[str] = mapped_column(String(8), nullable=True)
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.

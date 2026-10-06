@@ -13,7 +13,10 @@ def register_admin_designs_handlers(socketio, app, db):
     application/admin/settings/sockethandlers.py). Containers/layout are
     a separate concern — see application/admin/layouts.
     """
-    from application.admin.designs.helper import emit_designs_update, upsert_container_styles
+    from application.admin.designs.helper import (
+        emit_designs_update, upsert_container_styles,
+        clean_indicator_color, clean_indicator_height, clean_indicator_direction,
+    )
     from application.socketio_handlers.auth import require_right
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
@@ -75,6 +78,10 @@ def register_admin_designs_handlers(socketio, app, db):
                 'background_effect_settings': design.background_effect_settings or '',
                 'default_colors': design.default_colors or '',
                 'aspect_ratios': design.aspect_ratios or '',
+                'indicator_enabled': bool(design.indicator_enabled),
+                'indicator_color': design.indicator_color or '',
+                'indicator_height': design.indicator_height,
+                'indicator_direction': design.indicator_direction or 'ltr',
                 'is_default': bool(getattr(design, 'isDefault', False)),
             }
         }
@@ -101,6 +108,10 @@ def register_admin_designs_handlers(socketio, app, db):
             background_effect_settings=data.get('background_effect_settings') or None,
             default_colors=data.get('default_colors') or None,
             aspect_ratios=_ratios_json(data.get('aspect_ratios')),
+            indicator_enabled=bool(data.get('indicator_enabled')),
+            indicator_color=clean_indicator_color(data.get('indicator_color')),
+            indicator_height=clean_indicator_height(data.get('indicator_height')),
+            indicator_direction=clean_indicator_direction(data.get('indicator_direction')),
         )
         db.session.add(design)
         db.session.flush()  # assigns design.id, needed for the global style row below
@@ -151,6 +162,14 @@ def register_admin_designs_handlers(socketio, app, db):
             design.default_colors = data.get('default_colors') or None
         if 'aspect_ratios' in data:
             design.aspect_ratios = _ratios_json(data.get('aspect_ratios'))
+        if 'indicator_enabled' in data:
+            design.indicator_enabled = bool(data.get('indicator_enabled'))
+        if 'indicator_color' in data:
+            design.indicator_color = clean_indicator_color(data.get('indicator_color'))
+        if 'indicator_height' in data:
+            design.indicator_height = clean_indicator_height(data.get('indicator_height'))
+        if 'indicator_direction' in data:
+            design.indicator_direction = clean_indicator_direction(data.get('indicator_direction'))
 
         db.session.add(design)
         db.session.commit()

@@ -225,6 +225,33 @@ body {
     inset: 0;
 }
 
+/* Progress indicator along the bottom of the stage. Height/colour/direction are
+   set inline by indicator.ts; the bar fills via the keyframes below. */
+#scene-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#scene-indicator[hidden] {
+    display: none;
+}
+
+#scene-indicator-bar {
+    width: 100%;
+    height: 100%;
+    transform: scaleX(0);
+}
+
+@keyframes dh-indicator-fill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
 /* ── Persistent powered-by badge — bottom-right corner during normal playback.
    Only rendered when the "hide powered by" setting is off (see index.html). ── */
 #powered-by-badge {

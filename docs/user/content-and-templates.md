@@ -106,13 +106,20 @@ panels, layered in this order (later panels win over earlier ones):
    fields, waves, etc.), picked from a dropdown of effect types with
    optional presets and per-effect parameters (numbers, colors, color
    arrays), with a live inline preview while you tune it.
-4. **Global Styles** — font and layout properties (family from a websafe
+4. **Indicator** — an optional thin bar along the bottom of the screen that
+   fills over the time the current content is shown, then starts again with
+   the next one. Choose whether it is shown, its **color** (including the
+   design's default colors), its **height** (in % of the screen height) and
+   its **direction** (left to right or right to left). It turns with the
+   screen if the screen is rotated, and saving the active design reloads the
+   screens so the change shows up.
+5. **Global Styles** — font and layout properties (family from a websafe
    list, variant, weight, stretch, size in vh, line-height, style, color,
    text-align, display, justify-content, align-items) applied to every
    container by default. Styling for a single container (font, background,
    border, padding …) is done in the Layout editor's **Container Design**
    card instead.
-5. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
+6. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
    structured options above don't cover; it always renders last and wins
    over every other panel.
 

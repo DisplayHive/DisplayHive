@@ -70,6 +70,11 @@ export interface Design {
   default_colors?: string
   /** JSON-encoded list of extra aspect ratios ("W:H") — 16:9 is the implicit base. */
   aspect_ratios?: string
+  /** Progress indicator along the bottom of the screen (fills over a scene's duration). */
+  indicator_enabled?: boolean
+  indicator_color?: string
+  indicator_height?: number | null
+  indicator_direction?: 'ltr' | 'rtl'
   is_default?: boolean
 }
 

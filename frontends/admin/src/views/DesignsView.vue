@@ -48,6 +48,7 @@ const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
 // content make the whole header row clickable instead.
 const defaultColorsCollapsed = ref(true)
 const aspectRatiosCollapsed = ref(true)
+const indicatorCollapsed = ref(true)
 const backdropCollapsed = ref(true)
 const gradientPanelCollapsed = ref(true)
 const backgroundPanelCollapsed = ref(true)
@@ -58,6 +59,7 @@ const customHtmlCssCollapsed = ref(true)
 const resetPanelCollapseState = () => {
   defaultColorsCollapsed.value = true
   aspectRatiosCollapsed.value = true
+  indicatorCollapsed.value = true
   backdropCollapsed.value = true
   gradientPanelCollapsed.value = true
   backgroundPanelCollapsed.value = true
@@ -395,6 +397,11 @@ const editForm = ref({
   default_colors: [] as DefaultColor[],
   /** Extra aspect ratios ("W:H") offered for Screens and Layout variations; 16:9 is the implicit base. */
   aspect_ratios: [] as string[],
+  /** Progress indicator along the bottom of the screen (fills over a scene's duration). */
+  indicator_enabled: false as boolean,
+  indicator_color: '' as string,
+  indicator_height: 0.8 as number,
+  indicator_direction: 'ltr' as 'ltr' | 'rtl',
   gradient_ids: [] as number[],
 })
 
@@ -596,6 +603,17 @@ const setBackdropColorRef = (ref: string) => {
   editForm.value.background_color = ref
 }
 
+// Progress indicator colour: same literal-or-"@default:<id>" convention as the
+// Backdrop colour above.
+const INDICATOR_DIRECTIONS = [
+  { label: 'Left to right', value: 'ltr' },
+  { label: 'Right to left', value: 'rtl' },
+]
+const getIndicatorColorHex = (): string => resolveColorRef(editForm.value.indicator_color).replace(/^#/, '')
+const setIndicatorColorHex = (hex: string | undefined) => {
+  editForm.value.indicator_color = hex ? `#${hex}` : ''
+}
+
 const showBackgroundImagePicker = ref(false)
 const setBackgroundImage = (url: string) => {
   editForm.value.background_image_url = url
@@ -673,6 +691,10 @@ const handleDesignDetail = (data: { design?: Design }) => {
       } catch {
         editForm.value.aspect_ratios = []
       }
+      editForm.value.indicator_enabled = !!design.indicator_enabled
+      editForm.value.indicator_color = design.indicator_color || ''
+      editForm.value.indicator_height = design.indicator_height ?? 0.8
+      editForm.value.indicator_direction = design.indicator_direction === 'rtl' ? 'rtl' : 'ltr'
       loadingDesign.value = false
       loadingDesignError.value = ''
       if (designLoadTimer) {
@@ -716,6 +738,10 @@ const openNewDialog = () => {
     background_effect: '', background_effect_settings: {},
     default_colors: [],
     aspect_ratios: [],
+    indicator_enabled: false,
+    indicator_color: '',
+    indicator_height: 0.8,
+    indicator_direction: 'ltr',
     gradient_ids: [],
   }
   globalStyles.value = {}
@@ -740,6 +766,10 @@ const openEditDialog = (design: Design) => {
     background_effect_settings: {},
     default_colors: [],
     aspect_ratios: [],
+    indicator_enabled: false,
+    indicator_color: '',
+    indicator_height: 0.8,
+    indicator_direction: 'ltr',
     gradient_ids: [],
   }
   globalStyles.value = {}
@@ -793,6 +823,10 @@ const saveDesign = async (keepOpen = false) => {
       : '',
     default_colors: JSON.stringify(editForm.value.default_colors.filter((c) => c.name.trim() && c.hex.trim())),
     aspect_ratios: JSON.stringify(editForm.value.aspect_ratios),
+    indicator_enabled: editForm.value.indicator_enabled,
+    indicator_color: editForm.value.indicator_color,
+    indicator_height: editForm.value.indicator_height,
+    indicator_direction: editForm.value.indicator_direction,
   })
 
   toast.add({
@@ -1115,6 +1149,50 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
           :selected-url="editForm.background_image_url"
           @select="(item) => setBackgroundImage(item.url)"
         />
+
+        <div v-if="!isNew" class="container-styles-section" data-tour="designs-indicator">
+          <Panel v-model:collapsed="indicatorCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="indicatorCollapsed = !indicatorCollapsed">
+                <span class="panel-header-title">Indicator</span>
+                <small class="panel-header-desc">A thin bar along the bottom of the screen that fills over the time the current content is shown.</small>
+              </div>
+            </template>
+            <div class="field indicator-enable-row">
+              <Checkbox v-model="editForm.indicator_enabled" inputId="indicator-enabled" binary />
+              <label for="indicator-enabled">Show the indicator</label>
+            </div>
+            <div class="font-properties-grid" :class="{ 'indicator-fields-off': !editForm.indicator_enabled }">
+              <div class="field">
+                <label>Color</label>
+                <div class="color-field-row">
+                  <ColorPicker :model-value="getIndicatorColorHex()" @update:model-value="(v) => setIndicatorColorHex(v)" />
+                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => (editForm.indicator_color = colorRefFor(c.id))" />
+                  <span class="color-field-value">{{ colorDisplayLabel(editForm.indicator_color) }}</span>
+                  <Button
+                    v-if="editForm.indicator_color"
+                    icon="pi pi-times" text size="small" title="Clear (white)"
+                    @click="editForm.indicator_color = ''"
+                  />
+                </div>
+              </div>
+              <div class="field">
+                <label for="indicator-height">Height</label>
+                <InputNumber
+                  v-model="editForm.indicator_height" inputId="indicator-height"
+                  :min="0.1" :max="10" :step="0.1" :max-fraction-digits="2" suffix=" vh" size="small" class="w-full"
+                />
+              </div>
+              <div class="field">
+                <label for="indicator-direction">Direction</label>
+                <Dropdown
+                  v-model="editForm.indicator_direction" inputId="indicator-direction"
+                  :options="INDICATOR_DIRECTIONS" optionLabel="label" optionValue="value" size="small" class="w-full"
+                />
+              </div>
+            </div>
+          </Panel>
+        </div>
 
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="effectPanelCollapsed" toggleable class="container-style-panel">
@@ -1637,6 +1715,16 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.4rem;
+}
+
+.indicator-enable-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.indicator-fields-off {
+  opacity: 0.55;
 }
 
 .aspect-ratio-list,

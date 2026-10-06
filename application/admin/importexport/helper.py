@@ -122,6 +122,8 @@ def _row_design(d):
         'background_effect': d.background_effect, 'background_effect_settings': d.background_effect_settings,
         'default_colors': d.default_colors,
         'aspect_ratios': d.aspect_ratios,
+        'indicator_enabled': bool(d.indicator_enabled), 'indicator_color': d.indicator_color,
+        'indicator_height': d.indicator_height, 'indicator_direction': d.indicator_direction,
     }
 
 
@@ -743,6 +745,8 @@ def _import_designs(ctx):
         background_effect_settings=row.get('background_effect_settings'),
         default_colors=row.get('default_colors'),
         aspect_ratios=row.get('aspect_ratios'),
+        indicator_enabled=bool(row.get('indicator_enabled')), indicator_color=row.get('indicator_color'),
+        indicator_height=row.get('indicator_height'), indicator_direction=row.get('indicator_direction'),
     ))
 
     for file_id, local_id in ctx.id_map['designs'].items():
