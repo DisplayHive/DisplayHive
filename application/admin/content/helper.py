@@ -25,20 +25,26 @@ def _image_style(ctx: dict, field_name: str) -> str:
     `__size` entirely; unset, falls back to the vh-based fixed-height
     behavior (explicit height keeps it consistent regardless of the
     container's own height; 0/blank just scales to fit as before).
+
+    Any mode that sets an explicit height together with `max-width` also sets
+    `object-fit: contain`: when `max-width` clamps the box (an image wider than
+    the container), the picture is letterboxed inside it instead of being
+    squashed to the unclamped height — i.e. the aspect ratio is kept. Only
+    'stretch' deliberately distorts.
     """
     fit = str(ctx.get(f'{field_name}__fit') or '').strip()
     if fit == 'height':
-        return 'height:100%;width:auto;max-width:100%;'
+        return 'height:100%;width:auto;max-width:100%;object-fit:contain;'
     if fit == 'width':
         return 'width:100%;height:auto;'
     if fit == 'stretch':
-        return 'width:100%;height:100%;'
+        return 'width:100%;height:100%;object-fit:fill;'
     size = ctx.get(f'{field_name}__size')
     try:
         size = float(size)
     except (TypeError, ValueError):
         size = 0
-    return f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+    return f'height:{size}vh;width:auto;max-width:100%;object-fit:contain;' if size > 0 else 'max-width:100%;height:auto;'
 
 
 def _resolve_icon_color(raw, db=None) -> str:

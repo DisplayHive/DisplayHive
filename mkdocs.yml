@@ -75,5 +75,6 @@ nav:
       - Architecture: developer/architecture.md
       - Real-time content push: developer/realtime-push.md
       - Admin panel styleguide: developer/styleguide.md
+      - Guided tour design ruleset: developer/tour-design-ruleset.md
       - Contributing: developer/contributing.md
   - Contact: contact.md
