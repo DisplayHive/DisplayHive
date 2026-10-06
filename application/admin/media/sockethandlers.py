@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from flask_socketio import emit
 from werkzeug.utils import secure_filename
 
+from application import media_renditions
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,6 +20,7 @@ def register_admin_media_handlers(socketio, app, db):
 
     MEDIA_FOLDER = app.config.get('MEDIA_FOLDER', 'static/media')
     PREVIEW_FOLDER = app.config.get('PREVIEW_FOLDER', 'static/media_previews')
+    RENDITIONS_FOLDER = app.config.get('MEDIA_RENDITIONS_FOLDER', 'static/media_renditions')
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
@@ -181,6 +184,11 @@ def register_admin_media_handlers(socketio, app, db):
         is_video = mime_type and mime_type.startswith('video/')
         create_preview(file_path, preview_path, is_video)
 
+        # FHD / 4K / 8K renditions (never larger than the upload itself)
+        if not is_video:
+            rel = f'{folder_path}/{filename}' if folder_path else filename
+            media_renditions.run_blocking(media_renditions.render_renditions, file_path, RENDITIONS_FOLDER, rel)
+
         # Save to database
         media = Media(
             filename=filename,
@@ -251,7 +259,8 @@ def register_admin_media_handlers(socketio, app, db):
     @require_right('media.upload')
     def handle_sync_previews(data=None):
         """Compare the count of media files against their preview/thumbnail
-        files on disk and regenerate any that are missing (e.g. lost in a
+        files on disk and regenerate any that are missing — and render any
+        missing FHD/4K/8K renditions of the images (e.g. lost in a
         backup that didn't include static/media_previews, or a manual file
         copy). Returns a summary ack; pushes a refreshed media list since a
         previously-broken thumbnail URL now resolves.
@@ -260,6 +269,7 @@ def register_admin_media_handlers(socketio, app, db):
         missing = 0
         regenerated = 0
         skipped_no_source = 0
+        renditions_created = 0
         for m in all_media:
             file_path = (
                 os.path.join(MEDIA_FOLDER, m.folder_path, m.filename)
@@ -270,6 +280,11 @@ def register_admin_media_handlers(socketio, app, db):
                 os.path.join(PREVIEW_FOLDER, m.folder_path, preview_filename)
                 if m.folder_path else os.path.join(PREVIEW_FOLDER, preview_filename)
             )
+            if not (m.mime_type and m.mime_type.startswith('video/')) and os.path.exists(file_path):
+                rel = f'{m.folder_path}/{m.filename}' if m.folder_path else m.filename
+                renditions_created += len(
+                    media_renditions.run_blocking(media_renditions.render_renditions, file_path, RENDITIONS_FOLDER, rel)
+                )
             if os.path.exists(preview_path):
                 continue
             missing += 1
@@ -286,6 +301,7 @@ def register_admin_media_handlers(socketio, app, db):
             'sync_previews: %s media, %s missing previews, %s regenerated, %s skipped (source file missing)',
             len(all_media), missing, regenerated, skipped_no_source,
         )
+        logger.info('sync_previews: %s image renditions (FHD/4K/8K) created', renditions_created)
         if regenerated:
             _push_media_list()
 
@@ -295,6 +311,7 @@ def register_admin_media_handlers(socketio, app, db):
             'missing': missing,
             'regenerated': regenerated,
             'skipped_no_source': skipped_no_source,
+            'renditions_created': renditions_created,
         }
 
     @socketio.on('displayhive:media:cts:delete_media')
@@ -322,6 +339,10 @@ def register_admin_media_handlers(socketio, app, db):
             os.remove(file_path)
         if os.path.exists(preview_path):
             os.remove(preview_path)
+        media_renditions.remove_renditions(
+            RENDITIONS_FOLDER,
+            f'{media.folder_path}/{media.filename}' if media.folder_path else media.filename,
+        )
 
         # Delete from database
         db.session.delete(media)

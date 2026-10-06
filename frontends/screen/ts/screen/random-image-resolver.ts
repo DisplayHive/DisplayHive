@@ -10,6 +10,7 @@
  */
 
 import { pickCached, getObjectUrl, topUp } from "./random-image-cache.js";
+import { preferredUrl } from "./media-renditions.js";
 
 // Tracks the object URL currently assigned to each element so it can be
 // revoked when replaced — object URLs are otherwise never released and
@@ -30,7 +31,9 @@ export async function resolveRandomImages(root: ParentNode = document): Promise<
   const els = root.querySelectorAll<HTMLImageElement>("[data-dh-random-pool]");
   await Promise.all(
     Array.from(els).map(async (el) => {
-      const candidates = parseCandidates(el.getAttribute("data-dh-random-pool"));
+      // Each candidate is loaded at the size that fits this screen (its FHD/4K/8K
+      // rendition, or the original where that doesn't exist).
+      const candidates = parseCandidates(el.getAttribute("data-dh-random-pool")).map(preferredUrl);
       if (!candidates.length) return;
 
       const chosen = pickCached(candidates);

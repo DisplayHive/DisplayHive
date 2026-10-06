@@ -17,6 +17,7 @@
 
 import { getRandomImageManifest, setRandomImageManifest } from "./storage.js";
 import { log } from "./logger.js";
+import { markRenditionMissing } from "./media-renditions.js";
 
 const CACHE_NAME = "dh-random-images";
 const DEFAULT_MAX_ENTRIES = 40;
@@ -122,7 +123,12 @@ export async function topUp(
   inFlight.add(next);
   try {
     const response = await fetch(next);
-    if (!response.ok) return;
+    if (!response.ok) {
+      // A 404 for a rendition means the source was smaller than that tier —
+      // remember it so the next pass asks for the original instead.
+      markRenditionMissing(next);
+      return;
+    }
     const size = Number(response.headers.get("content-length")) || 0;
     const cache = await caches.open(CACHE_NAME);
     await cache.put(next, response.clone());

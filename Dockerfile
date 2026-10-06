@@ -53,7 +53,7 @@ COPY --from=frontend /build/dist ./dist
 
 # Run as an unprivileged user; give it ownership of the writable data dirs.
 RUN useradd --system --create-home --uid 10001 displayhive \
-    && mkdir -p /app/static/media /app/static/media_previews \
+    && mkdir -p /app/static/media /app/static/media_previews /app/static/media_renditions \
     && chown -R displayhive:displayhive /app
 USER displayhive
 

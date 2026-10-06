@@ -188,3 +188,20 @@ every screen it will affect before you save.
 
 Saving pushes the change to every screen showing that content immediately —
 there's no separate publish step.
+
+## Image sizes
+
+Every uploaded image (PNG/JPEG) is also rendered at **FHD (1920 px)**, **4K
+(3840 px)** and **8K (7680 px)** on its longer side, keeping its aspect
+ratio. A size is **never larger than your original** — if the upload is
+smaller than a size, that size isn't created (the original is used instead).
+Screens automatically load the **next larger size than their own
+resolution** (a 1920×1080 screen gets FHD, a 2560×1440 screen gets 4K),
+so large uploads don't have to be sent in full to every screen. This applies
+to image fields, random-image fields and the design's backdrop image.
+
+New uploads are processed right away. Images uploaded before this existed are
+processed in the background when the server starts, and again whenever you
+use **Sync previews** on the Media page or import a package. The generated
+copies live in `static/media_renditions/` (a separate volume in the Docker
+setup) and can always be recreated from the originals.
