@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -823,6 +824,9 @@ const deleteDesign = (design: Design) => {
     },
   })
 }
+
+// Reached via a link like /designs?edit=<id>: open that design.
+useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
 </script>
 
 <template>

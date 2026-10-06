@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -181,6 +183,18 @@ const refreshData = () => {
           </Column>
           <Column header="Containers" style="width: 110px">
             <template #body="{ data }">{{ (data.container_ids || []).length }}</template>
+          </Column>
+          <Column header="Used by" style="width: 200px">
+            <template #body="{ data }">
+              <template v-if="(data.contenttypes || []).length">
+                <template v-for="(ct, i) in data.contenttypes" :key="ct.id">
+                  <span v-if="i">, </span>
+                  <RouteLink v-if="rightsStore.can('contenttypes.page')" :to="links.contentType(ct.id)" title="Open this content type">{{ ct.name }}</RouteLink>
+                  <span v-else>{{ ct.name }}</span>
+                </template>
+              </template>
+              <span v-else class="hint">-</span>
+            </template>
           </Column>
           <Column header="Actions" style="width: 180px">
             <template #body="{ data }">

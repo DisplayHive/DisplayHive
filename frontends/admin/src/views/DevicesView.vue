@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted } from 'vue'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
@@ -345,6 +348,9 @@ const deleteDevice = (device: Device) => {
     },
   })
 }
+
+// Reached via a link like /devices?edit=<id>: open that device's dialog.
+useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.value)
 </script>
 
 <template>
@@ -482,7 +488,8 @@ const deleteDevice = (device: Device) => {
           </Column>
           <Column field="screen_name" header="Screen" sortable>
             <template #body="{ data }">
-              {{ data.screen_name || '-' }}
+              <RouteLink v-if="data.screen_id && data.screen_name && rightsStore.can('screens.page')" :to="links.screen(data.screen_id)" title="Open this screen">{{ data.screen_name }}</RouteLink>
+              <template v-else>{{ data.screen_name || '-' }}</template>
             </template>
           </Column>
           <Column style="width: 200px">

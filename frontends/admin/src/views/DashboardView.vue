@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -223,7 +224,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Find Mode -->
-      <Card v-if="rightsStore.can('device.page')" data-tour="stat-find" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('device.page')" data-tour="stat-find" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push(links.screensFiltered('find'))">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-search stat-icon"></i>
@@ -239,7 +240,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Debug Mode -->
-      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-debug" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-debug" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push(links.screensFiltered('debug'))">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-wrench stat-icon"></i>

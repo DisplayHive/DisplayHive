@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useRightsStore } from '../stores/rights'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -58,6 +61,7 @@ interface RawTagConfig {
 }
 
 const router = useRouter()
+const rightsStore = useRightsStore()
 const route = useRoute()
 const goBack = () => router.push({ name: 'content' })
 
@@ -789,7 +793,10 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <div v-if="selectedContentType" class="content-type-banner">
         <i class="pi pi-file-edit"></i>
         <div>
-          <strong>{{ selectedContentType.name }}</strong>
+          <strong>
+            <RouteLink v-if="rightsStore.can('contenttypes.page')" :to="links.contentType(selectedContentType.id)" title="Open this content type">{{ selectedContentType.name }}</RouteLink>
+            <template v-else>{{ selectedContentType.name }}</template>
+          </strong>
           <p v-if="selectedContentType.description" class="text-muted">{{ selectedContentType.description }}</p>
         </div>
       </div>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -461,6 +464,9 @@ const deleteContentType = (ct: ContentType) => {
     },
   })
 }
+
+// Reached via a link like /contenttypes?edit=<id>: open that content type.
+useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
 </script>
 
 <template>
@@ -526,11 +532,12 @@ const deleteContentType = (ct: ContentType) => {
           <Column header="Layout" style="width: 160px">
             <template #body="{ data }">
               <a
-                v-if="data.layout_name"
-                href="#"
+                v-if="data.layout_name && data.layout_id"
+                :href="router.resolve({ name: 'layout-edit', params: { id: data.layout_id } }).href"
                 class="layout-link"
-                @click.prevent="router.push('/layouts')"
-              >{{ data.layout_name }} <i class="pi pi-external-link layout-link-icon"></i></a>
+                @click.prevent="router.push({ name: 'layout-edit', params: { id: data.layout_id } })"
+              >{{ data.layout_name }}</a>
+              <span v-else-if="data.layout_name">{{ data.layout_name }}</span>
               <span v-else class="hint">none</span>
             </template>
           </Column>
@@ -656,7 +663,13 @@ const deleteContentType = (ct: ContentType) => {
                   <i class="pi pi-bars drag-handle" title="Drag to reorder"></i>
                 </div>
                 <div class="tagconfig-col-container">
-                  <span class="container-label">{{ containerLabelFor(t.contentcontainer_id) }}</span>
+                  <RouteLink
+                    v-if="rightsStore.can('layouts.page') && editForm.layout_id && t.contentcontainer_id"
+                    :to="links.layout(editForm.layout_id, t.contentcontainer_id)"
+                    class="container-label"
+                    title="Open this container in the layout editor"
+                  >{{ containerLabelFor(t.contentcontainer_id) }}</RouteLink>
+                  <span v-else class="container-label">{{ containerLabelFor(t.contentcontainer_id) }}</span>
                 </div>
                 <div class="tagconfig-col-title">
                   <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
@@ -743,11 +756,6 @@ const deleteContentType = (ct: ContentType) => {
 
 .layout-link:hover {
   text-decoration: underline;
-}
-
-.layout-link-icon {
-  font-size: 0.7rem;
-  color: var(--p-text-muted-color, #9ca3af);
 }
 
 .tpl-loading {

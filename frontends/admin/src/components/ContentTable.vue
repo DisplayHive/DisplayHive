@@ -10,6 +10,8 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import { useAspectRatios, bestAspectRatio, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useRightsStore } from '../stores/rights'
+import RouteLink from './RouteLink.vue'
+import { links } from '../utils/links'
 import { useSettingsStore } from '../stores/settings'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 
@@ -28,6 +30,7 @@ interface ContentElement {
   start_time?: string | null
   end_time?: string | null
   contenttypeName: string
+  contenttype_id?: number | null
   screengroups?: Array<{ id: number; name: string }>
   [key: string]: unknown
 }
@@ -46,6 +49,12 @@ const props = withDefaults(defineProps<{
   search: '',
   oneScreenGroupIds: () => [],
 })
+
+// Links: the content type opens its editor; screen and group chips lead to the
+// matching overview page (Screens / Screen Groups), not into one item's dialog.
+const canLinkContentTypes = computed(() => rightsStore.can('contenttypes.page'))
+const canLinkGroups = computed(() => rightsStore.can('screengroups.page'))
+const canLinkScreens = computed(() => rightsStore.can('screens.page'))
 
 const getScreensAndGroups = (data: ContentElement) => {
   const screenIds = new Set(props.oneScreenGroupIds)
@@ -170,24 +179,35 @@ watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => 
         <template #body="{ data }">
           <div class="title-cell">
             <span class="title-text">{{ data.title }}</span>
-            <Tag :value="data.contenttypeName" severity="info" class="title-type-tag" />
+            <RouteLink v-if="canLinkContentTypes && data.contenttype_id" :to="links.contentType(data.contenttype_id)" title="Open this content type">
+              <Tag :value="data.contenttypeName" severity="info" class="title-type-tag" />
+            </RouteLink>
+            <Tag v-else :value="data.contenttypeName" severity="info" class="title-type-tag" />
           </div>
           <div v-if="(data.screengroups || []).length > 0" class="membership-chips">
             <template v-if="getScreensAndGroups(data).screens.length > 0">
               <span class="membership-label">Screens:</span>
-              <span
-                v-for="sg in getScreensAndGroups(data).screens"
-                :key="sg.id"
-                class="membership-chip membership-chip--screen"
-              >{{ sg.name }}</span>
+              <template v-for="sg in getScreensAndGroups(data).screens" :key="sg.id">
+                <RouteLink
+                  v-if="canLinkScreens"
+                  :to="links.screensPage()"
+                  class="membership-chip membership-chip--screen"
+                  title="Go to the Screens page"
+                >{{ sg.name }}</RouteLink>
+                <span v-else class="membership-chip membership-chip--screen">{{ sg.name }}</span>
+              </template>
             </template>
             <template v-if="getScreensAndGroups(data).groups.length > 0">
               <span class="membership-label">Groups:</span>
-              <span
-                v-for="sg in getScreensAndGroups(data).groups"
-                :key="sg.id"
-                class="membership-chip membership-chip--group"
-              >{{ sg.name }}</span>
+              <template v-for="sg in getScreensAndGroups(data).groups" :key="sg.id">
+                <RouteLink
+                  v-if="canLinkGroups"
+                  :to="links.screengroupsPage()"
+                  class="membership-chip membership-chip--group"
+                  title="Go to the Screen Groups page"
+                >{{ sg.name }}</RouteLink>
+                <span v-else class="membership-chip membership-chip--group">{{ sg.name }}</span>
+              </template>
             </template>
           </div>
         </template>

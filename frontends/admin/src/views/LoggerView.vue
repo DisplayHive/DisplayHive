@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useRightsStore } from '../stores/rights'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import { useRightsStore } from '../stores/rights'
 import type { Screen } from '../types/models'
 
 // PrimeVue components
@@ -25,6 +27,7 @@ const { on, off, emit } = useSocket()
 const logs = ref<LogEntry[]>([])
 const logContainer = ref<HTMLElement | null>(null)
 const screens = ref<Screen[]>([])
+const screenIdByName = computed(() => new Map(screens.value.map((s) => [s.name, s.id])))
 const selectedSeverity = ref<string | null>(null)
 const selectedScreen = ref<string | null>(null)
 const autoScroll = ref(true)
@@ -201,7 +204,10 @@ const sendTestLog = () => {
           >
             <span class="log-time">{{ formatTimestamp(log.timestamp) }}</span>
             <Tag :value="log.severity" :severity="getSeverityClass(log.severity)" class="log-severity" />
-            <span class="log-screen" v-if="log.screen">{{ log.screen }}</span>
+            <span class="log-screen" v-if="log.screen">
+              <RouteLink v-if="rightsStore.can('screens.page') && screenIdByName.get(log.screen)" :to="links.screen(screenIdByName.get(log.screen)!)" title="Open this screen">{{ log.screen }}</RouteLink>
+              <template v-else>{{ log.screen }}</template>
+            </span>
             <span class="log-function" v-if="log.function">[{{ log.function }}]</span>
             <span class="log-message">{{ log.message }}</span>
           </div>

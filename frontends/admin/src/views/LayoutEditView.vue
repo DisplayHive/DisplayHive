@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -155,6 +157,14 @@ watch(layouts, () => {
       <Textarea id="l-description" v-model="layoutForm.description" rows="1" class="w-full" />
     </div>
 
+    <p v-if="editingLayout?.contenttypes?.length" class="hint">
+      Used by:
+      <template v-for="(ct, i) in editingLayout.contenttypes" :key="ct.id">
+        <span v-if="i">, </span>
+        <RouteLink v-if="rightsStore.can('contenttypes.page')" :to="links.contentType(ct.id)">{{ ct.name }}</RouteLink>
+        <span v-else>{{ ct.name }}</span>
+      </template>
+    </p>
     <p v-if="editingLayout" class="hint">
       Drag containers directly on the canvas to move/resize them, draw new ones on empty space,
       or drag existing containers in from the sidebar. Position changes save when you click

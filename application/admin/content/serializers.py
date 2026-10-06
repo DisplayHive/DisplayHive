@@ -40,6 +40,7 @@ def build_content_dict(content, design_payload=None, db=None):
         'start_time': fmt_dt(getattr(content, 'start_time', None)),
         'end_time': fmt_dt(getattr(content, 'end_time', None)),
         'contenttypeName': content.contenttype.name if content.contenttype else '',
+        'contenttype_id': content.contenttype_id,
         'design': design_payload,
         'containers': build_scene_containers(content.contenttype, content.html or '', db=db),
         # Same, per aspect ratio the Layout has a variant for (the base is

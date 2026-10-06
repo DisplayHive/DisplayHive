@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -317,6 +320,9 @@ const removeAllContentFromGroup = () => {
     },
   })
 }
+
+// Reached via a link like /screengroups?edit=<id>: open that group's dialog.
+useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => canRename.value)
 </script>
 
 <template>
@@ -466,7 +472,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAssignedScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAssignedScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name" />
+                <Column field="name" header="Name">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
+                    <template v-else>{{ data.name }}</template>
+                  </template>
+                </Column>
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
                   <template #body="{ data }">
@@ -497,7 +508,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAvailableScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAvailableScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name" />
+                <Column field="name" header="Name">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
+                    <template v-else>{{ data.name }}</template>
+                  </template>
+                </Column>
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
                   <template #body="{ data }">
@@ -558,7 +574,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAssignedContent" stripedRows :paginator="filteredAssignedContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title" />
+                <Column field="title" header="Title">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
+                    <template v-else>{{ data.title }}</template>
+                  </template>
+                </Column>
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
                   <template #body="{ data }">
@@ -584,7 +605,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAvailableContent" stripedRows :paginator="filteredAvailableContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title" />
+                <Column field="title" header="Title">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
+                    <template v-else>{{ data.title }}</template>
+                  </template>
+                </Column>
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
                   <template #body="{ data }">

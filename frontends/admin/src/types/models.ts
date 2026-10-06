@@ -125,6 +125,8 @@ export interface Layout {
   variations?: LayoutVariation[]
   /** True if at least one Contenttype is bound to this Layout. */
   in_use?: boolean
+  /** The Contenttypes bound to this Layout. */
+  contenttypes?: { id: number; name: string }[]
 }
 
 /** A Layout at one non-base aspect ratio. */

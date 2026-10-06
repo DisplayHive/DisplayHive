@@ -94,6 +94,8 @@ def emit_layouts_update(socketio, app, db, room: Optional[str] = None):
                 ],
                 # In use = at least one Contenttype is bound to this Layout.
                 'in_use': len(layout.contenttypes or []) > 0,
+                # Which Contenttypes use it (for "used by" links in the admin).
+                'contenttypes': [{'id': ct.id, 'name': ct.name} for ct in (layout.contenttypes or [])],
             }
             for layout in all_layouts
         ]

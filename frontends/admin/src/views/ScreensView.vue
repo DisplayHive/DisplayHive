@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
@@ -22,6 +25,7 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
 import Select from 'primevue/select'
+import { useRoute, useRouter } from 'vue-router'
 import { useAspectRatios } from '../composables/useAspectRatios'
 
 const toast = useToast()
@@ -43,6 +47,20 @@ const canReload = computed(() => rightsStore.can('screens.reload'))
 const canReloadAll = computed(() => rightsStore.can('screens.reload_all'))
 
 const filterText = ref('')
+
+// ?filter=find|debug (from the dashboard tiles) narrows the list to screens in
+// that state; the chip above the table clears it again.
+const route = useRoute()
+const router = useRouter()
+const statusFilter = computed<'find' | 'debug' | null>(() => {
+  const f = route.query.filter
+  return f === 'find' || f === 'debug' ? f : null
+})
+const clearStatusFilter = () => {
+  const rest = { ...route.query }
+  delete rest.filter
+  router.replace({ query: rest })
+}
 
 const { showOnline, showOffline, toggleShowOnline, toggleShowOffline, applyOnlineFilter } = useOnlineFilter()
 const { showWindowed, showFullscreen, toggleShowWindowed, toggleShowFullscreen, applyMaximizedFilter } = useMaximizedFilter()
@@ -87,6 +105,8 @@ const filteredScreens = computed(() => {
       (s.resolution && s.resolution.toLowerCase().includes(search))
     )
   }
+  if (statusFilter.value === 'find') list = list.filter((s) => !!s.attached_device?.find)
+  if (statusFilter.value === 'debug') list = list.filter((s) => !!s.debug && s.monitoring_enabled !== false)
   list = applyOnlineFilter(list, (s) => !!s.attached_device?.is_online)
   return applyMaximizedFilter(list)
 })
@@ -255,6 +275,9 @@ const resetScreenSize = (screen: Screen) => {
   screensStore.resetScreenSize(screen.id)
   toast.add({ severity: 'info', summary: 'Size reset', detail: `Screen size reset for ${screen.name}`, life: 2000 })
 }
+
+// Reached via a link like /screens?edit=<id>: open that screen's dialog.
+useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.value)
 </script>
 
 <template>
@@ -322,6 +345,14 @@ const resetScreenSize = (screen: Screen) => {
                   placeholder="Filter screens..."
                   class="filter-input"
                 />
+                <Tag
+                  v-if="statusFilter"
+                  severity="info"
+                  class="clickable-tag"
+                  :value="statusFilter === 'find' ? 'Only screens in find mode ✕' : 'Only screens in debug mode ✕'"
+                  title="Show all screens"
+                  @click="clearStatusFilter"
+                />
               </div>
               <div class="dt-right" data-tour="screens-status-filters">
                 <div class="filter-row">
@@ -380,7 +411,10 @@ const resetScreenSize = (screen: Screen) => {
           <Column field="aspect_ratio" header="Ratio" sortable />
           <Column header="Status" style="width: 150px">
             <template #body="{ data }">
-              <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
+              <RouteLink v-if="data.attached_device && rightsStore.can('device.page')" :to="links.device(data.attached_device.id)" title="Open this screen's device">
+                <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
+              </RouteLink>
+              <Tag v-else :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
             </template>
           </Column>
           <Column header="Actions" style="width: 340px">

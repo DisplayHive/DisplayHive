@@ -464,6 +464,16 @@ The lesson generalizes: matching tokens exactly between a small control and
 its immediate container is itself a contrast bug, even when both tokens
 individually adapt correctly.
 
+### Links inside coloured elements (`RouteLink`)
+
+`components/RouteLink.vue` is the cross-page link. Its default
+`color: inherit` / no underline is written unscoped inside `:where()` (zero
+specificity) on purpose: a class on the link — such as ContentTable's coloured
+`.membership-chip--*` pills — then always wins. A scoped `.route-link { color:
+inherit }` has the same specificity as the pill's own scoped class, so source
+order decided the winner and could leave light inherited text on a light pill
+(unreadable in dark mode).
+
 ### Empty color fields (checkerboard)
 
 PrimeVue's `ColorPicker` paints an unset value as red, which reads as a real

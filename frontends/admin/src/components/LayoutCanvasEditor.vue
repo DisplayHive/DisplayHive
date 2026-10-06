@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useConfirm } from 'primevue/useconfirm'
@@ -1142,6 +1143,30 @@ const canvasStyle = computed(() => {
   // Keep tall (portrait) ratios from growing past ~75% of the viewport height.
   return { aspectRatio: cssAspectRatio(activeRatio.value), width: `min(100%, ${((75 * w) / h).toFixed(3)}vh)`, marginInline: 'auto' }
 })
+
+// Reached via a link like /layouts/<id>/edit?container=<cid> (e.g. from a
+// content type's field): select that container, switching to the variation
+// that has it if it isn't in the base. The parameter is stripped afterwards.
+const route = useRoute()
+const router = useRouter()
+watch(
+  [() => route.query.container, () => props.containers, () => props.layout.variations],
+  () => {
+    const raw = route.query.container
+    const id = Number(Array.isArray(raw) ? raw[0] : raw)
+    if (!id || !props.containers.some((c) => c.id === id)) return
+    if (!activeContainerIds.value.includes(id)) {
+      const ratio = layoutRatioList.value.find((r) => idsOfLayoutAt(props.layout, r).includes(id))
+      if (!ratio) return
+      selectRatio(ratio)
+    }
+    selectedId.value = id
+    const rest = { ...route.query }
+    delete rest.container
+    router.replace({ query: rest })
+  },
+  { immediate: true },
+)
 
 // Every containerEditForm edit is staged live (into draft/contentDraft) as
 // it's made — there's no separate "Save" in the settings card; the whole
