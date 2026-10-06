@@ -81,7 +81,9 @@ const screensInFind = computed(() => {
 
 const totalContent = computed(() => contentStore.content.length)
 const unassignedContent = computed(() => contentStore.unassignedContent.length)
-const screengroupsCount = computed(() => screengroupsStore.screengroups.length)
+// Every screen also has a hidden one-screen group of its own (is_one_screen) —
+// only real groups count here, same as the Screen Groups page lists.
+const screengroupsCount = computed(() => screengroupsStore.screengroups.filter((sg) => !sg.is_one_screen).length)
 const mediaCount = computed(() => mediaStore.mediaItems.length)
 
 // Warning indicators
