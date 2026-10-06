@@ -2,7 +2,7 @@
 
 A checklist for writing a new mini-tour under `frontends/admin/src/tour/`.
 It restates and expands on the "Adding a new mini-tour" section of the root
-[`CLAUDE.md`](../../CLAUDE.md) — read that first for the full mechanics
+[`CLAUDE.md`](https://github.com/DisplayHive/DisplayHive/blob/main/CLAUDE.md) — read that first for the full mechanics
 (file layout, `TourDefinition`, the content package). This page is the
 rule-by-rule checklist to apply while writing one, with real examples
 pulled from the existing tours (`contentTypes.ts`, `createEditContent.ts`,
