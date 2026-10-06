@@ -115,3 +115,26 @@ def test_rendered_container_is_kept_regardless_of_show_when_empty():
     from application.admin.content.helper import combine_layout_containers
     result = combine_layout_containers([_container(1, False)], {'1': '<b>x</b>'})
     assert result['1']['html'] == '<b>x</b>'
+
+
+# --- _image_style: aspect ratio is kept whenever max-width can clamp the box ---
+
+
+def test_image_style_height_mode_keeps_aspect_ratio():
+    from application.admin.content.helper import _image_style
+    style = _image_style({'img__fit': 'height'}, 'img')
+    assert 'height:100%' in style and 'max-width:100%' in style
+    assert 'object-fit:contain' in style
+
+
+def test_image_style_fixed_size_mode_keeps_aspect_ratio():
+    from application.admin.content.helper import _image_style
+    style = _image_style({'img__size': '8'}, 'img')
+    assert 'height:8.0vh' in style and 'object-fit:contain' in style
+
+
+def test_image_style_width_stretch_and_default():
+    from application.admin.content.helper import _image_style
+    assert _image_style({'img__fit': 'width'}, 'img') == 'width:100%;height:auto;'
+    assert 'object-fit:fill' in _image_style({'img__fit': 'stretch'}, 'img')
+    assert _image_style({}, 'img') == 'max-width:100%;height:auto;'
