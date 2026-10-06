@@ -464,6 +464,15 @@ The lesson generalizes: matching tokens exactly between a small control and
 its immediate container is itself a contrast bug, even when both tokens
 individually adapt correctly.
 
+### Number inputs in CSS grids
+
+PrimeVue's `InputNumber` input has an intrinsic minimum width. Inside a grid with
+`repeat(n, 1fr)` that makes the tracks grow past a narrow container (the Layout
+editor's 340px right column hides overflow, so the extra columns simply vanish).
+Use `repeat(n, minmax(0, 1fr))` and give the grid items and the
+`.p-inputnumber` / `.p-inputnumber-input` elements `min-width: 0; width: 100%`
+(see `.position-grid` in `LayoutCanvasEditor.vue`).
+
 ### Links inside coloured elements (`RouteLink`)
 
 `components/RouteLink.vue` is the cross-page link. Its default

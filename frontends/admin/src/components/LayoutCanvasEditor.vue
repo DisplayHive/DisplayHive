@@ -2419,10 +2419,20 @@ const toggleSelectedLayoutMembership = () => {
   color: var(--p-text-muted-color, #666);
 }
 
+/* Two columns (Top/Left, Width/Height): four did not fit the 340px right column
+   and pushed Width/Height out of view. minmax(0, 1fr) + min-width: 0 let the
+   number inputs shrink instead of forcing the grid wider than the card. */
 .position-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem 0.5rem;
+}
+
+.position-grid .field,
+.position-grid :deep(.p-inputnumber),
+.position-grid :deep(.p-inputnumber-input) {
+  min-width: 0;
+  width: 100%;
 }
 
 .selected-actions {
