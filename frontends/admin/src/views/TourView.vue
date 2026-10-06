@@ -8,6 +8,7 @@ import type { TourDefinition } from '../tour/types'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
+import Message from 'primevue/message'
 
 const rightsStore = useRightsStore()
 const settingsStore = useSettingsStore()
@@ -31,6 +32,10 @@ const runTour = (tour: TourDefinition) => start(tour)
     </Card>
   </div>
   <div v-else class="tour-view">
+    <Message severity="info" :closable="false" class="tour-notice">
+      The guided tours are currently not completely ready for production use and are subject to change.
+      Feedback and ideas are welcome.
+    </Message>
     <section v-if="userTours.length" class="tour-section">
       <h2 class="tour-section-title"><i class="pi pi-user"></i> User</h2>
       <div class="tour-list">
