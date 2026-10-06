@@ -32,6 +32,7 @@ import { preloadIframesInHtml } from "./preload-iframes.js";
 import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
 import { applyBackgroundEffect } from "./background-effects.js";
 import { adaptCss, adaptHtml, setRotation } from "./rotation.js";
+import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
 
 // Track if device is deactivated (prevents hiding overlay on reconnect)
 let _isDeactivated = false;
@@ -363,11 +364,21 @@ export function setupSocketHandlers(socket: any): void {
         );
         if (typeof design.html === "string") {
           const backgroundEl = document.getElementById("design-background");
-          if (backgroundEl) backgroundEl.innerHTML = adaptHtml(design.html);
+          if (backgroundEl) {
+            backgroundEl.innerHTML = adaptHtml(design.html);
+            adaptMediaImages(backgroundEl);
+          }
         }
         if (typeof design.css === "string") {
           const styleEl = document.getElementById("design-css");
-          if (styleEl) styleEl.textContent = adaptCss(design.css);
+          if (styleEl) {
+            const adapted = adaptCss(design.css);
+            styleEl.textContent = adapted;
+            // The Backdrop image: swap in the right-sized rendition once it's confirmed to exist.
+            void adaptMediaCss(adapted).then((withRenditions) => {
+              if (withRenditions !== adapted) styleEl.textContent = withRenditions;
+            });
+          }
         }
         applyBackgroundEffect(design.background_effect || null).catch((err) => {
           log("error", "socket.on(upd_content)", "Failed to apply background effect", err);

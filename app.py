@@ -1,6 +1,8 @@
 import eventlet
 eventlet.monkey_patch()
 
+from application import media_renditions
+from application.db_url import normalize_database_url
 import os
 import json
 import logging
@@ -40,7 +42,7 @@ app = Flask(__name__,
 # TEST_DB_PATH lets each Playwright worker point at its own isolated SQLite file.
 _database_url = os.environ.get('DATABASE_URL')
 if _database_url:
-    app.config["SQLALCHEMY_DATABASE_URI"] = _database_url
+    app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_url(_database_url)
 else:
     db_path = os.environ.get('TEST_DB_PATH') or os.path.join(app.root_path, 'project.db')
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
@@ -278,6 +280,13 @@ def _screen_log_retention_loop():
 
 
 socketio.start_background_task(_screen_log_retention_loop)
+
+# Make sure every already-uploaded image has its FHD/4K/8K renditions
+# (uploads made before renditions existed, restored backups, copied files).
+# Runs in the background and only renders what's missing, so it's cheap on
+# every start after the first.
+_RENDITIONS_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'media_renditions')
+media_renditions.schedule_backfill(socketio, app, db, os.path.join(os.path.dirname(__file__), 'static', 'media'), _RENDITIONS_FOLDER)
 
 
 @app.route('/')
@@ -714,6 +723,9 @@ def admin_import_confirm():
                     else:
                         os.remove(entry.path)
             os.makedirs(_MEDIA_FOLDER, exist_ok=True)
+            # Renditions belong to the files just wiped.
+            if os.path.isdir(_RENDITIONS_FOLDER):
+                shutil.rmtree(_RENDITIONS_FOLDER, ignore_errors=True)
 
         if has_zip:
             selected_media_uuids = set(selection.get('media') or []) if selection is not None else None
@@ -738,6 +750,8 @@ def admin_import_confirm():
         result = import_database(app, db, db_payload, selection=selection, mode=mode, conflict_resolution=conflict_resolution)
         if result.get('success'):
             _broadcast_import_update()
+            # Imported images need their renditions too.
+            media_renditions.schedule_backfill(socketio, app, db, _MEDIA_FOLDER, _RENDITIONS_FOLDER)
     finally:
         for path in (json_path, zip_path):
             try:

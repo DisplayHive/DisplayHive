@@ -16,6 +16,7 @@ import { resolveIcons } from "./icon-resolver.js";
 import { resolveRandomImages } from "./random-image-resolver.js";
 import { log } from "./logger.js";
 import { adaptCss, adaptHtml, containerGeometry } from "./rotation.js";
+import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
 
 // Optional emitter injected by socket setup so this module does not
 // directly depend on `window.socket`. Call `setSocketEmitter` with
@@ -118,6 +119,7 @@ function paintContainerElement(
 
   if (contentChanged) {
     el.innerHTML = adaptHtml(html);
+    adaptMediaImages(el);
   }
 
   if (cssChanged) {
@@ -128,7 +130,12 @@ function paintContainerElement(
       cssEl.id = cssId;
       document.head.appendChild(cssEl);
     }
-    cssEl.textContent = adaptCss(css);
+    const adapted = adaptCss(css);
+    cssEl.textContent = adapted;
+    // Swap uploaded-image urls for renditions once they're confirmed to exist.
+    void adaptMediaCss(adapted).then((withRenditions) => {
+      if (withRenditions !== adapted && cssEl) cssEl.textContent = withRenditions;
+    });
   }
 
   lastPainted[containerId] = { top: c.top, left: c.left, width: c.width, height: c.height, html, css };

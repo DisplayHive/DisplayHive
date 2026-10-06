@@ -8,7 +8,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://displayhive:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/displayhive
+      DATABASE_URL: postgresql+psycopg2://displayhive:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/displayhive
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       # Comma-separated list of allowed origins for the API / Socket.IO.
       # Set to your public URL(s) in production, e.g. https://signage.example.com
@@ -25,6 +25,7 @@ services:
       # Uploaded media and generated previews must survive container upgrades.
       - media:/app/static/media
       - media_previews:/app/static/media_previews
+      - media_renditions:/app/static/media_renditions
 
   db:
     image: postgres:16-alpine
@@ -45,4 +46,5 @@ services:
 volumes:
   media:
   media_previews:
+  media_renditions:
   pgdata:

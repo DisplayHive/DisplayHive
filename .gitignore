@@ -18,6 +18,7 @@ project.db
 static/js-build/
 static/media/
 static/media_previews/
+static/media_renditions/
 testing/playwright-report/
 testing/playwright-report/index.html
 testing/test-results/

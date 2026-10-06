@@ -16,6 +16,8 @@ from alembic import context
 # Make the project root importable so models can be imported below.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from application.db_url import normalize_database_url  # noqa: E402
+
 # Alembic Config object, giving access to values in alembic.ini.
 config = context.config
 
@@ -24,7 +26,7 @@ config = context.config
 # PostgreSQL (production) without editing the file.
 _db_url = os.environ.get('DATABASE_URL')
 if _db_url:
-    config.set_main_option('sqlalchemy.url', _db_url)
+    config.set_main_option('sqlalchemy.url', normalize_database_url(_db_url))
 else:
     _test_db = os.environ.get('TEST_DB_PATH')
     if _test_db:
