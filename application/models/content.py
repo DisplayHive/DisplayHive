@@ -16,6 +16,17 @@ layout_container = Table(
 )
 
 
+# Layout variation membership: which containers a variation (a Layout at one
+# non-base aspect ratio) contains. The base (16:9) membership stays in
+# layout_container above.
+layout_variation_container = Table(
+    'layout_variation_container',
+    db.Model.metadata,
+    Column('variation_id', Integer, ForeignKey('layout_variation.id', ondelete='CASCADE'), primary_key=True),
+    Column('contentcontainer_id', Integer, ForeignKey('contentcontainer.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
 class ContentElement(db.Model):
     """Content element model for displaying on screens.
 
@@ -81,6 +92,9 @@ class Design(db.Model):
     # global/per-container font color, gradient stops, effect color params).
     # JSON-encoded list of {"name": ..., "hex": "#rrggbb"} objects, opaque here.
     default_colors: Mapped[str] = mapped_column(Text, nullable=True)
+    # JSON list of extra aspect ratios ("W:H") offered for Screens and Layout
+    # variations; 16:9 is the always-available base and is not listed here.
+    aspect_ratios: Mapped[str] = mapped_column(Text, nullable=True)
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.
@@ -157,6 +171,41 @@ class Layout(db.Model):
     contentcontainers: Mapped[list["ContentContainer"]] = relationship("ContentContainer", secondary=layout_container, back_populates="layouts")
     # Contenttypes scoped to this Layout
     contenttypes: Mapped[list["Contenttype"]] = relationship("Contenttype", back_populates="layout")
+    # Per-aspect-ratio variants (the base 16:9 one is `contentcontainers` above)
+    variations: Mapped[list["LayoutVariation"]] = relationship("LayoutVariation", back_populates="layout", cascade="all, delete-orphan")
+
+
+class LayoutVariation(db.Model):
+    """A Layout at one non-base aspect ratio: its own set of member containers.
+
+    The base (16:9) variant is the Layout's own `contentcontainers`. Container
+    positions per ratio live in ContainerPosition (shared by every Layout that
+    uses the container); all other container properties are shared.
+    """
+    __tablename__ = 'layout_variation'
+    __table_args__ = (UniqueConstraint('layout_id', 'aspect_ratio', name='uq_layout_variation'),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    layout_id: Mapped[int] = mapped_column(Integer, ForeignKey('layout.id', ondelete='CASCADE'), nullable=False, index=True)
+    aspect_ratio: Mapped[str] = mapped_column(String(16), nullable=False)
+    layout: Mapped["Layout"] = relationship("Layout", back_populates="variations")
+    contentcontainers: Mapped[list["ContentContainer"]] = relationship("ContentContainer", secondary=layout_variation_container)
+
+
+class ContainerPosition(db.Model):
+    """A container's position/size (vh/vw) at one non-base aspect ratio.
+
+    Absent row = the container has no dedicated position at that ratio and
+    falls back to its base (16:9) columns.
+    """
+    __tablename__ = 'container_position'
+    __table_args__ = (UniqueConstraint('contentcontainer_id', 'aspect_ratio', name='uq_container_position'),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    contentcontainer_id: Mapped[int] = mapped_column(Integer, ForeignKey('contentcontainer.id', ondelete='CASCADE'), nullable=False, index=True)
+    aspect_ratio: Mapped[str] = mapped_column(String(16), nullable=False)
+    top: Mapped[float] = mapped_column(Float, nullable=False)
+    left: Mapped[float] = mapped_column(Float, nullable=False)
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class ContentContainer(db.Model):
@@ -172,6 +221,14 @@ class ContentContainer(db.Model):
     left: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # vw
     width: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vw
     height: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)  # vh
+    # When true, the Layout editor blocks drag/resize on this container until
+    # unlocked again — a shared, persisted property (not per-Layout), since
+    # the container itself is the standalone entity being positioned.
+    locked: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    # When true, the container is sent to screens (and so its Container Design
+    # background/border etc. is visible) even when it has no content at all;
+    # otherwise an empty container is omitted entirely, as before.
+    show_when_empty: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # Fallback content shown when no active scene's field currently targets
     # this container. Reuses the same field_handler transform as TagConfig
     # (textklein, image, pretalx_table, etc); null field_handler means no
@@ -182,6 +239,8 @@ class ContentContainer(db.Model):
     layouts: Mapped[list["Layout"]] = relationship("Layout", secondary=layout_container, back_populates="contentcontainers")
     # TagConfigs (fields) targeting this container
     tagconfigs: Mapped[list["TagConfig"]] = relationship("TagConfig", back_populates="contentcontainer")
+    # Dedicated positions at non-base aspect ratios
+    positions: Mapped[list["ContainerPosition"]] = relationship("ContainerPosition", cascade="all, delete-orphan")
 
 
 class DesignContainerStyle(db.Model):
@@ -282,44 +341,6 @@ class TagConfig(db.Model):
     # Relationship to Contenttype
     contenttype: Mapped["Contenttype"] = relationship("Contenttype", back_populates="tagconfigs")
     contentcontainer: Mapped["ContentContainer"] = relationship("ContentContainer", back_populates="tagconfigs")
-
-
-class MagicTagValueList(db.Model):
-    """A named list of key/value entries a 'list'-type MagicTag can draw from."""
-    __tablename__ = 'magic_tag_value_list'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
-    name: Mapped[str] = mapped_column(String(255))
-    entries: Mapped[list["MagicTagValueListEntry"]] = relationship(
-        "MagicTagValueListEntry", back_populates="value_list", cascade="all, delete-orphan"
-    )
-
-
-class MagicTagValueListEntry(db.Model):
-    """A single key/value entry belonging to a MagicTagValueList."""
-    __tablename__ = 'magic_tag_value_list_entry'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    value_list_id: Mapped[int] = mapped_column(Integer, ForeignKey('magic_tag_value_list.id'), nullable=False)
-    key: Mapped[str] = mapped_column(String(255))
-    value: Mapped[str] = mapped_column(Text)
-    value_list: Mapped["MagicTagValueList"] = relationship("MagicTagValueList", back_populates="entries")
-
-
-class MagicTag(db.Model):
-    """Global magic tag injected into templates and other content.
-
-    A 'text' tag renders `value` literally. A 'list' tag renders the value
-    of the entry in `value_list` whose key matches `value`.
-    """
-    __tablename__ = 'magic_tag'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
-    name: Mapped[str] = mapped_column(String(255))
-    value: Mapped[str] = mapped_column(Text)
-    description: Mapped[str] = mapped_column(Text, nullable=True, default='')
-    type: Mapped[str] = mapped_column(String(20), nullable=False, default='text', server_default='text')
-    value_list_id: Mapped[int] = mapped_column(Integer, ForeignKey('magic_tag_value_list.id'), nullable=True, default=None)
-    value_list: Mapped["MagicTagValueList"] = relationship("MagicTagValueList", foreign_keys=[value_list_id])
 
 
 class SystemSetting(db.Model):

@@ -27,7 +27,6 @@ owns advancing through it by `duration` and creating/positioning each scene's
 container divs from the per-scene `containers` map (vh/vw top/left/width/height).
 """
 
-import json
 import logging
 from typing import List, Optional
 
@@ -67,6 +66,7 @@ def _build_payload(db, screen):
     # container from some other Layout, even if another scene in the
     # rotation happens to use it.
     from application.admin.content.helper import render_container_default
+    from application.admin.layouts.helper import container_geometry, containers_for_ratio, resolve_layout_ratio
 
     scenes = []
     for mc in content_elements:
@@ -78,7 +78,11 @@ def _build_payload(db, screen):
         # Layout doesn't touch any Contenttype's TagConfig rows) — without
         # this check, that container would keep rendering this scene's old
         # content forever even though it's no longer part of the Layout.
-        layout_containers = list(getattr(mc.contenttype.layout, 'contentcontainers', None) or []) if mc.contenttype.layout else []
+        # Which aspect-ratio variant of that Layout this screen gets: the one
+        # closest to the screen's own ratio (base 16:9 when it has none).
+        layout = mc.contenttype.layout
+        ratio = resolve_layout_ratio(layout, getattr(screen, 'aspect_ratio', None)) if layout else None
+        layout_containers = containers_for_ratio(layout, ratio) if layout else []
         layout_container_ids = {c.id for c in layout_containers}
 
         scene_containers = {}
@@ -88,8 +92,7 @@ def _build_payload(db, screen):
                 continue
             scene_containers[str(container.id)] = {
                 'name': container.name,
-                'top': container.top, 'left': container.left,
-                'width': container.width, 'height': container.height,
+                **container_geometry(container, ratio),
                 'html': rendered_by_container.get(str(tc.contentcontainer_id), ''),
             }
 
@@ -101,13 +104,12 @@ def _build_payload(db, screen):
             if str(container.id) in scene_containers:
                 continue
             html = render_container_default(container, db=db)
-            if not html:
+            if not html and not container.show_when_empty:
                 continue
             scene_containers[str(container.id)] = {
                 'name': container.name,
-                'top': container.top, 'left': container.left,
-                'width': container.width, 'height': container.height,
-                'html': html,
+                **container_geometry(container, ratio),
+                'html': html or '',
             }
 
         if not scene_containers:
@@ -127,16 +129,20 @@ def _build_payload(db, screen):
         if mc.end_time is not None:
             scene['end_time'] = mc.end_time.isoformat()
         try:
-            si = json.loads(mc.serialized_input or '{}')
-            if any(v == 'random_tags' for k, v in si.items() if k.endswith('__image_mode')):
-                scene['update_after_show'] = True
-            elif any(
+            # random_tags image fields no longer need this: the candidate
+            # pool is rendered straight into the HTML as a
+            # data-dh-random-pool placeholder (render_content_fields) and
+            # the screen client picks a fresh one client-side on every
+            # display — see frontends/screen/ts/screen/random-image-resolver.ts.
+            # pretalx_table is the only handler left that genuinely needs a
+            # server-side re-render (live schedule data).
+            if any(
                 getattr(tc, 'field_handler', '') == 'pretalx_table'
                 for tc in (getattr(mc.contenttype, 'tagconfigs', None) or [])
             ):
                 scene['update_after_show'] = True
         except Exception:
-            logger.debug('Failed to parse serialized_input for content_element id=%s', mc.id, exc_info=True)
+            logger.debug('Failed to check tagconfigs for content_element id=%s', mc.id, exc_info=True)
 
         scenes.append(scene)
 

@@ -11,10 +11,6 @@
  *  - Socket helpers are used only for cleanup to avoid coupling test assertions
  *    to socket internals.
  *  - All tests run serially on the same worker / isolated DB.
- *
- * Note: Magic Tags now have their own dedicated page (/magictags,
- * MagicTagsView.vue) and are covered separately — they used to be tested
- * from this same spec when they lived on the Templates page.
  */
 
 import test, { expect } from './fixtures.js'

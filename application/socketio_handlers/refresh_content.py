@@ -1,11 +1,16 @@
 """Socket.IO handler for per-item content refresh requests from screen devices.
 
 Screen devices emit `displayhive:screen:cts:refresh_content` with ``{'id': <int>}``
-after displaying a scene that has ``update_after_show`` set.  The handler
-re-renders every one of the ContentElement's Contenttype's fields (TagConfig)
-(picking a new random image if applicable), updates ``ContentElement.html``
-(a JSON map of ``{contentcontainer_id: rendered_html}``) in the database, and
-emits ``displayhive:screen:stc:content_updated`` with
+after displaying a scene that has ``update_after_show`` set — today that's
+only scenes with a `pretalx_table` field, which needs live schedule data
+re-fetched. (`random_tags` image fields no longer trigger this: the full
+candidate pool is rendered straight into the HTML as a `data-dh-random-pool`
+placeholder and the screen client itself picks a fresh one client-side on
+every display — see frontends/screen/ts/screen/random-image-resolver.ts.)
+The handler re-renders every one of the ContentElement's Contenttype's
+fields (TagConfig), updates ``ContentElement.html`` (a JSON map of
+``{contentcontainer_id: rendered_html}``) in the database, and emits
+``displayhive:screen:stc:content_updated`` with
 ``{'id': <int>, 'containers': {contentcontainer_id: html}}`` back to the
 requesting socket only.  On any failure the handler emits nothing so the
 client silently keeps its existing rendered HTML.
@@ -44,9 +49,10 @@ def register_refresh_content_handlers(socketio, app, db):
     def handle_refresh_content(data):
         """Re-render a content item and push the updated HTML back to the requesting screen.
 
-        Called by screen devices after displaying an item with `update_after_show` set.
-        Re-renders `ContentElement.html` from the stored `serialized_input` (picking a
-        fresh random image if applicable), persists the result, and emits
+        Called by screen devices after displaying an item with `update_after_show`
+        set — a `pretalx_table` field needing fresh schedule data. Re-renders
+        `ContentElement.html` from the stored `serialized_input`, persists the
+        result, and emits
         `displayhive:screen:stc:content_updated` back to the requesting socket.
         On any failure, nothing is emitted so the client keeps its cached HTML.
         """

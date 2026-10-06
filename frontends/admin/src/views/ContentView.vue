@@ -300,7 +300,14 @@ const copyContent = (content: ContentElement) => {
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Content" @click="openCreateWorkflow" size="small" />
+            <Button
+              v-if="canCreate"
+              data-tour="content-new"
+              icon="pi pi-plus"
+              label="New Content"
+              @click="openCreateWorkflow"
+              size="small"
+            />
             <Button icon="pi pi-refresh" label="Refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>

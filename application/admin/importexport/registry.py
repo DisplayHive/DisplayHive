@@ -8,9 +8,9 @@ export/import is always self-consistent.
 
 Only entities that can be independently selected/matched across instances
 carry a `uuid` column and appear here. Support/child rows (DesignGradient,
-DesignContainerStyle, DesignGlobalStyle, TagConfig,
-MagicTagValueListEntry, and the pure association tables) always ride along
-with their owning entity and are not part of this registry.
+DesignContainerStyle, DesignGlobalStyle, TagConfig, and the pure
+association tables) always ride along with their owning entity and are not
+part of this registry.
 """
 
 from dataclasses import dataclass, field
@@ -39,8 +39,6 @@ ENTITY_TYPES = [
     EntityType(key='content_elements', model_name='ContentElement', label_field='title', depends_on=('contenttypes',)),
     EntityType(key='media', model_name='Media', label_field='filename', depends_on=()),
     EntityType(key='devices', model_name='Device', label_field='name', depends_on=()),  # screen link is soft/nullable, not a hard dep
-    EntityType(key='magic_tag_value_lists', model_name='MagicTagValueList', label_field='name', depends_on=()),
-    EntityType(key='magic_tags', model_name='MagicTag', label_field='name', depends_on=('magic_tag_value_lists',)),  # only when value_list_id set
 ]
 
 ENTITY_TYPES_BY_KEY = {et.key: et for et in ENTITY_TYPES}

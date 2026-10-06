@@ -7,6 +7,7 @@ import {
 } from "./adopt";
 import { getAdoptionToken } from "./storage";
 import { initDebugPanel } from "./debug-panel";
+import { applyStageTransform } from "./rotation";
 import { jumpToScene, stopSceneRotation, resumeSceneRotation } from "./content-display";
 
 /**
@@ -16,6 +17,13 @@ import { jumpToScene, stopSceneRotation, resumeSceneRotation } from "./content-d
  * Socket.IO connection, and performs lightweight startup logging.
  */
 export function screenInit(): void {
+  // Turn the stage straight away from the last known rotation (no flash).
+  try {
+    applyStageTransform();
+  } catch (e) {
+    console.warn("applyStageTransform failed:", e);
+  }
+
   // Initialize debug panel first
   try {
     initDebugPanel();

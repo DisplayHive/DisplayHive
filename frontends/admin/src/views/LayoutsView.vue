@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -85,6 +87,7 @@ const executeCopyLayout = async () => {
       name,
       description: copySource.value.description || '',
       container_ids: copySource.value.container_ids || [],
+      variations: copySource.value.variations || [],
     },
   )
   if (ack?.ok) {
@@ -129,18 +132,26 @@ const refreshData = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="layouts-view">
+  <div v-else data-tour="layouts-page" class="layouts-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Layout" @click="openNewPage" size="small" />
+            <Button
+              v-if="canCreate"
+              data-tour="layouts-new"
+              icon="pi pi-plus"
+              label="New Layout"
+              @click="openNewPage"
+              size="small"
+            />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="layouts-table"
           :value="filteredLayouts"
           :loading="loading"
           sortField="name"
@@ -154,7 +165,12 @@ const refreshData = () => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter layouts..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="layouts-filter"
+                  placeholder="Filter layouts..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -168,9 +184,21 @@ const refreshData = () => {
           <Column header="Containers" style="width: 110px">
             <template #body="{ data }">{{ (data.container_ids || []).length }}</template>
           </Column>
+          <Column header="Used by" style="width: 200px">
+            <template #body="{ data }">
+              <template v-if="(data.contenttypes || []).length">
+                <template v-for="(ct, i) in data.contenttypes" :key="ct.id">
+                  <span v-if="i">, </span>
+                  <RouteLink v-if="rightsStore.can('contenttypes.page')" :to="links.contentType(ct.id)" title="Open this content type">{{ ct.name }}</RouteLink>
+                  <span v-else>{{ ct.name }}</span>
+                </template>
+              </template>
+              <span v-else class="hint">-</span>
+            </template>
+          </Column>
           <Column header="Actions" style="width: 180px">
             <template #body="{ data }">
-              <div class="action-buttons">
+              <div class="action-buttons" data-tour="layouts-row-actions">
                 <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditPage(data)" size="small" outlined title="Edit" />
                 <Button v-if="canCreate" icon="pi pi-copy" @click="openCopyDialog(data)" size="small" outlined title="Clone" />
                 <Button

@@ -94,14 +94,15 @@ What the module handles automatically for each declared instance:
   the git repository and builds both frontends on boot, when `gitRepository`
   is set.
 - Optionally, a `displayhive-<name>-webhook` listener
-  (`webhook.enable = true`) that redeploys automatically on a Gogs push —
-  Python-only changes redeploy in seconds since it skips `npm ci`/`npm run
-  build` when the frontend source trees haven't changed.
+  (`webhook.enable = true`) that redeploys automatically on a push from
+  either Gogs or GitHub — Python-only changes redeploy in seconds since it
+  skips `npm ci`/`npm run build` when the frontend source trees haven't
+  changed.
 
 You'll need a reverse proxy (e.g. nginx) in front of the instance to terminate
 TLS and forward WebSocket upgrades for Socket.IO. See the commented example in
 [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)
-for a full walkthrough covering SSH deploy keys for private repos, Gogs
+for a full walkthrough covering SSH deploy keys for private repos, Gogs/GitHub
 webhook configuration, and an nginx `virtualHosts` block — including the
 `client_max_body_size` setting required for media uploads. Once a reverse
 proxy is in front of the instance, also set `TRUSTED_PROXY_COUNT` (see

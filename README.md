@@ -13,7 +13,6 @@ into groups so you can target one display or a hundred at once.
 - **Layouts & containers** — position named containers on a drag-and-drop canvas (with snapping), reuse across screens.
 - **Designs** — style a layout with color palettes, gradients, and animated/dynamic backgrounds, independent of its container placement.
 - **Content types** — reusable field schemas (text, image, icon, link, table, Pretalx table, date/time, WYSIWYG, ...) that populate containers.
-- **Magic tags** — `{{ var_name }}` placeholders for dynamic values inside designs.
 - **Screens & groups** — register devices, assign them to screens, organize screens into groups, and manage assignments from a matrix view.
 - **Live preview** — watch exactly what a screen renders from the admin panel without a physical device.
 - **Demo mode** — import ready-made example content packages to explore the admin panel with data already in place.
@@ -66,7 +65,7 @@ npm run docs:serve   # http://localhost:8000
 ```
 
 - **User guide** ([`docs/user/`](docs/user/)) — using the admin panel:
-  layouts, designs, content, magic tags, screens/devices/groups, rights &
+  layouts, designs, content, screens/devices/groups, rights &
   groups, integrations, import/export, and settings.
 - **Developer guide** ([`docs/developer/`](docs/developer/)) — architecture,
   the real-time content push pipeline, and how to contribute.

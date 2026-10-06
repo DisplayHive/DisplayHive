@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -69,7 +72,12 @@ const layoutOptions = computed(() => layouts.value.map(l => ({ label: l.name, va
 // in display order — each one gets exactly one field slot.
 const containersForLayout = computed(() => {
   const layout = layouts.value.find(l => l.id === editForm.value.layout_id)
-  const ids = new Set(layout?.container_ids || [])
+  // Any aspect-ratio variant counts — a container only present in, say, the
+  // 4:3 variation can still be targeted by a field.
+  const ids = new Set([
+    ...(layout?.container_ids || []),
+    ...(layout?.variations || []).flatMap(v => v.container_ids),
+  ])
   return containers.value
     .filter(c => ids.has(c.id))
     .slice()
@@ -456,6 +464,9 @@ const deleteContentType = (ct: ContentType) => {
     },
   })
 }
+
+// Reached via a link like /contenttypes?edit=<id>: open that content type.
+useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
 </script>
 
 <template>
@@ -469,18 +480,26 @@ const deleteContentType = (ct: ContentType) => {
       </template>
     </Card>
   </div>
-  <div v-else class="contenttypes-view">
+  <div v-else data-tour="contenttypes-page" class="contenttypes-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Content Type" @click="openNewDialog" size="small" />
+            <Button
+              v-if="canCreate"
+              data-tour="contenttypes-new"
+              icon="pi pi-plus"
+              label="New Content Type"
+              @click="openNewDialog"
+              size="small"
+            />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="contenttypes-table"
           :value="filteredContentTypes"
           :loading="loading"
           sortField="name"
@@ -494,7 +513,12 @@ const deleteContentType = (ct: ContentType) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter content types..." class="filter-input" />
+                <InputText
+                  data-tour="contenttypes-filter"
+                  v-model="filterText"
+                  placeholder="Filter content types..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -508,11 +532,12 @@ const deleteContentType = (ct: ContentType) => {
           <Column header="Layout" style="width: 160px">
             <template #body="{ data }">
               <a
-                v-if="data.layout_name"
-                href="#"
+                v-if="data.layout_name && data.layout_id"
+                :href="router.resolve({ name: 'layout-edit', params: { id: data.layout_id } }).href"
                 class="layout-link"
-                @click.prevent="router.push('/layouts')"
-              >{{ data.layout_name }} <i class="pi pi-external-link layout-link-icon"></i></a>
+                @click.prevent="router.push({ name: 'layout-edit', params: { id: data.layout_id } })"
+              >{{ data.layout_name }}</a>
+              <span v-else-if="data.layout_name">{{ data.layout_name }}</span>
               <span v-else class="hint">none</span>
             </template>
           </Column>
@@ -575,7 +600,7 @@ const deleteContentType = (ct: ContentType) => {
           <label for="ct-description">Description</label>
           <Textarea id="ct-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
-        <div class="field">
+        <div class="field" data-tour="contenttype-layout-field">
           <label for="ct-layout">
             Layout
             <i
@@ -614,7 +639,7 @@ const deleteContentType = (ct: ContentType) => {
              the label shown in the Content Editor form. Drag rows by the
              handle to reorder — this order is what the Content Editor and
              the rendered content element use. -->
-        <div class="fields-section">
+        <div class="fields-section" data-tour="contenttype-fields-section">
           <label>Fields <small>one per container of the selected Layout &mdash; drag to reorder</small></label>
           <p v-if="!editForm.layout_id" class="hint">Select a Layout above to see its containers.</p>
           <p v-else-if="!editForm.tagconfigs.length" class="hint">This Layout has no containers yet.</p>
@@ -638,7 +663,13 @@ const deleteContentType = (ct: ContentType) => {
                   <i class="pi pi-bars drag-handle" title="Drag to reorder"></i>
                 </div>
                 <div class="tagconfig-col-container">
-                  <span class="container-label">{{ containerLabelFor(t.contentcontainer_id) }}</span>
+                  <RouteLink
+                    v-if="rightsStore.can('layouts.page') && editForm.layout_id && t.contentcontainer_id"
+                    :to="links.layout(editForm.layout_id, t.contentcontainer_id)"
+                    class="container-label"
+                    title="Open this container in the layout editor"
+                  >{{ containerLabelFor(t.contentcontainer_id) }}</RouteLink>
+                  <span v-else class="container-label">{{ containerLabelFor(t.contentcontainer_id) }}</span>
                 </div>
                 <div class="tagconfig-col-title">
                   <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
@@ -680,9 +711,11 @@ const deleteContentType = (ct: ContentType) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeDialog" text />
-        <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveContentType(true)" :disabled="loadingContentType" />
-        <Button label="Save" @click="saveContentType()" :disabled="loadingContentType" />
+        <div class="dialog-footer-actions" data-tour="contenttype-dialog-footer">
+          <Button label="Cancel" @click="closeDialog" text />
+          <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveContentType(true)" :disabled="loadingContentType" />
+          <Button label="Save" @click="saveContentType()" :disabled="loadingContentType" />
+        </div>
       </template>
     </Dialog>
   </div>
@@ -701,6 +734,16 @@ const deleteContentType = (ct: ContentType) => {
   justify-content: flex-end;
 }
 
+/* PrimeVue's own .p-dialog-footer flex styling applies to this slot's
+   direct children — wrapping the buttons in a div (so the tour has one
+   element to highlight/advanceOnClick regardless of which button is
+   clicked) needs the same layout repeated on the wrapper. */
+.dialog-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .hint {
   color: var(--p-text-muted-color, #888);
   font-size: 0.75rem;
@@ -713,11 +756,6 @@ const deleteContentType = (ct: ContentType) => {
 
 .layout-link:hover {
   text-decoration: underline;
-}
-
-.layout-link-icon {
-  font-size: 0.7rem;
-  color: var(--p-text-muted-color, #9ca3af);
 }
 
 .tpl-loading {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -202,7 +204,7 @@ const refreshData = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="matrix-view">
+  <div v-else data-tour="matrix-page" class="matrix-view">
     <Card>
       <template #content>
         <div class="matrix-info-row">
@@ -226,7 +228,7 @@ const refreshData = () => {
                   :key="sg.id"
                   class="group-header"
                 >
-                  <div class="group-name">{{ sg.name }}</div>
+                  <div class="group-name"><RouteLink :to="links.screengroup(sg.id)" title="Open this screen group">{{ sg.name }}</RouteLink></div>
                 </th>
               </tr>
             </thead>
@@ -234,7 +236,7 @@ const refreshData = () => {
               <tr v-for="screen in screens" :key="screen.id">
                 <td class="screen-name">
                   <div class="screen-name-inner">
-                    <span>{{ screen.name }}</span>
+                    <RouteLink :to="links.screen(screen.id)" title="Open this screen">{{ screen.name }}</RouteLink>
                     <Tag
                       v-if="screen.hasDevice"
                       :value="screen.online ? 'Online' : 'Offline'"
@@ -248,6 +250,7 @@ const refreshData = () => {
                   v-for="sg in screengroups"
                   :key="sg.id"
                   class="matrix-cell"
+                  data-tour="matrix-checkbox-cell"
                   @click="rightsStore.can('screengroups.manage_screens') && toggleAssignment(screen.id, sg.id)"
                 >
                   <Checkbox

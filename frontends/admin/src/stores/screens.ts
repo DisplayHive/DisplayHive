@@ -22,11 +22,7 @@ export const useScreensStore = defineStore('screens', () => {
     emit('displayhive:admin:cts:get_admin_screen')
   }
 
-  const createScreen = (payload: {
-    name: string
-    width?: string | null
-    height?: string | null
-  }) => {
+  const createScreen = (payload: { name: string }) => {
     emit('displayhive:screens:cts:create_screen', payload)
   }
 
@@ -35,6 +31,8 @@ export const useScreensStore = defineStore('screens', () => {
     old_name: string
     new_name: string
     screengroup_ids: number[]
+    aspect_ratio?: string
+    rotation?: number
   }) => {
     emit('displayhive:screens:cts:rename_screen', payload)
   }

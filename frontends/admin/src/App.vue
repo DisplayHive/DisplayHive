@@ -167,6 +167,15 @@ watch(
   },
 )
 
+watch(
+  () => [settingsStore.hideUserTours, settingsStore.hideAdminTours, route.name] as const,
+  ([hideUser, hideAdmin, name]) => {
+    if (hideUser && hideAdmin && name === 'tour') {
+      router.replace('/')
+    }
+  },
+)
+
 onMounted(async () => {
   await authStore.restore()
   if (authStore.isAuthenticated) {
@@ -259,15 +268,6 @@ const contentStructureGroupItems = computed(() => [
           label: 'Layouts',
           icon: 'pi pi-th-large',
           command: () => router.push('/layouts'),
-        },
-      ]
-    : []),
-  ...(rightsStore.can('magictags.page') || rightsStore.can('magictagvaluelists.page')
-    ? [
-        {
-          label: 'Magic Tags',
-          icon: 'pi pi-tags',
-          command: () => router.push('/magictags'),
         },
       ]
     : []),
@@ -378,6 +378,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     home: 'Dashboard',
     demo: 'Demo Mode',
+    tour: 'Guided Tour',
     devices: 'Adopted Devices',
     screens: 'Screens',
     screengroups: 'Screen Groups',
@@ -390,7 +391,6 @@ const pageTitle = computed(() => {
     layouts: 'Layouts',
     'layout-new': 'New Layout',
     'layout-edit': 'Edit Layout',
-    magictags: 'Magic Tags',
     settings: 'Settings',
     logger: 'Logger',
     media: 'Media',
@@ -407,6 +407,7 @@ const pageIcon = computed(() => {
   const icons: Record<string, string> = {
     home: 'pi pi-home',
     demo: 'pi pi-sparkles',
+    tour: 'pi pi-compass',
     devices: 'pi pi-desktop',
     screens: 'pi pi-window-maximize',
     screengroups: 'pi pi-clone',
@@ -419,7 +420,6 @@ const pageIcon = computed(() => {
     layouts: 'pi pi-th-large',
     'layout-new': 'pi pi-plus',
     'layout-edit': 'pi pi-pencil',
-    magictags: 'pi pi-tags',
     settings: 'pi pi-cog',
     logger: 'pi pi-list',
     media: 'pi pi-images',
@@ -499,9 +499,25 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
             <i class="pi pi-sparkles"></i>
             Demo Mode
           </span>
+          <span
+            v-if="!(settingsStore.hideUserTours && settingsStore.hideAdminTours) && rightsStore.can('tour.page')"
+            class="demo-mode-badge"
+            :class="{ active: route.name === 'tour' }"
+            data-testid="tour-badge"
+            @click="router.push('/tour')"
+          >
+            <i class="pi pi-compass"></i>
+            Tour
+          </span>
         </div>
         <div class="header-controls">
-          <Menubar :model="menuItems" class="app-menubar" breakpoint="600px" />
+          <Menubar
+            :model="menuItems"
+            class="app-menubar"
+            :class="{ 'app-menubar--disabled': !isConnected }"
+            :aria-disabled="!isConnected"
+            breakpoint="600px"
+          />
           <span class="current-user" data-testid="current-username">
             <i class="pi pi-user"></i>
             {{ authStore.username }}
@@ -574,7 +590,10 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
         <RouterView />
       </main>
 
-      <div class="git-commit-badge">Commit: {{ gitCommit }}</div>
+      <div class="git-commit-badge">
+        <a href="https://docs.displayhive.org/" target="_blank" rel="noopener" class="docs-link">DisplayHive Documentation</a>
+        · Commit: {{ gitCommit }}
+      </div>
     </template>
   </div>
 </template>
@@ -731,6 +750,14 @@ body {
 .app-menubar {
   background: transparent !important;
   border: none !important;
+}
+
+/* Navigating while the socket is down would just dead-end on pages that
+   can't fetch anything — grey the toolbar out and block clicks until the
+   connection (and with it, the disconnect-overlay below) comes back. */
+.app-menubar--disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .header-controls {
@@ -1042,6 +1069,18 @@ body {
   font-family: monospace;
   pointer-events: none;
   z-index: 9999;
+}
+
+/* The badge itself is pointer-events: none (sits over page content without
+   intercepting clicks near the corner) — restore it just for the link. */
+.docs-link {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: underline;
+}
+
+.docs-link:hover {
+  color: var(--p-primary-color, #667eea);
 }
 
 /* Tablet styles */

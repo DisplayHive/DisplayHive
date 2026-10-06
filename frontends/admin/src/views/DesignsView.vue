@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import { useMagicTagsStore } from '../stores/magicTags'
 import { useRightsStore } from '../stores/rights'
-import type { Design, ContentContainer, Gradient, GradientStop, DefaultColor } from '../types/models'
+import type { Design, Gradient, GradientStop, DefaultColor } from '../types/models'
 import ColorPalettePicker from '../components/ColorPalettePicker.vue'
 import {
   BACKGROUND_EFFECTS,
@@ -28,9 +28,10 @@ import Panel from 'primevue/panel'
 import Dropdown from 'primevue/dropdown'
 import MultiSelect from 'primevue/multiselect'
 import InputNumber from 'primevue/inputnumber'
-import ColorPicker from 'primevue/colorpicker'
+import ColorPicker from '../components/ColorPicker.vue'
 import Checkbox from 'primevue/checkbox'
 import MediaPickerDialog from '../components/MediaPickerDialog.vue'
+import { FONT_PROPERTIES, keywordOptions, type FontOption, type FontProperty } from '../utils/containerFontProperties'
 
 import { Codemirror } from 'vue-codemirror'
 import { html as cmHtml } from '@codemirror/lang-html'
@@ -41,130 +42,34 @@ import { EditorView } from '@codemirror/view'
 const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
 const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
 
-const htmlEditorRef = ref<{ view: EditorView } | null>(null)
-const cssEditorRef = ref<{ view: EditorView } | null>(null)
-const lastFocusedEditor = ref<'html' | 'css'>('html')
-
-const onMagicTagDragStart = (e: DragEvent, tagName: string) => {
-  e.dataTransfer?.setData('text/plain', `{{ var_${tagName} }}`)
-}
-
 // --- Collapsible Panel state ------------------------------------------------
 // PrimeVue's Panel only toggles from its small chevron button, not the
 // header itself — these refs + a click handler on our custom #header slot
 // content make the whole header row clickable instead.
 const defaultColorsCollapsed = ref(true)
+const aspectRatiosCollapsed = ref(true)
 const backdropCollapsed = ref(true)
 const gradientPanelCollapsed = ref(true)
 const backgroundPanelCollapsed = ref(true)
 const effectPanelCollapsed = ref(true)
 const globalStylesCollapsed = ref(true)
-const perContainerSectionCollapsed = ref(true)
 const customHtmlCssCollapsed = ref(true)
 
-const containerPanelCollapsed = ref<Record<number, boolean>>({})
-const isContainerPanelCollapsed = (id: number) => containerPanelCollapsed.value[id] ?? true
-const toggleContainerPanel = (id: number) => {
-  containerPanelCollapsed.value[id] = !isContainerPanelCollapsed(id)
-}
 const resetPanelCollapseState = () => {
   defaultColorsCollapsed.value = true
+  aspectRatiosCollapsed.value = true
   backdropCollapsed.value = true
   gradientPanelCollapsed.value = true
   backgroundPanelCollapsed.value = true
   effectPanelCollapsed.value = true
   globalStylesCollapsed.value = true
-  perContainerSectionCollapsed.value = true
   customHtmlCssCollapsed.value = true
-  containerPanelCollapsed.value = {}
-}
-
-// --- Per-container "Font" style overrides ----------------------------------
-// A generic (property, value) key/value row per container per Design (see
-// DesignContainerStyle on the backend) — starting with this one "Font"
-// group. Blank/"(not set)" means the property is omitted from the generated
-// CSS entirely, not rendered as `prop: ;`.
-
-interface FontOption { label: string; value: string }
-interface FontProperty {
-  key: string
-  label: string
-  /** 'dropdown' (editable Dropdown, default) | 'vh-number' (numeric vh input) | 'color' (ColorPicker) */
-  type?: 'dropdown' | 'vh-number' | 'color'
-  options?: FontOption[]
-}
-
-const NOT_SET: FontOption = { label: '(not set)', value: '' }
-
-const WEB_SAFE_FONTS: FontOption[] = [
-  { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Arial Black', value: '"Arial Black", sans-serif' },
-  { label: 'Verdana', value: 'Verdana, sans-serif' },
-  { label: 'Tahoma', value: 'Tahoma, sans-serif' },
-  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
-  { label: 'Impact', value: 'Impact, sans-serif' },
-  { label: 'Segoe UI', value: '"Segoe UI", sans-serif' },
-  { label: 'Times New Roman', value: '"Times New Roman", serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Garamond', value: 'Garamond, serif' },
-  { label: 'Courier New', value: '"Courier New", monospace' },
-  { label: 'Lucida Console', value: '"Lucida Console", monospace' },
-  { label: 'Monaco', value: 'Monaco, monospace' },
-  { label: 'Brush Script MT', value: '"Brush Script MT", cursive' },
-  { label: 'Comic Sans MS', value: '"Comic Sans MS", cursive' },
-  { label: 'Sans-serif (generic)', value: 'sans-serif' },
-  { label: 'Serif (generic)', value: 'serif' },
-  { label: 'Monospace (generic)', value: 'monospace' },
-  { label: 'Cursive (generic)', value: 'cursive' },
-  { label: 'Fantasy (generic)', value: 'fantasy' },
-  { label: 'System UI (generic)', value: 'system-ui' },
-]
-
-const keywordOptions = (...values: string[]): FontOption[] => values.map((v) => ({ label: v, value: v }))
-
-const FONT_PROPERTIES: FontProperty[] = [
-  { key: 'font-family', label: 'Font Family', options: [NOT_SET, ...WEB_SAFE_FONTS] },
-  { key: 'font-variant', label: 'Font Variant', options: [NOT_SET, ...keywordOptions(
-    'normal', 'small-caps', 'all-small-caps', 'petite-caps', 'all-petite-caps', 'unicase', 'titling-caps',
-  )] },
-  { key: 'font-weight', label: 'Font Weight', options: [NOT_SET, ...keywordOptions(
-    'normal', 'bold', 'bolder', 'lighter', '100', '200', '300', '400', '500', '600', '700', '800', '900',
-  )] },
-  { key: 'font-stretch', label: 'Font Stretch', options: [NOT_SET, ...keywordOptions(
-    'normal', 'ultra-condensed', 'extra-condensed', 'condensed', 'semi-condensed',
-    'semi-expanded', 'expanded', 'extra-expanded', 'ultra-expanded',
-  )] },
-  { key: 'font-size', label: 'Font Size', type: 'vh-number' },
-  { key: 'line-height', label: 'Line Height', options: [NOT_SET, ...keywordOptions('normal')] },
-  { key: 'font-style', label: 'Font Style', options: [NOT_SET, ...keywordOptions('normal', 'italic', 'oblique')] },
-  { key: 'color', label: 'Color', type: 'color' },
-  // Alignment: text-align always applies (block or flex); the other three
-  // only take effect once `display` is switched to flex/grid — harmless
-  // no-ops otherwise, so they're safe to leave "(not set)" by default.
-  { key: 'text-align', label: 'Text Align', options: [NOT_SET, ...keywordOptions('left', 'center', 'right', 'justify')] },
-  { key: 'display', label: 'Display (for content alignment)', options: [NOT_SET, ...keywordOptions('flex', 'grid', 'block')] },
-  { key: 'justify-content', label: 'Justify Content (horizontal)', options: [NOT_SET, ...keywordOptions(
-    'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly',
-  )] },
-  { key: 'align-items', label: 'Align Items (vertical)', options: [NOT_SET, ...keywordOptions(
-    'flex-start', 'center', 'flex-end', 'stretch', 'baseline',
-  )] },
-]
-
-const containers = ref<ContentContainer[]>([])
-// contentcontainer id -> { property: value }
-const containerStyles = ref<Record<number, Record<string, string>>>({})
-
-const handleContainersList = (data: { data?: ContentContainer[] }) => {
-  containers.value = data?.data || []
 }
 
 // A stored value that no longer matches its property's current input type
 // (e.g. "xx-small" for font-size after it changed from a keyword dropdown to
-// a vh number) can't be shown OR cleared by that control — it would just
-// look blank/unset while actually still being sent back unchanged on every
-// autosave. Discarding it here, once, on load turns "invisible stale value"
-// into a real, visible "not set" the moment the Design is opened.
+// a vh number) can't be shown OR cleared by that control. Discarding it on
+// load turns "invisible stale value" into a visible "not set".
 const isValidForType = (type: FontProperty['type'], value: string): boolean => {
   if (!value) return true
   if (type === 'vh-number') return /^-?\d+(\.\d+)?vh$/.test(value)
@@ -172,79 +77,10 @@ const isValidForType = (type: FontProperty['type'], value: string): boolean => {
   return true
 }
 
-const handleDesignContainerStyles = (data: { design_id?: number; data?: Record<string, unknown> }) => {
-  if (!data || data.design_id !== editForm.value.id) return
-  const loaded: Record<number, Record<string, string>> = {}
-  for (const [idStr, rawStyles] of Object.entries(data.data || {})) {
-    const styles = { ...(rawStyles as Record<string, string>) }
-    for (const p of FONT_PROPERTIES) {
-      const v = styles[p.key]
-      if (v && !isValidForType(p.type, v)) {
-        delete styles[p.key]
-      }
-    }
-    loaded[Number(idStr)] = styles
-  }
-  containerStyles.value = loaded
-}
-
-const getStyleValue = (containerId: number, prop: string): string =>
-  containerStyles.value[containerId]?.[prop] ?? ''
-
-const saveDebounce: Record<number, ReturnType<typeof setTimeout>> = {}
-
-const setStyleValue = (containerId: number, prop: string, value: string | undefined) => {
-  const current = { ...containerStyles.value[containerId] }
-  current[prop] = value || ''
-  containerStyles.value = { ...containerStyles.value, [containerId]: current }
-
-  if (!editForm.value.id) return
-  if (saveDebounce[containerId]) clearTimeout(saveDebounce[containerId])
-  saveDebounce[containerId] = setTimeout(() => {
-    const styles: Record<string, string> = {}
-    for (const p of FONT_PROPERTIES) styles[p.key] = containerStyles.value[containerId]?.[p.key] || ''
-    emit('displayhive:admin:cts:save_design_container_styles', {
-      design_id: editForm.value.id, contentcontainer_id: containerId, styles,
-    })
-  }, 400)
-}
-
-// font-size: stored as a plain CSS value (e.g. "5vh"); the input only ever
-// deals in the numeric vh amount.
-const getVhNumber = (containerId: number, prop: string): number | null => {
-  const raw = getStyleValue(containerId, prop)
-  if (!raw) return null
-  const n = parseFloat(raw)
-  return isNaN(n) ? null : n
-}
-
-const setVhValue = (containerId: number, prop: string, n: number | null | undefined) => {
-  setStyleValue(containerId, prop, n == null ? '' : `${n}vh`)
-}
-
-// color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
-// CSS value needs the leading "#" — unless it's a "@default:<id>" reference
-// (see resolveColorRef below), in which case the ColorPicker just shows
-// that reference's *current* resolved hex.
-const getColorHex = (containerId: number, prop: string): string => {
-  const raw = getStyleValue(containerId, prop)
-  return raw ? resolveColorRef(raw).replace(/^#/, '') : ''
-}
-
-// Manual ColorPicker interaction always stores a literal — this is how a
-// field detaches from a default-color reference it may have held before.
-const setColorHex = (containerId: number, prop: string, hex: string | undefined) => {
-  setStyleValue(containerId, prop, hex ? `#${hex}` : '')
-}
-
-const setColorRef = (containerId: number, prop: string, ref: string) => {
-  setStyleValue(containerId, prop, ref)
-}
-
 // --- Global font styles (applied to every container via `.dh-container`) ---
-// Same (property, value) shape as the per-container ones above, just not
-// keyed by container id. Precedence: these global ones < per-container
-// overrides < the Design's own hand-written CSS (see upd_content.py).
+// A (property, value) pair per Design, not keyed by container. Precedence:
+// these global ones < per-container overrides (Layout editor) < the Design's
+// own hand-written CSS (see upd_content.py).
 const globalStyles = ref<Record<string, string>>({})
 
 const handleDesignGlobalStyles = (data: { design_id?: number; data?: Record<string, string> }) => {
@@ -323,7 +159,21 @@ type GradientLike = { type: string; repeating: boolean; angle: number; shape: st
 // opacity (0-100, default 100/opaque) becomes an 8-digit hex alpha channel
 // so a fully opaque top layer doesn't always hide gradients listed after it.
 const stopColorWithAlpha = (s: GradientStop): string => {
-  const color = `#${resolveStopColorHex(s)}`
+  // resolveStopColorHex()'s contract (see its own doc comment) is "return
+  // stop.color as-is, resolving a same-Design ref first" — it makes no
+  // promise about a leading '#', and callers disagree on it: the Color
+  // Stops editor below strips it (gradientEditForm's stops are always
+  // hash-less), but a Gradient fetched straight from the server (the list
+  // swatch here, and the Backdrop's applied-gradient preview) keeps
+  // whatever's in the DB, which always has one (see saveGradientEdit,
+  // which sends `#${stop.color}`). Blindly prepending '#' as this used to
+  // do doubled it for that second case ("##eeff00"), an invalid CSS color
+  // that silently dropped the *entire* background-image — hence a blank
+  // swatch. Strip first so this works for both cases, matching the
+  // backend's gradient_css_value()/_stop_color(), which never had this bug
+  // since it just uses the DB value directly.
+  const hex = resolveStopColorHex(s).replace(/^#/, '')
+  const color = `#${hex}`
   const opacity = s.opacity ?? 100
   if (opacity >= 100 || !color.startsWith('#') || color.length !== 7) return color
   const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255)
@@ -462,16 +312,46 @@ const deleteGradient = (g: Gradient) => {
   })
 }
 
+// Copy: duplicates a Gradient's type/angle/position and stops (including
+// each stop's Default Color `ref`, same as any other Design using it —
+// see resolveStopColorHex's doc comment) as a brand new, independent one.
+const showCopyGradientDialog = ref(false)
+const copyGradientSource = ref<Gradient | null>(null)
+const copyGradientNewName = ref('')
+
+const openCopyGradientDialog = (g: Gradient) => {
+  copyGradientSource.value = g
+  copyGradientNewName.value = `Copy of ${g.name}`
+  showCopyGradientDialog.value = true
+}
+
+const executeCopyGradient = () => {
+  const source = copyGradientSource.value
+  const name = copyGradientNewName.value.trim()
+  if (!source || !name) return
+  emit('displayhive:admin:cts:create_gradient', {
+    name,
+    type: source.type,
+    repeating: source.repeating,
+    angle: source.angle,
+    shape: source.shape,
+    size: source.size,
+    position_x: source.position_x,
+    position_y: source.position_y,
+    stops: source.stops,
+  })
+  toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
+  showCopyGradientDialog.value = false
+}
+
 const toast = useToast()
 const confirm = useConfirm()
 const { on, off, emit } = useSocket()
-const magicTagsStore = useMagicTagsStore()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('designs.create'))
 const canEdit = computed(() => rightsStore.can('designs.edit'))
 const canDelete = computed(() => rightsStore.can('designs.delete'))
-const canMagicTagsPage = computed(() => rightsStore.can('magictags.page'))
 
 const designs = ref<Design[]>([])
 const loading = ref(true)
@@ -513,6 +393,8 @@ const editForm = ref({
   background_effect: '' as string,
   background_effect_settings: {} as Record<string, number | string | string[]>,
   default_colors: [] as DefaultColor[],
+  /** Extra aspect ratios ("W:H") offered for Screens and Layout variations; 16:9 is the implicit base. */
+  aspect_ratios: [] as string[],
   gradient_ids: [] as number[],
 })
 
@@ -565,6 +447,30 @@ const colorDisplayLabel = (v: string | undefined | null): string => {
   const id = v.slice(DEFAULT_COLOR_PREFIX.length)
   const c = editForm.value.default_colors.find((c) => c.id === id)
   return c ? `🎨 ${c.name || c.hex}` : '(deleted default color)'
+}
+
+// --- Aspect ratios: extra "W:H" shapes this Design supports, on top of the
+// always-available 16:9 base. Screens pick one, and Layouts get one
+// variation (own container membership + positions) per ratio. Duplicates are
+// by shape (4:3 == 8:6) and 16:9 itself is never listed.
+const RATIO_PRESETS = ['4:3', '16:10', '21:9', '1:1', '3:4', '10:16', '9:16']
+const newRatioW = ref<number | null>(null)
+const newRatioH = ref<number | null>(null)
+const ratioValue = (r: string) => { const [w = 1, h = 1] = r.split(':').map(Number); return w / h }
+const hasRatio = (r: string) =>
+  Math.abs(ratioValue(r) - 16 / 9) < 1e-9 || editForm.value.aspect_ratios.some((x) => Math.abs(ratioValue(x) - ratioValue(r)) < 1e-9)
+const addAspectRatio = (r: string) => {
+  if (!/^\d{1,4}:\d{1,4}$/.test(r) || r.startsWith('0:') || r.endsWith(':0') || hasRatio(r)) return
+  editForm.value.aspect_ratios = [...editForm.value.aspect_ratios, r]
+}
+const addCustomAspectRatio = () => {
+  if (!newRatioW.value || !newRatioH.value) return
+  addAspectRatio(`${newRatioW.value}:${newRatioH.value}`)
+  newRatioW.value = null
+  newRatioH.value = null
+}
+const removeAspectRatio = (r: string) => {
+  editForm.value.aspect_ratios = editForm.value.aspect_ratios.filter((x) => x !== r)
 }
 
 const newColorId = (): string =>
@@ -761,6 +667,12 @@ const handleDesignDetail = (data: { design?: Design }) => {
       } catch {
         editForm.value.default_colors = []
       }
+      try {
+        const parsedRatios = design.aspect_ratios ? JSON.parse(design.aspect_ratios) : []
+        editForm.value.aspect_ratios = Array.isArray(parsedRatios) ? parsedRatios.filter((r: unknown) => typeof r === 'string') : []
+      } catch {
+        editForm.value.aspect_ratios = []
+      }
       loadingDesign.value = false
       loadingDesignError.value = ''
       if (designLoadTimer) {
@@ -776,22 +688,16 @@ const handleDesignDetail = (data: { design?: Design }) => {
 onMounted(() => {
   on('displayhive:admin:stc:upd_designs', handleDesignsList)
   on('displayhive:admin:stc:design_detail', handleDesignDetail)
-  on('displayhive:admin:stc:upd_containers', handleContainersList)
-  on('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   on('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
   on('displayhive:admin:stc:upd_gradients', handleGradientsList)
   on('displayhive:admin:stc:design_gradients', handleDesignGradients)
   refreshData()
-  emit('displayhive:admin:cts:get_containers')
   emit('displayhive:admin:cts:get_gradients')
-  magicTagsStore.fetch()
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:upd_designs', handleDesignsList)
   off('displayhive:admin:stc:design_detail', handleDesignDetail)
-  off('displayhive:admin:stc:upd_containers', handleContainersList)
-  off('displayhive:admin:stc:design_container_styles', handleDesignContainerStyles)
   off('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
   off('displayhive:admin:stc:upd_gradients', handleGradientsList)
   off('displayhive:admin:stc:design_gradients', handleDesignGradients)
@@ -809,9 +715,9 @@ const openNewDialog = () => {
     background_color: '', background_image_url: '', background_repeat: '', background_size: '', background_opacity: 100,
     background_effect: '', background_effect_settings: {},
     default_colors: [],
+    aspect_ratios: [],
     gradient_ids: [],
   }
-  containerStyles.value = {}
   globalStyles.value = {}
   resetPanelCollapseState()
   showEditDialog.value = true
@@ -833,16 +739,15 @@ const openEditDialog = (design: Design) => {
     background_effect: design.background_effect || '',
     background_effect_settings: {},
     default_colors: [],
+    aspect_ratios: [],
     gradient_ids: [],
   }
-  containerStyles.value = {}
   globalStyles.value = {}
   resetPanelCollapseState()
   try {
     loadingDesign.value = true
     loadingDesignError.value = ''
     emit('displayhive:admin:cts:get_design', { id: design.id })
-    emit('displayhive:admin:cts:get_design_container_styles', { design_id: design.id })
     emit('displayhive:admin:cts:get_design_global_styles', { design_id: design.id })
     emit('displayhive:admin:cts:get_design_gradients', { design_id: design.id })
     if (designLoadTimer) clearTimeout(designLoadTimer)
@@ -887,6 +792,7 @@ const saveDesign = async (keepOpen = false) => {
       ? JSON.stringify(editForm.value.background_effect_settings)
       : '',
     default_colors: JSON.stringify(editForm.value.default_colors.filter((c) => c.name.trim() && c.hex.trim())),
+    aspect_ratios: JSON.stringify(editForm.value.aspect_ratios),
   })
 
   toast.add({
@@ -918,6 +824,9 @@ const deleteDesign = (design: Design) => {
     },
   })
 }
+
+// Reached via a link like /designs?edit=<id>: open that design.
+useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
 </script>
 
 <template>
@@ -931,18 +840,19 @@ const deleteDesign = (design: Design) => {
       </template>
     </Card>
   </div>
-  <div v-else class="designs-view">
+  <div v-else data-tour="designs-page" class="designs-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
+            <Button v-if="canCreate" data-tour="designs-new" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="designs-table"
           :value="filteredDesigns"
           :loading="loading"
           sortField="name"
@@ -956,7 +866,12 @@ const deleteDesign = (design: Design) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter designs..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="designs-filter"
+                  placeholder="Filter designs..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -975,9 +890,10 @@ const deleteDesign = (design: Design) => {
           <Column header="Actions" style="width: 200px">
             <template #body="{ data }">
               <div class="action-buttons">
-                <Button v-if="canEdit" icon="pi pi-pencil" @click="openEditDialog(data)" size="small" outlined title="Edit" />
+                <Button v-if="canEdit" data-tour="designs-row-edit" icon="pi pi-pencil" @click="openEditDialog(data)" size="small" outlined title="Edit" />
                 <Button
                   v-if="canEdit && !data.isDefault"
+                  data-tour="designs-row-make-active"
                   icon="pi pi-check"
                   @click="setDefault(data)"
                   size="small"
@@ -1029,7 +945,7 @@ const deleteDesign = (design: Design) => {
           Loading design HTML/CSS…
           <div v-if="loadingDesignError" class="tpl-loading-error">{{ loadingDesignError }}</div>
         </div>
-        <div class="field">
+        <div class="field" data-tour="designs-name-fields">
           <label for="design-name">Name</label>
           <InputText id="design-name" v-model="editForm.name" class="w-full" />
         </div>
@@ -1040,7 +956,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="defaultColorsCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-default-colors-header" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
                 <span class="panel-header-title">Default Colors</span>
                 <small class="panel-header-desc">A named palette for this Design — pick the palette icon next to any color field below to reuse one of these.</small>
               </div>
@@ -1055,10 +971,40 @@ const deleteDesign = (design: Design) => {
           </Panel>
         </div>
 
+        <div v-if="!isNew" class="container-styles-section" data-tour="designs-aspect-ratios">
+          <Panel v-model:collapsed="aspectRatiosCollapsed" toggleable class="container-style-panel">
+            <template #header>
+              <div class="panel-header-clickable" @click="aspectRatiosCollapsed = !aspectRatiosCollapsed">
+                <span class="panel-header-title">Aspect Ratios</span>
+                <small class="panel-header-desc">16:9 is always available. Add more here, then give Screens a ratio and Layouts a variation per ratio.</small>
+              </div>
+            </template>
+            <div class="aspect-ratio-list">
+              <Tag value="16:9 (base)" severity="secondary" />
+              <Tag v-for="r in editForm.aspect_ratios" :key="r" severity="info" class="aspect-ratio-chip">
+                {{ r }}
+                <i class="pi pi-times aspect-ratio-remove" title="Remove" @click="removeAspectRatio(r)"></i>
+              </Tag>
+            </div>
+            <div class="aspect-ratio-presets">
+              <Button
+                v-for="r in RATIO_PRESETS.filter((x) => !hasRatio(x))" :key="r"
+                :label="r" icon="pi pi-plus" text size="small" @click="addAspectRatio(r)"
+              />
+            </div>
+            <div class="aspect-ratio-custom">
+              <InputNumber v-model="newRatioW" :min="1" :max="9999" placeholder="W" size="small" style="width: 5rem" />
+              <span>:</span>
+              <InputNumber v-model="newRatioH" :min="1" :max="9999" placeholder="H" size="small" style="width: 5rem" />
+              <Button label="Add ratio" icon="pi pi-plus" size="small" outlined :disabled="!newRatioW || !newRatioH" @click="addCustomAspectRatio" />
+            </div>
+          </Panel>
+        </div>
+
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="backdropCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="backdropCollapsed = !backdropCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-backdrop-header" @click="backdropCollapsed = !backdropCollapsed">
                 <span class="panel-header-title">Backdrop</span>
                 <small class="panel-header-desc">The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor below, so a manual edit there still wins.</small>
               </div>
@@ -1173,7 +1119,7 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="effectPanelCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="effectPanelCollapsed = !effectPanelCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-effect-header" @click="effectPanelCollapsed = !effectPanelCollapsed">
                 <span class="panel-header-title">Background Effect</span>
                 <small class="panel-header-desc">An animated canvas effect rendered behind the Backdrop. Runs continuously on the screen client — test on real display hardware before relying on it, it has a real CPU/GPU cost.</small>
               </div>
@@ -1243,9 +1189,9 @@ const deleteDesign = (design: Design) => {
         <div v-if="!isNew" class="container-styles-section">
           <Panel v-model:collapsed="globalStylesCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="globalStylesCollapsed = !globalStylesCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-global-styles-header" @click="globalStylesCollapsed = !globalStylesCollapsed">
                 <span class="panel-header-title">Global Styles</span>
-                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to a per-container override below, and to anything in the CSS editor below.</small>
+                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to anything in the CSS editor below. Per-container styling is edited in the Layout editor's Container Design card.</small>
               </div>
             </template>
             <div class="font-properties-grid">
@@ -1289,84 +1235,18 @@ const deleteDesign = (design: Design) => {
           </Panel>
         </div>
 
-        <div v-if="!isNew && containers.length" class="container-styles-section">
-          <Panel v-model:collapsed="perContainerSectionCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" @click="perContainerSectionCollapsed = !perContainerSectionCollapsed">
-                <span class="panel-header-title">Per-Container Styles</span>
-                <small class="panel-header-desc">Style an individual container's overlay by its stable .dh-container-&lt;id&gt; class. Changes save automatically. "(not set)" leaves that CSS property out entirely.</small>
-              </div>
-            </template>
-            <Panel
-              v-for="c in containers"
-              :key="c.id"
-              :collapsed="isContainerPanelCollapsed(c.id)"
-              toggleable
-              class="container-style-panel nested-panel"
-            >
-              <template #header>
-                <div class="panel-header-clickable" @click="toggleContainerPanel(c.id)">
-                  <span class="panel-header-title">{{ c.name }} #{{ c.id }}</span>
-                </div>
-              </template>
-              <details class="font-collapsible">
-                <summary>Font</summary>
-                <div class="font-properties-grid">
-                <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
-                  <label>{{ p.label }}</label>
-                  <InputNumber
-                    v-if="p.type === 'vh-number'"
-                    :model-value="getVhNumber(c.id, p.key)"
-                    :min="0" :max="50" :step="0.1" :max-fraction-digits="2"
-                    suffix=" vh"
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v) => setVhValue(c.id, p.key, v)"
-                  />
-                  <div v-else-if="p.type === 'color'" class="color-field-row">
-                    <ColorPicker
-                      :model-value="getColorHex(c.id, p.key)"
-                      @update:model-value="(v) => setColorHex(c.id, p.key, v)"
-                    />
-                    <ColorPalettePicker :palette="editForm.default_colors" @select="(color) => setColorRef(c.id, p.key, colorRefFor(color.id))" />
-                    <span class="color-field-value">{{ colorDisplayLabel(getStyleValue(c.id, p.key)) }}</span>
-                    <Button
-                      v-if="getColorHex(c.id, p.key)"
-                      icon="pi pi-times" text size="small" title="Clear"
-                      @click="setColorHex(c.id, p.key, '')"
-                    />
-                  </div>
-                  <Dropdown
-                    v-else
-                    :model-value="getStyleValue(c.id, p.key)"
-                    :options="p.options"
-                    optionLabel="label"
-                    optionValue="value"
-                    editable
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v: string | undefined) => setStyleValue(c.id, p.key, v)"
-                  />
-                </div>
-              </div>
-            </details>
-            </Panel>
-          </Panel>
-        </div>
-
         <div class="container-styles-section">
           <Panel v-model:collapsed="customHtmlCssCollapsed" toggleable class="container-style-panel">
             <template #header>
-              <div class="panel-header-clickable" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
+              <div class="panel-header-clickable" data-tour="designs-custom-html-header" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
                 <span class="panel-header-title">Custom HTML and CSS</span>
                 <small class="panel-header-desc">Hand-written background HTML/CSS — rendered last, so it always wins over every collapsible above.</small>
               </div>
             </template>
             <div class="code-editors-row">
-              <div class="code-editor-field" @focusin="lastFocusedEditor = 'html'">
+              <div class="code-editor-field">
                 <label>Background HTML</label>
                 <Codemirror
-                  ref="htmlEditorRef"
                   v-model="editForm.html"
                   :extensions="cmHtmlExtensions"
                   :style="{ height: '400px' }"
@@ -1376,10 +1256,9 @@ const deleteDesign = (design: Design) => {
                 />
                 <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
               </div>
-              <div class="code-editor-field" @focusin="lastFocusedEditor = 'css'">
+              <div class="code-editor-field">
                 <label>CSS Styles</label>
                 <Codemirror
-                  ref="cssEditorRef"
                   v-model="editForm.css"
                   :extensions="cmCssExtensions"
                   :style="{ height: '400px' }"
@@ -1389,24 +1268,11 @@ const deleteDesign = (design: Design) => {
                 />
               </div>
             </div>
-            <div v-if="canMagicTagsPage && magicTagsStore.magicTags.length" class="var-tags-section">
-              <label>Magic Tags</label>
-              <div class="var-chips">
-                <span
-                  v-for="v in magicTagsStore.magicTags"
-                  :key="v.id"
-                  class="var-chip"
-                  draggable="true"
-                  @dragstart="onMagicTagDragStart($event, v.name)"
-                  :title="v.description ? `${v.description}\n\nDrag {{ var_${v.name} }} into the editor` : `Drag {{ var_${v.name} }} into the editor`"
-                >&#123;&#123; var_{{ v.name }} &#125;&#125;</span>
-              </div>
-            </div>
           </Panel>
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeDialog" text />
+        <Button data-tour="designs-dialog-cancel" label="Cancel" @click="closeDialog" text />
         <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveDesign(true)" :disabled="loadingDesign" />
         <Button label="Save" @click="saveDesign()" :disabled="loadingDesign" />
       </template>
@@ -1430,12 +1296,37 @@ const deleteDesign = (design: Design) => {
           <div class="gradient-list-label">{{ g.name }} <small class="hint">({{ g.type }})</small></div>
           <div class="action-buttons">
             <Button v-if="canEdit" icon="pi pi-pencil" size="small" outlined title="Edit" @click="openEditGradientDialog(g)" />
+            <Button v-if="canCreate" icon="pi pi-copy" size="small" outlined title="Copy" @click="openCopyGradientDialog(g)" />
             <Button v-if="canDelete" icon="pi pi-trash" size="small" severity="danger" outlined title="Delete" @click="deleteGradient(g)" />
           </div>
         </div>
       </div>
       <template #footer>
         <Button label="Close" @click="showGradientManageDialog = false" />
+      </template>
+    </Dialog>
+
+    <!-- Copy Gradient Dialog -->
+    <Dialog v-model:visible="showCopyGradientDialog" modal :style="{ width: '400px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Copy Gradient</span>
+        </div>
+      </template>
+      <div class="field">
+        <label for="copy-gradient-name">New Name</label>
+        <InputText
+          id="copy-gradient-name"
+          v-model="copyGradientNewName"
+          class="w-full"
+          autofocus
+          @keyup.enter="executeCopyGradient"
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" @click="showCopyGradientDialog = false" text />
+        <Button label="Copy" icon="pi pi-copy" @click="executeCopyGradient" :disabled="!copyGradientNewName.trim()" />
       </template>
     </Dialog>
 
@@ -1599,44 +1490,6 @@ const deleteDesign = (design: Design) => {
   font-size: 0.85rem;
 }
 
-.var-tags-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
-}
-
-.var-tags-section label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color, #6b7280);
-}
-
-.var-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.var-chip {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  background: #1e3a5f;
-  color: #7dd3fc;
-  border: 1px solid #2563ab;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s, color 0.15s;
-}
-
-.var-chip:hover {
-  background: #2563ab;
-  color: #e0f2fe;
-}
-
 .container-styles-section {
   display: flex;
   flex-direction: column;
@@ -1672,18 +1525,6 @@ const deleteDesign = (design: Design) => {
   font-weight: 400;
   font-size: 0.78rem;
   color: var(--p-text-muted-color, #777);
-}
-
-.font-collapsible {
-  border: 1px dashed var(--p-content-border-color, #ddd);
-  border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-}
-
-.font-collapsible summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.85rem;
 }
 
 .font-properties-grid {
@@ -1796,6 +1637,22 @@ const deleteDesign = (design: Design) => {
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.4rem;
+}
+
+.aspect-ratio-list,
+.aspect-ratio-presets,
+.aspect-ratio-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.aspect-ratio-remove {
+  margin-left: 0.4rem;
+  cursor: pointer;
+  font-size: 0.75rem;
 }
 
 .default-color-row {

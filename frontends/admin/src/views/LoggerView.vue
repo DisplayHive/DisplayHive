@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useRightsStore } from '../stores/rights'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import { useRightsStore } from '../stores/rights'
 import type { Screen } from '../types/models'
 
 // PrimeVue components
@@ -25,6 +27,7 @@ const { on, off, emit } = useSocket()
 const logs = ref<LogEntry[]>([])
 const logContainer = ref<HTMLElement | null>(null)
 const screens = ref<Screen[]>([])
+const screenIdByName = computed(() => new Map(screens.value.map((s) => [s.name, s.id])))
 const selectedSeverity = ref<string | null>(null)
 const selectedScreen = ref<string | null>(null)
 const autoScroll = ref(true)
@@ -145,11 +148,11 @@ const sendTestLog = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="logger-view">
+  <div v-else data-tour="logger-page" class="logger-view">
     <Card>
       <template #title>
         <div class="card-header">
-          <div class="header-actions">
+          <div class="header-actions" data-tour="logger-controls">
             <Button
               :icon="autoScroll ? 'pi pi-lock' : 'pi pi-lock-open'"
               :label="autoScroll ? 'Auto-scroll On' : 'Auto-scroll Off'"
@@ -164,7 +167,7 @@ const sendTestLog = () => {
         </div>
       </template>
       <template #content>
-        <div class="filter-bar">
+        <div class="filter-bar" data-tour="logger-filters">
           <div class="filter-item">
             <label>Severity</label>
             <Select
@@ -192,7 +195,7 @@ const sendTestLog = () => {
           </div>
         </div>
 
-        <div class="log-container" ref="logContainer">
+        <div class="log-container" data-tour="logger-log-container" ref="logContainer">
           <div
             v-for="(log, index) in filteredLogs"
             :key="index"
@@ -201,7 +204,10 @@ const sendTestLog = () => {
           >
             <span class="log-time">{{ formatTimestamp(log.timestamp) }}</span>
             <Tag :value="log.severity" :severity="getSeverityClass(log.severity)" class="log-severity" />
-            <span class="log-screen" v-if="log.screen">{{ log.screen }}</span>
+            <span class="log-screen" v-if="log.screen">
+              <RouteLink v-if="rightsStore.can('screens.page') && screenIdByName.get(log.screen)" :to="links.screen(screenIdByName.get(log.screen)!)" title="Open this screen">{{ log.screen }}</RouteLink>
+              <template v-else>{{ log.screen }}</template>
+            </span>
             <span class="log-function" v-if="log.function">[{{ log.function }}]</span>
             <span class="log-message">{{ log.message }}</span>
           </div>

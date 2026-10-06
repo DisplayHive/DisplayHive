@@ -7,6 +7,8 @@ import urllib.parse
 from html import escape as _html_escape
 from markupsafe import Markup
 
+from application.aspect_ratio import BASE_RATIO
+
 from application.admin.content.pretalx_render import (
     _get_pretalx_data,
     _render_pretalx_table,
@@ -14,6 +16,29 @@ from application.admin.content.pretalx_render import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _image_style(ctx: dict, field_name: str) -> str:
+    """CSS for an image field, from its `__fit` / `__size` sub-settings.
+
+    `__fit` ('height'/'width'/'stretch') takes priority and ignores
+    `__size` entirely; unset, falls back to the vh-based fixed-height
+    behavior (explicit height keeps it consistent regardless of the
+    container's own height; 0/blank just scales to fit as before).
+    """
+    fit = str(ctx.get(f'{field_name}__fit') or '').strip()
+    if fit == 'height':
+        return 'height:100%;width:auto;max-width:100%;'
+    if fit == 'width':
+        return 'width:100%;height:auto;'
+    if fit == 'stretch':
+        return 'width:100%;height:100%;'
+    size = ctx.get(f'{field_name}__size')
+    try:
+        size = float(size)
+    except (TypeError, ValueError):
+        size = 0
+    return f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
 
 
 def _resolve_icon_color(raw, db=None) -> str:
@@ -105,7 +130,16 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if isinstance(flag, dict) and (flag.get('locked') or flag.get('hidden')) and key in preset:
                 ctx[key] = preset[key]
 
-    # Resolve random_tags image fields to a concrete URL before rendering
+    # Collect random_tags image fields' full candidate lists — the actual
+    # pick happens client-side, fresh on every display, not here (see the
+    # `image` rendering branch below and
+    # frontends/screen/ts/screen/random-image-resolver.ts). Picking once
+    # server-side and baking a single URL into the (shared, per-
+    # ContentElement) rendered HTML meant every screen showing this content
+    # saw the same image, it only changed on the next display after a
+    # throttled server round trip, and that round trip silently failed
+    # offline, repeating the same image forever.
+    random_pools: dict = {}
     if db is not None and field_handlers:
         from application.models.content import Media
         image_mode_keys = [k for k in ctx if k.endswith('__image_mode') and ctx[k] == 'random_tags']
@@ -126,36 +160,25 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                     file_rel = (folder + '/' + m.filename) if folder else m.filename
                     candidates.append(f'/static/media/{file_rel}')
             if candidates:
-                ctx[field_name] = _random.choice(candidates)
-
-    # Inject magic tags so {{ var_<name> }} typed into a text field's stored
-    # value gets substituted before that value is escaped/wrapped below.
-    tvars: dict = {}
-    if db is not None:
-        try:
-            from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-            tvars = load_magic_tags(db)
-        except Exception:
-            tvars = {}
+                random_pools[field_name] = candidates
 
     # Transform each field's raw value according to its field_handler.
     # Values are HTML-escaped to prevent XSS from stored field data.
     for field_name, ftype in field_handlers.items():
-        if ftype == 'image' and field_name in ctx and ctx[field_name]:
+        if ftype == 'image' and field_name in random_pools:
+            # Same size/style logic as a normal image field below, just no
+            # `src` — the screen client fills it in from the candidate pool.
+            # See frontends/screen/ts/screen/random-image-resolver.ts.
+            style = _image_style(ctx, field_name)
+            pool_json = _html_escape(json.dumps(random_pools[field_name]))
+            ctx[field_name] = Markup(f"<img data-dh-random-pool='{pool_json}' style=\"{style}\" />")
+        elif ftype == 'image' and field_name in ctx and ctx[field_name]:
             url = str(ctx[field_name]).strip()
             parsed_scheme = urllib.parse.urlparse(url).scheme.lower()
             if parsed_scheme not in ('', 'http', 'https', 'data'):
                 ctx[field_name] = ''
             elif url:
-                # An explicit size (vh) fixes the image's height so it stays
-                # consistent regardless of its container's own height; left
-                # unset, it just scales to fit the container as before.
-                size = ctx.get(f'{field_name}__size')
-                try:
-                    size = float(size)
-                except (TypeError, ValueError):
-                    size = 0
-                style = f'height:{size}vh;width:auto;max-width:100%;' if size > 0 else 'max-width:100%;height:auto;'
+                style = _image_style(ctx, field_name)
                 ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="{style}" />')
         elif ftype == 'icon' and field_name in ctx and ctx[field_name]:
             # The value is "<library>/<icon-name>" — the backend has no
@@ -282,9 +305,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             ctx[field_name] = Markup(str(ctx[field_name]))
         elif ftype == 'marquee' and field_name in ctx:
             text = str(ctx.get(field_name, '')).strip()
-            if tvars:
-                from application.admin.magictags.helper import substitute_magic_tags
-                text = substitute_magic_tags(text, tvars)
             speed = ctx.get(f'{field_name}__speed', 20)
             try:
                 speed = float(speed)
@@ -301,8 +321,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             )
         elif ftype in ('textklein', 'textbig', 'link') and field_name in ctx:
             raw = str(ctx[field_name])
-            if tvars:
-                raw = substitute_magic_tags(raw, tvars)
             escaped = _html_escape(raw)
             ctx[field_name] = Markup(escaped.replace('\n', '<br>'))
         elif ftype == 'table':
@@ -355,7 +373,11 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
         except Exception:
             parsed = None
         if isinstance(parsed, dict) and 'url' in parsed:
-            ctx = {'default': parsed.get('url', ''), 'default__size': parsed.get('size') or 0}
+            ctx = {
+                'default': parsed.get('url', ''),
+                'default__size': parsed.get('size') or 0,
+                'default__fit': parsed.get('fit') or '',
+            }
     elif field_handler == 'icon':
         try:
             parsed = json.loads(content)
@@ -423,7 +445,7 @@ def render_container_default(container, db=None) -> str:
     return render_default_value(container.default_field_handler, container.default_content, db=db)
 
 
-def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None) -> dict:
+def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None, ratio: str = BASE_RATIO) -> dict:
     """Combine already-rendered per-container HTML (keyed by
     contentcontainer_id, e.g. from render_content_fields/parse_content_html)
     with each container's own Layout position, falling back to the
@@ -440,20 +462,22 @@ def combine_layout_containers(layout_containers, rendered_by_container: dict, db
     matching what real screen delivery does in
     application/socketio_handlers/upd_content.py's _build_payload.
 
+    *ratio* picks which aspect-ratio variant's position/size each container
+    is placed at (the caller passes that variant's own member containers).
+
     Returns {contentcontainer_id_str: {top, left, width, height, html}}.
     """
+    from application.admin.layouts.helper import container_geometry
     containers = {}
     for c in (layout_containers or []):
         html = rendered_by_container.get(str(c.id)) or render_container_default(c, db=db)
-        if not html:
+        if not html and not c.show_when_empty:
             continue
-        containers[str(c.id)] = {
-            'top': c.top, 'left': c.left, 'width': c.width, 'height': c.height, 'html': html,
-        }
+        containers[str(c.id)] = {**container_geometry(c, ratio), 'html': html or ''}
     return containers
 
 
-def build_scene_containers(contenttype, content_html: str, db=None) -> dict:
+def build_scene_containers(contenttype, content_html: str, db=None, ratio: str = BASE_RATIO) -> dict:
     """Combine a saved ContentElement's already-rendered per-field HTML
     (its `html` column) with its Contenttype's Layout container positions —
     see combine_layout_containers. Reused by admin previews (Content list,
@@ -468,7 +492,23 @@ def build_scene_containers(contenttype, content_html: str, db=None) -> dict:
         return {}
 
     rendered_by_container = parse_content_html(content_html, contenttype.tagconfigs or [])
-    return combine_layout_containers(contenttype.layout.contentcontainers, rendered_by_container, db=db)
+    from application.admin.layouts.helper import containers_for_ratio
+    return combine_layout_containers(
+        containers_for_ratio(contenttype.layout, ratio), rendered_by_container, db=db, ratio=ratio,
+    )
+
+
+def build_scene_containers_by_ratio(contenttype, content_html: str, db=None) -> dict:
+    """build_scene_containers for every aspect ratio the Contenttype's Layout
+    has a variant for: {ratio: {contentcontainer_id_str: {...}}}."""
+    from application.admin.layouts.helper import layout_ratios
+
+    if not contenttype or not contenttype.layout:
+        return {}
+    return {
+        r: build_scene_containers(contenttype, content_html, db=db, ratio=r)
+        for r in layout_ratios(contenttype.layout)
+    }
 
 
 def rerender_content_element_for_contenttype(db, contenttype_id: int) -> list[int]:

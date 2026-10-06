@@ -22,8 +22,14 @@
 #     config.age.secrets."displayhive-staging-deploy-key".path;
 #
 # ────────────────────────────────────────────────────────────────────────────
-# Gogs webhook setup
+# Gogs / GitHub webhook setup
 # ────────────────────────────────────────────────────────────────────────────
+#
+# The listener accepts a push webhook from either host — it checks whichever
+# signature header the request actually carries (Gogs' X-Gogs-Signature, raw
+# hex HMAC-SHA256; GitHub's X-Hub-Signature-256, "sha256=" + hex) against the
+# same shared secret, so no extra config is needed to support one vs. the
+# other.
 #
 # 1. Generate a webhook secret on the server:
 #      python3 -c "import secrets; print(secrets.token_hex(32))"
@@ -38,16 +44,35 @@
 #      location /hooks/displayhive-staging/ {
 #          proxy_pass http://127.0.0.1:9001/;
 #      }
-#    Then the Gogs URL becomes https://yourserver.com/hooks/displayhive-staging/
+#    Then the webhook URL becomes https://yourserver.com/hooks/displayhive-staging/
 #    and you can set listenAddress = "127.0.0.1" so the port is not exposed.
 #
-# 4. In Gogs:  Repo → Settings → Webhooks → Add Webhook → Gogs
-#      Payload URL : http(s)://<server>:<port>/   (or via nginx proxy)
-#      Content type: application/json
-#      Secret      : the value from step 1
-#      Trigger     : Push events (or "Send me everything")
-#      Active      : ✓
+# 4a. In Gogs:    Repo → Settings → Webhooks → Add Webhook → Gogs
+#       Payload URL : http(s)://<server>:<port>/   (or via nginx proxy)
+#       Content type: application/json
+#       Secret      : the value from step 1
+#       Trigger     : Push events (or "Send me everything")
+#       Active      : ✓
 #
+# 4b. In GitHub:  Repo → Settings → Webhooks → Add webhook
+#       Payload URL : same as above
+#       Content type: application/json  — MUST be this, not the form-encoded
+#                      option. The listener also accepts
+#                      application/x-www-form-urlencoded (GitHub's other
+#                      choice, which wraps the JSON payload inside a
+#                      `payload=` form field), but there's no reason to use
+#                      it here.
+#       Secret      : the value from step 1
+#       Events      : "Just the push event"
+#       Active      : ✓
+#     GitHub's "Recent Deliveries" tab on the webhook page shows each
+#     delivery's response:
+#       - 403 "invalid signature" almost always means the secret configured
+#         in GitHub doesn't match webhook.secret/secretFile on the server.
+#       - 400 with an "invalid JSON body" server log line almost always
+#         means Content type was left on the form-encoded option above.
+#
+
 # ────────────────────────────────────────────────────────────────────────────
 # Deploy speed
 # ────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -12,20 +13,17 @@ import { isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 
 // PrimeVue components
 import Card from 'primevue/card'
-import ToggleSwitch from 'primevue/toggleswitch'
 
 const router = useRouter()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
 const rightsStore = useRightsStore()
 const canSeeDemo = computed(() => rightsStore.can('importexport.page'))
-const canEditSettings = computed(() => rightsStore.can('settings.edit'))
 
 const welcomeHeadline = ref('Welcome to DisplayHive Admin')
 const welcomeText = ref('Use the navigation menu to manage your digital signage system.')
 const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
 const hideDemoMode = ref(false)
-const demoModeSaving = ref(false)
 
 interface SystemSettings {
   welcome_headline?: string
@@ -44,27 +42,7 @@ const handleSettings = (data: { system_settings?: SystemSettings }) => {
   if (sys.hide_demo_mode !== undefined) hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
 }
 
-const demoModeEnabled = computed({
-  get: () => !hideDemoMode.value,
-  set: async (value: boolean) => {
-    const previous = hideDemoMode.value
-    hideDemoMode.value = !value
-    demoModeSaving.value = true
-    try {
-      const ack = await emitWithAck<{ success: boolean; error?: string }>(
-        'displayhive:admin:cts:set_system_settings',
-        { settings: { hide_demo_mode: hideDemoMode.value ? 'true' : 'false' } },
-      )
-      if (!ack?.success) {
-        hideDemoMode.value = previous
-      }
-    } catch {
-      hideDemoMode.value = previous
-    } finally {
-      demoModeSaving.value = false
-    }
-  },
-})
+const demoModeEnabled = computed(() => !hideDemoMode.value)
 const devicesStore = useDevicesStore()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
@@ -104,7 +82,9 @@ const screensInFind = computed(() => {
 
 const totalContent = computed(() => contentStore.content.length)
 const unassignedContent = computed(() => contentStore.unassignedContent.length)
-const screengroupsCount = computed(() => screengroupsStore.screengroups.length)
+// Every screen also has a hidden one-screen group of its own (is_one_screen) —
+// only real groups count here, same as the Screen Groups page lists.
+const screengroupsCount = computed(() => screengroupsStore.screengroups.filter((sg) => !sg.is_one_screen).length)
 const mediaCount = computed(() => mediaStore.mediaItems.length)
 
 // Warning indicators
@@ -124,7 +104,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
         <div class="demo-hint-body">
           <i class="pi pi-sparkles demo-hint-icon"></i>
           <div class="demo-hint-text">
-            <div class="demo-hint-title">Demo mode is active on this instance</div>
+            <div class="demo-hint-title">Demo mode and Guided Tours are available on this instance</div>
             <p>
               You can import example configurations from the
               <a href="#" @click.prevent="router.push('/demo')">Demo page</a>.
@@ -133,13 +113,12 @@ const debugWarn = computed(() => screensInDebug.value > 0)
               You can back up your current data beforehand via
               <a href="#" @click.prevent="router.push('/importexport')">Import / Export</a>.
             </p>
+            <p>
+              The <a href="#" @click.prevent="router.push('/tour')">Guided Tours</a> walk through
+              the admin UI step by step. Demo projects and Guided Tours can each be disabled from
+              <a href="#" @click.prevent="router.push('/settings')">Settings</a>.
+            </p>
           </div>
-        </div>
-        <div v-if="canEditSettings" class="demo-hint-footer">
-          <ToggleSwitch v-model="demoModeEnabled" :disabled="demoModeSaving" class="demo-hint-switch" />
-          <span class="demo-hint-switch-desc">
-            Turn off to disable access to demo mode. It can be re-enabled later in Settings.
-          </span>
         </div>
       </template>
     </Card>
@@ -157,10 +136,10 @@ const debugWarn = computed(() => screensInDebug.value > 0)
     </Card>
 
     <!-- Status cards grid -->
-    <div class="stats-grid">
+    <div class="stats-grid" data-tour="dashboard-stats-grid">
 
       <!-- Screens -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-screens" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-desktop stat-icon"></i>
@@ -186,7 +165,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Devices -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/devices')">
+      <Card v-if="rightsStore.can('device.page')" data-tour="stat-devices" :class="['stat-card', devicesWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/devices')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-tablet stat-icon"></i>
@@ -205,7 +184,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Content -->
-      <Card v-if="rightsStore.can('content.page')" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
+      <Card v-if="rightsStore.can('content.page')" data-tour="stat-content" :class="['stat-card', contentWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-file stat-icon"></i>
@@ -221,7 +200,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screen Groups -->
-      <Card v-if="rightsStore.can('screengroups.page')" class="stat-card stat-card--ok" @click="router.push('/screengroups')">
+      <Card v-if="rightsStore.can('screengroups.page')" data-tour="stat-screengroups" class="stat-card stat-card--ok" @click="router.push('/screengroups')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-th-large stat-icon"></i>
@@ -233,7 +212,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Media -->
-      <Card v-if="rightsStore.can('media.page')" class="stat-card stat-card--ok" @click="router.push('/media')">
+      <Card v-if="rightsStore.can('media.page')" data-tour="stat-media" class="stat-card stat-card--ok" @click="router.push('/media')">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-images stat-icon"></i>
@@ -245,7 +224,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Find Mode -->
-      <Card v-if="rightsStore.can('device.page')" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('device.page')" data-tour="stat-find" :class="['stat-card', findWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push(links.screensFiltered('find'))">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-search stat-icon"></i>
@@ -261,7 +240,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
       <!-- Screens in Debug Mode -->
-      <Card v-if="rightsStore.can('screens.page')" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">
+      <Card v-if="rightsStore.can('screens.page')" data-tour="stat-debug" :class="['stat-card', debugWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push(links.screensFiltered('debug'))">
         <template #content>
           <div class="stat-header">
             <i class="pi pi-wrench stat-icon"></i>
@@ -524,25 +503,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
   margin-bottom: 0;
 }
 
-.demo-hint-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--p-amber-200, #fde68a);
-}
-
-.demo-hint-switch {
-  flex-shrink: 0;
-}
-
-.demo-hint-switch-desc {
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color, #6b7280);
-  line-height: 1.4;
-}
-
 .welcome-card :deep(.p-card-body) {
   padding: 1.25rem 1.5rem;
 }
@@ -796,10 +756,6 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 .dark-mode .demo-hint-card {
   background: var(--p-surface-800, #1e293b);
   border-color: var(--p-amber-700, #b45309);
-}
-
-.dark-mode .demo-hint-footer {
-  border-top-color: var(--p-surface-700, #334155);
 }
 
 .dark-mode .link-card {

@@ -377,17 +377,17 @@ onUnmounted(() => {
       </template>
     </Card>
   </div>
-  <div v-else class="pretalx-view">
+  <div v-else data-tour="pretalx-page" class="pretalx-view">
     <Card>
       <template #title>
         <div class="card-header">
           <i class="pi pi-calendar card-header-icon" />
           <span>Pretalx API Endpoints</span>
-          <Button v-if="canManage" label="Add URL" icon="pi pi-plus" size="small" class="add-btn" @click="openAddDialog" />
+          <Button v-if="canManage" data-tour="pretalx-add-url" label="Add URL" icon="pi pi-plus" size="small" class="add-btn" @click="openAddDialog" />
         </div>
       </template>
       <template #content>
-        <DataTable :value="urls" stripedRows size="small">
+        <DataTable :value="urls" stripedRows size="small" data-tour="pretalx-table">
           <template #empty>
             <div class="empty-state empty-state--compact">
               <i class="pi pi-calendar" />
@@ -435,7 +435,7 @@ onUnmounted(() => {
 
           <Column header="" style="width: 120px">
             <template #body="{ data }">
-              <div class="row-actions">
+              <div class="row-actions" data-tour="pretalx-row-actions">
                 <Button
                   v-if="canManage"
                   icon="pi pi-pencil"
@@ -478,7 +478,7 @@ onUnmounted(() => {
           <span class="p-dialog-title">Add Pretalx API URL</span>
         </div>
       </template>
-      <div class="edit-form">
+      <div class="edit-form" data-tour="pretalx-add-fields">
         <div class="field">
           <label>Name</label>
           <InputText v-model="newName" placeholder="e.g. Main Conference" class="w-full" autofocus />
@@ -495,7 +495,7 @@ onUnmounted(() => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" severity="secondary" outlined @click="addDialogVisible = false" />
+        <Button data-tour="pretalx-add-cancel" label="Cancel" severity="secondary" outlined @click="addDialogVisible = false" />
         <Button
           label="Add & Validate"
           icon="pi pi-plus"
@@ -562,7 +562,7 @@ onUnmounted(() => {
       </template>
       <template #content>
         <p class="settings-hint">All settings are only default values. They may be overwritten in the content.</p>
-        <div class="settings-form">
+        <div class="settings-form" data-tour="pretalx-texts-fields">
           <div class="field">
             <label for="pretalx-no-session">No Session Running</label>
             <InputText id="pretalx-no-session" v-model="pretalxNoSessionText" class="w-full" :disabled="!canManage" />
@@ -592,7 +592,7 @@ onUnmounted(() => {
       </template>
       <template #content>
         <p class="settings-hint">All settings are only default values. They may be overwritten in the content.</p>
-        <div class="settings-form">
+        <div class="settings-form" data-tour="pretalx-datetime-fields">
           <div class="field">
             <label for="pretalx-time-format">Display Time Format</label>
             <div class="datetime-format-wrapper">

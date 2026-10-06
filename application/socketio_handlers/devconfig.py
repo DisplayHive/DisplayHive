@@ -63,6 +63,7 @@ def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional
                 'screenname':       screenname_val,
                 'devicedebugstate': devicedebugstate,
                 'glow':             glow_state,
+                'rotation':         int(getattr(screen_obj, 'rotation', 0) or 0) if screen_obj else 0,
             }
         }
 

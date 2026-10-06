@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useRightsStore } from '../stores/rights'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -17,6 +20,8 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
 import Popover from 'primevue/popover'
+import Select from 'primevue/select'
+import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
 import type { OptionFlags } from '../utils/optionFlags'
@@ -56,6 +61,7 @@ interface RawTagConfig {
 }
 
 const router = useRouter()
+const rightsStore = useRightsStore()
 const route = useRoute()
 const goBack = () => router.push({ name: 'content' })
 
@@ -140,6 +146,13 @@ const createForm = ref({
   fields: {} as Record<string, string | number | boolean>
 })
 const tagConfigs = ref<TagConfig[]>([])
+// Per-tag "does its FieldValueEditor actually render an editable control"
+// flag, reported by FieldValueEditor's `update:hasVisibleControl` — a field
+// whose only control(s) are all hidden via the per-field "hide" option flag
+// renders nothing, so its label/description row is hidden too rather than
+// showing a bare headline over empty space. Defaults to visible so a field
+// isn't hidden before its FieldValueEditor has reported in.
+const tagHasVisibleControl = reactive<Record<string, boolean>>({})
 
 const formScreengroupIds = ref<number[]>([])
 const originalScreengroupIds = ref<number[]>([])
@@ -168,7 +181,11 @@ const affectsMultipleScreens = computed(() => editMode.value && affectedScreenNa
 // it doesn't fire a server round trip on every keystroke. srcdoc assembly
 // itself lives in utils/designPreview.ts, shared with ContentTable.vue's
 // row-expansion preview for already-saved content. ---
-interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer> }
+interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer>; aspect_ratio?: string }
+// Which aspect ratio the preview shows (resolved server-side to the Layout's
+// best matching variation, like a screen of that ratio).
+const { ratios: previewRatios } = useAspectRatios()
+const previewRatio = ref(BASE_ASPECT_RATIO)
 const previewData = ref<PreviewData | null>(null)
 let previewTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -187,9 +204,12 @@ const requestPreview = () => {
   }
   socketEmit('displayhive:admin:cts:preview_content_element', {
     contenttype_id: createForm.value.contenttype_id,
+    aspect_ratio: previewRatio.value,
     ...createForm.value.fields,
   })
 }
+
+watch(previewRatio, requestPreview)
 
 watch(
   () => [createForm.value.contenttype_id, createForm.value.fields],
@@ -739,6 +759,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <Card
         v-for="ct in contentTypes"
         :key="ct.id"
+        :data-tour="`contenttype-card-${ct.id}`"
         class="contenttype-card"
         @click="selectContentType(ct)"
       >
@@ -772,7 +793,10 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <div v-if="selectedContentType" class="content-type-banner">
         <i class="pi pi-file-edit"></i>
         <div>
-          <strong>{{ selectedContentType.name }}</strong>
+          <strong>
+            <RouteLink v-if="rightsStore.can('contenttypes.page')" :to="links.contentType(selectedContentType.id)" title="Open this content type">{{ selectedContentType.name }}</RouteLink>
+            <template v-else>{{ selectedContentType.name }}</template>
+          </strong>
           <p v-if="selectedContentType.description" class="text-muted">{{ selectedContentType.description }}</p>
         </div>
       </div>
@@ -798,7 +822,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       <section class="form-section">
         <h3 class="form-section-title">Content</h3>
 
-        <div class="field">
+        <div class="field" data-tour="content-title-field">
           <label for="create-title">
             Title *
             <i
@@ -823,13 +847,20 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         <div v-if="tagConfigs.length > 0" class="tag-fields-section">
           <div
             v-for="tag in tagConfigs"
-            v-show="tag.fieldHandler !== ''"
+            v-show="tag.fieldHandler !== '' && tagHasVisibleControl[tag.name] !== false"
             :key="tag.name"
             class="field"
           >
             <label :for="`field-${tag.name}`">{{ tag.title || tag.name }}</label>
             <small v-if="tag.description" class="field-description">{{ tag.description }}</small>
-            <FieldValueEditor :tag="tag" :fields="createForm.fields" mode="edit" :palette="designPalette" :option-flags="tag.optionFlags" />
+            <FieldValueEditor
+              :tag="tag"
+              :fields="createForm.fields"
+              mode="edit"
+              :palette="designPalette"
+              :option-flags="tag.optionFlags"
+              @update:has-visible-control="(v) => (tagHasVisibleControl[tag.name] = v)"
+            />
           </div>
         </div>
       </section>
@@ -838,7 +869,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         <h3 class="form-section-title">Delivery settings</h3>
 
         <!-- Scheduling -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-scheduling">
           <summary class="scheduling-summary">
             <i class="pi pi-clock summary-icon"></i>
             Scheduling
@@ -875,7 +906,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </details>
 
         <!-- Duration -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-duration">
           <summary class="scheduling-summary">
             <i class="pi pi-stopwatch summary-icon"></i>
             Duration
@@ -902,7 +933,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         </details>
 
         <!-- Screen Groups & Screens -->
-        <details class="scheduling-collapsible">
+        <details class="scheduling-collapsible" data-tour="content-screens">
           <summary class="scheduling-summary">
             <i class="pi pi-desktop summary-icon"></i>
             Screen Groups &amp; Screens
@@ -911,7 +942,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
           <div class="scheduling-fields">
             <!-- Screengroup assignment -->
             <div class="screengroup-assignment-section">
-              <h4>Screen Groups</h4>
+              <h4 v-if="allScreengroups.length > 0">Screen Groups</h4>
               <p v-if="allScreengroups.length === 0" class="text-muted">No screen groups available.</p>
               <template v-else>
                 <InputText v-model="sgSearchText" placeholder="Search screen groups…" class="screengroup-search" />
@@ -958,15 +989,19 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
       </section>
     </div>
 
-    <div class="content-edit-form-actions">
-      <Button label="Cancel" @click="goBack" text />
+    <div class="content-edit-form-actions" data-tour="content-form-actions">
+      <Button data-tour="content-cancel" label="Cancel" @click="goBack" text />
       <Button v-if="editMode && createForm.id" label="Update" severity="secondary" outlined @click="submitCreateContent(true)" :disabled="loadingContentTypeDetail" />
-      <Button :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />
+      <Button data-tour="content-save" :label="editMode && createForm.id ? 'Save' : 'Create'" @click="submitCreateContent()" :disabled="loadingContentTypeDetail" />
     </div>
     </div>
 
     <div class="content-edit-preview" :style="{ flex: `0 0 ${settingsStore.contentEditPreviewSize}%` }">
-      <div v-if="!previewSrcdoc" class="content-edit-preview-empty">
+      <div v-if="previewRatios.length > 1" class="content-edit-preview-ratio">
+        <label for="preview-ratio">Preview as</label>
+        <Select id="preview-ratio" v-model="previewRatio" :options="previewRatios" size="small" />
+      </div>
+      <div v-if="!previewSrcdoc" class="content-edit-preview-empty" :style="{ aspectRatio: cssAspectRatio(previewRatio) }">
         <i class="pi pi-eye"></i>
         <p>Preview will appear here once a content type is selected.</p>
       </div>
@@ -975,6 +1010,7 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         :srcdoc="previewSrcdoc"
         sandbox="allow-scripts"
         class="content-edit-preview-iframe"
+        :style="{ aspectRatio: cssAspectRatio(previewRatio) }"
         title="Content preview"
       ></iframe>
     </div>
@@ -1018,6 +1054,19 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
 
 .content-edit-preview h4 {
   margin-top: 0;
+}
+
+.content-edit-preview-ratio {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.content-edit-preview-ratio label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color, #6b7280);
 }
 
 .content-edit-preview-iframe {

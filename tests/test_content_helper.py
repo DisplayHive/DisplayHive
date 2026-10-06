@@ -91,3 +91,27 @@ def test_html_special_characters_are_escaped():
     result = render_content_fields([tc], json.dumps({'title': '<script>alert(1)</script>'}))
     assert '<script>' not in result['1']
     assert '&lt;script&gt;' in result['1']
+
+
+# --- combine_layout_containers: show_when_empty ---------------------------------
+
+
+def _container(cid, show_when_empty):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        id=cid, top=1, left=2, width=3, height=4, show_when_empty=show_when_empty,
+        default_field_handler=None, default_content=None,
+    )
+
+
+def test_empty_container_is_omitted_unless_show_when_empty():
+    from application.admin.content.helper import combine_layout_containers
+    result = combine_layout_containers([_container(1, False), _container(2, True)], {})
+    assert list(result) == ['2']
+    assert result['2']['html'] == ''
+
+
+def test_rendered_container_is_kept_regardless_of_show_when_empty():
+    from application.admin.content.helper import combine_layout_containers
+    result = combine_layout_containers([_container(1, False)], {'1': '<b>x</b>'})
+    assert result['1']['html'] == '<b>x</b>'

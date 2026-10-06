@@ -5,6 +5,7 @@ Provides helper to emit the designs list payload to admin clients.
 
 import json
 import logging
+import re
 from typing import Optional
 
 from application.models import Design
@@ -212,12 +213,55 @@ def gradient_css_value(gradient, design=None) -> str:
     return ''
 
 
+_STYLE_PROP_RE = re.compile(r'^[a-z][a-z-]*$')
+# Values are written verbatim into `.dh-container-<id> { prop: value; }`, so
+# anything that could close the rule or pull in external resources is dropped.
+_STYLE_VALUE_FORBIDDEN = re.compile(r'[{};<>\\]|/\*|url\(|@import', re.IGNORECASE)
+
+
+def upsert_container_styles(db, design_id: int, contentcontainer_id: int, styles: dict) -> None:
+    """Upsert every (property, value) pair for one container on one Design.
+
+    A blank value deletes that property's row (the UI's "not set") instead
+    of storing an empty string. Does not commit — the caller does. Shared by
+    the Designs page and the Layout editor's "Container Design" card.
+    """
+    from application.models import DesignContainerStyle
+
+    existing = {
+        row.property: row
+        for row in db.session.execute(
+            db.select(DesignContainerStyle).where(
+                DesignContainerStyle.design_id == design_id,
+                DesignContainerStyle.contentcontainer_id == contentcontainer_id,
+            )
+        ).scalars().all()
+    }
+    for prop, value in styles.items():
+        value = (value or '').strip()
+        if not _STYLE_PROP_RE.match(prop or '') or _STYLE_VALUE_FORBIDDEN.search(value):
+            continue
+        row = existing.get(prop)
+        if not value:
+            if row:
+                db.session.delete(row)
+            continue
+        if row:
+            row.value = value
+            db.session.add(row)
+        else:
+            db.session.add(DesignContainerStyle(
+                design_id=design_id, contentcontainer_id=contentcontainer_id,
+                property=prop, value=value,
+            ))
+
+
 def build_design_payload(db) -> dict:
     """Assemble the same `{name, html, css, background_effect}` shape pushed
     to screens as `upd_content`'s `design` field — the currently active/
     default Design's HTML, its fully-layered CSS (global/container styles,
     Backdrop, then its own hand-written CSS last), and its animated
-    background effect (if any), with magic tags substituted into html/css.
+    background effect (if any).
 
     Also used by the admin Layout editor to preview the active Design behind
     the container-positioning canvas — see
@@ -281,20 +325,6 @@ def build_design_payload(db) -> dict:
         }
     else:
         design_payload['background_effect'] = None
-
-    # Load magic tags once; applied to Design HTML/CSS.
-    _tvars: dict = {}
-    try:
-        from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-        _tvars = load_magic_tags(db)
-    except Exception:
-        logger.debug('Failed to load magic tags for design payload', exc_info=True)
-
-    if _tvars:
-        if design_payload['html']:
-            design_payload['html'] = substitute_magic_tags(design_payload['html'], _tvars)
-        if design_payload['css']:
-            design_payload['css'] = substitute_magic_tags(design_payload['css'], _tvars)
 
     return design_payload
 

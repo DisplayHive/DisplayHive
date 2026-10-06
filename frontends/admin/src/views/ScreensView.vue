@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
+import { openDevicePreview } from '../composables/useDevicePreview'
 import { useMaximizedFilter, isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -20,6 +24,9 @@ import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
+import Select from 'primevue/select'
+import { useRoute, useRouter } from 'vue-router'
+import { useAspectRatios } from '../composables/useAspectRatios'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -33,12 +40,27 @@ const canCreate = computed(() => rightsStore.can('screens.create'))
 const canEdit = computed(() => rightsStore.can('screens.edit'))
 const canDelete = computed(() => rightsStore.can('screens.delete'))
 const canMonitor = computed(() => rightsStore.can('screens.monitor'))
+const canPreview = computed(() => rightsStore.can('device.preview'))
 const canResize = computed(() => rightsStore.can('screens.resize'))
 const canDebug = computed(() => rightsStore.can('screens.debug'))
 const canReload = computed(() => rightsStore.can('screens.reload'))
 const canReloadAll = computed(() => rightsStore.can('screens.reload_all'))
 
 const filterText = ref('')
+
+// ?filter=find|debug (from the dashboard tiles) narrows the list to screens in
+// that state; the chip above the table clears it again.
+const route = useRoute()
+const router = useRouter()
+const statusFilter = computed<'find' | 'debug' | null>(() => {
+  const f = route.query.filter
+  return f === 'find' || f === 'debug' ? f : null
+})
+const clearStatusFilter = () => {
+  const rest = { ...route.query }
+  delete rest.filter
+  router.replace({ query: rest })
+}
 
 const { showOnline, showOffline, toggleShowOnline, toggleShowOffline, applyOnlineFilter } = useOnlineFilter()
 const { showWindowed, showFullscreen, toggleShowWindowed, toggleShowFullscreen, applyMaximizedFilter } = useMaximizedFilter()
@@ -51,8 +73,6 @@ const isCreating = ref(false)
 const showCreateDialog = ref(false)
 const createForm = ref({
   name: '',
-  width: null as string | null,
-  height: null as string | null,
 })
 
 // Rename screen dialog
@@ -62,7 +82,16 @@ const renamingScreen = ref<Screen | null>(null)
 const renameForm = ref({
   name: '',
   screengroup_ids: [] as number[],
+  aspect_ratio: '16:9',
+  rotation: 0,
 })
+const { ratios: aspectRatios } = useAspectRatios()
+const ROTATION_OPTIONS = [
+  { label: 'None (0°)', value: 0 },
+  { label: '+90° (clockwise)', value: 90 },
+  { label: '-90° (counter-clockwise)', value: 270 },
+  { label: '180°', value: 180 },
+]
 
 const windowedCount = computed(() => screensStore.screens.filter(isWindowed).length)
 const fullscreenCount = computed(() => screensStore.screens.filter(isFullscreen).length)
@@ -76,6 +105,8 @@ const filteredScreens = computed(() => {
       (s.resolution && s.resolution.toLowerCase().includes(search))
     )
   }
+  if (statusFilter.value === 'find') list = list.filter((s) => !!s.attached_device?.find)
+  if (statusFilter.value === 'debug') list = list.filter((s) => !!s.debug && s.monitoring_enabled !== false)
   list = applyOnlineFilter(list, (s) => !!s.attached_device?.is_online)
   return applyMaximizedFilter(list)
 })
@@ -110,7 +141,7 @@ onUnmounted(() => {
 const refreshScreens = () => screensStore.fetch()
 
 const openCreateDialog = () => {
-  createForm.value = { name: '', width: null, height: null }
+  createForm.value = { name: '' }
   showCreateDialog.value = true
 }
 
@@ -121,12 +152,7 @@ const createScreen = async () => {
   }
   isCreating.value = true
   try {
-    const payload: { name: string; width?: string | null; height?: string | null } = { name: createForm.value.name }
-    if (createForm.value.width && createForm.value.height) {
-      payload.width = createForm.value.width
-      payload.height = createForm.value.height
-    }
-    screensStore.createScreen(payload)
+    screensStore.createScreen({ name: createForm.value.name })
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen created', life: 3000 })
     showCreateDialog.value = false
   } finally {
@@ -139,6 +165,8 @@ const openRenameDialog = (screen: Screen) => {
   renameForm.value = {
     name: screen.name,
     screengroup_ids: [],
+    aspect_ratio: screen.aspect_ratio || '16:9',
+    rotation: screen.rotation || 0,
   }
   emit('displayhive:screens:cts:get_screen_screengroups', { screen_id: screen.id })
   showRenameDialog.value = true
@@ -153,6 +181,8 @@ const saveRename = async (keepOpen = false) => {
       old_name: renamingScreen.value.name,
       new_name: renameForm.value.name,
       screengroup_ids: renameForm.value.screengroup_ids,
+      aspect_ratio: renameForm.value.aspect_ratio,
+      rotation: renameForm.value.rotation,
     })
     toast.add({ severity: 'success', summary: 'Screen saved', detail: renameForm.value.name, life: 3000 })
     if (!keepOpen) showRenameDialog.value = false
@@ -170,6 +200,32 @@ const toggleDebug = (screen: Screen) => {
 const reloadScreen = (screen: Screen) => {
   screensStore.reloadScreen(screen.name)
   toast.add({ severity: 'info', summary: 'Reloading', detail: `Reload command sent to ${screen.name}`, life: 2000 })
+}
+
+// A screen previews via its attached device's live connection — content is
+// only ever pushed to a screen's actual devices (see _emit_to_screen in
+// application/socketio_handlers/upd_content.py), there's no standalone
+// "preview a screen with no device" delivery path. So this is disabled,
+// not hidden, whenever that device or its key isn't available — hiding it
+// would look like Screens can't be previewed at all, when really it's
+// just this one screen's setup.
+const previewUnavailableReason = (screen: Screen): string | null => {
+  if (!screen.attached_device) return 'No device is attached to this screen'
+  if (!screen.attached_device.devicekey) return 'Device key is not visible to this account (requires device.showkey)'
+  return null
+}
+
+const previewScreen = (screen: Screen) => {
+  const reason = previewUnavailableReason(screen)
+  if (reason) {
+    toast.add({ severity: 'error', summary: 'Cannot preview', detail: reason, life: 4000 })
+    return
+  }
+  try {
+    openDevicePreview(screen.attached_device!.devicekey!)
+  } catch (e) {
+    console.error('[ScreensView] previewScreen error', e)
+  }
 }
 
 const reloadAllScreens = () => {
@@ -219,6 +275,9 @@ const resetScreenSize = (screen: Screen) => {
   screensStore.resetScreenSize(screen.id)
   toast.add({ severity: 'info', summary: 'Size reset', detail: `Screen size reset for ${screen.name}`, life: 2000 })
 }
+
+// Reached via a link like /screens?edit=<id>: open that screen's dialog.
+useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.value)
 </script>
 
 <template>
@@ -232,13 +291,14 @@ const resetScreenSize = (screen: Screen) => {
       </template>
     </Card>
   </div>
-  <div v-else class="screens-view">
+  <div v-else data-tour="screens-page" class="screens-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
             <Button
               v-if="canCreate"
+              data-tour="screens-new"
               icon="pi pi-plus"
               label="Add Screen"
               @click="openCreateDialog"
@@ -246,6 +306,7 @@ const resetScreenSize = (screen: Screen) => {
             />
             <Button
               v-if="canReloadAll"
+              data-tour="screens-reload-all"
               icon="pi pi-refresh"
               label="Reload All"
               @click="reloadAllScreens"
@@ -263,6 +324,7 @@ const resetScreenSize = (screen: Screen) => {
       </template>
       <template #content>
         <DataTable
+          data-tour="screens-table"
           :value="filteredScreens"
           :loading="screensStore.loading"
           sortField="name"
@@ -277,9 +339,22 @@ const resetScreenSize = (screen: Screen) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter screens..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="screens-filter"
+                  placeholder="Filter screens..."
+                  class="filter-input"
+                />
+                <Tag
+                  v-if="statusFilter"
+                  severity="info"
+                  class="clickable-tag"
+                  :value="statusFilter === 'find' ? 'Only screens in find mode ✕' : 'Only screens in debug mode ✕'"
+                  title="Show all screens"
+                  @click="clearStatusFilter"
+                />
               </div>
-              <div class="dt-right">
+              <div class="dt-right" data-tour="screens-status-filters">
                 <div class="filter-row">
                   <Tag
                     severity="warn"
@@ -333,16 +408,31 @@ const resetScreenSize = (screen: Screen) => {
             </template>
           </Column>
           <Column field="resolution" header="Resolution" sortable />
+          <Column field="aspect_ratio" header="Ratio" sortable />
           <Column header="Status" style="width: 150px">
             <template #body="{ data }">
-              <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
+              <RouteLink v-if="data.attached_device && rightsStore.can('device.page')" :to="links.device(data.attached_device.id)" title="Open this screen's device">
+                <Tag :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
+              </RouteLink>
+              <Tag v-else :severity="getStatusSeverity(data)" :value="getStatusText(data)" />
             </template>
           </Column>
-          <Column header="Actions" style="width: 300px">
+          <Column header="Actions" style="width: 340px">
             <template #body="{ data }">
               <div class="action-buttons">
                 <Button
+                  v-if="canPreview"
+                  data-tour="screens-preview-button"
+                  icon="pi pi-play"
+                  @click="previewScreen(data)"
+                  size="small"
+                  outlined
+                  :disabled="!!previewUnavailableReason(data)"
+                  :title="previewUnavailableReason(data) || 'Preview'"
+                />
+                <Button
                   v-if="canEdit"
+                  data-tour="screens-row-rename"
                   icon="pi pi-pencil"
                   @click="openRenameDialog(data)"
                   size="small"
@@ -351,6 +441,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canReload"
+                  data-tour="screens-row-reload"
                   icon="pi pi-refresh"
                   @click="reloadScreen(data)"
                   size="small"
@@ -368,6 +459,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canDebug"
+                  data-tour="screens-row-debug"
                   icon="pi pi-wrench"
                   @click="toggleDebug(data)"
                   size="small"
@@ -377,6 +469,7 @@ const resetScreenSize = (screen: Screen) => {
                 />
                 <Button
                   v-if="canMonitor"
+                  data-tour="screens-row-monitor"
                   :icon="data.monitoring_enabled !== false ? 'pi pi-eye' : 'pi pi-eye-slash'"
                   @click="toggleMonitoring(data)"
                   size="small"
@@ -409,21 +502,13 @@ const resetScreenSize = (screen: Screen) => {
         </div>
       </template>
       <div class="dialog-content">
-        <div class="field">
+        <div class="field" data-tour="screen-name-field">
           <label for="create-name">Screen Name</label>
           <InputText id="create-name" v-model="createForm.name" class="w-full" placeholder="e.g. Lobby-Display" />
         </div>
-        <div class="field">
-          <label for="create-width">Width (optional)</label>
-          <InputText id="create-width" v-model="createForm.width" class="w-full" placeholder="1920" type="number" />
-        </div>
-        <div class="field">
-          <label for="create-height">Height (optional)</label>
-          <InputText id="create-height" v-model="createForm.height" class="w-full" placeholder="1080" type="number" />
-        </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
+        <Button data-tour="screens-create-cancel" label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
         <Button label="Create" @click="createScreen" :loading="isCreating" :disabled="isCreating" />
       </template>
     </Dialog>
@@ -442,6 +527,28 @@ const resetScreenSize = (screen: Screen) => {
           <InputText id="rename-name" v-model="renameForm.name" class="w-full" />
         </div>
         <div class="field">
+          <label for="rename-aspect-ratio">Aspect Ratio</label>
+          <Select
+            id="rename-aspect-ratio"
+            v-model="renameForm.aspect_ratio"
+            :options="aspectRatios.includes(renameForm.aspect_ratio) ? aspectRatios : [...aspectRatios, renameForm.aspect_ratio]"
+            class="w-full"
+          />
+          <small class="hint">The Layout variation closest to this ratio is sent to the screen. Ratios are added on the Designs page.</small>
+        </div>
+        <div class="field">
+          <label for="rename-rotation">Rotation</label>
+          <Select
+            id="rename-rotation"
+            v-model="renameForm.rotation"
+            :options="ROTATION_OPTIONS"
+            optionLabel="label"
+            optionValue="value"
+            class="w-full"
+          />
+          <small class="hint">Turns everything the screen shows, as one piece, for displays mounted sideways or upside-down. The layout is laid out at the aspect ratio above first, then rotated. The screen reloads when this changes.</small>
+        </div>
+        <div class="field" data-tour="rename-screengroups-field">
           <label>Screengroups</label>
           <div class="screengroup-checkboxes">
             <div v-for="sg in screengroupsStore.screengroups.filter(sg => !sg.is_one_screen)" :key="sg.id" class="checkbox-item">

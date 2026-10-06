@@ -36,8 +36,6 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   content_elements: 'Content Elements',
   media: 'Media',
   devices: 'Devices',
-  magic_tag_value_lists: 'Magic Tag Value Lists',
-  magic_tags: 'Magic Tags',
 }
 const ENTITY_TYPE_ORDER = Object.keys(ENTITY_TYPE_LABELS)
 
@@ -331,10 +329,10 @@ onRightsReady(loadExportTree)
       </template>
     </Card>
   </div>
-  <div v-else class="importexport-view">
+  <div v-else data-tour="importexport-page" class="importexport-view">
     <Message severity="warn" :closable="false" class="not-a-backup-notice">
       <strong>This is not a full system backup.</strong> It exports/imports display content
-      (screens, designs, layouts, content, media, devices, magic tags) and general app settings
+      (screens, designs, layouts, content, media, devices) and general app settings
       only. It never includes admin user accounts, API keys or tokens (Telegram bot token, Pretalx
       credentials), or log files — restoring a file elsewhere will not recreate logins or
       integration credentials.
@@ -364,6 +362,7 @@ onRightsReady(loadExportTree)
             :value="exportTree"
             selectionMode="checkbox"
             class="importexport-tree"
+            data-tour="importexport-export-tree"
           />
           <p v-if="exportTreeLoaded && totalExportItems === 0" class="description">
             Nothing to export yet.
@@ -371,6 +370,7 @@ onRightsReady(loadExportTree)
           <Button
             label="Download Export"
             icon="pi pi-download"
+            data-tour="importexport-download-button"
             :loading="exporting"
             :disabled="exporting || !exportTreeLoaded"
             class="mt-4"
@@ -407,6 +407,7 @@ onRightsReady(loadExportTree)
           v-if="!importToken"
           label="Select ZIP or JSON File…"
           icon="pi pi-folder-open"
+          data-tour="importexport-file-picker"
           outlined
           :loading="previewing"
           :disabled="previewing"
@@ -424,6 +425,7 @@ onRightsReady(loadExportTree)
             :value="importTree"
             selectionMode="checkbox"
             class="importexport-tree"
+            data-tour="importexport-import-tree"
           >
             <template #default="{ node }">
               <span class="tree-item-label">
@@ -447,12 +449,12 @@ onRightsReady(loadExportTree)
             This file has nothing to import.
           </p>
 
-          <div class="mode-row">
+          <div class="mode-row" data-tour="importexport-mode-row">
             <label class="mode-label">Import mode</label>
             <SelectButton v-model="importMode" :options="modeOptions" optionLabel="label" optionValue="value" />
           </div>
 
-          <div v-if="hasConflictsInSelection" class="conflict-row">
+          <div v-if="hasConflictsInSelection" class="conflict-row" data-tour="importexport-conflict-row">
             <label class="mode-label">Conflicting items already exist locally — default action</label>
             <SelectButton
               v-model="globalConflictResolution"
@@ -469,7 +471,7 @@ onRightsReady(loadExportTree)
             This permanently overwrites the entire database and media folder and cannot be undone.
           </Message>
 
-          <div class="import-actions">
+          <div class="import-actions" data-tour="importexport-import-actions">
             <Button
               label="Import"
               icon="pi pi-check"

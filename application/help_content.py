@@ -39,8 +39,6 @@ PAGE_HELP = [
      'Create and edit the visual designs used to render content — backgrounds, styling, and placement of elements.'),
     ('page.layouts', 'page', 'layouts', None, None,
      'Arrange designs and content zones into layouts that can be assigned to screens.'),
-    ('page.magictags', 'page', 'magictags', None, None,
-     'Manage placeholder tags (and their value lists) that get automatically substituted with dynamic data inside your content.'),
     ('page.settings', 'page', 'settings', None, None,
      'Configure system-wide options for this DisplayHive installation.'),
     ('page.logger', 'page', 'logger', None, None,

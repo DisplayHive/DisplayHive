@@ -64,11 +64,6 @@ const router = createRouter({
       component: () => import('../views/LayoutEditView.vue'),
     },
     {
-      path: '/magictags',
-      name: 'magictags',
-      component: () => import('../views/MagicTagsView.vue'),
-    },
-    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
@@ -102,6 +97,11 @@ const router = createRouter({
       path: '/demo',
       name: 'demo',
       component: () => import('../views/DemoModeView.vue'),
+    },
+    {
+      path: '/tour',
+      name: 'tour',
+      component: () => import('../views/TourView.vue'),
     },
     {
       path: '/importexport',

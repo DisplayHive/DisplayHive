@@ -61,6 +61,7 @@ RIGHTS = [
     ('contenttypes.create', 'contenttypes', 'Create contenttype'),
     ('contenttypes.edit', 'contenttypes', 'Edit contenttype'),
     ('contenttypes.delete', 'contenttypes', 'Delete contenttype'),
+    ('contenttypes.edit_design', 'contenttypes', 'Edit container design (Layout editor)'),
 
     ('designs.page', 'designs', 'View Designs page'),
     ('designs.create', 'designs', 'Create design'),
@@ -102,18 +103,10 @@ RIGHTS = [
     ('importexport.export', 'importexport', 'Export the full database'),
     ('importexport.import', 'importexport', 'Import / overwrite the full database'),
 
+    ('tour.page', 'tour', 'View Guided Tour page'),
+
     ('pretalx.page', 'pretalx', 'View Pretalx page'),
     ('pretalx.manage', 'pretalx', 'Manage Pretalx settings / API URLs'),
-
-    ('magictags.page', 'magictags', 'View Magic Tags page'),
-    ('magictags.create', 'magictags', 'Create magic tag'),
-    ('magictags.edit', 'magictags', 'Edit magic tag'),
-    ('magictags.delete', 'magictags', 'Delete magic tag'),
-
-    ('magictagvaluelists.page', 'magictagvaluelists', 'View Magic Tag Value Lists page'),
-    ('magictagvaluelists.create', 'magictagvaluelists', 'Create magic tag value list'),
-    ('magictagvaluelists.edit', 'magictagvaluelists', 'Edit magic tag value list'),
-    ('magictagvaluelists.delete', 'magictagvaluelists', 'Delete magic tag value list'),
 
     ('users.page', 'users', 'View Users page'),
     ('users.create', 'users', 'Create admin user'),

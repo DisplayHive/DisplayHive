@@ -16,7 +16,8 @@ from application.admin.content.serializers import (
     build_content_dict,
     fmt_dt,
 )
-from application.models import ContentElement, Contenttype, Layout
+from application.aspect_ratio import BASE_RATIO, normalize_ratio
+from application.models import ContentElement, Contenttype, Layout, LayoutVariation
 from application.models.content import Media
 from application.utils.design import media_file_urls
 
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 _CONTENT_ELEMENT_LIST_OPTIONS = (
     joinedload(ContentElement.contenttype).selectinload(Contenttype.tagconfigs),
     joinedload(ContentElement.contenttype).joinedload(Contenttype.layout).selectinload(Layout.contentcontainers),
+    joinedload(ContentElement.contenttype).joinedload(Contenttype.layout).selectinload(Layout.variations).selectinload(LayoutVariation.contentcontainers),
     selectinload(ContentElement.screengroups),
 )
 
@@ -227,14 +229,23 @@ def register_content_query_handlers(socketio, app, db):
             return
 
         serialized = json.dumps(
-            {k: v for k, v in data.items() if k != 'contenttype_id'}, ensure_ascii=False,
+            {k: v for k, v in data.items() if k not in ('contenttype_id', 'aspect_ratio')}, ensure_ascii=False,
         )
         rendered_by_container = render_content_fields(contenttype.tagconfigs, serialized, db=db)
-        containers = combine_layout_containers(contenttype.layout.contentcontainers, rendered_by_container, db=db)
+        from application.admin.layouts.helper import containers_for_ratio
+        # Which aspect-ratio variant of the Layout to preview (default: base).
+        # The requested ratio is resolved to the Layout's best matching
+        # variant, exactly as a screen of that ratio would be.
+        from application.admin.layouts.helper import resolve_layout_ratio
+        ratio = normalize_ratio(data.get('aspect_ratio')) or BASE_RATIO
+        used_ratio = resolve_layout_ratio(contenttype.layout, ratio)
+        containers = combine_layout_containers(
+            containers_for_ratio(contenttype.layout, used_ratio), rendered_by_container, db=db, ratio=used_ratio,
+        )
 
         socketio.emit(
             'displayhive:admin:stc:content_element_preview',
-            {'design': build_design_payload(db), 'containers': containers},
+            {'design': build_design_payload(db), 'containers': containers, 'aspect_ratio': ratio},
             room=sid,
         )
 

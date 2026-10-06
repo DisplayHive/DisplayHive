@@ -13,7 +13,9 @@ import type { Scene } from "./types.js";
 import { tickNow } from "./clock.js";
 import { tickCountdown } from "./countdown.js";
 import { resolveIcons } from "./icon-resolver.js";
+import { resolveRandomImages } from "./random-image-resolver.js";
 import { log } from "./logger.js";
+import { adaptCss, adaptHtml, containerGeometry } from "./rotation.js";
 
 // Optional emitter injected by socket setup so this module does not
 // directly depend on `window.socket`. Call `setSocketEmitter` with
@@ -111,14 +113,11 @@ function paintContainerElement(
   const cssChanged = !prev || prev.css !== css;
 
   if (positionChanged) {
-    el.style.top = `${c.top}vh`;
-    el.style.left = `${c.left}vw`;
-    el.style.width = `${c.width}vw`;
-    el.style.height = `${c.height}vh`;
+    Object.assign(el.style, containerGeometry(c));
   }
 
   if (contentChanged) {
-    el.innerHTML = html;
+    el.innerHTML = adaptHtml(html);
   }
 
   if (cssChanged) {
@@ -129,7 +128,7 @@ function paintContainerElement(
       cssEl.id = cssId;
       document.head.appendChild(cssEl);
     }
-    cssEl.textContent = css;
+    cssEl.textContent = adaptCss(css);
   }
 
   lastPainted[containerId] = { top: c.top, left: c.left, width: c.width, height: c.height, html, css };
@@ -182,6 +181,15 @@ export function renderScene(scene: Scene): void {
   for (const id of changedIds) {
     const el = containerElements[id];
     if (el) void resolveIcons(el);
+  }
+  // Unlike icons, a random-image placeholder must resolve to a *new* pick
+  // every time this scene is shown — including repeat/unchanged displays,
+  // where the HTML string is byte-identical to last time and so never made
+  // it into changedIds — so this runs for every active container, not just
+  // the ones above.
+  for (const id of activeIds) {
+    const el = containerElements[id];
+    if (el) void resolveRandomImages(el);
   }
   log(
     "info", "renderScene",

@@ -303,15 +303,6 @@ def index():
     if design:
         design_html = design.html or ''
         design_css = design.css or ''
-
-        # Substitute {{ var_<name> }} placeholders in HTML and CSS.
-        try:
-            from application.admin.magictags.helper import load_magic_tags, substitute_magic_tags
-            _tvars = load_magic_tags(db)
-            design_html = substitute_magic_tags(design_html, _tvars)
-            design_css = substitute_magic_tags(design_css, _tvars)
-        except Exception:
-            pass
     else:
         design_html = ''
         design_css = ''

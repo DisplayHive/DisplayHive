@@ -6,7 +6,7 @@
 #   • its own system user / group (displayhive-<name>)
 #   • its own PostgreSQL database and role (displayhive-<name>)
 #   • its own TCP port
-#   • optionally: a Gogs webhook listener (displayhive-<name>-webhook.service)
+#   • optionally: a Gogs/GitHub push webhook listener (displayhive-<name>-webhook.service)
 #
 # Instance names must be valid in Linux usernames and PostgreSQL role names
 # (letters, digits, dashes — no spaces or underscores at the start).
@@ -22,7 +22,10 @@
 #   services.displayhive.instances.myinstance.webhook.secretFile =
 #     config.age.secrets."displayhive-myinstance-webhook-secret".path;
 #
-# On receiving a valid POST from Gogs the listener runs a fast redeploy:
+# On receiving a valid push POST from Gogs or GitHub (the listener accepts
+# either's signature header — X-Gogs-Signature or X-Hub-Signature-256, both
+# HMAC-SHA256 over the raw body with the same shared secret) it runs a fast
+# redeploy:
 #   1. git fetch + reset --hard (no re-clone)
 #   2. npm ci  — only if package-lock.json changed since last deploy
 #   3. npm run build — only if the frontend source tree changed
@@ -229,8 +232,10 @@ let
   };
 
   # ── Webhook HTTP listener (Python stdlib — no extra dependencies) ─────────
-  # Validates the Gogs HMAC-SHA256 signature, checks the pushed branch, then
-  # spawns webhookDeployScript in a background thread.  A deploy-lock prevents
+  # Validates the HMAC-SHA256 signature (Gogs' X-Gogs-Signature — raw hex —
+  # or GitHub's X-Hub-Signature-256 — "sha256=" + hex; whichever header the
+  # request actually carries), checks the pushed branch, then spawns
+  # webhookDeployScript in a background thread.  A deploy-lock prevents
   # concurrent deploys when pushes arrive faster than the build completes.
   #
   # Secret resolution order (evaluated at runtime, not at Nix evaluation time):
@@ -242,7 +247,7 @@ let
   #      (only appropriate for purely internal/firewalled staging networks).
   webhookServerPy = pkgs.writeText "displayhive-webhook-server.py" ''
     #!/usr/bin/env python3
-    import hashlib, hmac, http.server, json, os, subprocess, sys, threading
+    import hashlib, hmac, http.server, json, os, subprocess, sys, threading, urllib.parse
 
     INSTANCE    = sys.argv[1]
     PORT        = int(sys.argv[2])
@@ -290,14 +295,44 @@ let
             self.end_headers()
             self.wfile.write(b"displayhive webhook ready\n")
 
-        def do_POST(self):
+        def _read_body(self):
+            # http.server never decodes Transfer-Encoding: chunked on its
+            # own — only Content-Length. A reverse proxy in front of this
+            # listener (nginx with proxy_request_buffering off, for example)
+            # can relay the request chunked instead, which would otherwise
+            # silently read 0 bytes here and fail JSON parsing below with no
+            # clue why. Decode it ourselves when present.
+            if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+                chunks = []
+                while True:
+                    size_line = self.rfile.readline().strip()
+                    if not size_line:
+                        continue
+                    size = int(size_line.split(b";")[0], 16)
+                    if size == 0:
+                        self.rfile.readline()  # final CRLF after the 0-size chunk
+                        break
+                    chunks.append(self.rfile.read(size))
+                    self.rfile.read(2)  # CRLF trailing each chunk's data
+                return b"".join(chunks)
             length = int(self.headers.get("Content-Length", 0))
-            body   = self.rfile.read(length)
+            return self.rfile.read(length)
+
+        def do_POST(self):
+            body = self._read_body()
 
             if SECRET:
-                sig    = self.headers.get("X-Gogs-Signature", "")
+                # Gogs sends a raw hex HMAC-SHA256 in X-Gogs-Signature; GitHub
+                # sends the same digest in X-Hub-Signature-256, prefixed with
+                # "sha256=". Accept whichever header is actually present so
+                # this one listener works unmodified against either host.
                 expect = hmac.new(SECRET, body, hashlib.sha256).hexdigest()
-                if not hmac.compare_digest(sig, expect):
+                gogs_sig   = self.headers.get("X-Gogs-Signature", "")
+                github_sig = self.headers.get("X-Hub-Signature-256", "")
+                if github_sig.startswith("sha256="):
+                    github_sig = github_sig[len("sha256="):]
+                sig = gogs_sig or github_sig
+                if not sig or not hmac.compare_digest(sig, expect):
                     self.send_response(403)
                     self.end_headers()
                     self.wfile.write(b"invalid signature\n")
@@ -305,10 +340,28 @@ let
                     return
 
             try:
-                payload = json.loads(body)
-            except (ValueError, UnicodeDecodeError):
+                content_type = self.headers.get("Content-Type", "")
+                if content_type.startswith("application/x-www-form-urlencoded"):
+                    # GitHub's webhook config offers a content-type choice —
+                    # "application/x-www-form-urlencoded" sends the JSON
+                    # payload URL-encoded inside a `payload=` form field
+                    # instead of as the raw body (Gogs always sends raw
+                    # JSON, so this branch is GitHub-only). The signature
+                    # above is still computed over the raw body either way,
+                    # since that's what the sender actually signed.
+                    form = urllib.parse.parse_qs(body.decode("utf-8"))
+                    raw_payload = form.get("payload", [""])[0]
+                    payload = json.loads(raw_payload)
+                else:
+                    payload = json.loads(body)
+            except (ValueError, UnicodeDecodeError) as exc:
                 self.send_response(400)
                 self.end_headers()
+                print(
+                    f"[webhook/{INSTANCE}] rejected: invalid JSON body "
+                    f"(content-type={content_type!r}, {len(body)} bytes): {exc}",
+                    flush=True,
+                )
                 return
 
             ref = payload.get("ref", "")

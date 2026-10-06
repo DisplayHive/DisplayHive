@@ -104,6 +104,8 @@ def emit_admin_screen(socketio, app, db, room=None):
                 'id': entry.id,
                 'name': entry.name,
                 'resolution': resolution_str,
+                'aspect_ratio': entry.aspect_ratio or '16:9',
+                'rotation': entry.rotation or 0,
                 'timestr': timestr,
                 'debug': bool(entry.debug) if entry.debug is not None else False,
                 'monitoring_enabled': bool(entry.monitoring_enabled) if entry.monitoring_enabled is not None else True,

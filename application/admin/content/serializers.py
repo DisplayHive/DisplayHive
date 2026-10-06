@@ -30,7 +30,7 @@ def build_content_dict(content, design_payload=None, db=None):
     Content list's row-expansion preview can render an accurate as-on-screen
     iframe instead of an unpositioned concatenation of fragments.
     """
-    from application.admin.content.helper import build_scene_containers
+    from application.admin.content.helper import build_scene_containers, build_scene_containers_by_ratio
 
     data = {
         'id': content.id,
@@ -40,8 +40,12 @@ def build_content_dict(content, design_payload=None, db=None):
         'start_time': fmt_dt(getattr(content, 'start_time', None)),
         'end_time': fmt_dt(getattr(content, 'end_time', None)),
         'contenttypeName': content.contenttype.name if content.contenttype else '',
+        'contenttype_id': content.contenttype_id,
         'design': design_payload,
         'containers': build_scene_containers(content.contenttype, content.html or '', db=db),
+        # Same, per aspect ratio the Layout has a variant for (the base is
+        # also under '16:9'); lets the admin previews switch ratio client-side.
+        'containers_by_ratio': build_scene_containers_by_ratio(content.contenttype, content.html or '', db=db),
         'screengroups': [
             {'id': sg.id, 'name': sg.name} for sg in content.screengroups
         ] if content.screengroups else [],

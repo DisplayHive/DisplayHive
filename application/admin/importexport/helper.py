@@ -56,13 +56,13 @@ def _exportable_setting_keys():
 
 
 def _support_models():
-    from application.models import TagConfig, MagicTagValueListEntry
+    from application.models import TagConfig
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import (
         layout_container, DesignGradient, DesignContainerStyle, DesignGlobalStyle,
     )
     return dict(
-        TagConfig=TagConfig, MagicTagValueListEntry=MagicTagValueListEntry,
+        TagConfig=TagConfig,
         screengroup_screen=screengroup_screen, content_element_screengroup=content_element_screengroup,
         layout_container=layout_container, DesignGradient=DesignGradient,
         DesignContainerStyle=DesignContainerStyle, DesignGlobalStyle=DesignGlobalStyle,
@@ -83,6 +83,8 @@ def _row_screen(s):
         'resolution_height': s.resolution_height,
         'debug': bool(s.debug),
         'monitoring_enabled': bool(s.monitoring_enabled),
+        'aspect_ratio': s.aspect_ratio,
+        'rotation': s.rotation,
     }
 
 
@@ -105,6 +107,7 @@ def _row_container(c):
         'name': c.name, 'order': c.order, 'top': c.top, 'left': c.left,
         'width': c.width, 'height': c.height,
         'default_field_handler': c.default_field_handler, 'default_content': c.default_content,
+        'show_when_empty': c.show_when_empty,
     }
 
 
@@ -118,6 +121,7 @@ def _row_design(d):
         'background_opacity': d.background_opacity,
         'background_effect': d.background_effect, 'background_effect_settings': d.background_effect_settings,
         'default_colors': d.default_colors,
+        'aspect_ratios': d.aspect_ratios,
     }
 
 
@@ -162,21 +166,6 @@ def _row_device(d, selected_screen_ids):
         'max_resolution_height': d.max_resolution_height,
         # Soft/nullable relation: only keep the reference if the Screen is also in the export.
         'screen_id': d.screen_id if d.screen_id in selected_screen_ids else None,
-    }
-
-
-def _row_magic_tag_value_list(l):
-    return {
-        'id': l.id, 'uuid': l.uuid, 'name': l.name,
-        'entries': [{'id': e.id, 'key': e.key, 'value': e.value} for e in l.entries],
-    }
-
-
-def _row_magic_tag(v):
-    return {
-        'id': v.id, 'uuid': v.uuid,
-        'name': v.name, 'value': v.value, 'description': v.description or '',
-        'type': v.type or 'text', 'value_list_id': v.value_list_id,
     }
 
 
@@ -255,6 +244,14 @@ def _resolve_export_selection(db, selection):
                 if cid not in selected['contentcontainers']:
                     selected['contentcontainers'].add(cid)
                     changed = True
+        if selected['layouts']:
+            # Aspect-ratio variants: their member containers come along too.
+            from application.models.content import LayoutVariation
+            for v in db.session.execute(db.select(LayoutVariation).where(LayoutVariation.layout_id.in_(selected['layouts']))).scalars():
+                for c in v.contentcontainers:
+                    if c.id not in selected['contentcontainers']:
+                        selected['contentcontainers'].add(c.id)
+                        changed = True
         if selected['contenttypes']:
             for ct_id in list(selected['contenttypes']):
                 ct = by_id['contenttypes'].get(ct_id)
@@ -268,12 +265,6 @@ def _resolve_export_selection(db, selection):
                     selected['contenttypes'].add(ce.contenttype_id)
                     changed = True
                 if ce and _pull_in_media_referenced_by(f"{ce.serialized_input or ''} {ce.html or ''}"):
-                    changed = True
-        if selected['magic_tags']:
-            for mt_id in list(selected['magic_tags']):
-                mt = by_id['magic_tags'].get(mt_id)
-                if mt and mt.value_list_id and mt.value_list_id not in selected['magic_tag_value_lists']:
-                    selected['magic_tag_value_lists'].add(mt.value_list_id)
                     changed = True
 
     return selected, all_rows
@@ -313,6 +304,21 @@ def export_database(app, db, selection=None):
             {'layout_id': lid, 'contentcontainer_id': cid}
             for lid, cid in db.session.execute(db.select(sm['layout_container'])).fetchall()
             if lid in selected['layouts'] and cid in selected['contentcontainers']
+        ]
+        from application.models.content import LayoutVariation, ContainerPosition
+        layout_variation_rows = [
+            {
+                'layout_id': v.layout_id, 'aspect_ratio': v.aspect_ratio,
+                'container_ids': [c.id for c in v.contentcontainers if c.id in selected['contentcontainers']],
+            }
+            for v in db.session.execute(db.select(LayoutVariation)).scalars()
+            if v.layout_id in selected['layouts']
+        ]
+        container_position_rows = [
+            {'contentcontainer_id': p.contentcontainer_id, 'aspect_ratio': p.aspect_ratio,
+             'top': p.top, 'left': p.left, 'width': p.width, 'height': p.height}
+            for p in db.session.execute(db.select(ContainerPosition)).scalars()
+            if p.contentcontainer_id in selected['contentcontainers']
         ]
         tagconfigs = [
             {
@@ -357,6 +363,8 @@ def export_database(app, db, selection=None):
             'design_global_styles': design_global_styles,
             'layouts': [_row_layout(lo) for lo in rows_of('layouts')],
             'layout_container': layout_container_rows,
+            'layout_variations': layout_variation_rows,
+            'container_positions': container_position_rows,
             'contentcontainers': [_row_container(c) for c in rows_of('contentcontainers')],
             'contenttypes': [_row_contenttype(ct) for ct in rows_of('contenttypes')],
             'tagconfigs': tagconfigs,
@@ -364,8 +372,6 @@ def export_database(app, db, selection=None):
             'content_element_screengroup': content_element_screengroup_rows,
             'media': [_row_media(med) for med in rows_of('media')],
             'devices': [_row_device(d, selected['screens']) for d in rows_of('devices')],
-            'magic_tag_value_lists': [_row_magic_tag_value_list(l) for l in rows_of('magic_tag_value_lists')],
-            'magic_tags': [_row_magic_tag(v) for v in rows_of('magic_tags')],
         }
 
 
@@ -518,6 +524,13 @@ def _resolve_import_selection(data: dict, selection):
                 if r['layout_id'] in selected['layouts'] and r['contentcontainer_id'] not in selected['contentcontainers']:
                     selected['contentcontainers'].add(r['contentcontainer_id'])
                     changed = True
+        if selected['layouts']:
+            for v in data.get('layout_variations', []):
+                if v['layout_id'] in selected['layouts']:
+                    for cid in v.get('container_ids', []):
+                        if cid not in selected['contentcontainers']:
+                            selected['contentcontainers'].add(cid)
+                            changed = True
         if selected['contenttypes']:
             for ct_id in list(selected['contenttypes']):
                 ct = by_id['contenttypes'].get(ct_id)
@@ -531,12 +544,6 @@ def _resolve_import_selection(data: dict, selection):
                     selected['contenttypes'].add(ce['contenttype_id'])
                     changed = True
                 if ce and _pull_in_media_referenced_by(f"{ce.get('serialized_input') or ''} {ce.get('html') or ''}"):
-                    changed = True
-        if selected['magic_tags']:
-            for mt_id in list(selected['magic_tags']):
-                mt = by_id['magic_tags'].get(mt_id)
-                if mt and mt.get('value_list_id') and mt['value_list_id'] not in selected['magic_tag_value_lists']:
-                    selected['magic_tag_value_lists'].add(mt['value_list_id'])
                     changed = True
 
     return selected, all_rows
@@ -584,7 +591,6 @@ def _reset_postgres_sequences(db):
         ('design_gradient', 'id'), ('design_container_style', 'id'), ('design_global_style', 'id'),
         ('layout', 'id'), ('contenttype', 'id'), ('tagconfig', 'id'), ('contentcontainer', 'id'),
         ('content_element', 'id'), ('media', 'id'), ('device', 'id'),
-        ('magic_tag_value_list', 'id'), ('magic_tag_value_list_entry', 'id'), ('magic_tag', 'id'),
     ]
     for table, col in sequences:
         db.session.execute(db.text(
@@ -597,9 +603,12 @@ def _clear_all_tables(db, models):
     """Delete all rows from every importable table, most-dependent first."""
     (content_element_screengroup, screengroup_screen, layout_container, TagConfig,
      ContentElement, Device, Screen, Screengroup, DesignContainerStyle, DesignGlobalStyle,
-     ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media,
-     MagicTag, MagicTagValueListEntry, MagicTagValueList) = models
+     ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media) = models
 
+    from application.models.content import LayoutVariation, ContainerPosition, layout_variation_container
+    db.session.execute(db.delete(layout_variation_container))
+    db.session.execute(db.delete(LayoutVariation))
+    db.session.execute(db.delete(ContainerPosition))
     db.session.execute(db.delete(content_element_screengroup))
     db.session.execute(db.delete(screengroup_screen))
     db.session.execute(db.delete(layout_container))
@@ -617,9 +626,6 @@ def _clear_all_tables(db, models):
     db.session.execute(db.delete(Design))
     db.session.execute(db.delete(Gradient))
     db.session.execute(db.delete(Media))
-    db.session.execute(db.delete(MagicTag))
-    db.session.execute(db.delete(MagicTagValueListEntry))
-    db.session.execute(db.delete(MagicTagValueList))
     db.session.commit()
 
 
@@ -694,6 +700,8 @@ def _import_screens(ctx):
         resolution_height=row.get('resolution_height') or 0,
         debug=bool(row.get('debug', False)),
         monitoring_enabled=bool(row.get('monitoring_enabled', True)),
+        aspect_ratio=row.get('aspect_ratio') or '16:9',
+        rotation=row.get('rotation') or 0,
     ))
 
 
@@ -719,6 +727,7 @@ def _import_contentcontainers(ctx):
         top=row.get('top', 0) or 0, left=row.get('left', 0) or 0,
         width=row.get('width', 100) or 100, height=row.get('height', 100) or 100,
         default_field_handler=row.get('default_field_handler'), default_content=row.get('default_content'),
+        show_when_empty=bool(row.get('show_when_empty')),
     ))
 
 
@@ -733,6 +742,7 @@ def _import_designs(ctx):
         background_opacity=row.get('background_opacity'), background_effect=row.get('background_effect'),
         background_effect_settings=row.get('background_effect_settings'),
         default_colors=row.get('default_colors'),
+        aspect_ratios=row.get('aspect_ratios'),
     ))
 
     for file_id, local_id in ctx.id_map['designs'].items():
@@ -782,6 +792,46 @@ def _import_layouts(ctx):
                 db.session.execute(sm['layout_container'].insert().values(
                     layout_id=local_id, contentcontainer_id=ctx.id_map['contentcontainers'][lc['contentcontainer_id']],
                 ))
+    db.session.flush()
+    _import_aspect_ratio_variants(ctx)
+
+
+def _import_aspect_ratio_variants(ctx):
+    """Per-ratio container positions, then each Layout's variations."""
+    from application.models import ContentContainer
+    from application.models.content import LayoutVariation, ContainerPosition
+    db = ctx.db
+
+    for file_id, local_id in ctx.id_map['contentcontainers'].items():
+        if ctx.action['contentcontainers'][file_id] == 'overwritten':
+            db.session.execute(db.delete(ContainerPosition).where(ContainerPosition.contentcontainer_id == local_id))
+    for r in ctx.data.get('container_positions', []):
+        local = ctx.id_map['contentcontainers'].get(r['contentcontainer_id'])
+        if local is None or ctx.action['contentcontainers'][r['contentcontainer_id']] == 'skipped':
+            continue
+        db.session.add(ContainerPosition(
+            contentcontainer_id=local, aspect_ratio=r['aspect_ratio'],
+            top=r['top'], left=r['left'], width=r['width'], height=r['height'],
+        ))
+    db.session.flush()
+
+    for file_id, local_id in ctx.id_map['layouts'].items():
+        action = ctx.action['layouts'][file_id]
+        if action == 'skipped':
+            continue
+        if action == 'overwritten':
+            for v in db.session.execute(db.select(LayoutVariation).where(LayoutVariation.layout_id == local_id)).scalars().all():
+                db.session.delete(v)
+            db.session.flush()
+        for v in ctx.data.get('layout_variations', []):
+            if v['layout_id'] != file_id:
+                continue
+            variation = LayoutVariation(layout_id=local_id, aspect_ratio=v['aspect_ratio'])
+            variation.contentcontainers = [
+                db.session.get(ContentContainer, ctx.id_map['contentcontainers'][cid])
+                for cid in v.get('container_ids', []) if cid in ctx.id_map['contentcontainers']
+            ]
+            db.session.add(variation)
     db.session.flush()
 
 
@@ -841,34 +891,6 @@ def _import_devices(ctx):
         max_resolution_width=row.get('max_resolution_width'),
         max_resolution_height=row.get('max_resolution_height'),
         screen_id=ctx.id_map['screens'].get(row.get('screen_id')),
-    ))
-
-
-def _import_magic_tag_value_lists(ctx):
-    sm = _support_models()
-    db = ctx.db
-    ctx.upsert('magic_tag_value_lists', lambda row: dict(name=row['name']))
-
-    for file_id, local_id in ctx.id_map['magic_tag_value_lists'].items():
-        action = ctx.action['magic_tag_value_lists'][file_id]
-        if action == 'skipped':
-            continue
-        if action == 'overwritten':
-            db.session.execute(db.delete(sm['MagicTagValueListEntry']).where(sm['MagicTagValueListEntry'].value_list_id == local_id))
-        row = next(r for r in ctx.data.get('magic_tag_value_lists', []) if r['id'] == file_id)
-        for entry in row.get('entries', []):
-            extra = {'id': entry['id']} if ctx.mode == 'reset' else {}
-            db.session.add(sm['MagicTagValueListEntry'](
-                **extra, value_list_id=local_id, key=entry['key'], value=entry.get('value') or '',
-            ))
-    db.session.flush()
-
-
-def _import_magic_tags(ctx):
-    ctx.upsert('magic_tags', lambda row: dict(
-        name=row['name'], value=row['value'], description=row.get('description') or '',
-        type=row.get('type') or 'text',
-        value_list_id=ctx.id_map['magic_tag_value_lists'].get(row.get('value_list_id')),
     ))
 
 
@@ -978,8 +1000,6 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             _import_content_elements(ctx)
             _import_media(ctx)
             _import_devices(ctx)
-            _import_magic_tag_value_lists(ctx)
-            _import_magic_tags(ctx)
             _import_soft_associations(ctx)
             _import_system_settings(ctx)
 
@@ -1011,8 +1031,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
 def _clear_all_models():
     from application.models import (
         Screen, Screengroup, ContentElement, Design, Layout, Contenttype,
-        ContentContainer, TagConfig, Media, Device, MagicTag,
-        MagicTagValueList, MagicTagValueListEntry,
+        ContentContainer, TagConfig, Media, Device,
     )
     from application.models.base import screengroup_screen, content_element_screengroup
     from application.models.content import (
@@ -1022,5 +1041,4 @@ def _clear_all_models():
         content_element_screengroup, screengroup_screen, layout_container, TagConfig,
         ContentElement, Device, Screen, Screengroup, DesignContainerStyle, DesignGlobalStyle,
         ContentContainer, Contenttype, Layout, DesignGradient, Design, Gradient, Media,
-        MagicTag, MagicTagValueListEntry, MagicTagValueList,
     )

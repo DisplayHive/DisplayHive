@@ -59,6 +59,8 @@ export interface DeviceConfig {
   screenname: string | null;
   devicedebugstate: "yes" | "no";
   glow: "yes" | "no";
+  /** Clockwise rotation of the whole stage in degrees: 0, 90, 180 or 270. */
+  rotation?: number;
 }
 
 export interface UpdDeviceConfigMessage {

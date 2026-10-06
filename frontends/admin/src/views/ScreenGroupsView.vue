@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -317,6 +320,9 @@ const removeAllContentFromGroup = () => {
     },
   })
 }
+
+// Reached via a link like /screengroups?edit=<id>: open that group's dialog.
+useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => canRename.value)
 </script>
 
 <template>
@@ -330,18 +336,19 @@ const removeAllContentFromGroup = () => {
       </template>
     </Card>
   </div>
-  <div v-else class="screengroups-view">
+  <div v-else data-tour="screengroups-page" class="screengroups-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
-            <Button v-if="canCreate" icon="pi pi-plus" label="New Screen Group" @click="openNewDialog" size="small" />
+            <Button v-if="canCreate" data-tour="screengroups-new" icon="pi pi-plus" label="New Screen Group" @click="openNewDialog" size="small" />
             <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable
+          data-tour="screengroups-table"
           :value="filteredScreenGroups"
           :loading="screengroupsStore.loading"
           sortField="name"
@@ -354,7 +361,12 @@ const removeAllContentFromGroup = () => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter screen groups..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="screengroups-filter"
+                  placeholder="Filter screen groups..."
+                  class="filter-input"
+                />
               </div>
             </div>
           </template>
@@ -364,6 +376,7 @@ const removeAllContentFromGroup = () => {
             <template #body="{ data }">
               <Badge
                 :value="data.screens_count"
+                data-tour="screengroups-screens-badge"
                 severity="secondary"
                 class="clickable-badge"
                 @click="openScreensDialog(data)"
@@ -375,6 +388,7 @@ const removeAllContentFromGroup = () => {
             <template #body="{ data }">
               <Badge
                 :value="data.content_count"
+                data-tour="screengroups-content-badge"
                 severity="info"
                 class="clickable-badge"
                 @click="openContentDialog(data)"
@@ -415,13 +429,13 @@ const removeAllContentFromGroup = () => {
         </div>
       </template>
       <div class="dialog-content">
-        <div class="field">
+        <div class="field" data-tour="screengroup-name-field">
           <label for="sg-name">Name</label>
           <InputText id="sg-name" v-model="editForm.name" class="w-full" />
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeDialog" text :disabled="isSaving" />
+        <Button data-tour="screengroups-create-cancel" label="Cancel" @click="closeDialog" text :disabled="isSaving" />
         <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveScreenGroup(true)" :loading="isSaving" :disabled="isSaving" />
         <Button label="Save" @click="saveScreenGroup()" :loading="isSaving" :disabled="isSaving" />
       </template>
@@ -458,7 +472,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAssignedScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAssignedScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name" />
+                <Column field="name" header="Name">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
+                    <template v-else>{{ data.name }}</template>
+                  </template>
+                </Column>
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
                   <template #body="{ data }">
@@ -477,7 +496,7 @@ const removeAllContentFromGroup = () => {
           <div class="divider"></div>
 
           <!-- Available Screens Section -->
-          <div class="screens-section">
+          <div class="screens-section" data-tour="screengroups-available-screens">
             <h6 class="section-title">Not Assigned Screens</h6>
             <InputText
               v-model="availableScreensFilter"
@@ -489,7 +508,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAvailableScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAvailableScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name" />
+                <Column field="name" header="Name">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
+                    <template v-else>{{ data.name }}</template>
+                  </template>
+                </Column>
                 <Column field="resolution" header="Resolution" style="width:160px" />
                 <Column header="Online" style="width:120px">
                   <template #body="{ data }">
@@ -515,7 +539,7 @@ const removeAllContentFromGroup = () => {
           outlined
           size="small"
         />
-        <Button label="Close" @click="closeScreensDialog" />
+        <Button data-tour="screengroups-screens-dialog-close" label="Close" @click="closeScreensDialog" />
       </template>
     </Dialog>
 
@@ -550,7 +574,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAssignedContent" stripedRows :paginator="filteredAssignedContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title" />
+                <Column field="title" header="Title">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
+                    <template v-else>{{ data.title }}</template>
+                  </template>
+                </Column>
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
                   <template #body="{ data }">
@@ -564,7 +593,7 @@ const removeAllContentFromGroup = () => {
           <div class="divider"></div>
 
           <!-- Available Content Section -->
-          <div class="content-section">
+          <div class="content-section" data-tour="screengroups-available-content">
             <h6 class="section-title">Not Assigned Content</h6>
             <InputText
               v-model="availableContentFilter"
@@ -576,7 +605,12 @@ const removeAllContentFromGroup = () => {
             </div>
             <div v-else>
               <DataTable :value="filteredAvailableContent" stripedRows :paginator="filteredAvailableContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title" />
+                <Column field="title" header="Title">
+                  <template #body="{ data }">
+                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
+                    <template v-else>{{ data.title }}</template>
+                  </template>
+                </Column>
                 <Column field="contenttype_name" header="Type" style="width:180px" />
                 <Column header="Actions" style="width:120px">
                   <template #body="{ data }">
@@ -597,7 +631,7 @@ const removeAllContentFromGroup = () => {
           outlined
           size="small"
         />
-        <Button label="Close" @click="closeContentDialog" />
+        <Button data-tour="screengroups-content-dialog-close" label="Close" @click="closeContentDialog" />
       </template>
     </Dialog>
   </div>

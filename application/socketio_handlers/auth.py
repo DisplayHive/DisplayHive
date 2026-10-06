@@ -152,6 +152,34 @@ def require_right(right_key: str):
     return decorator
 
 
+def require_any_right(*right_keys: str):
+    """Like require_right, but grants access if the caller holds *any* of the
+    given rights (e.g. a feature reachable via either of two roles' rights).
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if not require_admin():
+                return None
+            try:
+                from application.models import db
+                from application.permissions import has_right
+                user = current_admin_user()
+                if not any(has_right(db, user, k) for k in right_keys):
+                    return None
+                return fn(*args, **kwargs)
+            except Exception:
+                logger.exception("Unhandled error in admin handler %s", fn.__name__)
+                try:
+                    from application.models import db
+                    db.session.rollback()
+                except Exception:
+                    pass
+                return None
+        return wrapper
+    return decorator
+
+
 def admin_handler(fn):
     """Decorator for admin-only Socket.IO handlers.
 

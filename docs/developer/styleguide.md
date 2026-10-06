@@ -147,8 +147,8 @@ classes from `assets/views.css`:
 <template #title>
   <div class="card-header">
     <div class="card-header-title">
-      <i class="pi pi-tags card-header-icon" />
-      <span>Magic Tags</span>
+      <i class="pi pi-clone card-header-icon" />
+      <span>Screen Groups</span>
     </div>
     <div class="header-actions">
       <Button ... />
@@ -253,7 +253,7 @@ match — the two are meant to always be identical.
 ### Standard props
 
 The dominant convention, followed by most list pages (`ContentTypesView`,
-`DesignsView`, `DevicesView`, `LayoutsView`, `MagicTagsView`, `ScreenGroupsView`,
+`DesignsView`, `DevicesView`, `LayoutsView`, `ScreenGroupsView`,
 `ScreensView`, `PretalxView`, `AlertingView`):
 
 ```html
@@ -446,6 +446,64 @@ higher specificity than the sub-class that sets the status color
 (`.stat-card--ok`/`--warn`) and will silently wipe it out. Use
 `box-shadow: inset 0 0 0 1px ...` instead when you need a defining edge
 without touching an existing border side.
+
+A small interactive control (not a `<Card>`) can fall into the same trap
+even using a correctly-adapting semantic token, if it happens to share that
+exact token with its own containing element — `OptionFlagToggle.vue`'s
+idle-state button used `background: var(--p-content-background, ...)`
+while sitting inside `ContentTypesView.vue`'s `.tagconfig-preset-panel`,
+which sets its own background from that *same* token. Both resolve to the
+same color in both themes, so the button was only distinguishable by a
+faint 1px border — easy to miss entirely, especially in dark mode and next
+to little else (e.g. `FieldValueEditor.vue`'s image field "Size (vh)"
+row). Fix: use `--p-content-hover-background` for this kind of small
+control's idle fill instead — a token that stays visually close to
+`--p-content-background` but is deliberately offset from it, already used
+this way by `IconPickerField.vue`/`ContentTypesView.vue`/`MatrixView.vue`.
+The lesson generalizes: matching tokens exactly between a small control and
+its immediate container is itself a contrast bug, even when both tokens
+individually adapt correctly.
+
+### Links inside coloured elements (`RouteLink`)
+
+`components/RouteLink.vue` is the cross-page link. Its default
+`color: inherit` / no underline is written unscoped inside `:where()` (zero
+specificity) on purpose: a class on the link — such as ContentTable's coloured
+`.membership-chip--*` pills — then always wins. A scoped `.route-link { color:
+inherit }` has the same specificity as the pill's own scoped class, so source
+order decided the winner and could leave light inherited text on a light pill
+(unreadable in dark mode).
+
+### Empty color fields (checkerboard)
+
+PrimeVue's `ColorPicker` paints an unset value as red, which reads as a real
+choice. Always import `components/ColorPicker.vue` (a thin wrapper) instead of
+`primevue/colorpicker`: an empty value shows a checkerboard built from
+`--p-surface-300` / `--p-content-background`, so it works in light and dark
+mode without a `.dark-mode` override. It needs `!important` only because
+PrimeVue sets the preview's `background-color` inline.
+
+### Third-party widgets mounted outside the component tree
+
+Some libraries (the Guided Tour's `driver.js`, for the arrow/popover
+overlays) append their DOM directly to `<body>` at runtime rather than
+rendering through Vue, so a component's `<style scoped>` block can never
+reach them — Vue's scoping attribute is never applied to elements it didn't
+render. These need the same treatment as the global `.p-card` fix above:
+plain, unscoped rules (in `src/assets/main.css`, since there's no single
+"owning" component), pairing a semantic-token default with an explicit
+`.dark-mode` override for anything the library pins to a light-only color:
+
+```css
+.dark-mode .driver-popover {
+  background: var(--p-surface-800, #1e293b);
+  color: var(--p-text-color, #f3f4f6);
+}
+```
+
+Same rule as everywhere else in this document: only override what's
+actually wrong (surface/text/button colors here) — the library's own
+layout/spacing/animation CSS is left alone.
 
 ### Form control borders
 

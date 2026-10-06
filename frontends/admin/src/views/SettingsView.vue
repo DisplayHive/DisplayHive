@@ -28,6 +28,8 @@ const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
 const hidePoweredBy = ref(false)
 const hideDemoMode = ref(false)
+const hideUserTours = ref(false)
+const hideAdminTours = ref(false)
 const contentEditPreviewSize = ref(35)
 const contentListPreviewSize = ref(20)
 const contentSaving = ref(false)
@@ -82,6 +84,8 @@ interface SystemSettings {
   hide_helping_hand?: boolean | string
   hide_powered_by?: boolean | string
   hide_demo_mode?: boolean | string
+  hide_user_tours?: boolean | string
+  hide_admin_tours?: boolean | string
   content_edit_preview_size?: number | string
   content_list_preview_size?: number | string
   timezone?: string
@@ -96,6 +100,8 @@ const handleSettings = (data: { system_settings?: SystemSettings; server_time?: 
   hideHelpingHand.value = sys.hide_helping_hand === true || sys.hide_helping_hand === 'true'
   hidePoweredBy.value = sys.hide_powered_by === true || sys.hide_powered_by === 'true'
   hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
+  hideUserTours.value = sys.hide_user_tours === true || sys.hide_user_tours === 'true'
+  hideAdminTours.value = sys.hide_admin_tours === true || sys.hide_admin_tours === 'true'
   const previewSize = Number(sys.content_edit_preview_size)
   contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
   const listPreviewSize = Number(sys.content_list_preview_size)
@@ -134,6 +140,8 @@ const saveDashboardSettings = async () => {
           hide_helping_hand: hideHelpingHand.value ? 'true' : 'false',
           hide_powered_by: hidePoweredBy.value ? 'true' : 'false',
           hide_demo_mode: hideDemoMode.value ? 'true' : 'false',
+          hide_user_tours: hideUserTours.value ? 'true' : 'false',
+          hide_admin_tours: hideAdminTours.value ? 'true' : 'false',
         },
       },
     )
@@ -193,6 +201,7 @@ const saveTimeSettings = async () => {
     timeSaving.value = false
   }
 }
+
 </script>
 
 <template>
@@ -206,7 +215,7 @@ const saveTimeSettings = async () => {
       </template>
     </Card>
   </div>
-  <div v-else class="settings-view">
+  <div v-else data-tour="settings-page" class="settings-view">
 
     <div v-if="loading" class="loading-state">
       <i class="pi pi-spin pi-spinner"></i>
@@ -223,6 +232,7 @@ const saveTimeSettings = async () => {
         </template>
         <template #content>
           <div class="settings-form">
+            <div class="field-group" data-tour="settings-welcome-fields">
             <div class="field">
               <label for="welcome-headline">Welcome headline</label>
               <InputText
@@ -245,6 +255,8 @@ const saveTimeSettings = async () => {
                 :disabled="!canEdit"
               />
             </div>
+            </div>
+            <div class="toggle-group" data-tour="settings-visibility-toggles">
             <div class="field toggle-field">
               <label for="hide-community-links">Hide community links</label>
               <ToggleSwitch id="hide-community-links" v-model="hideCommunityLinks" :disabled="!canEdit" />
@@ -261,7 +273,16 @@ const saveTimeSettings = async () => {
               <label for="hide-demo-mode">Hide Demo Mode (removes it from the top bar and blocks the API)</label>
               <ToggleSwitch id="hide-demo-mode" v-model="hideDemoMode" :disabled="!canEdit" />
             </div>
-            <div class="field-actions">
+            <div class="field toggle-field">
+              <label for="hide-user-tours">Hide User tours (removes the "User" section from the Guided Tour page)</label>
+              <ToggleSwitch id="hide-user-tours" v-model="hideUserTours" :disabled="!canEdit" />
+            </div>
+            <div class="field toggle-field">
+              <label for="hide-admin-tours">Hide Admin Path tours (removes the "Admin Path" section from the Guided Tour page)</label>
+              <ToggleSwitch id="hide-admin-tours" v-model="hideAdminTours" :disabled="!canEdit" />
+            </div>
+            </div>
+            <div class="field-actions" data-tour="settings-dashboard-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -283,6 +304,7 @@ const saveTimeSettings = async () => {
         </template>
         <template #content>
           <div class="settings-form">
+            <div class="field-group" data-tour="settings-content-preview-fields">
             <div class="field">
               <label for="content-edit-preview-size">Preview size on the Content edit page</label>
               <div class="flex align-items-center gap-2">
@@ -309,7 +331,8 @@ const saveTimeSettings = async () => {
                 />
               </div>
             </div>
-            <div class="field-actions">
+            </div>
+            <div class="field-actions" data-tour="settings-content-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -340,7 +363,7 @@ const saveTimeSettings = async () => {
                 tabindex="-1"
               />
             </div>
-            <div class="field">
+            <div class="field" data-tour="settings-timezone-field">
               <label for="timezone">Timezone</label>
               <Select
                 id="timezone"
@@ -363,7 +386,7 @@ const saveTimeSettings = async () => {
                 tabindex="-1"
               />
             </div>
-            <div class="field-actions">
+            <div class="field-actions" data-tour="settings-time-save">
               <Button
                 v-if="canEdit"
                 label="Save"
@@ -375,6 +398,7 @@ const saveTimeSettings = async () => {
           </div>
         </template>
       </Card>
+
     </template>
 
   </div>
@@ -403,6 +427,13 @@ const saveTimeSettings = async () => {
   gap: 1rem;
 }
 
+.field-group,
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -426,4 +457,5 @@ const saveTimeSettings = async () => {
   justify-content: space-between;
   gap: 1rem;
 }
+
 </style>

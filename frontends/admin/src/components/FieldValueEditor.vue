@@ -21,7 +21,7 @@
  * above); Vue's reactivity tracks the mutation through the shared object
  * reference, so there's no missing event, just a pattern the default rule
  * doesn't know is deliberate here. */
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 
 import Button from 'primevue/button'
@@ -77,6 +77,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:optionFlags': [OptionFlags]
+  'update:hasVisibleControl': [boolean]
 }>()
 
 const { on, off, emit: socketEmit } = useSocket()
@@ -273,6 +274,25 @@ const getImageSize = (fieldName: string): number | null => {
 
 const setImageSize = (fieldName: string, v: number | null) => {
   props.fields[`${fieldName}__size`] = v ?? ''
+}
+
+// How the image fills its container, as an alternative to a fixed Size
+// (vh): '' keeps today's behavior (Size field, or natural scaling if
+// unset); the other three ignore Size entirely and are computed
+// server-side the same way — see _image_style() in
+// application/admin/content/helper.py.
+const imageFitOptions = [
+  { label: 'Fixed height (vh)', value: '' },
+  { label: 'Full height of container (keep ratio)', value: 'height' },
+  { label: 'Full width of container (keep ratio)', value: 'width' },
+  { label: 'Full width & height (stretch)', value: 'stretch' },
+]
+
+const getImageFit = (fieldName: string): string =>
+  String(props.fields[`${fieldName}__fit`] || '')
+
+const setImageFit = (fieldName: string, v: string) => {
+  props.fields[`${fieldName}__fit`] = v
 }
 
 const showImagePickerDialog = ref(false)
@@ -556,6 +576,41 @@ onUnmounted(() => {
   }
   if (previewInterval) clearInterval(previewInterval)
 })
+
+// Whether this instance renders any editable control for the current
+// tag/mode/option-flags combination — mirrors the per-handler `isHidden(...)`
+// conditions in the template above. Reported to the parent
+// (ContentEditView.vue) via `update:hasVisibleControl` so it can hide a
+// field's label when every one of its controls has been hidden via the
+// per-field "hide" flag, instead of showing a bare label over empty space.
+// datetime_format/countdown/marquee always render a preview/hint alongside
+// their (possibly-hidden) inputs, and pretalx_table/icon manage their own
+// hidden state internally, so those are always reported visible.
+const hasVisibleControl = computed(() => {
+  if (props.mode !== 'edit') return true
+  const name = props.tag.name
+  switch (props.tag.fieldHandler) {
+    case 'image':
+      return (
+        !isHidden(`${name}__image_mode`) ||
+        !isHidden(`${name}__size`) ||
+        (getImageMode(name) === 'single' && !isHidden(name)) ||
+        (getImageMode(name) === 'random_tags' && !isHidden(`${name}__image_tags`))
+      )
+    case 'arrows':
+      return !isHidden(name) || !isHidden(`${name}_size`)
+    case 'datetime_format':
+    case 'countdown':
+    case 'marquee':
+    case 'pretalx_table':
+    case 'icon':
+      return true
+    default:
+      return !isHidden(name)
+  }
+})
+
+watch(hasVisibleControl, (v) => emit('update:hasVisibleControl', v), { immediate: true })
 </script>
 
 <template>
@@ -691,7 +746,22 @@ onUnmounted(() => {
         <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__image_tags')" @toggle-locked="toggleFlag(tag.name + '__image_tags', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__image_tags', 'hidden')" />
       </div>
 
-      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__size')" class="fve-slot image-size-row">
+      <div v-if="mode !== 'edit' || !isHidden(tag.name + '__fit')" class="fve-slot image-size-row">
+        <label :for="`field-${tag.name}-fit`" class="image-size-label">Fit</label>
+        <Select
+          :id="`field-${tag.name}-fit`"
+          :modelValue="getImageFit(tag.name)"
+          @update:modelValue="(v: string) => setImageFit(tag.name, v)"
+          :options="imageFitOptions"
+          optionLabel="label"
+          optionValue="value"
+          :disabled="isLocked(tag.name + '__fit')"
+          style="width: 260px"
+        />
+        <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor(tag.name + '__fit')" @toggle-locked="toggleFlag(tag.name + '__fit', 'locked')" @toggle-hidden="toggleFlag(tag.name + '__fit', 'hidden')" />
+      </div>
+
+      <div v-if="!getImageFit(tag.name) && (mode !== 'edit' || !isHidden(tag.name + '__size'))" class="fve-slot image-size-row">
         <label :for="`field-${tag.name}-size`" class="image-size-label">Size (vh)</label>
         <InputNumber
           :id="`field-${tag.name}-size`"
@@ -1351,6 +1421,29 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+/* .fve-slot's ":first-child { flex: 1 }" rule (a class + pseudo-class
+   selector, specificity 0-2-0) is meant for the control, not a leading
+   label — a plain ".arrow-size-label { flex: 0 0 auto }" (specificity
+   0-1-0) can never win against it regardless of source order, so the
+   override has to match that same specificity. Without this, a label
+   placed first (as here) grabs the row's flex-grow and shoves the actual
+   control off to the right instead. Same fix repeated for
+   .image-size-label / .marquee-speed-label below. */
+.fve-slot > .arrow-size-label:first-child {
+  flex: 0 0 auto;
+}
+
+/* Unlike the full-width dropdown/textarea controls elsewhere in this file,
+   these rows' InputNumber has a fixed width and never grows to fill the
+   row, so its OptionFlagToggle would otherwise sit right next to it instead
+   of flush with the right edge like every other row's toggle. :deep()
+   reaches into OptionFlagToggle's own root (a separate component, so scoped
+   styles here don't reach it without it) to override its default
+   margin-left. Repeated for .image-size-row / .marquee-speed-row below. */
+.arrow-size-row :deep(.option-flag-toggle) {
+  margin-left: auto;
+}
+
 .image-size-row {
   display: flex;
   align-items: center;
@@ -1362,6 +1455,16 @@ onUnmounted(() => {
   font-size: 0.875rem;
   color: var(--p-text-color, #334155);
   white-space: nowrap;
+}
+
+/* Same specificity fix as .arrow-size-label above. */
+.fve-slot > .image-size-label:first-child {
+  flex: 0 0 auto;
+}
+
+/* Same right-alignment fix as .arrow-size-row above. */
+.image-size-row :deep(.option-flag-toggle) {
+  margin-left: auto;
 }
 
 /* Image picker dialog */
@@ -1444,11 +1547,22 @@ onUnmounted(() => {
   font-size: 0.875rem;
   color: var(--p-text-color, #334155);
   white-space: nowrap;
-  /* .fve-slot's ":first-child { flex: 1 }" rule is meant for the control,
-     not a leading label — without this override, a label placed first
-     (as here and in the countdown fields below) grabs the row's flex-grow
-     and shoves the actual control off to the right instead. */
+}
+
+/* .fve-slot's ":first-child { flex: 1 }" rule (specificity 0-2-0) is meant
+   for the control, not a leading label — a plain single-class override
+   (0-1-0, as this used to be) can never beat it regardless of source
+   order, so the selector has to match that specificity. Without this, a
+   label placed first (as here) grabs the row's flex-grow and shoves the
+   actual control off to the right instead. Same fix as .arrow-size-label /
+   .image-size-label above. */
+.fve-slot > .marquee-speed-label:first-child {
   flex: 0 0 auto;
+}
+
+/* Same right-alignment fix as .arrow-size-row above. */
+.marquee-speed-row :deep(.option-flag-toggle) {
+  margin-left: auto;
 }
 
 .marquee-hint {

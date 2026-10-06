@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import RouteLink from '../components/RouteLink.vue'
+import { links } from '../utils/links'
+import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted } from 'vue'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
+import { getScreenBaseUrl, openDevicePreview } from '../composables/useDevicePreview'
 import type { Device } from '../types/models'
 import { useDevicesStore } from '../stores/devices'
 import { useScreensStore } from '../stores/screens'
@@ -267,21 +271,6 @@ const toggleActiveDevice = (device: Device, val: boolean) => {
   toast.add({ severity: 'success', summary: 'Updated', detail: `Device ${device.name} ${val ? 'activated' : 'deactivated'}`, life: 2000 })
 }
 
-// Allow overriding screen URL via Vite env `VITE_SCREEN_URL`. Otherwise:
-// - In dev (`npm run dev`), the admin SPA is served by its own Vite dev
-//   server (e.g. :5173), which is NOT where Flask renders the screen/
-//   handles the devicekey socket auth — default to the Flask backend URL
-//   instead (same fallback used for the socket connection).
-// - In production, admin + screen are both served by Flask on the same
-//   origin, so `window.location.origin` is correct.
-const getScreenBaseUrl = (): string => {
-  const env = import.meta.env || {}
-  return (
-    (env.VITE_SCREEN_URL as string) ||
-    (env.DEV ? (env.VITE_BACKEND_URL as string) || (env.VITE_SOCKET_URL as string) || 'http://localhost:5000' : window.location.origin)
-  )
-}
-
 const playDevice = (device: Device) => {
   if (!device.devicekey) {
     toast.add({
@@ -293,12 +282,7 @@ const playDevice = (device: Device) => {
     return
   }
   try {
-    const base = getScreenBaseUrl()
-    const key = device.devicekey || ''
-    const separator = base.includes('?') ? '&' : '?'
-    const url = `${base}${separator}impersonate=true&devicekey=${encodeURIComponent(key)}`
-    // Open in new tab/window safely
-    window.open(url, '_blank', 'noopener')
+    openDevicePreview(device.devicekey)
   } catch (e) {
     console.error('[DevicesView] playDevice error', e)
   }
@@ -364,6 +348,9 @@ const deleteDevice = (device: Device) => {
     },
   })
 }
+
+// Reached via a link like /devices?edit=<id>: open that device's dialog.
+useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.value)
 </script>
 
 <template>
@@ -377,13 +364,14 @@ const deleteDevice = (device: Device) => {
       </template>
     </Card>
   </div>
-  <div v-else class="devices-view">
+  <div v-else data-tour="devices-page" class="devices-view">
     <Card>
       <template #title>
         <div class="card-header">
           <div class="header-actions">
             <Button
               v-if="canAdopt"
+              data-tour="devices-adopt"
               icon="pi pi-plus"
               label="Adopt Device"
               @click="openAdoptDialog"
@@ -400,6 +388,7 @@ const deleteDevice = (device: Device) => {
       </template>
       <template #content>
         <DataTable
+          data-tour="devices-table"
           :value="filteredDevices"
           :loading="devicesStore.loading"
           sortField="name"
@@ -414,7 +403,12 @@ const deleteDevice = (device: Device) => {
           <template #header>
             <div class="dt-header">
               <div class="dt-left">
-                <InputText v-model="filterText" placeholder="Filter devices..." class="filter-input" />
+                <InputText
+                  v-model="filterText"
+                  data-tour="devices-filter"
+                  placeholder="Filter devices..."
+                  class="filter-input"
+                />
               </div>
               <div class="dt-right">
                 <Tag
@@ -470,7 +464,7 @@ const deleteDevice = (device: Device) => {
               </Popover>
             </template>
             <template #body="{ data }">
-              <div class="key-cell">
+              <div class="key-cell" data-tour="devices-key-column">
                 <Button class="key-button" icon="pi pi-key" size="small" outlined @click="() => copyDeviceKey(data)" :title="'Copy key'">
                 </Button>
                 <Button class="key-button" icon="pi pi-share-alt" size="small" outlined @click="() => copyDeviceUrl(data)" :title="'Copy dynamic device URL'">
@@ -494,7 +488,8 @@ const deleteDevice = (device: Device) => {
           </Column>
           <Column field="screen_name" header="Screen" sortable>
             <template #body="{ data }">
-              {{ data.screen_name || '-' }}
+              <RouteLink v-if="data.screen_id && data.screen_name && rightsStore.can('screens.page')" :to="links.screen(data.screen_id)" title="Open this screen">{{ data.screen_name }}</RouteLink>
+              <template v-else>{{ data.screen_name || '-' }}</template>
             </template>
           </Column>
           <Column style="width: 200px">
@@ -532,6 +527,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="canRename"
+                  data-tour="devices-row-rename"
                   icon="pi pi-pencil"
                   @click="openRenameDialog(data)"
                   size="small"
@@ -540,6 +536,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="canAssign"
+                  data-tour="devices-row-assign"
                   icon="pi pi-desktop"
                   @click="openAssignDialog(data)"
                   size="small"
@@ -548,6 +545,7 @@ const deleteDevice = (device: Device) => {
                 />
                 <Button
                   v-if="data.is_online"
+                  data-tour="devices-row-locate"
                   icon="pi pi-map-marker"
                   @click="toggleFind(data)"
                   size="small"
@@ -580,18 +578,18 @@ const deleteDevice = (device: Device) => {
         </div>
       </template>
       <div class="dialog-content">
-        <div class="field">
+        <div class="field" data-tour="devices-adopt-name-field">
           <label for="adopt-name">Device Name</label>
           <InputText id="adopt-name" v-model="adoptForm.name" class="w-full" />
         </div>
-          <div class="field">
+          <div class="field" data-tour="devices-adopt-qr">
             <label for="adopt-key">Adoptiontoken</label>
             <div class="key-input-group">
               <InputText id="adopt-key" v-model="adoptForm.adoptiontoken" class="w-full" placeholder="Enter or scan adoption token" />
-            <Button 
+            <Button
               v-if="!scannerActive"
-              icon="pi pi-camera" 
-              @click="startQRScanner" 
+              icon="pi pi-camera"
+              @click="startQRScanner"
               outlined
               title="Scan QR Code"
             />
@@ -621,7 +619,7 @@ const deleteDevice = (device: Device) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="closeAdoptDialog" text :disabled="isAdopting" />
+        <Button data-tour="devices-adopt-cancel" label="Cancel" @click="closeAdoptDialog" text :disabled="isAdopting" />
         <Button label="Adopt" @click="adoptDevice" :loading="isAdopting" :disabled="isAdopting" />
       </template>
     </Dialog>
@@ -669,7 +667,7 @@ const deleteDevice = (device: Device) => {
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showAssignDialog = false" text :disabled="isSavingAssign" />
+        <Button data-tour="devices-assign-cancel" label="Cancel" @click="showAssignDialog = false" text :disabled="isSavingAssign" />
         <Button label="Save" @click="saveAssign()" :loading="isSavingAssign" :disabled="isSavingAssign" />
       </template>
     </Dialog>
