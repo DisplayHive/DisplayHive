@@ -137,4 +137,4 @@ def test_media_routes_take_precedence_over_the_static_folder(flask_app):
     assert adapter.match('/static/media/a/b.png')[0] == 'static_media'
     assert adapter.match('/static/media_previews/a.png')[0] == 'static_media_previews'
     assert adapter.match('/static/media_renditions/fhd/a.png')[0] == 'static_media_renditions'
-    assert adapter.match('/static/js-build/app.js')[0] == 'static'
+    assert adapter.match('/static/demo_logos/event.png')[0] == 'static'

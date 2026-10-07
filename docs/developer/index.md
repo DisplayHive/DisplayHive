@@ -6,7 +6,7 @@ to contribute a change.
 
 For environment setup and day-to-day commands (`nix develop`, `npm run dev`,
 tests), see the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)
-and [`startup.md`](https://github.com/DisplayHive/DisplayHive/blob/main/startup.md) —
+and [Contributing](contributing.md) —
 this guide assumes a working dev environment and focuses on how the code is
 organized.
 

@@ -4,9 +4,19 @@
 
 See the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)
 for environment setup — `nix develop` provisions everything (Python, Node,
-SQLite) and runs first-time setup automatically. Without Nix, you'll need
+SQLite) and runs first-time setup automatically: JS dependencies, the
+Python venv (`.venv`, see below) and `alembic upgrade head`. `nix-shell`
+works too — `flake.nix` just wraps `shell.nix`. Without Nix, you'll need
 the Python version from `.python-version` (currently 3.13), Node.js, and
 SQLite installed manually.
+
+With [direnv](https://direnv.net/) hooked into your shell
+(`eval "$(direnv hook bash)"`), run `direnv allow` once and the dev shell
+loads automatically whenever you `cd` into the repository.
+
+The dev backend is plain HTTP — no certificates needed. `frontends/admin`
+and `frontends/screen` pin their own dev ports in `vite.config.ts`
+(5173 / 5174), so all three servers run side by side.
 
 ### Python version
 

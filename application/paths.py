@@ -20,7 +20,7 @@ location whose old copy still holds data while the new one doesn't, the old
 path keeps being used and is reported in ``DataPaths.legacy``, which the
 admin UI turns into a banner with migration steps.
 
-Imported by app.py, migrations/env.py and rerender_all_content.py, so it
+Imported by app.py and migrations/env.py, so it
 must not depend on Flask or the app being set up.
 """
 

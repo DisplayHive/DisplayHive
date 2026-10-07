@@ -14,10 +14,9 @@ project.db
 *.sqlite
 *.sqlite3
 .gitattributes
-.venv_lib/
+.pytest_cache/
 # Dev-shell venv synced from requirements-dev.txt (shell.nix)
 .venv/
-static/js-build/
 # DATA_DIR default (application/paths.py): media, previews, renditions, SQLite, import staging
 /data/
 # Legacy data locations, still honoured until migrated

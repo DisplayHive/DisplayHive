@@ -78,4 +78,3 @@ Re-renders the stored HTML of all content, for example after an update that
 changed how a field type renders. Limit it with `--contenttype ID`
 (repeatable). Running screens pick up the new HTML with their next content
 update, because the command can't reach them itself.
-(`python rerender_all_content.py` still works and does the same.)
