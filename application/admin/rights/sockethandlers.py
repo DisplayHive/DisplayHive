@@ -225,10 +225,10 @@ def register_admin_rights_handlers(socketio, app, db):
 
         data: {group_id, right_keys: [...], allow}. Used by the "All"/"None"
         buttons in the admin UI — deliberately NOT implemented as N parallel
-        calls to set_group_right from the client: this app runs single-worker
-        with eventlet, and N concurrent Socket.IO handler invocations sharing
-        the same db.session can interleave (one handler's rollback wiping out
-        another's uncommitted add), silently dropping some of the N rights.
+        calls to set_group_right from the client: N concurrent Socket.IO
+        handler invocations (each in its own thread) can interleave their
+        check-then-insert on the same group (one handler's rollback wiping
+        out another's uncommitted add), silently dropping some of the N rights.
         One handler call, one commit, no interleaving.
         """
         data = data or {}

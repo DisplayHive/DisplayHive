@@ -2,7 +2,7 @@
 
 | Component | Stack | Purpose |
 |---|---|---|
-| Backend | Flask + Flask-SocketIO (eventlet), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends |
+| Backend | Flask + Flask-SocketIO (threading mode, gunicorn `gthread`), SQLAlchemy, Alembic | REST/API + realtime hub, serves both frontends |
 | Admin panel | Vue 3, PrimeVue, Pinia, Vite | Manage content, screens, devices, layouts/designs, settings |
 | Screen client | TypeScript (no framework), Vite | Kiosk-facing display client, renders pushed content |
 
@@ -10,8 +10,17 @@
 
 Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/main/app.py):
 
-- `eventlet.monkey_patch()` runs first, before any other import, so
-  networking stays cooperative under eventlet's async model.
+- Flask-SocketIO runs in **threading** mode (`async_mode='threading'`):
+  every Socket.IO event, HTTP request and background task runs in its own OS
+  thread, WebSockets via `simple-websocket`, served by gunicorn's `gthread`
+  worker — one process, many threads. There is no monkey-patching. Shared
+  in-memory state is guarded by locks: the login rate limiter
+  (`application/auth.py`, which also counts a login attempt *before* the
+  password check so parallel guesses can't slip past it), pending SSO
+  logins (`application/oidc.py`) and the connection registry
+  (`registry_lock` in `application/socketio_handlers/lifecycle.py`). New
+  module-level state shared between requests needs the same — and tests
+  for it need real `threading.Thread`s.
 - The Flask app is created and configured with the DB URI (`DATABASE_URL`
   for Postgres, falling back to local SQLite), CORS restricted to `/api/*`
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance

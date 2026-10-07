@@ -36,8 +36,8 @@ def rendition_path(renditions_root: str, tier: str, rel: str) -> str:
 def _save(img, path: str, fmt: str, info: dict) -> None:
     """Write *img* to *path* atomically (temp file in the same folder + replace).
 
-    The temp name is unique per call, not just per process: run_blocking()
-    renders in a real thread pool, so two threads of one process can write
+    The temp name is unique per call, not just per process: rendering runs
+    in whatever thread asked for it, so two threads of one process can write
     the same rendition at once (e.g. "Sync previews" while the startup
     backfill is still running). With a shared per-pid name they overwrote
     each other's half-written file or deleted it from under each other.
@@ -175,17 +175,14 @@ def ensure_all(rels: Iterable[str], media_root: str, renditions_root: str) -> di
 
 
 def run_blocking(fn, *args):
-    """Run CPU-bound *fn* without stalling the eventlet hub.
+    """Run CPU-bound *fn* (image resizing) and return its result.
 
-    Under eventlet (the production server) image resizing in the green thread
-    would freeze every socket for its duration, so it goes through a real
-    thread pool; anywhere else it just runs inline.
+    Just a call now: every Socket.IO event and background task runs in its
+    own OS thread (async_mode='threading' in app.py), and Pillow releases the
+    GIL while resizing/encoding, so nothing else stalls meanwhile. Kept as
+    the one place to change should rendering ever move to a process pool.
     """
-    try:
-        from eventlet import tpool
-        return tpool.execute(fn, *args)
-    except Exception:
-        return fn(*args)
+    return fn(*args)
 
 
 def media_rels(media_rows) -> list:

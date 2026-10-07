@@ -449,7 +449,7 @@ let
     alembic
     pillow
     gunicorn
-    eventlet
+    simple-websocket
     psycopg2
     requests
     pyjwt
@@ -534,6 +534,17 @@ let
         type    = types.str;
         default = "INFO";
         description = "Python logging level (e.g. DEBUG, INFO, WARNING, ERROR).";
+      };
+
+      threads = mkOption {
+        type        = types.ints.positive;
+        default     = 500;
+        description = ''
+          gunicorn worker threads (gthread worker, single process). Every
+          connected screen and open admin tab keeps one thread busy for its
+          WebSocket, so this must exceed the number of simultaneous
+          connections, with headroom for plain HTTP requests.
+        '';
       };
 
       trustedProxyCount = mkOption {
@@ -690,13 +701,16 @@ let
       WorkingDirectory = icfg.sourceDirectory;
       ExecStartPre     = "${cfg.pythonEnv}/bin/alembic upgrade head";
       ExecStart = "${cfg.pythonEnv}/bin/gunicorn"
-        + " --worker-class eventlet"
+        + " --worker-class gthread"
         + " -w 1"
+        + " --threads ${toString icfg.threads}"
         + " --bind 0.0.0.0:${toString icfg.port}"
         + " app:app";
       Restart    = "on-failure";
       RestartSec = "5s";
       NoNewPrivileges = true;
+      # One open socket per connected screen / admin tab (see `threads`).
+      LimitNOFILE     = 65536;
       PrivateTmp      = true;
     };
   };

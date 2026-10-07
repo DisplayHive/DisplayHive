@@ -224,29 +224,31 @@ def register_device_connection_handlers(socketio, app, db):
 
                     # Update device record and register tracking only for non-impersonation sessions
                     if not is_impersonation:
-                        try:
-                            dev.is_online = True
-                            dev.last_connected_at = datetime.now(timezone.utc)
-                            if getattr(dev, 'registration_token', None):
-                                dev.registration_token = None
-                            db.session.commit()
-                            # Re-fetch dev so screen_id and all attributes are fresh after commit
-                            from application.models import Device as _Device
-                            dev = db.session.execute(
-                                db.select(_Device).where(_Device.devicekey == devicekey)
-                            ).scalar_one_or_none() or dev
-                            logger.info("[Auth] Updated device record: is_online=True, cleared registration_token")
-                        except Exception as e:
-                            logger.warning("[Auth] Error updating device record: %s", e)
-                            db.session.rollback()
-
-                        # Register this devicekey in connected_devices tracking
-                        try:
-                            from application.socketio_handlers.lifecycle import connected_devices
+                        # Mark online and register as ONE step under
+                        # registry_lock, which the disconnect handler holds while
+                        # it unregisters and marks offline — so an old socket's
+                        # disconnect can't land in between and leave a connected
+                        # screen showing (and alerting) offline. No open DB
+                        # transaction while holding it (see lifecycle.py).
+                        from application.socketio_handlers.lifecycle import connected_devices, registry_lock
+                        dev_id = dev.id
+                        db.session.commit()
+                        with registry_lock:
+                            try:
+                                dev.is_online = True
+                                dev.last_connected_at = datetime.now(timezone.utc)
+                                if getattr(dev, 'registration_token', None):
+                                    dev.registration_token = None
+                                db.session.commit()
+                                logger.info("[Auth] Updated device record: is_online=True, cleared registration_token")
+                            except Exception as e:
+                                logger.warning("[Auth] Error updating device record: %s", e)
+                                db.session.rollback()
                             connected_devices[devicekey] = {'sid': sid_info, 'connected_at': datetime.now(timezone.utc)}
                             logger.info("[Auth] Registered in connected_devices tracking")
-                        except Exception as e:
-                            logger.warning("[Auth] Error registering in connected_devices: %s", e)
+                        # Re-fetch dev so screen_id and all attributes are fresh after commit
+                        from application.models import Device as _Device
+                        dev = db.session.get(_Device, dev_id) or dev
 
                     # Emit authentication ack to client regardless of impersonation
                     try:
@@ -275,15 +277,16 @@ def register_device_connection_handlers(socketio, app, db):
                         # Register in connected_screens only for non-impersonation
                         if not is_impersonation and screen:
                             try:
-                                from application.socketio_handlers.lifecycle import connected_screens
+                                from application.socketio_handlers.lifecycle import connected_screens, registry_lock
                                 w = getattr(screen, 'resolution_width', None)
                                 h = getattr(screen, 'resolution_height', None)
-                                connected_screens[screen.name] = {
-                                    'sid': sid_info,
-                                    'connected_at': datetime.now(timezone.utc),
-                                    'resolution': (w, h) if w and h else None,
-                                    'devicekey': devicekey
-                                }
+                                with registry_lock:
+                                    connected_screens[screen.name] = {
+                                        'sid': sid_info,
+                                        'connected_at': datetime.now(timezone.utc),
+                                        'resolution': (w, h) if w and h else None,
+                                        'devicekey': devicekey
+                                    }
                                 logger.info("[Auth] Registered screen '%s' in connected_screens", screen.name)
                             except Exception as e:
                                 logger.warning("[Auth] Error registering in connected_screens: %s", e)

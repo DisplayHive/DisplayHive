@@ -14,11 +14,10 @@ from application.auth import (
     decode_token,
     ensure_bootstrap_admin,
     hash_password,
-    clear_failed_login,
-    is_login_rate_limited,
+    begin_login_attempt,
+    finish_login_attempt,
     is_rate_limited,
     record_failed_attempt,
-    record_failed_login,
     user_from_token,
     verify_password,
 )
@@ -188,29 +187,85 @@ def test_per_ip_limit_stops_spraying_across_usernames():
     import application.auth as auth_module
 
     for i in range(auth_module._IP_MAX_ATTEMPTS):
-        assert is_login_rate_limited('1.2.3.4', f'victim-{i}') is False
-        record_failed_login('1.2.3.4', f'victim-{i}')
+        assert begin_login_attempt('1.2.3.4', f'victim-{i}') is not None  # counted as a failure
     # Every single username is still below its own threshold, but the IP is out.
-    assert is_login_rate_limited('1.2.3.4', 'yet-another-user') is True
-    assert is_login_rate_limited('5.6.7.8', 'yet-another-user') is False
+    assert begin_login_attempt('1.2.3.4', 'yet-another-user') is None
+    assert begin_login_attempt('5.6.7.8', 'yet-another-user') is not None
 
 
 def test_per_account_limit_still_applies_below_the_ip_threshold():
     for _ in range(5):
-        record_failed_login('1.2.3.4', 'Admin')
-    assert is_login_rate_limited('1.2.3.4', 'admin') is True
-    assert is_login_rate_limited('1.2.3.4', 'someone-else') is False
+        begin_login_attempt('1.2.3.4', 'Admin')
+    assert begin_login_attempt('1.2.3.4', 'admin') is None
+    assert begin_login_attempt('1.2.3.4', 'someone-else') is not None
 
 
-def test_successful_login_keeps_the_ip_counter():
-    """Otherwise a valid account of the attacker's own could reset it."""
+def test_successful_login_keeps_the_ip_counter_but_is_not_counted_itself():
+    """A valid account of the attacker's own must not reset the IP counter."""
     import application.auth as auth_module
 
     for i in range(auth_module._IP_MAX_ATTEMPTS - 1):
-        record_failed_login('1.2.3.4', f'victim-{i}')
-    clear_failed_login('1.2.3.4', 'attackers-own-account')
-    record_failed_login('1.2.3.4', 'victim-last')
-    assert is_login_rate_limited('1.2.3.4', 'anyone') is True
+        begin_login_attempt('1.2.3.4', f'victim-{i}')
+    own = begin_login_attempt('1.2.3.4', 'attackers-own-account')
+    finish_login_attempt(own, success=True)
+    # The success took only its own count back: one more failure locks the IP.
+    assert begin_login_attempt('1.2.3.4', 'victim-last') is not None
+    assert begin_login_attempt('1.2.3.4', 'anyone') is None
+
+
+def test_successful_login_resets_its_account_counter():
+    for _ in range(4):
+        begin_login_attempt('1.2.3.4', 'alice')
+    finish_login_attempt(begin_login_attempt('1.2.3.4', 'alice'), success=True)
+    for _ in range(4):
+        assert begin_login_attempt('1.2.3.4', 'alice') is not None
+
+
+def test_parallel_guesses_cannot_slip_past_the_limit():
+    """Many threads trying the same account at once: only 5 get to check a password."""
+    import threading
+    import time as _time
+
+    allowed = []
+    start = threading.Barrier(40)
+
+    def guess():
+        start.wait()
+        attempt = begin_login_attempt('9.9.9.9', 'victim')
+        if attempt is not None:
+            allowed.append(attempt)
+            _time.sleep(0.05)  # "hashing the password", with the GIL released
+
+    threads = [threading.Thread(target=guess) for _ in range(40)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(allowed) == 5
+
+
+def test_limiter_survives_concurrent_sweeps(monkeypatch):
+    """_sweep() iterates the whole dict; other threads insert meanwhile."""
+    import threading
+    import application.auth as auth_module
+
+    monkeypatch.setattr(auth_module, '_SWEEP_INTERVAL_SECONDS', 0)  # sweep on every call
+    errors = []
+
+    def hammer(n):
+        try:
+            for i in range(300):
+                auth_module.record_failed_attempt(f'user:{n}:{i}')
+                auth_module.is_rate_limited(f'user:{n}:{i // 2}')
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=hammer, args=(n,)) for n in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
 
 
 # --- JWT -----------------------------------------------------------------------

@@ -28,11 +28,9 @@ COPY frontends/screen/ frontends/screen/
 RUN npm --prefix frontends/screen run build
 
 # =====================================================================
-# Stage 2 — Python runtime (Flask + Socket.IO via gunicorn/eventlet)
-# Pinned to 3.12: eventlet's monkey-patching/worker fails to import on
-# Python 3.13, which makes gunicorn report "worker eventlet not found".
+# Stage 2 — Python runtime (Flask + Socket.IO via gunicorn's gthread worker)
 # =====================================================================
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

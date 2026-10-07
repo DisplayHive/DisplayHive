@@ -197,12 +197,15 @@ def register_device_management_handlers(socketio, app, db):
             # Targeting the captured sid directly keeps the rejection scoped to
             # the exact stale connection being kicked.
             try:
-                from application.socketio_handlers.lifecycle import connected_devices, connected_screens
-                entry = connected_devices.pop(device.devicekey, None)
-                sid_to_disconnect = entry.get('sid') if entry else None
-                for screen_name, info in list(connected_screens.items()):
-                    if info and info.get('devicekey') == device.devicekey:
-                        del connected_screens[screen_name]
+                from application.socketio_handlers.lifecycle import (
+                    connected_devices, connected_screens, registry_lock,
+                )
+                with registry_lock:
+                    entry = connected_devices.pop(device.devicekey, None)
+                    sid_to_disconnect = entry.get('sid') if entry else None
+                    for screen_name, info in list(connected_screens.items()):
+                        if info and info.get('devicekey') == device.devicekey:
+                            del connected_screens[screen_name]
             except Exception:
                 logger.exception('Error looking up connected device session')
                 sid_to_disconnect = None

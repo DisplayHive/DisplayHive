@@ -13,8 +13,7 @@ def _loaded_for_flask_cli_command() -> bool:
     gunicorn, `python app.py` and pytest import it without one.
     """
     # Only look at click if it's already loaded (the `flask` command loads
-    # it); importing anything here, ahead of eventlet's monkey-patching,
-    # would defeat the patching for the server.
+    # it) — no reason to import it for the server.
     click = sys.modules.get('click')
     if click is None or click.get_current_context(silent=True) is None:
         return False
@@ -33,10 +32,6 @@ def _loaded_for_flask_cli_command() -> bool:
 
 
 CLI_MODE = _loaded_for_flask_cli_command()
-
-if not CLI_MODE:
-    import eventlet
-    eventlet.monkey_patch()
 
 from application import media_renditions
 from application import paths as data_paths
@@ -66,10 +61,14 @@ from application.help_content import sync_help_topics
 # Import database models
 from application.models import db, Design, Device
 
-# Set this variable to "threading", "eventlet" or "gevent" to test the
-# different async modes, or leave it set to None for the application to choose
-# the best option based on installed packages.
-async_mode = None                                                       
+# Plain OS threads: every Socket.IO event and background task runs in a
+# thread, WebSockets via simple-websocket, served by gunicorn's gthread worker
+# (one connected screen or admin tab holds one thread — size --threads
+# accordingly). No monkey-patching. Shared in-memory state is guarded by
+# locks: the login rate limiter (application/auth.py), pending SSO logins
+# (application/oidc.py) and the connection registry
+# (application/socketio_handlers/lifecycle.py).
+async_mode = 'threading'
 
 # Create Flask app
 app = Flask(__name__,
@@ -110,6 +109,28 @@ if _database_url:
 else:
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DATA_PATHS.db_path}"
 app.config['SQLITE_IN_USE'] = not bool(_database_url)
+
+
+def _env_int(name, default):
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# Database connection pool. Idle screens hold no connection — a thread only
+# borrows one while it handles an event or request — but after a restart
+# every screen reconnects at once, and each connect needs the database
+# briefly. SQLAlchemy's default (5 + 10 overflow) makes that herd queue for
+# up to pool_timeout; 10 + 20 stays well inside PostgreSQL's default
+# max_connections of 100. pool_pre_ping drops connections the server closed.
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': _env_int('DB_POOL_SIZE', 10),
+    'max_overflow': _env_int('DB_MAX_OVERFLOW', 20),
+    'pool_timeout': 30,
+    'pool_pre_ping': True,
+}
 # enable automatic template reloading so changes in templates are picked up
 # without a full process restart
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -322,7 +343,27 @@ def _run_startup_steps():
 
 
 # Not for a `flask dh` maintenance command (see _loaded_for_flask_cli_command).
+def _raise_open_files_limit():
+    """Raise the soft limit on open files to the hard limit (capped at 65536).
+
+    Every connected screen or admin tab is an open socket, and many systems
+    start services with a soft limit of 1024 — reached at a few hundred
+    screens plus database connections and media files. The hard limit is
+    usually far higher (the NixOS module sets LimitNOFILE explicitly).
+    """
+    try:
+        import resource
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        target = 65536 if hard == resource.RLIM_INFINITY else min(hard, 65536)
+        if soft != resource.RLIM_INFINITY and soft < target:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+            logger.info('Raised the open files limit from %s to %s', soft, target)
+    except Exception:
+        logger.warning('Could not raise the open files limit', exc_info=True)
+
+
 if not CLI_MODE:
+    _raise_open_files_limit()
     _run_startup_steps()
 
 # Register Socket.IO event handlers
@@ -938,5 +979,7 @@ if __name__ == '__main__':
         port=flask_port,
         debug=debug_mode,
         use_reloader=False,  # reloader forks the process, incompatible with worker-per-port isolation
-        allow_unsafe_werkzeug=debug_mode,  # only needed when debug=True outside of the Werkzeug reloader
+        # `python app.py` is for development and the e2e tests; production runs
+        # gunicorn (docker-entrypoint.sh, nix/module.nix) and never gets here.
+        allow_unsafe_werkzeug=True,
     )

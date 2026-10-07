@@ -20,9 +20,8 @@ from application.auth import (
     create_token,
     user_from_token,
     decode_token,
-    is_login_rate_limited,
-    record_failed_login,
-    clear_failed_login,
+    begin_login_attempt,
+    finish_login_attempt,
 )
 
 logger = logging.getLogger(__name__)
@@ -115,11 +114,14 @@ def register_auth_routes(app, db):
         username = str(data.get('username', '')).strip()
         password = str(data.get('password', ''))
 
-        if is_login_rate_limited(request.remote_addr, username):
-            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
-
         if not username or not password:
             return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+        # Counted as a failure up front, taken back on success — see
+        # begin_login_attempt() for why (parallel guesses).
+        attempt = begin_login_attempt(request.remote_addr, username)
+        if attempt is None:
+            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
 
         user = db.session.execute(
             db.select(AdminUser).where(AdminUser.username == username)
@@ -128,14 +130,12 @@ def register_auth_routes(app, db):
         # Accounts without password login (e.g. created by an SSO login) get
         # the same answer as a wrong password, so this doesn't reveal them.
         if not user or not user.password_login_allowed or not verify_password(password, user.password_hash):
-            record_failed_login(request.remote_addr, username)
             return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
         if not user.is_active:
-            record_failed_login(request.remote_addr, username)
             return jsonify({'success': False, 'error': 'This account has been deactivated'}), 403
 
-        clear_failed_login(request.remote_addr, username)
+        finish_login_attempt(attempt, success=True)
         _record_login(user)
         db.session.commit()
 
@@ -198,12 +198,12 @@ def register_auth_routes(app, db):
 
         # Same limiter as the login route: the current-password check is
         # otherwise a brute-force oracle for anyone holding a stolen token.
-        if is_login_rate_limited(request.remote_addr, user.username):
+        attempt = begin_login_attempt(request.remote_addr, user.username)
+        if attempt is None:
             return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
         if not verify_password(current_password, user.password_hash):
-            record_failed_login(request.remote_addr, user.username)
             return jsonify({'success': False, 'error': 'Current password is incorrect'}), 400
-        clear_failed_login(request.remote_addr, user.username)
+        finish_login_attempt(attempt, success=True)
 
         if password_problem(new_password):
             return jsonify({'success': False, 'error': password_problem(new_password)}), 400

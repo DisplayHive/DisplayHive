@@ -17,7 +17,7 @@ let
     setuptools
     pytest
     playwright
-    eventlet
+    simple-websocket
     requests
     pyjwt
     cryptography

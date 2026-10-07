@@ -8,7 +8,9 @@ sessions are backed by a single shared token format.
 
 import os
 import secrets
+import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -210,6 +212,10 @@ class _Attempts:
 
 _failed_attempts: dict[str, _Attempts] = {}
 _last_sweep = 0.0
+# Guards _failed_attempts / _last_sweep: Socket.IO events and HTTP requests
+# run in parallel threads. Reentrant because the public functions build on
+# each other (record_failed_attempt → _sweep, begin_login_attempt → both).
+_lock = threading.RLock()
 
 
 def _lockout_seconds(over_threshold: int) -> int:
@@ -258,6 +264,11 @@ def _sweep(now: float) -> None:
 
 def is_rate_limited(key: str) -> bool:
     """Return True if *key* is currently locked out after too many failures."""
+    with _lock:
+        return _is_rate_limited(key)
+
+
+def _is_rate_limited(key: str) -> bool:
     now = time.time()
     _sweep(now)
     entry = _failed_attempts.get(key)
@@ -272,44 +283,84 @@ def is_rate_limited(key: str) -> bool:
 def record_failed_attempt(key: str, max_attempts: int = _MAX_ATTEMPTS) -> None:
     """Record a failed attempt for *key*, locking it once *max_attempts*
     failures fall inside the window (and again, longer, on every failure after)."""
+    with _lock:
+        _record_failed_attempt(key, max_attempts)
+
+
+def _record_failed_attempt(key: str, max_attempts: int) -> tuple[float, int, float]:
+    """Returns (timestamp recorded, strikes before, locked_until before) — what
+    _undo_attempt() needs to take this one failure back again."""
     now = time.time()
     _sweep(now)
     entry = _failed_attempts.get(key)
     if entry is None or _prune(entry, now):
         entry = _failed_attempts[key] = _Attempts()
+    before = (now, entry.strikes, entry.locked_until)
     entry.failures.append(now)
     if entry.strikes or len(entry.failures) >= max_attempts:
         entry.locked_until = now + _lockout_seconds(entry.strikes)
         entry.strikes += 1
+    return before
+
+
+def _undo_attempt(key: str, before: tuple[float, int, float]) -> None:
+    """Take back one failure recorded by _record_failed_attempt — as long as
+    nothing was recorded on *key* since; otherwise later failures stand."""
+    timestamp, strikes, locked_until = before
+    entry = _failed_attempts.get(key)
+    if entry is None or not entry.failures or entry.failures[-1] != timestamp:
+        return
+    entry.failures.pop()
+    entry.strikes, entry.locked_until = strikes, locked_until
 
 
 def clear_failed_attempts(key: str) -> None:
     """Clear failed-attempt tracking for *key* after a successful login."""
-    _failed_attempts.pop(key, None)
+    with _lock:
+        _failed_attempts.pop(key, None)
 
 
 def _login_keys(ip: str | None, username: str) -> tuple[str, str]:
     return f'user:{ip}:{(username or "").lower()}', f'ip:{ip}'
 
 
-def is_login_rate_limited(ip: str | None, username: str) -> bool:
-    """True if either this IP+username or this IP as a whole is locked out."""
-    account_key, ip_key = _login_keys(ip, username)
-    return is_rate_limited(account_key) or is_rate_limited(ip_key)
+@dataclass
+class LoginAttempt:
+    """A password check in progress, already counted as a failure — see
+    begin_login_attempt()."""
+    ip: str | None
+    username: str
+    account_before: tuple[float, int, float]
+    ip_before: tuple[float, int, float]
 
 
-def record_failed_login(ip: str | None, username: str) -> None:
-    """Count a failed login (or current-password check) against both counters."""
-    account_key, ip_key = _login_keys(ip, username)
-    record_failed_attempt(account_key)
-    record_failed_attempt(ip_key, max_attempts=_IP_MAX_ATTEMPTS)
+def begin_login_attempt(ip: str | None, username: str) -> LoginAttempt | None:
+    """Check the limits and count this attempt as a failure, in one step.
 
-
-def clear_failed_login(ip: str | None, username: str) -> None:
-    """Reset the IP+username counter after a successful login.
-
-    The per-IP counter is deliberately left alone: otherwise an attacker with
-    one valid account of their own could reset it between guesses at others.
+    Returns None if the IP or IP+username is locked out. Counting *before*
+    the password is checked matters with parallel threads: a check-then-count
+    sequence lets many simultaneous guesses all pass the check while the
+    first ones are still hashing. Call finish_login_attempt(..., True) when
+    the password turns out right to take the count back.
     """
-    account_key, _ = _login_keys(ip, username)
-    clear_failed_attempts(account_key)
+    account_key, ip_key = _login_keys(ip, username)
+    with _lock:
+        if _is_rate_limited(account_key) or _is_rate_limited(ip_key):
+            return None
+        return LoginAttempt(
+            ip=ip,
+            username=username,
+            account_before=_record_failed_attempt(account_key, _MAX_ATTEMPTS),
+            ip_before=_record_failed_attempt(ip_key, _IP_MAX_ATTEMPTS),
+        )
+
+
+def finish_login_attempt(attempt: LoginAttempt, success: bool) -> None:
+    """A failed attempt is already counted; a successful one resets the
+    IP+username counter and takes its provisional count off the IP counter."""
+    if not success:
+        return
+    account_key, ip_key = _login_keys(attempt.ip, attempt.username)
+    with _lock:
+        _failed_attempts.pop(account_key, None)
+        _undo_attempt(ip_key, attempt.ip_before)

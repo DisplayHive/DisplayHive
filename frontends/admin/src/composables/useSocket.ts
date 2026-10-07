@@ -67,7 +67,11 @@ export function useSocket() {
       // Sent only in the handshake `auth` payload (not `query`) so the JWT
       // never ends up in a URL / access log.
       auth: token ? { token } : undefined,
-      transports: ['polling'], //'websocket',
+      // Default transports: starts with HTTP long-polling, upgrades to a
+      // WebSocket when the path allows it (same as the screen client). With
+      // the server's thread-per-connection model a WebSocket holds one thread
+      // quietly, where long-polling keeps re-requesting; behind a proxy that
+      // can't forward WebSockets it simply stays on polling.
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,

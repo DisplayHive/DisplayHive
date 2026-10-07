@@ -22,7 +22,7 @@ systemd service both ultimately just run:
 
 ```bash
 alembic upgrade head
-gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:<port> app:app
+gunicorn --worker-class gthread -w 1 --threads 500 --bind 0.0.0.0:<port> app:app
 ```
 
 You can run that yourself on any Linux host with Python 3.13, Node.js, and
@@ -39,10 +39,12 @@ environment variables involved.
 There's no built-in limit — a screen or device is just a database row, and
 nothing in the code caps or licenses that count. The practical ceiling
 comes from how the backend runs: the standard deployment uses a **single**
-`gunicorn` worker process (`--worker-class eventlet -w 1`). Eventlet
-handles many concurrent Socket.IO connections efficiently within that one
-process, but all traffic is serialized through it — there's no built-in
-horizontal scaling across multiple worker processes. The README describes
+`gunicorn` worker process with a pool of threads
+(`--worker-class gthread -w 1 --threads 500`). Every connected screen and
+open admin tab keeps one thread busy, so the thread count is the number of
+simultaneous connections the instance accepts — raise it (`GUNICORN_THREADS`
+in Docker, `threads` in the NixOS module) for more screens. There's no
+built-in horizontal scaling across multiple worker processes. The README describes
 DisplayHive as comfortable driving "one display or a hundred at once,"
 which is the scale it's been built and tested around; nothing stops you
 from trying more, but very large deployments haven't been a focus yet.

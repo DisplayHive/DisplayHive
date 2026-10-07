@@ -103,14 +103,7 @@ def test_ensure_all_backfills_existing_uploads_and_skips_missing_sources(dirs):
 def test_concurrent_writes_of_the_same_rendition_dont_collide(tmp_path):
     """Two threads saving one rendition at once (backfill + "Sync previews")
     must both succeed and leave a complete file and no temp files behind."""
-    # Real OS threads: the test process imports app.py, whose
-    # eventlet.monkey_patch() turns threading.Thread into green threads
-    # that never overlap — exactly what run_blocking()'s pool is not.
-    try:
-        from eventlet import patcher
-        threading = patcher.original('threading')
-    except ImportError:
-        import threading
+    import threading
 
     dest = str(tmp_path / 'fhd' / 'same.png')
     # Noise doesn't compress, so each save takes long enough for the threads

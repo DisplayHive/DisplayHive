@@ -85,9 +85,10 @@ sudo nixos-rebuild switch
 
 What the module handles automatically for each declared instance:
 
-- A `displayhive-<name>.service` running the app under `gunicorn` (eventlet
-  worker), with `alembic upgrade head` run on every (re)start before the app
-  launches.
+- A `displayhive-<name>.service` running the app under `gunicorn` (one
+  `gthread` worker process with `threads` threads, default 500, and an open
+  files limit of 65536), with
+  `alembic upgrade head` run on every (re)start before the app launches.
 - A dedicated system user/group and a PostgreSQL database + role, both named
   `displayhive-<name>`.
 - Optionally, a `displayhive-<name>-deploy` one-shot service that clones/pulls
@@ -130,7 +131,8 @@ docker compose up -d
 ```
 
 On startup the container applies Alembic migrations (`alembic upgrade head`),
-then launches gunicorn with the eventlet worker. Once it's up, everything is
+then launches gunicorn (one `gthread` worker with `GUNICORN_THREADS` threads,
+default 500). Once it's up, everything is
 served from a single port:
 
 | Surface | URL |
@@ -176,6 +178,8 @@ variables are worth knowing about:
 | `LOGIN_RATE_LIMIT_PER_IP` | Failed logins allowed from one IP address, across all usernames, within 15 minutes before that IP is locked out (default `20`). Separate from the stricter 5-failure limit per IP + username. |
 | `FLASK_DEBUG` | Enables the Werkzeug debugger. Local development only — never set this on a network-reachable host, since it allows arbitrary code execution from the browser. |
 | `LOG_LEVEL` | Python logging level (default `INFO`). |
+| `GUNICORN_THREADS` | Docker only (NixOS: the instance's `threads` option): gunicorn worker threads, default `500`. Every connected screen and open admin tab keeps one busy, so set it above the number of simultaneous connections, with headroom for normal requests. Idle threads cost almost nothing: they're only created when needed. |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | Database connections kept open / allowed on top under load (default `10` / `20`). Only threads that are handling an event use one, but after a restart every screen reconnects at once. Keep the sum below PostgreSQL's `max_connections` (default 100). |
 | `DATA_DIR` | Where DisplayHive writes its data (see [below](#data-directory-data_dir)). Default: `data/` inside the app directory; `/data` in the Docker image; the module's `dataDirectory` on NixOS. |
 
 Copy `.env.example` to `.env` (or export the variables in your shell) to set

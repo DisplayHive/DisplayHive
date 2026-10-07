@@ -7,10 +7,13 @@ echo "[entrypoint] Applying database migrations (alembic upgrade head)..."
 alembic upgrade head
 
 echo "[entrypoint] Starting DisplayHive on port 5000..."
-# Socket.IO requires the eventlet worker; a single worker is mandatory because
-# Socket.IO connection state is held in-process (see nix/module.nix).
+# One worker is mandatory: Socket.IO connection state lives in-process (see
+# nix/module.nix). Threads: every connected screen and open admin tab keeps
+# one busy for its WebSocket, so GUNICORN_THREADS must exceed the number of
+# simultaneous connections, with headroom for plain HTTP requests.
 exec gunicorn \
-    --worker-class eventlet \
+    --worker-class gthread \
     --workers 1 \
+    --threads "${GUNICORN_THREADS:-500}" \
     --bind "0.0.0.0:5000" \
     app:app

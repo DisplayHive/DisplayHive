@@ -26,6 +26,7 @@ import hashlib
 import logging
 import re
 import secrets
+import threading
 import time
 import urllib.parse
 from dataclasses import dataclass, field
@@ -106,9 +107,15 @@ class PendingLogin:
 
 
 _pending: dict[str, PendingLogin] = {}
+# Guards _pending and _handoffs: requests run in parallel threads, and the
+# pruning below iterates the dicts while other logins insert into them.
+# (_discovery_cache/_jwks_clients need none: a race there only means one
+# extra fetch.)
+_state_lock = threading.Lock()
 
 
 def _prune_pending(now: float) -> None:
+    """Drop expired pending logins and enforce MAX_PENDING. Caller holds _state_lock."""
     for state in [s for s, p in _pending.items() if now - p.created_at >= PENDING_TTL_SECONDS]:
         del _pending[state]
     excess = len(_pending) - MAX_PENDING + 1
@@ -132,7 +139,6 @@ def begin_login(provider, redirect_uri: str) -> tuple[str, str]:
     """
     doc = discover(provider.issuer)
     now = time.time()
-    _prune_pending(now)
 
     state = secrets.token_urlsafe(32)
     pending = PendingLogin(
@@ -143,7 +149,9 @@ def begin_login(provider, redirect_uri: str) -> tuple[str, str]:
         browser_binding=secrets.token_urlsafe(32),
         created_at=now,
     )
-    _pending[state] = pending
+    with _state_lock:
+        _prune_pending(now)
+        _pending[state] = pending
 
     params = {
         'response_type': 'code',
@@ -162,7 +170,8 @@ def begin_login(provider, redirect_uri: str) -> tuple[str, str]:
 
 def take_pending(state: str, browser_binding: str | None) -> PendingLogin:
     """Look up and consume the pending login for *state* (single use)."""
-    pending = _pending.pop(state or '', None)
+    with _state_lock:
+        pending = _pending.pop(state or '', None)
     if pending is None or time.time() - pending.created_at >= PENDING_TTL_SECONDS:
         raise OidcError('This login attempt has expired or was already used. Please try again.')
     if not browser_binding or not secrets.compare_digest(pending.browser_binding, browser_binding):
@@ -317,16 +326,18 @@ _handoffs: dict[str, _Handoff] = {}
 
 def create_handoff(user_id: int) -> str:
     now = time.time()
-    for code in [c for c, h in _handoffs.items() if now - h.created_at >= HANDOFF_TTL_SECONDS]:
-        del _handoffs[code]
     code = secrets.token_urlsafe(32)
-    _handoffs[code] = _Handoff(user_id=user_id, created_at=now)
+    with _state_lock:
+        for old in [c for c, h in _handoffs.items() if now - h.created_at >= HANDOFF_TTL_SECONDS]:
+            del _handoffs[old]
+        _handoffs[code] = _Handoff(user_id=user_id, created_at=now)
     return code
 
 
 def redeem_handoff(code: str) -> int | None:
     """Consume a handoff *code*; returns its user id, or None if unknown/expired/used."""
-    handoff = _handoffs.pop(code or '', None)
+    with _state_lock:
+        handoff = _handoffs.pop(code or '', None)
     if handoff is None or time.time() - handoff.created_at >= HANDOFF_TTL_SECONDS:
         return None
     return handoff.user_id
