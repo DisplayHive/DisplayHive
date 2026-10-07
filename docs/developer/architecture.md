@@ -15,8 +15,12 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
 - The Flask app is created and configured with the DB URI (`DATABASE_URL`
   for Postgres, falling back to local SQLite), CORS restricted to `/api/*`
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance
-  sharing the same CORS origins with `max_http_buffer_size` raised to
-  100 MB to accommodate media uploads.
+  sharing the same CORS origins. `max_http_buffer_size` is 10 MB — room
+  for large content payloads, not files: media uploads are a separate HTTP
+  multipart route (`POST /admin/api/media/upload`,
+  `application/admin/media/routes.py`) whose file part Werkzeug streams
+  straight to a temp file in `DATA_DIR` (the app-wide `DataDirRequest`
+  request class), which is then hard-linked into the media folder.
 - There are **no Flask blueprints** for the admin feature areas.
   `application/admin/auth/routes.py` registers plain `@app.route` HTTP
   routes for login/session check, wired via `register_auth_routes(app, db)`.

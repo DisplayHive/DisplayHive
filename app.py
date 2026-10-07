@@ -96,6 +96,9 @@ app.config['MEDIA_FOLDER'] = DATA_PATHS.media
 app.config['PREVIEW_FOLDER'] = DATA_PATHS.media_previews
 app.config['MEDIA_RENDITIONS_FOLDER'] = DATA_PATHS.media_renditions
 app.config['LEGACY_DATA_PATHS'] = DATA_PATHS.legacy
+# Uploaded files (media, imports) are streamed here, not into memory or /tmp —
+# see DataDirRequest in application/admin/media/routes.py.
+app.config['UPLOAD_STAGING_DIR'] = DATA_PATHS.import_staging
 app.config['DEPLOYMENT_KIND'] = data_paths.deployment_kind()
 
 # Production: set DATABASE_URL to a PostgreSQL connection string.
@@ -251,9 +254,11 @@ socketio = SocketIO(
     reconnection_delay=1,
     reconnection_delay_max=5,
     cors_allowed_origins=_cors_allowed_origins,
-    # Base64 overhead is ~33 %, so 50 MB files arrive as ~67 MB frames.
-    # Must be kept in sync with MAX_FILE_SIZE in media/sockethandlers.py.
-    max_http_buffer_size=100 * 1024 * 1024,
+    # Largest single Socket.IO message, accepted from any connection before
+    # it has authenticated. Media uploads go over HTTP now
+    # (application/admin/media/routes.py); this only needs room for big
+    # content payloads, e.g. images embedded as data: URLs.
+    max_http_buffer_size=10 * 1024 * 1024,
 )
 
 def _startup_step(label, fn):
@@ -325,6 +330,11 @@ register_all_handlers(socketio, app, db)
 
 # Register admin authentication HTTP routes (/admin/api/auth/*)
 register_auth_routes(app, db)
+
+# Media upload over HTTP multipart, streamed to disk (/admin/api/media/upload)
+from application.admin.media.routes import DataDirRequest, register_media_routes  # noqa: E402
+app.request_class = DataDirRequest
+register_media_routes(app, db)
 
 # `flask dh …` maintenance commands (application/cli.py)
 from application.cli import register_cli  # noqa: E402

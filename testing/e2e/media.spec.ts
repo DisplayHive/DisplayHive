@@ -39,26 +39,25 @@ async function gotoMedia(page: Page, workerBackendUrl: string) {
   await expect(page.locator('.media-view, .card')).toBeVisible({ timeout: 10_000 })
 }
 
-/** Upload a media item via socket (base64). Returns the media id. */
-async function seedMediaViaSocket(page: Page, filename: string): Promise<number> {
-  return page.evaluate(
-    ({ filename, b64 }: { filename: string; b64: string }) =>
-      new Promise<number>((resolve, reject) => {
-        const socket = (window as any).__displayhive_socket__
-        if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error('Timed out waiting for media upload ack')), 10_000)
-        socket.emit(
-          'displayhive:media:cts:upload',
-          { filename, file_data: b64, mime_type: 'image/png', title: filename, tags: '' },
-          (ack: any) => {
-            clearTimeout(t)
-            if (ack?.success) resolve(Number(ack.id))
-            else reject(new Error(`Upload failed: ${JSON.stringify(ack)}`))
-          },
-        )
-      }),
-    { filename, b64: TINY_PNG_BASE64 },
-  )
+/**
+ * Upload a media item through the HTTP upload endpoint (multipart — the same
+ * request the Media page sends). Returns the media id. Sent from Playwright's
+ * own HTTP client straight to the worker's backend, with the session token
+ * the page holds.
+ */
+async function seedMediaViaHttp(page: Page, backendUrl: string, filename: string): Promise<number> {
+  const token = await page.evaluate(() => localStorage.getItem('displayhive_admin_token'))
+  const response = await page.request.post(`${backendUrl}/admin/api/media/upload`, {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      file: { name: filename, mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64') },
+      title: filename,
+      tags: '',
+    },
+  })
+  const result = await response.json()
+  if (!response.ok() || !result?.success) throw new Error(`Upload failed: ${JSON.stringify(result)}`)
+  return Number(result.id)
 }
 
 /** Delete a media item by id via socket. */
@@ -186,20 +185,20 @@ test.describe('Media page', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // 5. Upload via socket (socket upload path)
+  // 5. Upload via the HTTP endpoint (no UI)
   // ---------------------------------------------------------------------------
 
-  test('upload via socket — item appears in the media grid immediately', async ({
+  test('upload via HTTP — item appears in the media grid', async ({
     page,
     backendUrl,
   }) => {
     await gotoMedia(page, backendUrl)
 
     const socketFilename = `e2e-sock-${Math.random().toString(36).slice(2, 8)}.png`
-    socketMediaId = await seedMediaViaSocket(page, socketFilename)
+    socketMediaId = await seedMediaViaHttp(page, backendUrl, socketFilename)
     expect(socketMediaId).toBeGreaterThan(0)
 
-    // The socket upload emits a refreshed media_list; reload to confirm the grid updates
+    // Reload to confirm the grid shows it
     await page.reload()
     await expect(page.locator('.media-view, .card')).toBeVisible({ timeout: 10_000 })
     await expect(

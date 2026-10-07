@@ -5,6 +5,8 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMediaStore } from '../stores/media'
 import { useRightsStore } from '../stores/rights'
+import { useAuthStore } from '../stores/auth'
+import { uploadMedia, MAX_MEDIA_UPLOAD_BYTES } from '../utils/uploadMedia'
 import type { MediaItem } from '../types/models'
 
 // PrimeVue components
@@ -83,7 +85,22 @@ const editNewTagKeydown = (event: KeyboardEvent) => {
 // Upload dialog
 const showUploadDialog = ref(false)
 const uploadFiles = ref<File[]>([])
-const uploadProgress = ref<{ name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string }[]>([])
+const uploadProgress = ref<
+  { name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; loaded: number }[]
+>([])
+const authStore = useAuthStore()
+const maxUploadMb = MAX_MEDIA_UPLOAD_BYTES / 1024 / 1024
+
+// Overall progress across the batch, by bytes sent (finished/failed files count as fully sent).
+const uploadPercent = computed(() => {
+  const total = uploadFiles.value.reduce((sum, f) => sum + f.size, 0)
+  if (!total) return 0
+  const sent = uploadProgress.value.reduce(
+    (sum, p, i) => sum + (p.status === 'done' || p.status === 'error' ? (uploadFiles.value[i]?.size ?? 0) : p.loaded),
+    0,
+  )
+  return Math.min(100, Math.round((sent / total) * 100))
+})
 const isUploading = ref(false)
 const uploadDropActive = ref(false)
 
@@ -117,32 +134,25 @@ const closeUploadDialog = () => {
 const startUpload = async () => {
   if (!uploadFiles.value.length || isUploading.value) return
   isUploading.value = true
-  uploadProgress.value = uploadFiles.value.map((f) => ({ name: f.name, status: 'pending' }))
+  uploadProgress.value = uploadFiles.value.map((f) => ({ name: f.name, status: 'pending', loaded: 0 }))
 
+  // One request per file, one after another: per-file progress and errors,
+  // and never more than one large body in flight.
   for (let i = 0; i < uploadFiles.value.length; i++) {
     const file = uploadFiles.value[i] as File
     const progress = uploadProgress.value[i]!
     progress.status = 'uploading'
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = (e) => resolve(e.target?.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:media:cts:upload', {
-        file_data: base64,
-        filename: file.name,
-        mime_type: file.type,
-        folder: selectedFolder.value || '',
-        title: file.name,
-        tags: '',
-      })
-      if (!result?.success) throw new Error(result?.error || 'Upload failed')
+    const result = await uploadMedia(
+      file,
+      { folder: selectedFolder.value || '', title: file.name, tags: '' },
+      authStore.authHeader(),
+      (loaded) => (progress.loaded = loaded),
+    )
+    if (result.success) {
       progress.status = 'done'
-    } catch (e) {
+    } else {
       progress.status = 'error'
-      progress.error = (e as Error)?.message || 'Upload failed'
+      progress.error = result.error
     }
   }
 
@@ -524,7 +534,7 @@ const copyUrl = (url: string) => {
       >
         <i class="pi pi-cloud-upload" />
         <p class="upload-drop-zone-text">Drag &amp; drop files here, or <strong>click to browse</strong></p>
-        <p class="upload-drop-zone-hint">JPEG &amp; PNG only (max 50 MB each)</p>
+        <p class="upload-drop-zone-hint">JPEG &amp; PNG only (max {{ maxUploadMb }} MB each)</p>
       </div>
       <input
         ref="uploadInput"
@@ -545,7 +555,10 @@ const copyUrl = (url: string) => {
           <span class="upload-file-name">{{ file.name }}</span>
           <span class="upload-file-size">{{ (file.size / 1024 / 1024).toFixed(1) }} MB</span>
           <span v-if="uploadProgress[idx]" :class="'upload-status-' + uploadProgress[idx].status">
-            <i v-if="uploadProgress[idx].status === 'uploading'" class="pi pi-spin pi-spinner" />
+            <template v-if="uploadProgress[idx].status === 'uploading'">
+              <span class="upload-file-percent">{{ file.size ? Math.round((uploadProgress[idx].loaded / file.size) * 100) : 0 }}%</span>
+              <i class="pi pi-spin pi-spinner" />
+            </template>
             <i v-else-if="uploadProgress[idx].status === 'done'" class="pi pi-check" />
             <i v-else-if="uploadProgress[idx].status === 'error'" class="pi pi-times" :title="uploadProgress[idx].error" />
           </span>
@@ -557,10 +570,11 @@ const copyUrl = (url: string) => {
             size="small"
             @click.stop="removeUploadFile(idx)"
           />
+          <small v-if="uploadProgress[idx]?.status === 'error'" class="upload-file-error">{{ uploadProgress[idx].error }}</small>
         </div>
       </div>
 
-      <ProgressBar v-if="isUploading" mode="indeterminate" class="mt-4 thin-progress" />
+      <ProgressBar v-if="isUploading" :value="uploadPercent" :show-value="false" class="mt-4 thin-progress" />
 
       <template #footer>
         <Button data-tour="media-upload-cancel" label="Cancel" text :disabled="isUploading" @click="closeUploadDialog" />
@@ -938,6 +952,7 @@ const copyUrl = (url: string) => {
 }
 .upload-file-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.5rem;
@@ -962,6 +977,18 @@ const copyUrl = (url: string) => {
 }
 
 .upload-status-error {
+  color: var(--p-red-500, #ef4444);
+}
+
+.upload-file-percent {
+  color: var(--p-text-muted-color, #888);
+  font-size: 0.8rem;
+  margin-right: 0.35rem;
+}
+
+/* Full-width line under the row; same fixed status red as the icon above. */
+.upload-file-error {
+  flex-basis: 100%;
   color: var(--p-red-500, #ef4444);
 }
 

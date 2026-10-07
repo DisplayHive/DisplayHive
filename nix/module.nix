@@ -44,8 +44,9 @@
 #       listen 443 ssl;
 #       server_name myinstance.example.com;
 #
-#       # Must match MAX_FILE_SIZE in application/admin/media/sockethandlers.py
-#       client_max_body_size 50M;
+#       # At least MAX_FILE_SIZE in application/admin/media/storage.py
+#       # (uploads are one file per HTTP request, POST /admin/api/media/upload)
+#       client_max_body_size 51M;
 #
 #       location / {
 #           proxy_pass         http://displayhive_myinstance;

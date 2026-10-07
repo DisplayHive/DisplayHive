@@ -2,10 +2,8 @@
 
 import os
 import logging
-from datetime import datetime, timezone
 
 from flask_socketio import emit
-from werkzeug.utils import secure_filename
 
 from application import media_renditions
 
@@ -22,13 +20,6 @@ def register_admin_media_handlers(socketio, app, db):
     MEDIA_FOLDER = app.config['MEDIA_FOLDER']
     PREVIEW_FOLDER = app.config['PREVIEW_FOLDER']
     RENDITIONS_FOLDER = app.config['MEDIA_RENDITIONS_FOLDER']
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-
-    def allowed_file(filename):
-        """Return True if *filename* has an allowed extension."""
-        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
     create_preview = media_renditions.create_preview
 
     def _build_media_list_payload():
@@ -67,120 +58,8 @@ def register_admin_media_handlers(socketio, app, db):
         """Namespaced: return structured media list to the requesting client."""
         emit('displayhive:media:stc:media_list', {'media': _build_media_list_payload()})
 
-    @socketio.on('displayhive:media:cts:upload')
-    @require_right('media.upload')
-    def handle_upload(data):
-        """Namespaced: upload a media file. Returns an ack dict to the caller."""
-        file_data = data.get('file_data')  # base64 encoded
-        filename = data.get('filename')
-        folder_path = data.get('folder', '')
-        title = data.get('title', '').strip() or filename
-        tags = data.get('tags', '').strip()
-        mime_type = data.get('mime_type')
-
-        # If client didn't provide a MIME type, try to guess from filename
-        if not mime_type:
-            import mimetypes
-            mime_type = mimetypes.guess_type(filename)[0] or ''
-
-        if not file_data or not filename:
-            return {'success': False, 'error': 'No file provided'}
-
-        if not allowed_file(filename):
-            logger.warning('upload rejected by extension check: filename=%s', filename)
-            return {'success': False, 'error': 'File type not allowed'}
-
-        # Decode base64 file data. Accept both full data URLs and raw base64.
-        import base64
-        try:
-            if isinstance(file_data, str) and file_data.startswith('data:') and ',' in file_data:
-                b64payload = file_data.split(',', 1)[1]
-            else:
-                b64payload = file_data
-            file_bytes = base64.b64decode(b64payload)
-            logger.debug("upload decoded %s bytes for '%s'", len(file_bytes), filename)
-        except Exception as e:
-            return {'success': False, 'error': f'Could not decode file data: {e}'}
-
-        # Check file size
-        if len(file_bytes) > MAX_FILE_SIZE:
-            return {'success': False, 'error': f'File too large (max {MAX_FILE_SIZE // 1024 // 1024}MB)'}
-
-        # Validate the *content*, not just the extension: the bytes must
-        # actually decode as an image, and its detected format must match an
-        # allowed type. This rejects renamed/polyglot files.
-        try:
-            import io as _io
-            from PIL import Image as _Image
-            with _Image.open(_io.BytesIO(file_bytes)) as _probe:
-                _probe.verify()
-            detected_fmt = (_probe.format or '').lower()
-            if detected_fmt == 'jpg':
-                detected_fmt = 'jpeg'
-            if detected_fmt not in {'png', 'jpeg'}:
-                logger.warning('upload rejected by content check: detected format=%r', detected_fmt)
-                return {'success': False, 'error': 'File content is not a supported image'}
-        except Exception as e:
-            logger.warning('upload rejected: not a valid image (%s)', e)
-            return {'success': False, 'error': 'File is not a valid image'}
-
-        # Secure filename and ensure uniqueness
-        filename = secure_filename(filename)
-        base, ext = os.path.splitext(filename)
-        counter = 1
-        target_folder = os.path.join(MEDIA_FOLDER, folder_path) if folder_path else MEDIA_FOLDER
-        # Guard against path traversal via the client-supplied folder path:
-        # keep the resolved target strictly inside MEDIA_FOLDER/PREVIEW_FOLDER.
-        if folder_path:
-            media_root = os.path.realpath(MEDIA_FOLDER)
-            preview_root = os.path.realpath(PREVIEW_FOLDER)
-            if (not os.path.realpath(target_folder).startswith(media_root + os.sep)
-                    or not os.path.realpath(os.path.join(PREVIEW_FOLDER, folder_path)).startswith(preview_root + os.sep)):
-                logger.warning('upload rejected by path traversal check: folder=%r', folder_path)
-                return {'success': False, 'error': 'Invalid folder path'}
-        os.makedirs(target_folder, exist_ok=True)
-        while os.path.exists(os.path.join(target_folder, filename)):
-            filename = f"{base}_{counter}{ext}"
-            counter += 1
-
-        # Save file
-        file_path = os.path.join(target_folder, filename)
-        with open(file_path, 'wb') as f:
-            f.write(file_bytes)
-
-        file_size = len(file_bytes)
-
-        # Create preview
-        preview_folder = os.path.join(PREVIEW_FOLDER, folder_path) if folder_path else PREVIEW_FOLDER
-        os.makedirs(preview_folder, exist_ok=True)
-        preview_filename = f"{os.path.splitext(filename)[0]}_preview.jpg"
-        preview_path = os.path.join(preview_folder, preview_filename)
-        is_video = mime_type and mime_type.startswith('video/')
-        create_preview(file_path, preview_path, is_video)
-
-        # FHD / 4K / 8K renditions (never larger than the upload itself)
-        if not is_video:
-            rel = f'{folder_path}/{filename}' if folder_path else filename
-            media_renditions.run_blocking(media_renditions.render_renditions, file_path, RENDITIONS_FOLDER, rel)
-
-        # Save to database
-        media = Media(
-            filename=filename,
-            title=title,
-            tags=tags,
-            folder_path=folder_path,
-            mime_type=mime_type,
-            file_size=file_size,
-            created_at=datetime.now(timezone.utc)
-        )
-        db.session.add(media)
-        db.session.commit()
-        logger.info("upload saved media id=%s filename='%s'", media.id, filename)
-
-        # Push refreshed media list to the uploader so the gallery updates
-        _push_media_list()
-
-        return {'success': True, 'id': media.id, 'filename': filename}
+    # Uploads are an HTTP multipart route now (routes.py / storage.py), not a
+    # base64 Socket.IO event.
 
     def _do_media_edit(media_id, title, tags_raw):
         """Shared edit logic used by both legacy and namespaced handlers."""
