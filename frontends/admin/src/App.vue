@@ -82,19 +82,32 @@ on('displayhive:system:stc:security_status', (data: SecurityStatus) => {
 // Insecure defaults (SECRET_KEY, CORS, SQLite, debugger) are the norm in
 // local dev and would otherwise show on every load — only surface these
 // banners in a built/production bundle (import.meta.env.DEV is false there).
+// The two that actually weaken security are shown as a prominent block of their
+// own (SECRET_KEY, CORS); the rest stay slim one-line banners below it.
+type SecurityIssue = { title: string; detail: string }
+const criticalSecurityIssues = computed<SecurityIssue[]>(() => {
+  const issues: SecurityIssue[] = []
+  if (import.meta.env.DEV) return issues
+  if (securityStatus.value.secret_key_is_default) {
+    issues.push({
+      title: 'SECRET_KEY is the insecure default.',
+      detail:
+        'Admin login tokens are signed with this key, so anyone who knows the default can forge a token and sign in as any admin. Set the SECRET_KEY environment variable to a long random value and restart.',
+    })
+  }
+  if (securityStatus.value.cors_wildcard) {
+    issues.push({
+      title: 'CORS_ALLOWED_ORIGINS is set to "*" (any origin).',
+      detail:
+        'Any website may then make cross-origin requests to the API. Set it to the public URL(s) of this instance, for example https://signage.example.com, and restart.',
+    })
+  }
+  return issues
+})
+
 const securityWarnings = computed(() => {
   const warnings: string[] = []
   if (import.meta.env.DEV) return warnings
-  if (securityStatus.value.secret_key_is_default) {
-    warnings.push(
-      'SECRET_KEY is using the insecure default value. Set the SECRET_KEY environment variable before deploying to production.',
-    )
-  }
-  if (securityStatus.value.cors_wildcard) {
-    warnings.push(
-      'CORS_ALLOWED_ORIGINS is unset and defaulting to "*" (any origin allowed). Set it to your allowed origins before deploying to production.',
-    )
-  }
   if (securityStatus.value.sqlite_in_use) {
     warnings.push(
       'DATABASE_URL is unset — the server is running on a local SQLite file. Set DATABASE_URL to a PostgreSQL connection string before deploying to production.',
@@ -495,7 +508,23 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
         :data-dir="securityStatus.data_dir"
       />
 
-      <div v-if="securityWarnings.length" class="security-warnings">
+      <div v-if="criticalSecurityIssues.length || securityWarnings.length" class="security-warnings">
+        <div
+          v-if="criticalSecurityIssues.length"
+          class="security-critical"
+          role="alert"
+          data-testid="security-critical"
+        >
+          <div class="security-critical-title">
+            <i class="pi pi-shield"></i>
+            Insecure server configuration — fix this before going live
+          </div>
+          <ul class="security-critical-list">
+            <li v-for="issue in criticalSecurityIssues" :key="issue.title" data-testid="security-warning">
+              <strong>{{ issue.title }}</strong> {{ issue.detail }}
+            </li>
+          </ul>
+        </div>
         <div
           v-for="(warning, i) in securityWarnings"
           :key="i"
@@ -663,6 +692,45 @@ body {
   z-index: 1001;
   display: flex;
   flex-direction: column;
+}
+
+/* The prominent block for the issues that weaken security (SECRET_KEY, CORS):
+   solid dark red with an amber stripe, larger type, one list item per issue.
+   Fixed colours on purpose — it must stand out identically in light and dark mode. */
+.security-critical {
+  background: #7f1d1d;
+  color: #fff;
+  border-left: 0.6rem solid #fbbf24;
+  padding: 0.9rem 1.25rem 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.security-critical-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.security-critical-title .pi {
+  font-size: 1.3rem;
+  color: #fbbf24;
+}
+
+.security-critical-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.security-critical-list strong {
+  color: #fde68a;
 }
 
 .security-warning {
