@@ -97,16 +97,21 @@ export default async function globalSetup() {
   for (let i = 0; i < WORKER_COUNT; i++) {
     const port = BASE_PORT + i
     const dbPath = `/tmp/displayhive_test_${i}.db`
+    // Per-worker DATA_DIR (media, previews, import staging — see
+    // application/paths.py), so test uploads never land in the checkout.
+    const dataDir = `/tmp/displayhive_test_${i}_data`
 
-    // Remove stale DB from a previous run so every test starts clean
+    // Remove stale DB / data from a previous run so every test starts clean
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath)
       console.log(`[global-setup] Removed stale DB ${dbPath}`)
     }
+    fs.rmSync(dataDir, { recursive: true, force: true })
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       TEST_DB_PATH: dbPath,
+      DATA_DIR: dataDir,
       FLASK_PORT: String(port),
       // Pin the first-run bootstrap admin account so fixtures.ts can log in
       // with known credentials against this worker's isolated database.

@@ -608,7 +608,11 @@ palette, same idea as the validity icons), `DesignsView.vue`'s `.var-chip`
 (a code-style variable-tag badge with its own fixed dark-navy background +
 light-blue text, meant to look like a code chip regardless of theme), and
 `ContentTable.vue`/`DesignsView.vue`'s always-black screen/effect preview
-boxes (simulating a physical screen, not a themed surface). None of these
+boxes (simulating a physical screen, not a themed surface), and the
+top-of-page notice banners — `App.vue`'s red `.security-warning` and
+`LegacyDataBanner.vue`'s amber data-migration notice (fixed background *and*
+fixed text color, including the translucent `rgba(0,0,0,…)` code/button
+tints on top: chrome meant to look the same in both themes). None of these
 pair a color that swaps with the theme against a background that doesn't —
 the actual bug condition — so none needs a change.
 

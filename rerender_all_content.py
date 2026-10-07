@@ -13,7 +13,7 @@ frozen at original creation time.
 Usage:
     python rerender_all_content.py
 
-Uses the same DATABASE_URL / project.db resolution as the Flask app.
+Uses the same DATABASE_URL / SQLite resolution as the Flask app (application/paths.py).
 """
 
 import os
@@ -23,6 +23,7 @@ from flask import Flask
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from application import paths as data_paths
 from application.models import db, Contenttype
 from application.admin.content.helper import rerender_content_element_for_contenttype
 
@@ -33,8 +34,7 @@ def build_app() -> Flask:
     if database_url:
         app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     else:
-        db_path = os.path.join(os.path.dirname(__file__), 'project.db')
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{data_paths.resolve().db_path}'
     db.init_app(app)
     return app
 

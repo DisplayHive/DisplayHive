@@ -132,16 +132,21 @@ def register_device_connection_handlers(socketio, app, db):
 
             # Report security-sensitive config state (insecure defaults, debug mode, etc.)
             try:
-                socketio.emit(
-                    'displayhive:system:stc:security_status',
-                    {
-                        'secret_key_is_default': bool(app.config.get('SECRET_KEY_IS_DEFAULT')),
-                        'cors_wildcard': bool(app.config.get('CORS_WILDCARD')),
-                        'sqlite_in_use': bool(app.config.get('SQLITE_IN_USE')),
-                        'debug_enabled': bool(app.config.get('DEBUG_ENABLED')),
-                    },
-                    room=sid_info,
-                )
+                status = {
+                    'secret_key_is_default': bool(app.config.get('SECRET_KEY_IS_DEFAULT')),
+                    'cors_wildcard': bool(app.config.get('CORS_WILDCARD')),
+                    'sqlite_in_use': bool(app.config.get('SQLITE_IN_USE')),
+                    'debug_enabled': bool(app.config.get('DEBUG_ENABLED')),
+                }
+                # Data still in pre-DATA_DIR locations (application/paths.py):
+                # a server-side chore, so only for those who run the instance —
+                # and it reveals filesystem paths.
+                from application.permissions import has_right
+                if app.config.get('LEGACY_DATA_PATHS') and has_right(db, admin_user, 'settings.page'):
+                    status['legacy_data_paths'] = app.config['LEGACY_DATA_PATHS']
+                    status['data_dir'] = app.config.get('DATA_DIR')
+                    status['deployment'] = app.config.get('DEPLOYMENT_KIND', 'manual')
+                socketio.emit('displayhive:system:stc:security_status', status, room=sid_info)
             except Exception:
                 logger.debug('Failed to send security_status to admin sid=%s', sid_info, exc_info=True)
             return  # Accept connection for admin

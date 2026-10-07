@@ -23,9 +23,12 @@ services:
       - 5000:5000
     volumes:
       # Uploaded media and generated previews must survive container upgrades.
-      - media:/app/static/media
-      - media_previews:/app/static/media_previews
-      - media_renditions:/app/static/media_renditions
+      # They live in DATA_DIR (/data in the image). Before DATA_DIR these same
+      # volumes were mounted at /app/static/media* — same volumes, so moving
+      # the mount point is the whole migration.
+      - media:/data/media
+      - media_previews:/data/media_previews
+      - media_renditions:/data/media_renditions
 
   db:
     image: postgres:16-alpine

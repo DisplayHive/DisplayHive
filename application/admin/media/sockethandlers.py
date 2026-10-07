@@ -18,9 +18,10 @@ def register_admin_media_handlers(socketio, app, db):
     from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
     from application.permissions import has_right
 
-    MEDIA_FOLDER = app.config.get('MEDIA_FOLDER', 'static/media')
-    PREVIEW_FOLDER = app.config.get('PREVIEW_FOLDER', 'static/media_previews')
-    RENDITIONS_FOLDER = app.config.get('MEDIA_RENDITIONS_FOLDER', 'static/media_renditions')
+    # Absolute paths inside DATA_DIR, set by app.py from application/paths.py.
+    MEDIA_FOLDER = app.config['MEDIA_FOLDER']
+    PREVIEW_FOLDER = app.config['PREVIEW_FOLDER']
+    RENDITIONS_FOLDER = app.config['MEDIA_RENDITIONS_FOLDER']
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 

@@ -29,6 +29,19 @@ os.close(_tmp_db_fd)
 atexit.register(lambda: os.path.exists(_tmp_db_path) and os.unlink(_tmp_db_path))
 
 os.environ.setdefault('TEST_DB_PATH', _tmp_db_path)
+
+# Keep media/staging written by tests out of the checkout — and out of a
+# developer's real legacy static/media (application/paths.py would otherwise
+# fall back to it): point both DATA_DIR and the legacy lookup at temp dirs.
+import shutil  # noqa: E402
+_tmp_data_dir = tempfile.mkdtemp(prefix='displayhive_pytest_data_')
+_tmp_app_root = tempfile.mkdtemp(prefix='displayhive_pytest_root_')
+atexit.register(lambda: shutil.rmtree(_tmp_data_dir, ignore_errors=True))
+atexit.register(lambda: shutil.rmtree(_tmp_app_root, ignore_errors=True))
+os.environ.setdefault('DATA_DIR', _tmp_data_dir)
+
+import application.paths  # noqa: E402
+application.paths.APP_ROOT = _tmp_app_root
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-not-for-production')
 os.environ.setdefault('ADMIN_BOOTSTRAP_USERNAME', 'testadmin')
 os.environ.setdefault('ADMIN_BOOTSTRAP_PASSWORD', 'test-admin-password')

@@ -51,10 +51,22 @@ COPY . .
 # Built frontends from stage 1 (app.py serves dist/admin and dist/screen).
 COPY --from=frontend /build/dist ./dist
 
+# Everything the app writes goes to DATA_DIR (see application/paths.py);
+# DISPLAYHIVE_DEPLOYMENT tells the admin UI to show Docker-specific steps
+# when data still sits in the old /app/static/media* locations.
+ENV DATA_DIR=/data \
+    DISPLAYHIVE_DEPLOYMENT=docker
+
 # Run as an unprivileged user; give it ownership of the writable data dirs.
+# The old /app/static/media* dirs are still created so a pre-DATA_DIR
+# compose.yml that mounts fresh volumes there keeps working (with the
+# migration notice) instead of failing on root-owned mount points.
 RUN useradd --system --create-home --uid 10001 displayhive \
+    && mkdir -p /data/media /data/media_previews /data/media_renditions /data/import-staging /data/db \
     && mkdir -p /app/static/media /app/static/media_previews /app/static/media_renditions \
-    && chown -R displayhive:displayhive /app
+    && chmod 750 /data /data/media /data/media_previews /data/media_renditions \
+    && chmod 700 /data/import-staging /data/db \
+    && chown -R displayhive:displayhive /app /data
 USER displayhive
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

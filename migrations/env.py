@@ -2,8 +2,9 @@
 
 Database URL resolution order:
 1. DATABASE_URL environment variable (PostgreSQL in production).
-2. TEST_DB_PATH environment variable (per-worker SQLite in tests).
-3. Fallback: project.db in the project root (SQLite for development).
+2. Otherwise the same SQLite file the app uses — TEST_DB_PATH in tests,
+   else DATA_DIR/db/project.db (or a legacy project.db in the app root),
+   decided by application/paths.py.
 """
 
 import os
@@ -17,6 +18,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from application.db_url import normalize_database_url  # noqa: E402
+from application import paths as data_paths  # noqa: E402
 
 # Alembic Config object, giving access to values in alembic.ini.
 config = context.config
@@ -28,10 +30,11 @@ _db_url = os.environ.get('DATABASE_URL')
 if _db_url:
     config.set_main_option('sqlalchemy.url', normalize_database_url(_db_url))
 else:
-    _test_db = os.environ.get('TEST_DB_PATH')
-    if _test_db:
-        config.set_main_option('sqlalchemy.url', f'sqlite:///{_test_db}')
-    # else: alembic.ini default (sqlite:///project.db) is used as-is.
+    # Never alembic.ini's relative default: that depends on the working
+    # directory and could migrate a different file than the app opens.
+    _paths = data_paths.resolve()
+    data_paths.ensure_dirs(_paths)
+    config.set_main_option('sqlalchemy.url', f'sqlite:///{_paths.db_path}')
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:

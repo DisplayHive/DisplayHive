@@ -16,6 +16,9 @@ project.db
 .gitattributes
 .venv_lib/
 static/js-build/
+# DATA_DIR default (application/paths.py): media, previews, renditions, SQLite, import staging
+/data/
+# Legacy data locations, still honoured until migrated
 static/media/
 static/media_previews/
 static/media_renditions/

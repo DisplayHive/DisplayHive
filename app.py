@@ -2,6 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 
 from application import media_renditions
+from application import paths as data_paths
 from application.db_url import normalize_database_url
 import os
 import json
@@ -37,15 +38,31 @@ app = Flask(__name__,
             static_folder='static',
             static_url_path='/static',
             template_folder=os.path.join(os.path.dirname(__file__), 'frontends', 'screen', 'templates'))
+# Every on-disk location (DATA_DIR: media, previews, renditions, import
+# staging, the SQLite file) comes from application/paths.py — see there.
+DATA_PATHS = data_paths.resolve()
+data_paths.ensure_dirs(DATA_PATHS)
+for _legacy in DATA_PATHS.legacy:
+    logger.warning(
+        "Still using the legacy location %s for %s. Move it into DATA_DIR (%s) — "
+        "see 'Moving data to DATA_DIR' in docs/user/installation.md.",
+        _legacy['path'], _legacy['kind'], DATA_PATHS.data_dir,
+    )
+app.config['DATA_DIR'] = DATA_PATHS.data_dir
+app.config['MEDIA_FOLDER'] = DATA_PATHS.media
+app.config['PREVIEW_FOLDER'] = DATA_PATHS.media_previews
+app.config['MEDIA_RENDITIONS_FOLDER'] = DATA_PATHS.media_renditions
+app.config['LEGACY_DATA_PATHS'] = DATA_PATHS.legacy
+app.config['DEPLOYMENT_KIND'] = data_paths.deployment_kind()
+
 # Production: set DATABASE_URL to a PostgreSQL connection string.
-# Development / tests: fall back to a local SQLite file.
-# TEST_DB_PATH lets each Playwright worker point at its own isolated SQLite file.
+# Development / tests: fall back to a local SQLite file (DATA_DIR/db/project.db;
+# TEST_DB_PATH lets each Playwright worker point at its own isolated file).
 _database_url = os.environ.get('DATABASE_URL')
 if _database_url:
     app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_url(_database_url)
 else:
-    db_path = os.environ.get('TEST_DB_PATH') or os.path.join(app.root_path, 'project.db')
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DATA_PATHS.db_path}"
 app.config['SQLITE_IN_USE'] = not bool(_database_url)
 # enable automatic template reloading so changes in templates are picked up
 # without a full process restart
@@ -285,8 +302,26 @@ socketio.start_background_task(_screen_log_retention_loop)
 # (uploads made before renditions existed, restored backups, copied files).
 # Runs in the background and only renders what's missing, so it's cheap on
 # every start after the first.
-_RENDITIONS_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'media_renditions')
-media_renditions.schedule_backfill(socketio, app, db, os.path.join(os.path.dirname(__file__), 'static', 'media'), _RENDITIONS_FOLDER)
+_RENDITIONS_FOLDER = DATA_PATHS.media_renditions
+media_renditions.schedule_backfill(socketio, app, db, DATA_PATHS.media, _RENDITIONS_FOLDER)
+
+
+# Media live in DATA_DIR (see application/paths.py), not in the static
+# folder, but keep their /static/… URLs — stored content references them.
+# More specific than Flask's own /static/<path:filename>, so these win.
+@app.route('/static/media/<path:filename>')
+def static_media(filename):
+    return send_from_directory(DATA_PATHS.media, filename)
+
+
+@app.route('/static/media_previews/<path:filename>')
+def static_media_previews(filename):
+    return send_from_directory(DATA_PATHS.media_previews, filename)
+
+
+@app.route('/static/media_renditions/<path:filename>')
+def static_media_renditions(filename):
+    return send_from_directory(DATA_PATHS.media_renditions, filename)
 
 
 @app.route('/')
@@ -426,7 +461,7 @@ def admin_spa(filename='index.html'):
         return "Not Found", 404
 
 
-_MEDIA_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'media')
+_MEDIA_FOLDER = DATA_PATHS.media
 _EXAMPLECONTENT_FOLDER = os.path.join(os.path.dirname(__file__), 'examplecontent')
 _EXAMPLECONTENT_DESC = os.path.join(_EXAMPLECONTENT_FOLDER, 'exampledesc.json')
 
@@ -528,11 +563,13 @@ def _restore_from_zip_bytes(raw: bytes) -> dict:
 # staged payload by token and actually applies the import.
 # ---------------------------------------------------------------------------
 
-import tempfile
 import secrets
 import time
 
-_IMPORT_STAGE_DIR = tempfile.gettempdir()
+# DATA_DIR/import-staging (0700, see application/paths.py) rather than the
+# system temp dir: not shared with other local users, and on the same
+# filesystem as the media an import unpacks.
+_IMPORT_STAGE_DIR = DATA_PATHS.import_staging
 _IMPORT_STAGE_MAX_AGE = 3600  # seconds
 
 
@@ -547,11 +584,10 @@ def _import_stage_paths(token: str):
 def _open_stage_file(path: str, binary: bool):
     """Create a staged-import file with owner-only permissions (0600).
 
-    ``tempfile.gettempdir()`` is a directory shared by every local user on
-    the host; a plain ``open(path, 'w')`` would create it at the default
-    0o644 (world-readable), exposing staged import contents — which can
-    include Device credentials (devicekey/registration_token) — to any
-    other local user until cleanup runs (up to _IMPORT_STAGE_MAX_AGE).
+    Staged imports can include Device credentials (devicekey /
+    registration_token). The staging directory itself is 0700 already; this
+    keeps the files private too, should someone loosen the directory's
+    permissions or point DATA_DIR at a shared location.
     """
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     fd = os.open(path, flags, 0o600)

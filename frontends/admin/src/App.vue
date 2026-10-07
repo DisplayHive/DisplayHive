@@ -11,6 +11,7 @@ import { useHelpStore } from './stores/help'
 import { useTheme } from './composables/useTheme'
 import LoginView from './views/LoginView.vue'
 import ChangePasswordView from './views/ChangePasswordView.vue'
+import LegacyDataBanner from './components/LegacyDataBanner.vue'
 
 // PrimeVue components
 import Menubar from 'primevue/menubar'
@@ -66,6 +67,10 @@ type SecurityStatus = {
   cors_wildcard?: boolean
   sqlite_in_use?: boolean
   debug_enabled?: boolean
+  // Only sent to holders of settings.page (application/admin/devices/connection.py).
+  legacy_data_paths?: { kind: string; path: string }[]
+  data_dir?: string | null
+  deployment?: string
 }
 
 const securityStatus = ref<SecurityStatus>({})
@@ -480,6 +485,15 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           @click="authStore.stopImpersonation()"
         />
       </div>
+
+      <!-- Not suppressed in dev builds like the security warnings: the old
+           locations need moving in a dev checkout too. -->
+      <LegacyDataBanner
+        v-if="securityStatus.legacy_data_paths?.length"
+        :legacy-paths="securityStatus.legacy_data_paths"
+        :deployment="securityStatus.deployment"
+        :data-dir="securityStatus.data_dir"
+      />
 
       <div v-if="securityWarnings.length" class="security-warnings">
         <div

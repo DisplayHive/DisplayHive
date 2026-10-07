@@ -210,5 +210,6 @@ to image fields, random-image fields and the design's backdrop image.
 New uploads are processed right away. Images uploaded before this existed are
 processed in the background when the server starts, and again whenever you
 use **Sync previews** on the Media page or import a package. The generated
-copies live in `static/media_renditions/` (a separate volume in the Docker
-setup) and can always be recreated from the originals.
+copies live in `media_renditions/` inside the data directory (`DATA_DIR`, see
+[Installation](installation.md#data-directory-data_dir)) and can always be
+recreated from the originals.

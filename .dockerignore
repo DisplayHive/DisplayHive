@@ -28,6 +28,13 @@ site
 project.db
 .env
 
+# Local data (DATA_DIR default and legacy media locations) — a developer's
+# uploads must never end up in the image
+data
+static/media
+static/media_previews
+static/media_renditions
+
 # Not needed at runtime
 testing
 docs

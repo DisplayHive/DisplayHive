@@ -469,6 +469,19 @@ let
         '';
       };
 
+      dataDirectory = mkOption {
+        type        = types.path;
+        default     = "/var/lib/displayhive/${name}";
+        description = ''
+          Where this instance keeps uploaded media, previews, renditions and
+          import staging (DATA_DIR, see application/paths.py) — outside the
+          source tree, so a redeploy or re-clone never touches it. Created
+          with mode 0750 for the instance's user. Instances set up before
+          this option kept their media in <sourceDirectory>/static/media*;
+          the admin UI shows how to move it.
+        '';
+      };
+
       gitRepository = mkOption {
         type    = types.str;
         default = "";
@@ -638,6 +651,8 @@ let
       CORS_ALLOWED_ORIGINS     = icfg.corsAllowedOrigins;
       LOG_LEVEL                = icfg.logLevel;
       TRUSTED_PROXY_COUNT      = toString icfg.trustedProxyCount;
+      DATA_DIR                 = icfg.dataDirectory;
+      DISPLAYHIVE_DEPLOYMENT   = "nixos";
       ADMIN_BOOTSTRAP_USERNAME = icfg.adminBootstrapUsername;
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
       ADMIN_BOOTSTRAP_PASSWORD = icfg.adminBootstrapPassword;
@@ -740,6 +755,12 @@ in {
         createHome   = false;
         description  = "System user for displayhive instance '${name}'";
       }) cfg.instances;
+
+    # DATA_DIR per instance, owned by its service user (see dataDirectory).
+    systemd.tmpfiles.rules =
+      mapAttrsToList (name: icfg:
+        "d ${icfg.dataDirectory} 0750 displayhive-${name} displayhive-${name} -"
+      ) cfg.instances;
 
     users.groups =
       mapAttrs' (name: _: nameValuePair "displayhive-${name}" {})
