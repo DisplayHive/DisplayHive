@@ -31,6 +31,7 @@ import InputNumber from 'primevue/inputnumber'
 import ColorPicker from '../components/ColorPicker.vue'
 import Checkbox from 'primevue/checkbox'
 import MediaPickerDialog from '../components/MediaPickerDialog.vue'
+import { formatCss, formatHtml } from '../utils/codeFormat'
 import { FONT_PROPERTIES, keywordOptions, type FontOption, type FontProperty } from '../utils/containerFontProperties'
 
 import { Codemirror } from 'vue-codemirror'
@@ -38,6 +39,24 @@ import { html as cmHtml } from '@codemirror/lang-html'
 import { css as cmCss } from '@codemirror/lang-css'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
+
+// "Format" buttons on the HTML/CSS editors (Prettier, loaded on first use). A
+// source that can't be parsed is left exactly as it is, with the reason shown.
+const formatting = ref<'html' | 'css' | null>(null)
+const formatEditor = async (which: 'html' | 'css') => {
+  formatting.value = which
+  try {
+    const result = await (which === 'html' ? formatHtml(editForm.value.html) : formatCss(editForm.value.css))
+    if (result.ok) {
+      if (which === 'html') editForm.value.html = result.code
+      else editForm.value.css = result.code
+    } else {
+      toast.add({ severity: 'warn', summary: `Could not format the ${which.toUpperCase()}`, detail: result.error, life: 6000 })
+    }
+  } finally {
+    formatting.value = null
+  }
+}
 
 const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
 const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
@@ -1323,7 +1342,15 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
             </template>
             <div class="code-editors-row">
               <div class="code-editor-field">
-                <label>Background HTML</label>
+                <div class="code-editor-header">
+                  <label>Background HTML</label>
+                  <Button
+                    icon="pi pi-align-left" label="Format" size="small" text
+                    :loading="formatting === 'html'" :disabled="!editForm.html.trim()"
+                    title="Auto-format the HTML (Prettier)"
+                    @click="formatEditor('html')"
+                  />
+                </div>
                 <Codemirror
                   v-model="editForm.html"
                   :extensions="cmHtmlExtensions"
@@ -1335,7 +1362,15 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
                 <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
               </div>
               <div class="code-editor-field">
-                <label>CSS Styles</label>
+                <div class="code-editor-header">
+                  <label>CSS Styles</label>
+                  <Button
+                    icon="pi pi-align-left" label="Format" size="small" text
+                    :loading="formatting === 'css'" :disabled="!editForm.css.trim()"
+                    title="Auto-format the CSS (Prettier)"
+                    @click="formatEditor('css')"
+                  />
+                </div>
                 <Codemirror
                   v-model="editForm.css"
                   :extensions="cmCssExtensions"
@@ -1530,6 +1565,13 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
 .code-editors-row {
   display: flex;
   gap: 1rem;
+}
+
+.code-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .code-editor-field {
