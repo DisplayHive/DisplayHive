@@ -36,6 +36,7 @@ CLI_MODE = _loaded_for_flask_cli_command()
 from application import media_renditions
 from application import paths as data_paths
 from application.db_url import normalize_database_url
+from application.security_headers import register_security_headers
 import os
 import json
 import logging
@@ -247,20 +248,8 @@ def from_json_filter(value):
         return {}
 
 
-@app.after_request
-def _set_security_headers(resp):
-    """Apply conservative security headers to every response.
-
-    A strict Content-Security-Policy is intentionally omitted: both the admin
-    SPA and the screen page rely on inline styles/scripts and admin-authored
-    template markup, so a wrong CSP would break rendering. These headers are
-    safe defaults; setdefault avoids clobbering anything a handler set itself.
-    """
-    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
-    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
-    resp.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
-    resp.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
-    return resp
+# Security headers + Content-Security-Policy (see application/security_headers.py)
+register_security_headers(app)
 
 # Initialize Socket.IO with optimized connection settings
 socketio = SocketIO(

@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  Host page for the admin's content/design previews (components/PreviewFrame.vue).
+  It is served with its own, more permissive Content-Security-Policy (inline
+  scripts allowed — designs, raw-HTML fields and background effects need them;
+  see application/security_headers.py) and loaded with sandbox="allow-scripts",
+  so nothing rendered here can reach the admin session. The admin posts the
+  preview document's HTML; it is shown in the inner frame below, which inherits
+  this page's policy.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Preview</title>
+  <style>
+    html, body, iframe { margin: 0; padding: 0; border: 0; width: 100%; height: 100%; overflow: hidden; display: block; background: transparent; }
+  </style>
+  <script src="preview-frame.js"></script>
+</head>
+<body>
+  <iframe id="dh-preview" sandbox="allow-scripts" title="Preview"></iframe>
+</body>
+</html>

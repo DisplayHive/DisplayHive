@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PreviewFrame from '../components/PreviewFrame.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useRightsStore } from '../stores/rights'
@@ -1005,14 +1006,13 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
         <i class="pi pi-eye"></i>
         <p>Preview will appear here once a content type is selected.</p>
       </div>
-      <iframe
+      <PreviewFrame
         v-else
-        :srcdoc="previewSrcdoc"
-        sandbox="allow-scripts"
+        :html="previewSrcdoc"
         class="content-edit-preview-iframe"
         :style="{ aspectRatio: cssAspectRatio(previewRatio) }"
         title="Content preview"
-      ></iframe>
+      />
     </div>
     </div>
   </div>

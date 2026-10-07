@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PreviewFrame from './PreviewFrame.vue'
 import { ref, computed, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -248,7 +249,7 @@ watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => 
               <Select :id="`preview-ratio-${data.id}`" v-model="rowRatio[data.id]" :options="previewRatios" :placeholder="BASE_ASPECT_RATIO" size="small" />
             </div>
             <div class="preview-frame-wrapper" :style="{ height: `${settingsStore.contentListPreviewSize}vh`, aspectRatio: cssAspectRatio(ratioOf(data.id)) }">
-              <iframe :srcdoc="resolvedSrcdocs[data.id] || ''" sandbox="allow-scripts" class="preview-frame" title="Content preview" />
+              <PreviewFrame :html="resolvedSrcdocs[data.id] || ''" class="preview-frame" title="Content preview" />
             </div>
           </div>
           <div class="expansion-details">

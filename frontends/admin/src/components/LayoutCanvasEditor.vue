@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PreviewFrame from './PreviewFrame.vue'
 import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -1501,13 +1502,12 @@ const toggleSelectedLayoutMembership = () => {
           @dragover.prevent
           @drop.prevent="onCanvasDrop"
         >
-          <iframe
+          <PreviewFrame
             v-if="designPreviewSrcdoc"
             class="editor-design-preview"
-            :srcdoc="designPreviewSrcdoc"
+            :html="designPreviewSrcdoc"
             title="Active Design preview"
-            sandbox="allow-scripts"
-          ></iframe>
+          />
           <div
             v-for="(line, i) in snaplines"
             :key="`snapline-${i}`"
