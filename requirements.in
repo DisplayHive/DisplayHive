@@ -1,0 +1,30 @@
+# Runtime dependencies — what the server needs, nothing else. This is the
+# *input*: edit it, then regenerate the lock (requirements.txt) with
+#     npm run deps:lock        (scripts/lock-python-deps.sh, needs uv)
+# requirements.txt pins every package, transitive ones included, with hashes;
+# it's what the Docker image installs. Test/docs tools: requirements-dev.in.
+#
+# Every environment installs from the locks: Docker and CI with pip, the Nix
+# dev shell (shell.nix) and NixOS module (nix/module.nix) by syncing a venv
+# with uv — Nix provides only the interpreter. tests/test_dependency_sync.py
+# keeps it that way.
+
+flask
+flask-socketio
+flask-sqlalchemy
+# Stay on the 2.0 line: 2.1 makes psycopg 3 the default driver for plain
+# postgresql:// URLs, but this project ships psycopg2 (see application/db_url.py).
+sqlalchemy>=2.0,<2.1
+flask-cors
+alembic
+pillow
+# Served with gunicorn's built-in gthread worker (Flask-SocketIO threading
+# mode); simple-websocket provides the WebSocket transport for it.
+gunicorn>=23
+simple-websocket
+requests
+# [crypto] pulls in cryptography, needed to verify SSO (OIDC) ID tokens (RS256 etc.).
+pyjwt[crypto]
+# Only needed with PostgreSQL (DATABASE_URL). On NixOS its wheel needs libz,
+# provided via LD_LIBRARY_PATH by shell.nix / nix/module.nix.
+psycopg2-binary

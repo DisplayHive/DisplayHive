@@ -46,6 +46,8 @@ WORKDIR /app
 # psycopg2-binary and pillow ship manylinux wheels that bundle their native
 # libs, so no system build/runtime packages are required here.
 COPY requirements.txt ./
+# requirements.txt is the runtime lock (every package pinned, with hashes —
+# pip checks them); test/docs tools live in requirements-dev.txt only.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Application source.

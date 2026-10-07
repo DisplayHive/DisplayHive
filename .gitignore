@@ -15,6 +15,8 @@ project.db
 *.sqlite3
 .gitattributes
 .venv_lib/
+# Dev-shell venv synced from requirements-dev.txt (shell.nix)
+.venv/
 static/js-build/
 # DATA_DIR default (application/paths.py): media, previews, renditions, SQLite, import staging
 /data/

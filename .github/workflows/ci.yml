@@ -59,9 +59,26 @@ jobs:
         with:
           python-version-file: '.python-version'
           cache: pip
+          cache-dependency-path: requirements-dev.txt
 
+      # The locked versions: runtime pins identical to the Docker image's.
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Run pytest
         run: pytest
+
+  python-locks:
+    # Fails when requirements.txt / requirements-dev.txt don't match their .in
+    # inputs — someone edited an .in file without running `npm run deps:lock`.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Regenerate the lock files
+        run: sh scripts/lock-python-deps.sh
+
+      - name: Compare with the committed ones
+        run: git diff --exit-code -- requirements.txt requirements-dev.txt

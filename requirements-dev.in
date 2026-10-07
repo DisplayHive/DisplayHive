@@ -1,0 +1,13 @@
+# Development, test and docs tools, on top of the runtime dependencies.
+# Locked into requirements-dev.txt (npm run deps:lock), with the runtime
+# packages pinned to exactly the versions in requirements.txt — so CI tests
+# what the Docker image ships. Never installed into the image.
+
+-r requirements.in
+
+pytest
+# Docs (npm run docs:serve / docs:build)
+mkdocs
+mkdocs-material
+# Python call graphs for code exploration
+pyan3

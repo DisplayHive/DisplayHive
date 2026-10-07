@@ -30,7 +30,7 @@ jobs:
           python-version-file: '.python-version'
 
       - name: Install MkDocs
-        run: pip install mkdocs mkdocs-material
+        run: pip install -r requirements-dev.txt
 
       - name: Build site
         run: mkdocs build --strict

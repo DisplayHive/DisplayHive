@@ -10,7 +10,8 @@
     "test:e2e:headed": "npm --prefix testing run test:e2e:headed",
     "test:e2e:ui": "npm --prefix testing run test:e2e:ui",
     "docs:serve": "mkdocs serve",
-    "docs:build": "mkdocs build"
+    "docs:build": "mkdocs build",
+    "deps:lock": "sh scripts/lock-python-deps.sh"
   },
   "devDependencies": {
     "npm-run-all2": "^8.0.4"

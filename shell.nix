@@ -1,38 +1,21 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  # Version from .python-version, see nix/python.nix.
-  python = (import ./nix/python.nix { inherit pkgs; }).withPackages (ps: with ps; [
-    flask
-    flask-socketio
-    flask-bootstrap
-    flask-sqlalchemy
-    flask-cors
-    alembic
-    pillow
-    gunicorn
-    mkdocs
-    mkdocstrings
-    mkdocs-material
-    pip
-    setuptools
-    pytest
-    playwright
-    simple-websocket
-    requests
-    pyjwt
-    cryptography
-   
-    
-    
-   
-    
-  ]);
+  # Only the interpreter comes from Nix (version from .python-version, see
+  # nix/python.nix). Python packages come from the lock file
+  # requirements-dev.txt into ./.venv — the exact versions CI tests and the
+  # Docker image ships (runtime pins are shared), instead of whatever
+  # nixpkgs happens to carry.
+  python = import ./nix/python.nix { inherit pkgs; };
+  # Native libraries some PyPI wheels expect to find on a regular Linux
+  # (e.g. psycopg2-binary needs libz); NixOS has no global /usr/lib.
+  wheelLibs = pkgs.lib.makeLibraryPath [ pkgs.zlib pkgs.stdenv.cc.cc.lib ];
 in
 pkgs.mkShell {
   # Tools available while developing
   buildInputs = [
     python
+    pkgs.uv  # npm run deps:lock (scripts/lock-python-deps.sh)
     pkgs.direnv
     pkgs.nix-direnv
     pkgs.vim
@@ -60,20 +43,23 @@ pkgs.mkShell {
     # ts-node removed: prefer Node's built-in TS support or use `tsc`/`vite` for dev
   ];
 
-  # Ensure pyan3 is available inside the nix-shell for Python callgraph generation.
-  # If pyan3 is not present we install it via pip on shell entry. This keeps
-  # the nix derivation simple while providing a reproducible developer flow.
   shellHook = ''
-    # Ensure pyan3 is importable. If not available system-wide, install it into
-    # a project-local directory (.venv_lib) and prepend that to PYTHONPATH. This
-    # avoids modifying system site-packages and works without elevated privileges.
-    python -c "import importlib.util, sys; sys.exit(0) if importlib.util.find_spec('pyan') else sys.exit(1)" 2>/dev/null || {
-      if [ ! -d "$PWD/.venv_lib" ]; then
-        echo "pyan not found; installing into $PWD/.venv_lib via pip..."
-        python -m pip install --upgrade --target "$PWD/.venv_lib" pyan3 || echo "pip install failed; please install pyan3 manually inside the nix-shell (pip install --upgrade pyan3)"
-      fi
-      export PYTHONPATH="$PWD/.venv_lib:${PYTHONPATH:-}"
-    }
+    # Python packages: a venv synced to requirements-dev.txt on every shell
+    # entry (instant when nothing changed — uv keeps a cache; the network is
+    # only needed when the lock file changed). Recreated when the Nix
+    # interpreter changes, e.g. after a nixpkgs update.
+    export LD_LIBRARY_PATH="${wheelLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export UV_PYTHON_DOWNLOADS=never
+    venv="$PWD/.venv"
+    if [ "$(cat "$venv/.interpreter" 2>/dev/null)" != "${python}" ]; then
+      echo "Creating .venv with ${python.name}..."
+      rm -rf "$venv"
+      uv venv --quiet --python "${python}/bin/python3" "$venv" && echo "${python}" > "$venv/.interpreter"
+    fi
+    uv pip sync --quiet --python "$venv/bin/python" requirements-dev.txt \
+      || echo "uv pip sync failed — Python packages may be out of date (offline?)"
+    export VIRTUAL_ENV="$venv"
+    export PATH="$venv/bin:$PATH"
 
     # Install JS dependencies (root + each frontend) if package.json is present
     # and node_modules is either missing or stale relative to package-lock.json.

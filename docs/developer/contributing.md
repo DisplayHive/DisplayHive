@@ -22,6 +22,29 @@ move to a new version:
 3. If `nix develop` can't find `pythonXY`, update the flake's nixpkgs
    (`nix flake update`).
 
+### Python dependencies
+
+| File | What | Used by |
+|---|---|---|
+| `requirements.in` | Runtime dependencies (what the server imports) — edit this | |
+| `requirements.txt` | Lock: every runtime package pinned, with hashes — generated | Docker image |
+| `requirements-dev.in` | Test and docs tools on top — edit this | |
+| `requirements-dev.txt` | Lock: runtime + dev, runtime pins identical to `requirements.txt` — generated | CI, e2e, docs |
+
+After changing an `.in` file, regenerate both locks with `npm run deps:lock`
+(uv, included in `nix develop`); `npm run deps:lock -- --upgrade` moves every
+pin to the newest allowed version. Commit the `.in` and `.txt` files
+together — CI's `python-locks` job fails otherwise.
+
+Every environment installs from the locks, so there's nothing else to keep
+in sync: `nix develop` takes only the interpreter from Nix and syncs
+`./.venv` from `requirements-dev.txt` on every shell entry (instant when
+nothing changed; recreated when the Nix interpreter changes), and the NixOS
+module does the same with `requirements.txt` before every service start.
+Native libraries some wheels need (e.g. `libz` for psycopg2) come from Nix
+via `LD_LIBRARY_PATH`. `tests/test_dependency_sync.py` fails if a Nix file
+starts listing Python packages of its own again.
+
 ## Running things
 
 ```bash

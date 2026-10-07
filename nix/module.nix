@@ -424,7 +424,7 @@ let
       serviceConfig = {
         Type      = "simple";
         # Runs as root: needs to read the SSH deploy key and call systemctl.
-        ExecStart = "${cfg.pythonEnv}/bin/python3 ${webhookServerPy}"
+        ExecStart = "${python}/bin/python3 ${webhookServerPy}"  # stdlib only
           + " ${name}"
           + " ${toString wcfg.port}"
           + " ${wcfg.listenAddress}"
@@ -440,24 +440,38 @@ let
       };
     };
 
-  # ── Default Python environment ────────────────────────────────────────────
-  # Same interpreter version as the dev shell, CI and Docker image:
-  # .python-version via nix/python.nix (not pkgs.python3, which moves on with
-  # nixpkgs to versions the app isn't tested on).
-  defaultPythonEnv = (import ./python.nix { inherit pkgs; }).withPackages (ps: with ps; [
-    flask
-    flask-socketio
-    flask-sqlalchemy
-    flask-cors
-    alembic
-    pillow
-    gunicorn
-    simple-websocket
-    psycopg2
-    requests
-    pyjwt
-    cryptography # OIDC ID-token signatures (pyjwt RS256/ES256)
-  ]);
+  # ── Python ────────────────────────────────────────────────────────────────
+  # Only the interpreter comes from Nix: the version from .python-version (via
+  # nix/python.nix), same as the dev shell, CI and Docker image. The Python
+  # packages come from the lock file requirements.txt into a per-instance venv
+  # (see mkPythonSync) — the exact versions CI tests and the image ships.
+  python = import ./python.nix { inherit pkgs; };
+  # Native libraries some PyPI wheels expect on a regular Linux (e.g.
+  # psycopg2-binary needs libz); NixOS has no global /usr/lib.
+  wheelLibs = lib.makeLibraryPath [ pkgs.zlib pkgs.stdenv.cc.cc.lib ];
+  venvOf = icfg: "${icfg.pythonEnvDirectory}/venv";
+
+  # ExecStartPre: bring the instance's venv in line with requirements.txt.
+  # A no-op (no network) when neither the lock file nor the interpreter
+  # changed since the last successful sync — so a reboot without internet
+  # still starts. Rebuilds the venv when the Nix interpreter changed.
+  mkPythonSync = name: icfg: pkgs.writeShellScript "displayhive-${name}-python-sync" ''
+    set -eu
+    venv=${escapeShellArg (venvOf icfg)}
+    lock=${escapeShellArg "${icfg.sourceDirectory}/requirements.txt"}
+    want="${python} $(${pkgs.coreutils}/bin/sha256sum "$lock" | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
+    if [ "$(cat "$venv/.synced" 2>/dev/null)" = "$want" ] && [ -x "$venv/bin/gunicorn" ]; then
+      exit 0
+    fi
+    if [ "$(cat "$venv/.interpreter" 2>/dev/null)" != "${python}" ]; then
+      rm -rf "$venv"
+      ${pkgs.uv}/bin/uv venv --quiet --python ${python}/bin/python3 "$venv"
+      echo "${python}" > "$venv/.interpreter"
+    fi
+    echo "Syncing Python packages from $lock..."
+    ${pkgs.uv}/bin/uv pip sync --python "$venv/bin/python" "$lock"
+    echo "$want" > "$venv/.synced"
+  '';
 
   # ── Per-instance option schema ────────────────────────────────────────────
   instanceOpts = { name, ... }: {
@@ -484,6 +498,18 @@ let
           with mode 0750 for the instance's user. Instances set up before
           this option kept their media in <sourceDirectory>/static/media*;
           the admin UI shows how to move it.
+        '';
+      };
+
+      pythonEnvDirectory = mkOption {
+        type        = types.path;
+        default     = "/var/cache/displayhive/${name}";
+        description = ''
+          Where this instance's Python packages live: a venv synced from the
+          source tree's requirements.txt (the lock file) before every start,
+          plus uv's download cache. Regenerable — not part of a backup. The
+          first start needs internet access to download the packages; later
+          starts only when requirements.txt changed.
         '';
       };
 
@@ -661,6 +687,9 @@ let
       LOG_LEVEL                = icfg.logLevel;
       TRUSTED_PROXY_COUNT      = toString icfg.trustedProxyCount;
       DATA_DIR                 = icfg.dataDirectory;
+      LD_LIBRARY_PATH          = wheelLibs;
+      UV_CACHE_DIR             = "${icfg.pythonEnvDirectory}/uv-cache";
+      UV_PYTHON_DOWNLOADS      = "never";
       DISPLAYHIVE_DEPLOYMENT   = "nixos";
       ADMIN_BOOTSTRAP_USERNAME = icfg.adminBootstrapUsername;
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
@@ -683,14 +712,17 @@ let
       ${concatStringsSep " " (mapAttrsToList (k: v: escapeShellArg "${k}=${v}")
           # LOG_LEVEL: the CLI's own quieter default (WARNING) reads better.
           (removeAttrs (mkServiceEnv name icfg) [ "LOG_LEVEL" "FLASK_PORT" ]))} \
-      FLASK_APP=app ${cfg.pythonEnv}/bin/flask dh "$@"
+      FLASK_APP=app ${venvOf icfg}/bin/flask dh "$@"
   '';
 
   mkService = name: icfg:
     let hasGit = icfg.gitRepository != ""; in {
     description = "DisplayHive instance '${name}'";
-    after    = [ "network.target" "postgresql.service" ]
+    # network-online: the first start (and one after a lock file change)
+    # downloads Python packages, see mkPythonSync.
+    after    = [ "network-online.target" "postgresql.service" ]
                ++ optional hasGit "displayhive-${name}-deploy.service";
+    wants    = [ "network-online.target" ];
     requires = [ "postgresql.service" ]
                ++ optional hasGit "displayhive-${name}-deploy.service";
     wantedBy = [ "multi-user.target" ];
@@ -702,8 +734,8 @@ let
       User             = "displayhive-${name}";
       Group            = "displayhive-${name}";
       WorkingDirectory = icfg.sourceDirectory;
-      ExecStartPre     = "${cfg.pythonEnv}/bin/alembic upgrade head";
-      ExecStart = "${cfg.pythonEnv}/bin/gunicorn"
+      ExecStartPre     = [ "${mkPythonSync name icfg}" "${venvOf icfg}/bin/alembic upgrade head" ];
+      ExecStart = "${venvOf icfg}/bin/gunicorn"
         + " --worker-class gthread"
         + " -w 1"
         + " --threads ${toString icfg.threads}"
@@ -719,21 +751,17 @@ let
   };
 
 in {
+  imports = [
+    (mkRemovedOptionModule [ "services" "displayhive" "pythonEnv" ] ''
+      Python packages now come from the lock file requirements.txt into a
+      per-instance venv (services.displayhive.instances.<name>.pythonEnvDirectory),
+      so the server runs exactly the versions CI tests and the Docker image
+      ships. Add a dependency to requirements.in and run `npm run deps:lock`.
+    '')
+  ];
+
   # ── Module options ─────────────────────────────────────────────────────────
   options.services.displayhive = {
-
-    pythonEnv = mkOption {
-      type        = types.package;
-      default     = defaultPythonEnv;
-      defaultText = literalExpression
-        "(import <displayhive>/nix/python.nix { inherit pkgs; }).withPackages (ps: [ flask flask-socketio ... ])";
-      description = ''
-        Python environment used by every instance. The default uses the
-        Python version from the repository's .python-version (the one the
-        app is tested on). Override to add packages; keep the interpreter
-        from nix/python.nix rather than picking another version.
-      '';
-    };
 
     instances = mkOption {
       type        = types.attrsOf (types.submodule instanceOpts);
@@ -806,6 +834,10 @@ in {
     systemd.tmpfiles.rules =
       mapAttrsToList (name: icfg:
         "d ${icfg.dataDirectory} 0750 displayhive-${name} displayhive-${name} -"
+      ) cfg.instances
+      # Per-instance venv + uv cache (see pythonEnvDirectory).
+      ++ mapAttrsToList (name: icfg:
+        "d ${icfg.pythonEnvDirectory} 0750 displayhive-${name} displayhive-${name} -"
       ) cfg.instances;
 
     users.groups =

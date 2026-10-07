@@ -89,6 +89,13 @@ What the module handles automatically for each declared instance:
   `gthread` worker process with `threads` threads, default 500, and an open
   files limit of 65536), with
   `alembic upgrade head` run on every (re)start before the app launches.
+- The Python packages: Nix provides the interpreter (the version in
+  `.python-version`), the packages come from the lock file `requirements.txt`
+  into a venv in `pythonEnvDirectory` (default
+  `/var/cache/displayhive/<name>`), synced before every start — the same
+  versions the Docker image ships. **The first start, and the first one
+  after `requirements.txt` changed, needs internet access** to download
+  them; other restarts don't. (The former `pythonEnv` option is gone.)
 - A dedicated system user/group and a PostgreSQL database + role, both named
   `displayhive-<name>`.
 - Optionally, a `displayhive-<name>-deploy` one-shot service that clones/pulls
