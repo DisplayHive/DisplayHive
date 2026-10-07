@@ -13,16 +13,23 @@ from flask import request, jsonify
 
 from application.auth import (
     verify_password,
+    hash_password,
     create_token,
     user_from_token,
+    decode_token,
     is_rate_limited,
     record_failed_attempt,
     clear_failed_attempts,
 )
 
 
-def require_jwt_auth(app):
-    """Return a decorator that requires a valid `Authorization: Bearer <jwt>` header."""
+def require_jwt_auth(app, allow_pending_password_change=False):
+    """Return a decorator that requires a valid `Authorization: Bearer <jwt>` header.
+
+    *allow_pending_password_change* lets an account flagged
+    `must_change_password` through — only for the self-service routes it
+    needs to see and clear that flag (see user_from_token).
+    """
     def decorator(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
@@ -32,7 +39,7 @@ def require_jwt_auth(app):
             # cryptographically valid for its full TTL, so reject it here if the
             # user has since been deleted, deactivated, or changed their password.
             from application.models import db
-            if not user_from_token(app, db, token):
+            if not user_from_token(app, db, token, allow_pending_password_change=allow_pending_password_change):
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
             return fn(*args, **kwargs)
         return wrapped
@@ -129,10 +136,11 @@ def register_auth_routes(app, db):
             'token': token,
             'username': user.username,
             'preferences': user.get_preferences(),
+            'must_change_password': bool(user.must_change_password),
         })
 
     @app.route('/admin/api/auth/me', methods=['GET'])
-    @require_jwt_auth(app)
+    @require_jwt_auth(app, allow_pending_password_change=True)
     def admin_auth_me():
         """Validate the current token and return the associated username + preferences.
 
@@ -142,11 +150,63 @@ def register_auth_routes(app, db):
         auth_header = request.headers.get('Authorization', '')
         token = auth_header[7:] if auth_header.startswith('Bearer ') else None
 
-        user = user_from_token(app, db, token)
+        user = user_from_token(app, db, token, allow_pending_password_change=True)
         if not user:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
-        return jsonify({'success': True, 'username': user.username, 'preferences': user.get_preferences()})
+        # An impersonation session is never asked to change the impersonated
+        # account's password (see user_from_token).
+        payload = decode_token(app, token) or {}
+        return jsonify({
+            'success': True,
+            'username': user.username,
+            'preferences': user.get_preferences(),
+            'must_change_password': bool(user.must_change_password) and 'imp' not in payload,
+        })
+
+    @app.route('/admin/api/auth/me/password', methods=['POST'])
+    @require_jwt_auth(app, allow_pending_password_change=True)
+    def admin_auth_change_password():
+        """Change the caller's own password. data: {current_password, new_password}.
+
+        Self-service, and the only thing an account flagged
+        `must_change_password` can do. Clears that flag and bumps
+        token_version (revoking every other session), then returns a fresh
+        token so the caller's own session carries on.
+        """
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        user = user_from_token(app, db, token, allow_pending_password_change=True)
+        if not user:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+        if 'imp' in (decode_token(app, token) or {}):
+            return jsonify({'success': False, 'error': "Cannot change another user's password while impersonating"}), 403
+
+        data = request.get_json(silent=True) or {}
+        current_password = str(data.get('current_password', ''))
+        new_password = str(data.get('new_password', ''))
+
+        # Same limiter as the login route: the current-password check is
+        # otherwise a brute-force oracle for anyone holding a stolen token.
+        rate_key = f'{request.remote_addr}:{user.username.lower()}'
+        if is_rate_limited(rate_key):
+            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
+        if not verify_password(current_password, user.password_hash):
+            record_failed_attempt(rate_key)
+            return jsonify({'success': False, 'error': 'Current password is incorrect'}), 400
+        clear_failed_attempts(rate_key)
+
+        if len(new_password) < 8:
+            return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400
+        if verify_password(new_password, user.password_hash):
+            return jsonify({'success': False, 'error': 'New password must differ from the current one'}), 400
+
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
+        user.token_version = (user.token_version or 0) + 1
+        db.session.commit()
+
+        return jsonify({'success': True, 'token': create_token(app, user), 'username': user.username})
 
     @app.route('/admin/api/auth/me/preferences', methods=['PATCH'])
     @require_jwt_auth(app)

@@ -195,6 +195,8 @@ export interface AdminUser {
   id: number
   username: string
   is_active?: boolean
+  /** Set by an admin: the account must pick a new password on its next login. */
+  must_change_password?: boolean
   created_at?: string | null
   last_login_at?: string | null
 }

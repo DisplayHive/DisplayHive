@@ -8,6 +8,10 @@ const USERNAME_STORAGE_KEY = 'displayhive_admin_username'
 // before login()/restore() completes its round-trip (avoids a flash of the
 // wrong theme). The DB stays the source of truth; this is just a paint cache.
 const PREFERENCES_STORAGE_KEY = 'displayhive_admin_preferences'
+// Mirrors the server's must_change_password flag for the current session, so
+// other tabs (via the `storage` event) know not to connect a socket the
+// server would refuse anyway. The server stays the source of truth.
+const MUST_CHANGE_PASSWORD_STORAGE_KEY = 'displayhive_admin_must_change_password'
 
 export type UserPreferences = { theme?: 'light' | 'dark' | 'system' }
 
@@ -63,6 +67,11 @@ export const useAuthStore = defineStore('auth', () => {
   const restoring = ref(!!token.value)
 
   const isAuthenticated = computed(() => !!token.value)
+  // While set, the server rejects this session everywhere except the
+  // password-change routes (see application/auth.py user_from_token), so App.vue
+  // shows ChangePasswordView instead of the app and doesn't connect the socket.
+  const mustChangePassword = ref(localStorage.getItem(MUST_CHANGE_PASSWORD_STORAGE_KEY) === '1')
+  const hasUsableSession = computed(() => isAuthenticated.value && !mustChangePassword.value)
 
   const originalToken = ref<string | null>(localStorage.getItem(ORIGINAL_TOKEN_STORAGE_KEY))
   const originalUsername = ref<string | null>(localStorage.getItem(ORIGINAL_USERNAME_STORAGE_KEY))
@@ -97,6 +106,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(newPreferences))
   }
 
+  const setMustChangePassword = (value: boolean) => {
+    mustChangePassword.value = value
+    if (value) localStorage.setItem(MUST_CHANGE_PASSWORD_STORAGE_KEY, '1')
+    else localStorage.removeItem(MUST_CHANGE_PASSWORD_STORAGE_KEY)
+  }
+
   const setSession = (newToken: string, newUsername: string, newPreferences?: UserPreferences) => {
     token.value = newToken
     username.value = newUsername
@@ -119,6 +134,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     username.value = null
     preferences.value = {}
+    setMustChangePassword(false)
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     localStorage.removeItem(USERNAME_STORAGE_KEY)
     localStorage.removeItem(PREFERENCES_STORAGE_KEY)
@@ -179,6 +195,9 @@ export const useAuthStore = defineStore('auth', () => {
       if (!response.ok || !result.success) {
         return result.error || 'Login failed'
       }
+      // Before setSession(): its token write is what other tabs react to, and
+      // they read this flag when it lands.
+      setMustChangePassword(!!result.must_change_password)
       setSession(result.token, result.username, result.preferences || {})
       return null
     } catch (e) {
@@ -213,6 +232,7 @@ export const useAuthStore = defineStore('auth', () => {
         const result = await response.json()
         if (result.username) username.value = result.username
         if (result.preferences) cachePreferences(result.preferences)
+        setMustChangePassword(!!result.must_change_password)
         scheduleExpiry(token.value)
       }
     } catch {
@@ -246,6 +266,34 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Change the current user's own password (required while
+   * `mustChangePassword` is set). The server revokes every other session and
+   * returns a fresh token for this one. Returns an error message on failure,
+   * or null on success.
+   */
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<string | null> => {
+    try {
+      const response = await fetch('/admin/api/auth/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        return result.error || 'Failed to change password'
+      }
+      // Token first: other tabs reload on the token swap (see the storage
+      // listener below) rather than connecting with their now-revoked token
+      // the moment the flag clears.
+      setSession(result.token, result.username)
+      setMustChangePassword(false)
+      return null
+    } catch (e) {
+      return `Could not reach server: ${e}`
+    }
+  }
+
   // Cross-tab sync: localStorage writes in one tab fire a native 'storage'
   // event in every *other* open tab (never the tab that wrote it), so this
   // is enough to mirror login/logout everywhere without polling or a
@@ -256,6 +304,10 @@ export const useAuthStore = defineStore('auth', () => {
     if (event.key === ORIGINAL_TOKEN_STORAGE_KEY) {
       originalToken.value = event.newValue
       originalUsername.value = event.newValue ? localStorage.getItem(ORIGINAL_USERNAME_STORAGE_KEY) : null
+      return
+    }
+    if (event.key === MUST_CHANGE_PASSWORD_STORAGE_KEY) {
+      mustChangePassword.value = event.newValue === '1'
       return
     }
     if (event.key !== TOKEN_STORAGE_KEY) return
@@ -270,6 +322,7 @@ export const useAuthStore = defineStore('auth', () => {
         window.location.reload()
         return
       }
+      mustChangePassword.value = localStorage.getItem(MUST_CHANGE_PASSWORD_STORAGE_KEY) === '1'
       token.value = event.newValue
       username.value = localStorage.getItem(USERNAME_STORAGE_KEY)
       scheduleExpiry(event.newValue)
@@ -288,6 +341,8 @@ export const useAuthStore = defineStore('auth', () => {
     preferences,
     restoring,
     isAuthenticated,
+    mustChangePassword,
+    hasUsableSession,
     originalUsername,
     isImpersonating,
     startImpersonation,
@@ -296,6 +351,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     restore,
     setPreferences,
+    changePassword,
     authHeader,
   }
 })

@@ -21,6 +21,24 @@ IP/username are rate-limited and temporarily locked out.
 Additional admin accounts can be created, deactivated, reactivated, or
 deleted from the **Accounts** tab on the **Users** page (`/users`).
 
+### Forcing a password reset
+
+When creating or editing an account, tick **Force user to reset password on
+next login** (needs the `users.set_password` right). This is useful for
+handing out an initial password that only the account owner should end up
+knowing.
+
+- Turning it on for an existing account logs that account out everywhere.
+- On their next login, the user only sees a "Choose a New Password" screen
+  and must enter their current password plus a new one (at least 8
+  characters, different from the current one) before they can use anything
+  else.
+- Once they've set it, the flag clears and their other sessions are logged
+  out. Until then the Users list shows a **Password reset pending** tag next
+  to their name.
+- Impersonating such an account is unaffected; the impersonating admin is
+  never asked to change the password.
+
 ## Rights & groups
 
 Access isn't all-or-nothing: what an account can see and do is controlled by

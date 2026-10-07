@@ -72,7 +72,7 @@ def decode_token(app, token: str):
         return None
 
 
-def user_from_token(app, db, token: str):
+def user_from_token(app, db, token: str, allow_pending_password_change: bool = False):
     """Resolve *token* to a currently-valid AdminUser, or return None.
 
     Rejects the token if it is missing/expired/invalid, the user no longer
@@ -80,6 +80,13 @@ def user_from_token(app, db, token: str):
     ``token_version`` (e.g. the password has since been changed). This is the
     single authorization gate shared by the HTTP routes and the Socket.IO
     connect handler so a revoked session cannot linger until its TTL expires.
+
+    An account flagged ``must_change_password`` is also rejected unless
+    *allow_pending_password_change* is set — only the self-service session
+    check and password-change routes pass it, so such a session can do
+    nothing else until a new password is chosen. Impersonation tokens are
+    exempt: the admin driving one is not the person who has to pick the
+    new password.
     """
     payload = decode_token(app, token)
     if not payload:
@@ -92,6 +99,8 @@ def user_from_token(app, db, token: str):
     if not user or not user.is_active:
         return None
     if int(payload.get('tv', 0) or 0) != int(getattr(user, 'token_version', 0) or 0):
+        return None
+    if user.must_change_password and not allow_pending_password_change and 'imp' not in payload:
         return None
     return user
 

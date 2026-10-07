@@ -193,6 +193,99 @@ def test_user_from_token_none_for_empty_token(flask_app, app_ctx, db_session):
     assert user_from_token(app_ctx, flask_app.db, '') is None
 
 
+def test_user_from_token_rejects_pending_password_change(flask_app, app_ctx, db_session, make_user):
+    user = make_user()
+    token = create_token(app_ctx, user)
+    user.must_change_password = True
+    db_session.commit()
+    assert user_from_token(app_ctx, flask_app.db, token) is None
+    resolved = user_from_token(app_ctx, flask_app.db, token, allow_pending_password_change=True)
+    assert resolved is not None and resolved.id == user.id
+
+
+def test_user_from_token_impersonation_ignores_pending_password_change(flask_app, app_ctx, db_session, make_user):
+    """The admin driving an impersonation isn't the one who has to pick the password."""
+    admin = make_user()
+    target = make_user()
+    target.must_change_password = True
+    db_session.commit()
+    token = create_token(app_ctx, target, impersonator_id=admin.id)
+    assert user_from_token(app_ctx, flask_app.db, token) is not None
+
+
+# --- Forced password change (HTTP) -------------------------------------------------
+
+
+def _login(client, username, password='testpass123'):
+    return client.post('/admin/api/auth/login', json={'username': username, 'password': password})
+
+
+def test_login_reports_pending_password_change_and_locks_session(flask_app, db_session, make_user):
+    user = make_user()
+    user.must_change_password = True
+    db_session.commit()
+    client = flask_app.app.test_client()
+
+    result = _login(client, user.username).get_json()
+    assert result['success'] is True
+    assert result['must_change_password'] is True
+    headers = {'Authorization': f"Bearer {result['token']}"}
+
+    me = client.get('/admin/api/auth/me', headers=headers)
+    assert me.status_code == 200
+    assert me.get_json()['must_change_password'] is True
+    # Anything other than the password-change routes is refused.
+    prefs = client.patch('/admin/api/auth/me/preferences', headers=headers, json={'preferences': {'theme': 'dark'}})
+    assert prefs.status_code == 401
+
+
+def test_change_password_clears_flag_and_issues_new_token(flask_app, db_session, make_user):
+    user = make_user()
+    user.must_change_password = True
+    db_session.commit()
+    client = flask_app.app.test_client()
+    old_token = _login(client, user.username).get_json()['token']
+
+    response = client.post(
+        '/admin/api/auth/me/password',
+        headers={'Authorization': f'Bearer {old_token}'},
+        json={'current_password': 'testpass123', 'new_password': 'brand-new-pass'},
+    )
+    result = response.get_json()
+    assert response.status_code == 200 and result['success'] is True
+
+    db_session.refresh(user)
+    assert user.must_change_password is False
+    assert verify_password('brand-new-pass', user.password_hash)
+    # The old token is revoked; the returned one works everywhere.
+    assert user_from_token(flask_app.app, flask_app.db, old_token, allow_pending_password_change=True) is None
+    me = client.get('/admin/api/auth/me', headers={'Authorization': f"Bearer {result['token']}"})
+    assert me.get_json()['must_change_password'] is False
+
+
+@pytest.mark.parametrize('current, new, error', [
+    ('wrong-password', 'brand-new-pass', 'Current password is incorrect'),
+    ('testpass123', 'short', 'Password must be at least 8 characters'),
+    ('testpass123', 'testpass123', 'New password must differ from the current one'),
+])
+def test_change_password_rejects_invalid_input(flask_app, db_session, make_user, current, new, error):
+    user = make_user()
+    user.must_change_password = True
+    db_session.commit()
+    client = flask_app.app.test_client()
+    token = _login(client, user.username).get_json()['token']
+
+    response = client.post(
+        '/admin/api/auth/me/password',
+        headers={'Authorization': f'Bearer {token}'},
+        json={'current_password': current, 'new_password': new},
+    )
+    assert response.status_code == 400
+    assert response.get_json()['error'] == error
+    db_session.refresh(user)
+    assert user.must_change_password is True
+
+
 # --- First-run bootstrap -------------------------------------------------------
 
 

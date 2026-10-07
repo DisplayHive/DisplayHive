@@ -10,6 +10,7 @@ import { useRightsStore } from './stores/rights'
 import { useHelpStore } from './stores/help'
 import { useTheme } from './composables/useTheme'
 import LoginView from './views/LoginView.vue'
+import ChangePasswordView from './views/ChangePasswordView.vue'
 
 // PrimeVue components
 import Menubar from 'primevue/menubar'
@@ -136,9 +137,10 @@ watch(isConnected, (connected) => {
 // flush picks up and unmounts LoginView *before* the awaited login() call in
 // LoginView resumes and emits — so a child-emitted event fires after LoginView
 // is already gone and is silently dropped. Watching the store here has no
-// such race.
+// such race. Watches hasUsableSession, not isAuthenticated: a session that
+// still has to change its password is refused by the socket server anyway.
 watch(
-  () => authStore.isAuthenticated,
+  () => authStore.hasUsableSession,
   (authenticated) => {
     if (authenticated) {
       connect()
@@ -178,7 +180,7 @@ watch(
 
 onMounted(async () => {
   await authStore.restore()
-  if (authStore.isAuthenticated) {
+  if (authStore.hasUsableSession) {
     connect()
   }
 })
@@ -449,6 +451,8 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
     <template v-if="authStore.restoring"></template>
 
     <LoginView v-else-if="!authStore.isAuthenticated" />
+
+    <ChangePasswordView v-else-if="authStore.mustChangePassword" />
 
     <template v-else>
       <div v-if="authStore.isImpersonating" class="impersonation-banner" data-testid="impersonation-banner">

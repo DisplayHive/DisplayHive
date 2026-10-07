@@ -23,6 +23,11 @@ class AdminUser(db.Model):
     # invalidate every JWT issued before the change. Embedded in the token as
     # `tv` and compared on each request.
     token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    # Set by an admin (Users page) to force this account to pick a new password
+    # before it can do anything else. While set, user_from_token() only accepts
+    # this account's tokens on the self-service password-change routes; cleared
+    # by POST /admin/api/auth/me/password.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # JSON-encoded dict of self-service UI preferences (e.g. {"theme": "dark"}),
@@ -50,6 +55,7 @@ class AdminUser(db.Model):
             'id': self.id,
             'username': self.username,
             'is_active': self.is_active,
+            'must_change_password': bool(self.must_change_password),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
         }

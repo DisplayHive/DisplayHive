@@ -256,21 +256,22 @@ onUnmounted(() => {
 const showAccountDialog = ref(false)
 const isNewAccount = ref(false)
 const isSavingAccount = ref(false)
-const accountForm = ref<{ id: number | null; username: string; password: string }>({
+const accountForm = ref<{ id: number | null; username: string; password: string; mustChangePassword: boolean }>({
   id: null,
   username: '',
   password: '',
+  mustChangePassword: false,
 })
 
 const openCreateAccountDialog = () => {
   isNewAccount.value = true
-  accountForm.value = { id: null, username: '', password: '' }
+  accountForm.value = { id: null, username: '', password: '', mustChangePassword: false }
   showAccountDialog.value = true
 }
 
 const openEditAccountDialog = (user: AdminUser) => {
   isNewAccount.value = false
-  accountForm.value = { id: user.id, username: user.username, password: '' }
+  accountForm.value = { id: user.id, username: user.username, password: '', mustChangePassword: !!user.must_change_password }
   showAccountDialog.value = true
 }
 
@@ -292,9 +293,12 @@ const saveAccount = async () => {
     const payload: Record<string, unknown> = { username: accountForm.value.username.trim() }
     if (isNewAccount.value) {
       payload.password = accountForm.value.password
+      payload.must_change_password = accountForm.value.mustChangePassword
     } else {
       payload.id = accountForm.value.id
       if (accountForm.value.password) payload.password = accountForm.value.password
+      // Gated by users.set_password server-side, same as the password itself.
+      if (canSetPassword.value) payload.must_change_password = accountForm.value.mustChangePassword
     }
 
     const result = await emitWithAck<{ success: boolean; error?: string }>(event, payload)
@@ -695,7 +699,18 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                 :rows="10"
                 responsive-layout="scroll"
               >
-                <Column field="username" header="Username" sortable />
+                <Column field="username" header="Username" sortable>
+                  <template #body="{ data }">
+                    {{ data.username }}
+                    <Tag
+                      v-if="data.must_change_password"
+                      value="Password reset pending"
+                      severity="warn"
+                      class="ml-2"
+                      title="Must choose a new password on next login"
+                    />
+                  </template>
+                </Column>
                 <Column field="is_active" header="Active" style="width: 6rem">
                   <template #body="{ data }">
                     <ToggleSwitch
@@ -903,6 +918,11 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
             {{ isNewAccount ? 'Password' : 'New Password (leave blank to keep current)' }}
           </label>
           <Password id="user-password" v-model="accountForm.password" :feedback="false" toggle-mask />
+
+          <div class="must-change-password-row">
+            <Checkbox v-model="accountForm.mustChangePassword" input-id="user-must-change-password" binary />
+            <label for="user-must-change-password">Force user to reset password on next login</label>
+          </div>
         </template>
       </div>
 
@@ -1115,6 +1135,19 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 .dialog-form :deep(.p-password),
 .dialog-form :deep(input) {
   width: 100%;
+}
+
+.must-change-password-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.must-change-password-row label {
+  margin-top: 0;
+  font-weight: 400;
+  color: inherit;
 }
 
 .user-groups-row {

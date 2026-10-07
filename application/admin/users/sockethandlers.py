@@ -45,7 +45,7 @@ def register_admin_user_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:users:cts:create_user')
     @require_right('users.create')
     def handle_create_user(data):
-        """Create a new admin user. data: {username, password}."""
+        """Create a new admin user. data: {username, password, must_change_password?}."""
         username = str((data or {}).get('username', '')).strip()
         password = str((data or {}).get('password', ''))
 
@@ -60,7 +60,11 @@ def register_admin_user_handlers(socketio, app, db):
         if existing:
             return {'success': False, 'error': 'Username already exists'}
 
-        user = AdminUser(username=username, password_hash=hash_password(password))
+        user = AdminUser(
+            username=username,
+            password_hash=hash_password(password),
+            must_change_password=bool((data or {}).get('must_change_password')),
+        )
         db.session.add(user)
         db.session.commit()
 
@@ -70,9 +74,10 @@ def register_admin_user_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:users:cts:update_user')
     @admin_handler
     def handle_update_user(data):
-        """Update username and/or reset password. data: {id, username?, password?}.
+        """Update username and/or reset password. data: {id, username?, password?, must_change_password?}.
 
-        The two fields are gated by separate rights (users.edit / users.set_password),
+        The fields are gated by separate rights (users.edit for username,
+        users.set_password for password and must_change_password),
         so each requested field is checked independently and silently dropped if the
         caller lacks the right for that specific field — same pattern as
         media.rename/media.tag and device.rename/device.enable.
@@ -112,6 +117,15 @@ def register_admin_user_handlers(socketio, app, db):
             user.password_hash = hash_password(new_password)
             # Invalidate every JWT issued before this password change.
             user.token_version = (user.token_version or 0) + 1
+
+        must_change = (data or {}).get('must_change_password')
+        if must_change is not None and has_right(db, caller, 'users.set_password'):
+            must_change = bool(must_change)
+            if must_change and not user.must_change_password:
+                # Log the account out everywhere, so its next login (not some
+                # half-dead existing session) is what asks for the new password.
+                user.token_version = (user.token_version or 0) + 1
+            user.must_change_password = must_change
 
         db.session.commit()
         _emit_users()
