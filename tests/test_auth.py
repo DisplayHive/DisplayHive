@@ -14,8 +14,11 @@ from application.auth import (
     decode_token,
     ensure_bootstrap_admin,
     hash_password,
+    clear_failed_login,
+    is_login_rate_limited,
     is_rate_limited,
     record_failed_attempt,
+    record_failed_login,
     user_from_token,
     verify_password,
 )
@@ -99,6 +102,115 @@ def test_is_rate_limited_prunes_attempts_outside_window(monkeypatch):
     # longer count, so the key is not rate-limited anymore.
     monkeypatch.setattr(auth_module.time, 'time', lambda: now + auth_module._WINDOW_SECONDS + 1)
     assert is_rate_limited(key) is False
+
+
+@pytest.fixture()
+def clock(monkeypatch):
+    """A controllable time.time() for the rate limiter: `clock.now += 60`."""
+    import application.auth as auth_module
+
+    class _Clock:
+        now = 1_000_000.0
+
+    c = _Clock()
+    monkeypatch.setattr(auth_module.time, 'time', lambda: c.now)
+    return c
+
+
+def test_is_rate_limited_does_not_create_entries():
+    import application.auth as auth_module
+    assert is_rate_limited('ip:never-failed') is False
+    assert 'ip:never-failed' not in auth_module._failed_attempts
+
+
+def test_lockout_escalates_past_the_window_up_to_the_cap(clock):
+    """Each failure after the threshold doubles the lock, and that escalation
+    survives locks longer than the 15-minute window (up to the 1 h cap)."""
+    import application.auth as auth_module
+
+    key = 'ip:escalating'
+    for _ in range(5):
+        record_failed_attempt(key)
+    expected = [60, 120, 240, 480, 960, 1920, 3600, 3600]
+    for lock in expected:
+        clock.now += lock - 1
+        assert is_rate_limited(key) is True
+        clock.now += 1
+        assert is_rate_limited(key) is False
+        record_failed_attempt(key)
+    assert auth_module._failed_attempts[key].locked_until - clock.now == 3600
+
+
+def test_escalation_is_forgiven_after_a_quiet_window(clock):
+    import application.auth as auth_module
+
+    key = 'ip:forgiven'
+    for _ in range(5):
+        record_failed_attempt(key)
+    clock.now += 60 + auth_module._WINDOW_SECONDS
+    assert is_rate_limited(key) is False
+    assert key not in auth_module._failed_attempts
+    # A fresh start: four more failures are below the threshold again.
+    for _ in range(4):
+        record_failed_attempt(key)
+    assert is_rate_limited(key) is False
+
+
+def test_sweep_removes_expired_keys_nobody_asks_about_again(clock):
+    import application.auth as auth_module
+
+    for i in range(10):
+        record_failed_attempt(f'user:1.2.3.4:typo-{i}')
+    assert len(auth_module._failed_attempts) == 10
+    clock.now += auth_module._WINDOW_SECONDS + 1
+    is_rate_limited('user:5.6.7.8:someone-else')
+    assert auth_module._failed_attempts == {}
+
+
+def test_key_cap_evicts_unlocked_keys_but_never_locked_ones(clock, monkeypatch):
+    import application.auth as auth_module
+
+    monkeypatch.setattr(auth_module, '_MAX_TRACKED_KEYS', 3)
+    for _ in range(5):
+        record_failed_attempt('locked')
+    for i in range(5):
+        clock.now += 1
+        record_failed_attempt(f'single-{i}')
+    assert 'locked' in auth_module._failed_attempts
+    assert is_rate_limited('locked') is True
+    assert len(auth_module._failed_attempts) <= 4
+
+
+# --- Login rate limiting (per IP + username, and per IP) ------------------------
+
+
+def test_per_ip_limit_stops_spraying_across_usernames():
+    import application.auth as auth_module
+
+    for i in range(auth_module._IP_MAX_ATTEMPTS):
+        assert is_login_rate_limited('1.2.3.4', f'victim-{i}') is False
+        record_failed_login('1.2.3.4', f'victim-{i}')
+    # Every single username is still below its own threshold, but the IP is out.
+    assert is_login_rate_limited('1.2.3.4', 'yet-another-user') is True
+    assert is_login_rate_limited('5.6.7.8', 'yet-another-user') is False
+
+
+def test_per_account_limit_still_applies_below_the_ip_threshold():
+    for _ in range(5):
+        record_failed_login('1.2.3.4', 'Admin')
+    assert is_login_rate_limited('1.2.3.4', 'admin') is True
+    assert is_login_rate_limited('1.2.3.4', 'someone-else') is False
+
+
+def test_successful_login_keeps_the_ip_counter():
+    """Otherwise a valid account of the attacker's own could reset it."""
+    import application.auth as auth_module
+
+    for i in range(auth_module._IP_MAX_ATTEMPTS - 1):
+        record_failed_login('1.2.3.4', f'victim-{i}')
+    clear_failed_login('1.2.3.4', 'attackers-own-account')
+    record_failed_login('1.2.3.4', 'victim-last')
+    assert is_login_rate_limited('1.2.3.4', 'anyone') is True
 
 
 # --- JWT -----------------------------------------------------------------------

@@ -82,10 +82,12 @@ def reset_rate_limiter():
     """`application.auth._failed_attempts` is process-global mutable state
     (an in-memory login-rate-limiter dict) — clear it before and after every
     test so failures in one test can't affect another."""
-    from application.auth import _failed_attempts
-    _failed_attempts.clear()
+    import application.auth as auth_module
+    auth_module._failed_attempts.clear()
+    auth_module._last_sweep = 0.0
     yield
-    _failed_attempts.clear()
+    auth_module._failed_attempts.clear()
+    auth_module._last_sweep = 0.0
 
 
 @pytest.fixture()

@@ -17,9 +17,9 @@ from application.auth import (
     create_token,
     user_from_token,
     decode_token,
-    is_rate_limited,
-    record_failed_attempt,
-    clear_failed_attempts,
+    is_login_rate_limited,
+    record_failed_login,
+    clear_failed_login,
 )
 
 
@@ -87,8 +87,7 @@ def register_auth_routes(app, db):
         username = str(data.get('username', '')).strip()
         password = str(data.get('password', ''))
 
-        rate_key = f'{request.remote_addr}:{username.lower()}'
-        if is_rate_limited(rate_key):
+        if is_login_rate_limited(request.remote_addr, username):
             return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
 
         if not username or not password:
@@ -99,14 +98,14 @@ def register_auth_routes(app, db):
         ).scalar_one_or_none()
 
         if not user or not verify_password(password, user.password_hash):
-            record_failed_attempt(rate_key)
+            record_failed_login(request.remote_addr, username)
             return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
         if not user.is_active:
-            record_failed_attempt(rate_key)
+            record_failed_login(request.remote_addr, username)
             return jsonify({'success': False, 'error': 'This account has been deactivated'}), 403
 
-        clear_failed_attempts(rate_key)
+        clear_failed_login(request.remote_addr, username)
         user.last_login_at = datetime.now(timezone.utc)
         db.session.add(AdminUserLogin(
             user_id=user.id,
@@ -188,13 +187,12 @@ def register_auth_routes(app, db):
 
         # Same limiter as the login route: the current-password check is
         # otherwise a brute-force oracle for anyone holding a stolen token.
-        rate_key = f'{request.remote_addr}:{user.username.lower()}'
-        if is_rate_limited(rate_key):
+        if is_login_rate_limited(request.remote_addr, user.username):
             return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
         if not verify_password(current_password, user.password_hash):
-            record_failed_attempt(rate_key)
+            record_failed_login(request.remote_addr, user.username)
             return jsonify({'success': False, 'error': 'Current password is incorrect'}), 400
-        clear_failed_attempts(rate_key)
+        clear_failed_login(request.remote_addr, user.username)
 
         if len(new_password) < 8:
             return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400

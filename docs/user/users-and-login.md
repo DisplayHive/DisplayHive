@@ -13,8 +13,21 @@ Check your server logs after the first deploy to find this initial
 password, log in at `/admin/`, and set a real password for day-to-day use.
 
 Sessions use a JSON Web Token, valid for 12 hours; you'll be asked to log
-in again once it expires. Repeated failed login attempts from the same
-IP/username are rate-limited and temporarily locked out.
+in again once it expires.
+
+Failed logins are rate-limited in two ways, both counted over 15 minutes:
+
+- **5 failures for the same username from the same IP** lock that
+  combination out.
+- **20 failures from the same IP, across any usernames,** lock that whole IP
+  out (adjustable via `LOGIN_RATE_LIMIT_PER_IP`). This stops one client from
+  trying a common password against many accounts.
+
+A lockout starts at 1 minute and doubles with every further failed attempt,
+up to 1 hour. It is forgiven after 15 quiet minutes following the last
+lockout. A successful login resets only the username counter, not the IP
+counter. Wrong current passwords on the forced password-change screen count
+the same way.
 
 ## Managing accounts
 
