@@ -13,8 +13,8 @@ function getViewport(): { width: number; height: number } {
 
 function updateDebugPanel(width: number, height: number): void {
   try {
-    window.debugPanel?.push("Screen Info", "Viewport", "Width", `${width}px`);
-    window.debugPanel?.push("Screen Info", "Viewport", "Height", `${height}px`);
+    window.debugPanel?.push?.("Screen Info", "Viewport", "Width", `${width}px`);
+    window.debugPanel?.push?.("Screen Info", "Viewport", "Height", `${height}px`);
   } catch {
     /* intentional: debugPanel may not be ready */
   }

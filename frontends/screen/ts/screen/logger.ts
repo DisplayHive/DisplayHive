@@ -2,17 +2,17 @@
  * Shared logging utilities used by both screen and admin bundles.
  */
 
-import type { LogSeverity } from "./types";
+import type { LogSeverity, SocketEmitter } from "./types";
 
 let loggerConnected = false;
-let _socketEmitter: ((event: string, payload?: any) => void) | null = null;
+let _socketEmitter: SocketEmitter | null = null;
 
 /**
  * Inject a socket emitter so the logger does not access window.socket directly.
  * Call this once during initialisation (e.g. alongside setLoggerConnected).
  */
 export function setLoggerSocketEmitter(
-  emitter: ((event: string, payload?: any) => void) | null,
+  emitter: SocketEmitter | null,
 ): void {
   _socketEmitter = emitter;
 }
@@ -48,12 +48,12 @@ export function log(
   }
 
   // Always log locally
-  console.log(...(actualArgs as any));
+  console.log(...actualArgs);
 
   // Forward to remote logger if connected
   try {
     if (loggerConnected && _socketEmitter) {
-      const assigned = (window as any).assignedScreen || "unnamed";
+      const assigned = window.assignedScreen || "unnamed";
       const logPayload = {
         screen: assigned,
         severity,

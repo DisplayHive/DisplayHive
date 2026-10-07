@@ -61,7 +61,7 @@ function findNextActiveIndex(fromId: number | null): number | null {
 
 function pushDebugPlaylist(): void {
   try {
-    (window as any).debugPanel?.pushPlaylist?.(
+    window.debugPanel?.pushPlaylist?.(
       "scenes",
       scenes.map((s) => ({ id: s.id, title: s.title, duration: s.duration })),
       currentSceneId,

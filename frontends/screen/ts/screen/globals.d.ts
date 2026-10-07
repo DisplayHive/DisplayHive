@@ -1,4 +1,11 @@
-import type { Auth, DeviceConfig } from "./types";
+import type {
+  Auth,
+  DebugPanel,
+  DeviceConfig,
+  QRCodeConstructor,
+  ScreenSocket,
+  SocketOptions,
+} from "./types";
 
 declare global {
   const __GIT_COMMIT__: string;
@@ -15,39 +22,30 @@ declare global {
     readonly env: ImportMetaEnv;
   }
 
+  /** Every global the screen client reads or writes on `window`. */
   interface Window {
     auth?: Auth;
-    socket?: SocketIOClient.Socket | any;
+    socket?: ScreenSocket | null;
+    /** Socket.IO client factory (assets/socket.io.min.js). */
+    io?: (opts?: SocketOptions) => ScreenSocket;
     initializeSocketConnection?: () => void;
     initializeAuthentication?: () => void;
+    startAdoptionFlow?: () => void;
     deviceKey?: string | null;
+    /** Older spelling some deployments' pages still set. */
+    devicekey?: string | null;
     adoptionToken?: string | null;
     assignedScreen?: string;
-    io?: any;
     _lastDeviceConfig?: DeviceConfig | null;
-    __impersonate?: boolean;
+    /** Set by auth_helper.ts for URL-parameter impersonation (may arrive as "true"). */
+    __impersonate?: boolean | string;
     __displayhive_ping_interval?: ReturnType<typeof setInterval> | null;
-    debugPanel?: {
-      push: (
-        section: string,
-        group: string,
-        key: string,
-        value: string,
-      ) => void;
-      markUpdContent?: () => void;
-    };
+    debugPanel?: DebugPanel;
+    QRCode?: QRCodeConstructor;
   }
 
-  // QRCode.js global (loaded via CDN in templates)
-  declare const QRCode: {
-    CorrectLevel: {
-      L: number;
-      M: number;
-      Q: number;
-      H: number;
-    };
-    new (el: HTMLElement | null, opts: any): any;
-  };
+  /** QRCode.js global (templates/index.html). */
+  const QRCode: QRCodeConstructor;
 }
 
 export {};

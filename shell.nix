@@ -50,13 +50,15 @@ pkgs.mkShell {
     # interpreter changes, e.g. after a nixpkgs update.
     export LD_LIBRARY_PATH="${wheelLibs}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export UV_PYTHON_DOWNLOADS=never
-    venv="$PWD/.venv"
+    # From the repository root, also when the shell is entered in a subfolder.
+    dh_root="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+    venv="$dh_root/.venv"
     if [ "$(cat "$venv/.interpreter" 2>/dev/null)" != "${python}" ]; then
       echo "Creating .venv with ${python.name}..."
       rm -rf "$venv"
       uv venv --quiet --python "${python}/bin/python3" "$venv" && echo "${python}" > "$venv/.interpreter"
     fi
-    uv pip sync --quiet --python "$venv/bin/python" requirements-dev.txt \
+    uv pip sync --quiet --python "$venv/bin/python" "$dh_root/requirements-dev.txt" \
       || echo "uv pip sync failed — Python packages may be out of date (offline?)"
     export VIRTUAL_ENV="$venv"
     export PATH="$venv/bin:$PATH"

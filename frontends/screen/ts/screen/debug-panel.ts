@@ -123,14 +123,14 @@ export function initDebugPanel(): void {
       startBtn.textContent = "▶ Start";
       startBtn.style.display = stopped ? "" : "none";
       startBtn.addEventListener("click", () => {
-        try { (window as any).debugPanel?.resumeSceneRotation?.(); } catch (e) {}
+        try { window.debugPanel?.resumeSceneRotation?.(); } catch (e) {}
       });
       const stopBtn = document.createElement("button");
       stopBtn.className = "debug-btn debug-btn-stop";
       stopBtn.textContent = "■ Stop";
       stopBtn.style.display = stopped ? "none" : "";
       stopBtn.addEventListener("click", () => {
-        try { (window as any).debugPanel?.stopSceneRotation?.(); } catch (e) {}
+        try { window.debugPanel?.stopSceneRotation?.(); } catch (e) {}
       });
       controls.appendChild(startBtn);
       controls.appendChild(stopBtn);
@@ -160,7 +160,7 @@ export function initDebugPanel(): void {
         row.title = "Click to jump to this item";
         row.addEventListener("click", () => {
           try {
-            (window as any).debugPanel?.jumpToScene?.(item.id);
+            window.debugPanel?.jumpToScene?.(item.id);
           } catch (e) {}
         });
         list.appendChild(row);
@@ -207,13 +207,8 @@ export function initDebugPanel(): void {
     }
 
     try {
-      if ((window as any).debugPanel) {
-        (window as any).debugPanel.push = push;
-        (window as any).debugPanel.pushPlaylist = pushPlaylist;
-        (window as any).debugPanel.pushLayout = pushLayout;
-      } else {
-        (window as any).debugPanel = { push, pushPlaylist, pushLayout };
-      }
+      // index.ts may already have put the rotation controls there.
+      window.debugPanel = { ...window.debugPanel, push, pushPlaylist, pushLayout };
     } catch (e) {
       /* intentional: window may be unavailable in SSR/test contexts */
     }
@@ -264,7 +259,7 @@ export function initDebugPanel(): void {
       _lastUpdContentTime = Date.now();
     };
     try {
-      (window as any).debugPanel.markUpdContent = markUpdContent;
+      window.debugPanel = { ...window.debugPanel, markUpdContent };
     } catch (e) {
       /* intentional */
     }

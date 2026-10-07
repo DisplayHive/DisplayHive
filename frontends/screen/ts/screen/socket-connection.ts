@@ -5,63 +5,27 @@
 import { setupSocketHandlers } from "./socket-handlers";
 import { log } from "./logger";
 import { getDeviceKey, getAdoptionToken } from "./storage";
-import type { Auth } from "./types";
-
-/** Minimal subset of the Socket-like object used by the app. */
-export interface SocketLike {
-  /** Disconnect the socket. */
-  disconnect?: () => void;
-  /** Register an event handler. */
-  on?: (event: string, handler: (...args: unknown[]) => void) => void;
-  /** Emit an event to the server. */
-  emit?: (event: string, ...args: unknown[]) => void;
-  [key: string]: unknown;
-}
-
-/** Options passed to the socket/io initializer. */
-export interface SocketOptions {
-  reconnection?: boolean;
-  reconnectionAttempts?: number;
-  reconnectionDelay?: number;
-  reconnectionDelayMax?: number;
-  timeout?: number;
-  query?: Record<string, string>;
-  auth?: Record<string, string>;
-  transportOptions?: {
-    polling?: {
-      extraHeaders?: Record<string, string>;
-    };
-  };
-  [key: string]: unknown;
-}
-
-/** Extension to the global window object used by this module. */
-export interface WindowWithSocket extends Window {
-  io?: (opts?: SocketOptions) => SocketLike;
-  socket?: SocketLike | null;
-  auth?: Auth;
-  deviceKey?: string | null;
-}
+import type { SocketOptions } from "./types";
 
 /**
  * Resolve the connection keys from window globals and localStorage.
  * Returns the first deviceKey found and (if no deviceKey) an adoptionKey.
  */
-function resolveConnectionKeys(wnd: WindowWithSocket): {
+function resolveConnectionKeys(wnd: Window): {
   deviceKey: string | null;
   adoptionKey: string | null;
 } {
   let deviceKey: string | null = null;
   if (typeof wnd.deviceKey !== "undefined")
     deviceKey = String(wnd.deviceKey || "") || null;
-  if (!deviceKey && typeof (wnd as any).devicekey !== "undefined")
-    deviceKey = String((wnd as any).devicekey || "") || null;
+  if (!deviceKey && typeof wnd.devicekey !== "undefined")
+    deviceKey = String(wnd.devicekey || "") || null;
   if (!deviceKey) deviceKey = getDeviceKey();
 
   let adoptionKey: string | null = null;
   if (!deviceKey) {
-    if (typeof (wnd as any).adoptionToken !== "undefined")
-      adoptionKey = String((wnd as any).adoptionToken || "") || null;
+    if (typeof wnd.adoptionToken !== "undefined")
+      adoptionKey = String(wnd.adoptionToken || "") || null;
     if (!adoptionKey) adoptionKey = getAdoptionToken();
   }
 
@@ -71,11 +35,11 @@ function resolveConnectionKeys(wnd: WindowWithSocket): {
 /**
  * Detect whether this session is a transient URL-param impersonation.
  */
-function detectImpersonation(wnd: WindowWithSocket): boolean {
+function detectImpersonation(wnd: Window): boolean {
   try {
     return !!(
-      (wnd as any).__impersonate === true ||
-      String((wnd as any).__impersonate) === "true"
+      wnd.__impersonate === true ||
+      String(wnd.__impersonate) === "true"
     );
   } catch {
     return false;
@@ -97,24 +61,24 @@ function buildSocketOptions(
   };
 
   if (deviceKey) {
-    base.query = { devicekey: deviceKey };
-    base.auth = { devicekey: deviceKey };
-    base.transportOptions = {
-      polling: { extraHeaders: { devicekey: deviceKey } },
-    };
+    const query: Record<string, string> = { devicekey: deviceKey };
+    const auth: Record<string, string> = { devicekey: deviceKey };
+    const extraHeaders: Record<string, string> = { devicekey: deviceKey };
     if (isImpersonation) {
-      (base.query as any).impersonate = "true";
-      (base.auth as any).impersonate = "true";
-      (base.transportOptions!.polling!.extraHeaders as any).impersonate = "true";
+      query.impersonate = "true";
+      auth.impersonate = "true";
+      extraHeaders.impersonate = "true";
     }
+    base.query = query;
+    base.auth = auth;
+    base.transportOptions = { polling: { extraHeaders } };
     // Merge any URL query params so the server sees them in request.args
     try {
       const search = window.location.search || "";
       if (search.length > 1) {
         const usp = new URLSearchParams(search);
-        const q = base.query as Record<string, string>;
         usp.forEach((value, key) => {
-          if (typeof q[key] === "undefined") q[key] = value;
+          if (typeof query[key] === "undefined") query[key] = value;
         });
       }
     } catch {
@@ -141,7 +105,8 @@ function buildSocketOptions(
 export function initializeSocketConnection(): void {
   log("debug", "initializeSocketConnection", "called");
 
-  const wnd = window as unknown as WindowWithSocket;
+  // Plain Window (not `Window & typeof globalThis`): only the globals this app declares.
+  const wnd: Window = window;
 
   const { deviceKey, adoptionKey } = resolveConnectionKeys(wnd);
   const isImpersonation = detectImpersonation(wnd);
@@ -207,7 +172,7 @@ export function initializeSocketConnection(): void {
   // error on pages that don't include the `<script src="...socket.io...">`
   // tag.
   function createSocketAndSetup() {
-    const created: SocketLike | null = wnd.io ? wnd.io(socketOptions) : null;
+    const created = wnd.io ? wnd.io(socketOptions) : null;
     if (!created) {
       log(
         "error",
@@ -224,51 +189,18 @@ export function initializeSocketConnection(): void {
     );
     setupSocketHandlers(created);
 
-    // Global debug hook: log every incoming socket event and dispatch DOM events
+    // Global debug hook: re-dispatch every incoming socket event as a DOM
+    // event. (onAny exists in the pinned Socket.IO v4 client; the old
+    // onevent monkey-patch for pre-v3 clients is gone.)
     try {
-      const s: any = created as any;
-      if (s && typeof s.onAny === "function") {
-        s.onAny((event: string, ...args: any[]) => {
-          try {
-            window.dispatchEvent(
-              new CustomEvent("socket:any", { detail: { event, args } }),
-            );
-            try {
-              window.dispatchEvent(
-                new CustomEvent(`socket:${event}`, { detail: args }),
-              );
-            } catch (e) {}
-          } catch (e) {
-            // ignore
-          }
-        });
-      } else if (s) {
-        // Fallback for older socket.io clients: monkey-patch `onevent`
-        if (!s.__patched_onevent) {
-          const originalOnevent = s.onevent;
-          s.onevent = function (packet: any) {
-            try {
-              originalOnevent && originalOnevent.call(this, packet);
-            } catch (e) {}
-            try {
-              const args = packet && packet.data ? packet.data : [];
-              const evName = args && args.length ? args[0] : "(unknown)";
-              const evArgs = args && args.length ? args.slice(1) : [];
-              window.dispatchEvent(
-                new CustomEvent("socket:any", {
-                  detail: { event: evName, args: evArgs },
-                }),
-              );
-              try {
-                window.dispatchEvent(
-                  new CustomEvent(`socket:${evName}`, { detail: evArgs }),
-                );
-              } catch (e) {}
-            } catch (e) {}
-          };
-          s.__patched_onevent = true;
+      created.onAny((event: string, ...args: unknown[]) => {
+        try {
+          window.dispatchEvent(new CustomEvent("socket:any", { detail: { event, args } }));
+          window.dispatchEvent(new CustomEvent(`socket:${event}`, { detail: args }));
+        } catch {
+          // ignore
         }
-      }
+      });
     } catch (e) {
       // Ensure instrumentation never prevents normal socket setup
       log(

@@ -27,7 +27,7 @@ export function initializeAuthentication(adopt?: InitOptions) {
         "[Authentication] Dynamic device key (ddk) found in URL fragment - using it for this session only",
       );
       deviceKey = ddk;
-      if (typeof window !== "undefined") (window as any).deviceKey = deviceKey;
+      if (typeof window !== "undefined") window.deviceKey = deviceKey;
     }
   } catch (e) {
     console.warn("[Authentication] Error reading dynamic device key", e);
@@ -46,8 +46,8 @@ export function initializeAuthentication(adopt?: InitOptions) {
           "[Authentication] Impersonation parameters found in URL - using URL devicekey for this session",
         );
         deviceKey = String(urlKey);
-        (window as any).deviceKey = deviceKey;
-        (window as any).__impersonate = true;
+        window.deviceKey = deviceKey;
+        window.__impersonate = true;
       }
     }
   } catch (e) {
@@ -60,7 +60,7 @@ export function initializeAuthentication(adopt?: InitOptions) {
   // If no URL-provided deviceKey, fall back to localStorage-stored deviceKey
   if (!deviceKey) {
     deviceKey = getDeviceKey();
-    if (typeof window !== "undefined") (window as any).deviceKey = deviceKey;
+    if (typeof window !== "undefined") window.deviceKey = deviceKey;
   }
 
   if (deviceKey) {
@@ -70,9 +70,9 @@ export function initializeAuthentication(adopt?: InitOptions) {
     );
     if (
       typeof window !== "undefined" &&
-      typeof (window as any).initializeSocketConnection === "function"
+      typeof window.initializeSocketConnection === "function"
     ) {
-      (window as any).initializeSocketConnection();
+      window.initializeSocketConnection();
     } else {
       console.warn(
         "[Authentication] initializeSocketConnection() is not available.",
@@ -101,9 +101,9 @@ export function initializeAuthentication(adopt?: InitOptions) {
       // Trigger socket connection with adoptionkey
       if (
         typeof window !== "undefined" &&
-        typeof (window as any).initializeSocketConnection === "function"
+        typeof window.initializeSocketConnection === "function"
       ) {
-        (window as any).initializeSocketConnection();
+        window.initializeSocketConnection();
       }
     } else if (adopt?.startAdoptionFlow) {
       // Start new adoption flow (clears localStorage, generates token, shows QR, connects socket)

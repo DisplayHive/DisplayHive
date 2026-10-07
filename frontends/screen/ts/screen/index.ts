@@ -33,17 +33,19 @@ export function screenInit(): void {
 
   // Expose scene rotation controls so debug-panel buttons can call them
   try {
-    (window as any).debugPanel = (window as any).debugPanel || {};
-    (window as any).debugPanel.jumpToScene = jumpToScene;
-    (window as any).debugPanel.stopSceneRotation = stopSceneRotation;
-    (window as any).debugPanel.resumeSceneRotation = resumeSceneRotation;
+    window.debugPanel = {
+      ...window.debugPanel,
+      jumpToScene,
+      stopSceneRotation,
+      resumeSceneRotation,
+    };
   } catch (e) { /* intentional */ }
 
   // Expose functions on window BEFORE calling initializeAuthentication
   if (typeof window !== "undefined") {
-    (window as any).initializeSocketConnection =
-      (window as any).initializeSocketConnection || initializeSocketConnection;
-    (window as any).startAdoptionFlow = startAdoptionFlow;
+    window.initializeSocketConnection =
+      window.initializeSocketConnection || initializeSocketConnection;
+    window.startAdoptionFlow = startAdoptionFlow;
   }
 
   // NOW initialize authentication - it can safely call window.initializeSocketConnection

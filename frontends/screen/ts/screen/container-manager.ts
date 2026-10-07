@@ -9,7 +9,7 @@
  * scene never touches the Design markup).
  */
 
-import type { Scene } from "./types.js";
+import type { Scene, SocketEmitter } from "./types.js";
 import { tickNow } from "./clock.js";
 import { tickCountdown } from "./countdown.js";
 import { resolveIcons } from "./icon-resolver.js";
@@ -21,17 +21,13 @@ import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
 // Optional emitter injected by socket setup so this module does not
 // directly depend on `window.socket`. Call `setSocketEmitter` with
 // a function `(event, payload) => void` (for example `socket.emit`).
-let socketEmitter: ((event: string, payload?: any) => void) | null = null;
+let socketEmitter: SocketEmitter | null = null;
 
-export function setSocketEmitter(
-  emitter: (event: string, payload?: any) => void,
-): void {
+export function setSocketEmitter(emitter: SocketEmitter): void {
   socketEmitter = emitter;
 }
 
-export function getSocketEmitter():
-  | ((event: string, payload?: any) => void)
-  | null {
+export function getSocketEmitter(): SocketEmitter | null {
   return socketEmitter;
 }
 
@@ -163,7 +159,7 @@ export function renderScene(scene: Scene): void {
   }
 
   try {
-    (window as any).debugPanel?.pushLayout?.(
+    window.debugPanel?.pushLayout?.(
       scene.title || `Scene ${scene.id}`,
       Object.entries(scene.containers).map(([id, c]) => ({
         id,

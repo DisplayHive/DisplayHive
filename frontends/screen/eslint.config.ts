@@ -18,7 +18,14 @@ export default tseslint.config(
         sourceType: 'module',
       },
     },
+    plugins: {
+      '@typescript-eslint': tseslint.plugin,
+    },
     rules: {
+      // The screen client is any-free: socket payloads, window globals and
+      // the Socket.IO client are typed in ts/screen/types.ts / globals.d.ts.
+      // Use `unknown` and narrow where a shape really isn't known.
+      '@typescript-eslint/no-explicit-any': 'error',
       'no-restricted-syntax': [
         'error',
         {

@@ -12,9 +12,9 @@ import {
 function generateUUID(): string {
   if (
     typeof crypto !== "undefined" &&
-    typeof (crypto as any).randomUUID === "function"
+    typeof crypto.randomUUID === "function"
   ) {
-    return (crypto as any).randomUUID();
+    return crypto.randomUUID();
   }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
     const r = (Math.random() * 16) | 0;
@@ -103,19 +103,18 @@ export function generateQRCode(text: string): void {
 
   const tryGenerate = () => {
     try {
-      if (typeof (window as any).QRCode === "undefined") {
+      if (typeof window.QRCode === "undefined") {
         setTimeout(tryGenerate, 100); // wait for CDN script to load
         return;
       }
 
-      // @ts-ignore - QRCode is a global from QRCode.js
       new QRCode(qrContainer, {
         text,
         width: 300,
         height: 300,
         colorDark: "#000000",
         colorLight: "#ffffff",
-        correctLevel: (QRCode as any).CorrectLevel.H,
+        correctLevel: QRCode.CorrectLevel.H,
       });
     } catch (e) {
       console.error("[Adoption] generateQRCode error", e);
@@ -155,14 +154,14 @@ export function startAdoptionFlow(): void {
 
   const token = generateUUID();
   setAdoptionToken(token);
-  (window as any).adoptionToken = token;
+  window.adoptionToken = token;
   generateQRCode(token);
   showAdoptionOverlay();
 
   // initializeSocketConnection reads the adoption token from storage and
   // passes it in the Socket.IO handshake query.
-  if (typeof (window as any).initializeSocketConnection === "function") {
-    (window as any).initializeSocketConnection();
+  if (typeof window.initializeSocketConnection === "function") {
+    window.initializeSocketConnection();
   } else {
     console.warn("[Adoption] initializeSocketConnection() is not available.");
   }

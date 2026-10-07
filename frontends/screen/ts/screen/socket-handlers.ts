@@ -17,10 +17,17 @@
 
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
 import type {
-  SocketCommand,
-  UpdDeviceConfigMessage,
+  AdoptionApprovedMessage,
+  ConnectionRejectedMessage,
+  ContentUpdatedMessage,
   DeviceConfig,
   Scene,
+  ScreenSocket,
+  ServerTimeMessage,
+  SocketCommand,
+  SocketEmitter,
+  UpdContentMessage,
+  UpdDeviceConfigMessage,
 } from "./types.js";
 import { setSocketEmitter } from "./container-manager.js";
 import { startSceneRotation, patchCurrentScene } from "./content-display.js";
@@ -53,8 +60,8 @@ function hideDeactivationOverlay(): void {
 // ---------------------------------------------------------------------------
 
 /** Schedule a manual socket reconnect after `delayMs` ms (default 20 s). */
-function scheduleReconnect(socket: any, delayMs = 20_000): void {
-  setTimeout(() => socket?.connect?.(), delayMs);
+function scheduleReconnect(socket: ScreenSocket, delayMs = 20_000): void {
+  setTimeout(() => socket.connect(), delayMs);
 }
 
 /** Clear the device ping interval if one is running. */
@@ -64,7 +71,7 @@ function stopPingInterval(): void {
 }
 
 /** Send an immediate ping then repeat every 30 s. Clears any existing interval first. */
-function startPingInterval(socket: any): void {
+function startPingInterval(socket: ScreenSocket): void {
   stopPingInterval();
   socket.emit("displayhive:devices:cts:ping", {});
   window.__displayhive_ping_interval = setInterval(
@@ -80,7 +87,7 @@ function startPingInterval(socket: any): void {
  * preview is a quick one-off look at one item's rendered output, not a real
  * position within a Layout, so container placement doesn't apply here.
  */
-function handlePreviewMode(socket: any): void {
+function handlePreviewMode(socket: ScreenSocket): void {
   const params = new URLSearchParams(window.location.search);
   if (params.get("preview") !== "true") return;
   const previewContentId = parseInt(params.get("content_id") || "", 10);
@@ -91,7 +98,7 @@ function handlePreviewMode(socket: any): void {
 }
 
 /** Start the device ping on connect, unless this is an impersonation session. */
-function handlePingOnConnect(socket: any): void {
+function handlePingOnConnect(socket: ScreenSocket): void {
   if (window.__impersonate === true || !window.deviceKey) return;
   startPingInterval(socket);
 }
@@ -119,7 +126,7 @@ function applyScreenName(cfg: DeviceConfig, prev: DeviceConfig | null): void {
   window.assignedScreen = newName;
   const el = document.getElementById("debug-screen-name");
   if (el) el.textContent = newName;
-  window.debugPanel?.push("Screen Info", "Screen", "Name", newName);
+  window.debugPanel?.push?.("Screen Info", "Screen", "Name", newName);
   log("info", "applyScreenName", "Assigned screen name:", newName);
 }
 
@@ -132,11 +139,11 @@ function applyGlowState(cfg: DeviceConfig, prev: DeviceConfig | null): void {
     document.body.style.border = "10px solid #00ff00";
     document.body.style.boxShadow =
       "0 0 30px 10px rgba(0, 255, 0, 0.8), inset 0 0 30px 10px rgba(0, 255, 0, 0.3)";
-    (document.body.style as any).boxSizing = "border-box";
+    document.body.style.boxSizing = "border-box";
   } else {
     document.body.style.border = "";
     document.body.style.boxShadow = "";
-    (document.body.style as any).boxSizing = "";
+    document.body.style.boxSizing = "";
   }
 }
 
@@ -150,7 +157,12 @@ type ConnectErrorKind = "device_inactive" | "invalid_key" | "refused" | "unknown
  * so exact match on message is both sufficient and precise.
  */
 function classifyConnectError(error: unknown): ConnectErrorKind {
-  const msg = String((error as any)?.message ?? error ?? "").toLowerCase();
+  // Socket.IO passes an Error; also accept any object carrying a `message`.
+  const raw =
+    typeof error === "object" && error !== null && "message" in error
+      ? (error as { message: unknown }).message
+      : error;
+  const msg = String(raw ?? "").toLowerCase();
   if (msg === "invalid_key") return "invalid_key";
   if (msg === "device_inactive" || msg.includes("deactivated") || msg.includes("device inactive")) return "device_inactive";
   if (msg.includes("unauthor") || msg.includes("refus")) return "refused";
@@ -162,12 +174,12 @@ function classifyConnectError(error: unknown): ConnectErrorKind {
  * Call once after the socket is created; the socket instance is closed over
  * by every inner handler so no globals are needed.
  */
-export function setupSocketHandlers(socket: any): void {
+export function setupSocketHandlers(socket: ScreenSocket): void {
   log("debug", "setupSocketHandlers", "Initializing socket event handlers");
 
   // Share a single safe-emit wrapper with both container-manager and logger
   // so neither module needs a direct reference to the socket.
-  const safeEmit = (event: string, payload?: any): void => {
+  const safeEmit: SocketEmitter = (event, payload) => {
     try { socket.emit(event, payload); } catch { /* swallow emit errors */ }
   };
   setSocketEmitter(safeEmit);
@@ -185,7 +197,7 @@ export function setupSocketHandlers(socket: any): void {
   });
 
   // Handle adoption approval from server (during adoption flow)
-  socket.on("displayhive:devices:stc:adoption_approved", (data: any) => {
+  socket.on("displayhive:devices:stc:adoption_approved", (data: AdoptionApprovedMessage) => {
     log("info", "socket.adoption_approved", "Server approved adoption", data);
     const devicekey = data?.devicekey;
     if (!devicekey) return;
@@ -203,14 +215,14 @@ export function setupSocketHandlers(socket: any): void {
   });
 
   // Successful authentication means the device is active — clear deactivation state.
-  socket.on("displayhive:devices:stc:device_authenticated", (_data: any) => {
+  socket.on("displayhive:devices:stc:device_authenticated", () => {
     _isDeactivated = false;
     hideDeactivationOverlay();
     emitCurrentViewport();
   });
 
   // Explicit rejection from server (critical for polling transports where connect_error may not fire).
-  socket.on("displayhive:devices:stc:connection_rejected", (data: any) => {
+  socket.on("displayhive:devices:stc:connection_rejected", (data: ConnectionRejectedMessage) => {
     const reason = String(data?.reason || "").toLowerCase();
     const message = String(data?.message || "").toLowerCase();
     if (!reason.includes("device_inactive") && !message.includes("deactiv")) return;
@@ -222,7 +234,7 @@ export function setupSocketHandlers(socket: any): void {
     scheduleReconnect(socket);
   });
 
-  socket.on("connect_error", (error: any) => {
+  socket.on("connect_error", (error: Error) => {
     log("error", "socket.connect_error", "Connection error: " + error);
     const kind = classifyConnectError(error);
 
@@ -333,7 +345,7 @@ export function setupSocketHandlers(socket: any): void {
 
   // Listen for playlist response (IDs and durations only)
   // Unified full content snapshot pushed by server after deviceconfig
-  socket.on("upd_content", (msg: any, cb?: () => void) => {
+  socket.on("upd_content", (msg: UpdContentMessage, cb?: () => void) => {
     try {
       try {
         if (
@@ -357,7 +369,7 @@ export function setupSocketHandlers(socket: any): void {
       // #design-background in index.html, kept separate from
       // #scene-containers so re-rendering scenes never touches it).
       if (design) {
-        window.debugPanel?.push(
+        window.debugPanel?.push?.(
           "Screen Info",
           "Design",
           "Name",
@@ -410,16 +422,16 @@ export function setupSocketHandlers(socket: any): void {
   });
 
   // Server-time resync response (triggered every 30 min by clock.ts)
-  socket.on("displayhive:screen:stc:server_time", (msg: any) => {
+  socket.on("displayhive:screen:stc:server_time", (msg: ServerTimeMessage) => {
     if (msg?.server_time) applyServerTime(String(msg.server_time));
   });
 
   // Receive freshly re-rendered HTML for a scene's containers (e.g. a random
   // image refresh). If that scene is currently showing, patch its container
   // elements in place — the rotation timer keeps running unaffected.
-  socket.on("displayhive:screen:stc:content_updated", (msg: any) => {
+  socket.on("displayhive:screen:stc:content_updated", (msg: ContentUpdatedMessage) => {
     log("debug", "socket.on(content_updated)", "Received content_updated", msg);
-    const id: number = parseInt(msg?.id, 10);
+    const id: number = parseInt(String(msg?.id ?? ""), 10);
     const containers: Record<string, string> | undefined = msg?.containers;
     if (!id || !containers) return;
     for (const html of Object.values(containers)) {
