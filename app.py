@@ -1,5 +1,42 @@
-import eventlet
-eventlet.monkey_patch()
+import sys
+
+
+def _loaded_for_flask_cli_command() -> bool:
+    """True when the `flask` CLI imports this module to run a command other
+    than `flask run` — e.g. `flask dh check-config` (application/cli.py).
+
+    This module has no app factory: importing it *is* starting the server
+    (startup DB writes, background tasks). A maintenance command often runs
+    next to a live instance, where those would do real damage — resetting
+    every device to offline, say — so they're skipped then. Flask's CLI
+    imports the app while resolving the command, inside a click context;
+    gunicorn, `python app.py` and pytest import it without one.
+    """
+    # Only look at click if it's already loaded (the `flask` command loads
+    # it); importing anything here, ahead of eventlet's monkey-patching,
+    # would defeat the patching for the server.
+    click = sys.modules.get('click')
+    if click is None or click.get_current_context(silent=True) is None:
+        return False
+    args, command = sys.argv[1:], None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ('--app', '-A', '--env-file', '-e'):
+            i += 2
+            continue
+        if not arg.startswith('-'):
+            command = arg
+            break
+        i += 1
+    return command != 'run'
+
+
+CLI_MODE = _loaded_for_flask_cli_command()
+
+if not CLI_MODE:
+    import eventlet
+    eventlet.monkey_patch()
 
 from application import media_renditions
 from application import paths as data_paths
@@ -13,8 +50,9 @@ from flask import Flask, render_template, request, redirect, send_from_directory
 # `logging.getLogger(__name__)`; INFO-level operational messages (startup,
 # content pushes, etc.) go to stdout as the old print() calls did, while the
 # level can be tuned via the LOG_LEVEL environment variable.
+# A `flask dh` command defaults to WARNING so its own output isn't buried.
 logging.basicConfig(
-    level=getattr(logging, os.environ.get('LOG_LEVEL', 'INFO').upper(), logging.INFO),
+    level=getattr(logging, os.environ.get('LOG_LEVEL', 'WARNING' if CLI_MODE else 'INFO').upper(), logging.INFO),
     format='%(asctime)s %(levelname)s %(name)s: %(message)s',
 )
 logger = logging.getLogger(__name__)
@@ -38,10 +76,15 @@ app = Flask(__name__,
             static_folder='static',
             static_url_path='/static',
             template_folder=os.path.join(os.path.dirname(__file__), 'frontends', 'screen', 'templates'))
+
 # Every on-disk location (DATA_DIR: media, previews, renditions, import
 # staging, the SQLite file) comes from application/paths.py — see there.
 DATA_PATHS = data_paths.resolve()
-data_paths.ensure_dirs(DATA_PATHS)
+if not CLI_MODE:
+    # Not from the CLI: it may run as another user (root), and directories
+    # it created would then be unwritable for the server. check-config
+    # reports missing ones instead.
+    data_paths.ensure_dirs(DATA_PATHS)
 for _legacy in DATA_PATHS.legacy:
     logger.warning(
         "Still using the legacy location %s for %s. Move it into DATA_DIR (%s) — "
@@ -254,28 +297,38 @@ def _prune_screen_logs_startup():
         logger.info('Pruned screen_log on startup: %s by age, %s by row cap', deleted_by_age, deleted_by_cap)
 
 
-# Create database tables
-with app.app_context():
-    # In production, "alembic upgrade head" (run as ExecStartPre) manages the
-    # schema.  db.create_all() is kept here as a convenience for development
-    # (SQLite) when alembic is not being used.  It is a no-op when all tables
-    # already exist.
-    if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
-        db.create_all()
+def _run_startup_steps():
+    """Create tables (SQLite dev convenience) and run the server's startup steps."""
+    with app.app_context():
+        # In production, "alembic upgrade head" (run as ExecStartPre) manages the
+        # schema.  db.create_all() is kept here as a convenience for development
+        # (SQLite) when alembic is not being used.  It is a no-op when all tables
+        # already exist.
+        if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
+            db.create_all()
 
-    _startup_step('reset Device.is_online', _reset_devices_online)
-    _startup_step('enforce default design', _enforce_default_design)
-    _startup_step('prune screen_log', _prune_screen_logs_startup)
-    _startup_step('ensure bootstrap admin user', lambda: ensure_bootstrap_admin(app, db))
-    _startup_step('sync right definitions', lambda: sync_right_definitions(db))
-    _startup_step('ensure superadmin group', lambda: ensure_superadmin_group(db))
-    _startup_step('sync help topics', lambda: sync_help_topics(db))
+        _startup_step('reset Device.is_online', _reset_devices_online)
+        _startup_step('enforce default design', _enforce_default_design)
+        _startup_step('prune screen_log', _prune_screen_logs_startup)
+        _startup_step('ensure bootstrap admin user', lambda: ensure_bootstrap_admin(app, db))
+        _startup_step('sync right definitions', lambda: sync_right_definitions(db))
+        _startup_step('ensure superadmin group', lambda: ensure_superadmin_group(db))
+        _startup_step('sync help topics', lambda: sync_help_topics(db))
+
+
+# Not for a `flask dh` maintenance command (see _loaded_for_flask_cli_command).
+if not CLI_MODE:
+    _run_startup_steps()
 
 # Register Socket.IO event handlers
 register_all_handlers(socketio, app, db)
 
 # Register admin authentication HTTP routes (/admin/api/auth/*)
 register_auth_routes(app, db)
+
+# `flask dh …` maintenance commands (application/cli.py)
+from application.cli import register_cli  # noqa: E402
+register_cli(app)
 
 
 def _screen_log_retention_loop():
@@ -296,14 +349,16 @@ def _screen_log_retention_loop():
             logger.warning('Failed to prune screen_log: %s', e)
 
 
-socketio.start_background_task(_screen_log_retention_loop)
+if not CLI_MODE:
+    socketio.start_background_task(_screen_log_retention_loop)
 
 # Make sure every already-uploaded image has its FHD/4K/8K renditions
 # (uploads made before renditions existed, restored backups, copied files).
 # Runs in the background and only renders what's missing, so it's cheap on
 # every start after the first.
 _RENDITIONS_FOLDER = DATA_PATHS.media_renditions
-media_renditions.schedule_backfill(socketio, app, db, DATA_PATHS.media, _RENDITIONS_FOLDER)
+if not CLI_MODE:
+    media_renditions.schedule_backfill(socketio, app, db, DATA_PATHS.media, _RENDITIONS_FOLDER)
 
 
 # Media live in DATA_DIR (see application/paths.py), not in the static

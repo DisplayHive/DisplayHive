@@ -25,6 +25,20 @@ def hash_password(password: str) -> str:
     return generate_password_hash(password)
 
 
+MIN_PASSWORD_LENGTH = 8
+
+
+def password_problem(password: str) -> str | None:
+    """Why *password* isn't acceptable as a new password, or None if it is.
+
+    The one place the password rules live — the Users page, the forced
+    password change and the `flask dh` CLI all go through it.
+    """
+    if len(password or '') < MIN_PASSWORD_LENGTH:
+        return f'Password must be at least {MIN_PASSWORD_LENGTH} characters'
+    return None
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     """Return True if *password* matches *password_hash*."""
     try:

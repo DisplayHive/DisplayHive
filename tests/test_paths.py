@@ -99,6 +99,10 @@ def test_ensure_dirs_warns_about_a_readable_database(roots, caplog):
         pass
     os.chmod(p.db_path, 0o644)
     paths.ensure_dirs(p)
+    # Inside the 0700 db/ directory nobody else can reach it.
+    assert 'readable by other users' not in caplog.text
+    os.chmod(os.path.dirname(p.db_path), 0o755)
+    paths.ensure_dirs(p)
     assert 'readable by other users' in caplog.text
 
 

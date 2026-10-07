@@ -11,7 +11,7 @@ def register_admin_user_handlers(socketio, app, db):
     """Register socket handlers for listing/creating/updating/deleting admin users."""
     from application.socketio_handlers.auth import require_right, admin_handler, current_admin_user, is_impersonating
     from application.models import AdminUser, AdminUserLogin, AdminUserIdentity
-    from application.auth import hash_password, create_token
+    from application.auth import hash_password, create_token, password_problem
     from application.permissions import password_superadmin_exists, PASSWORD_SUPERADMIN_ERROR
 
     def _commit_keeping_break_glass(had_break_glass):
@@ -62,8 +62,8 @@ def register_admin_user_handlers(socketio, app, db):
 
         if not username:
             return {'success': False, 'error': 'Username is required'}
-        if len(password) < 8:
-            return {'success': False, 'error': 'Password must be at least 8 characters'}
+        if password_problem(password):
+            return {'success': False, 'error': password_problem(password)}
 
         existing = db.session.execute(
             db.select(AdminUser).where(AdminUser.username == username)
@@ -127,9 +127,9 @@ def register_admin_user_handlers(socketio, app, db):
         if new_password and not can_set_password:
             new_password = None
         if new_password:
-            if len(new_password) < 8:
+            if password_problem(new_password):
                 db.session.rollback()
-                return {'success': False, 'error': 'Password must be at least 8 characters'}
+                return {'success': False, 'error': password_problem(new_password)}
             user.password_hash = hash_password(new_password)
             # Invalidate every JWT issued before this password change.
             user.token_version = (user.token_version or 0) + 1

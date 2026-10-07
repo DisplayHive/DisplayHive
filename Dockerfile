@@ -55,7 +55,10 @@ COPY --from=frontend /build/dist ./dist
 # DISPLAYHIVE_DEPLOYMENT tells the admin UI to show Docker-specific steps
 # when data still sits in the old /app/static/media* locations.
 ENV DATA_DIR=/data \
-    DISPLAYHIVE_DEPLOYMENT=docker
+    DISPLAYHIVE_DEPLOYMENT=docker \
+    FLASK_APP=app
+# FLASK_APP: maintenance commands work as
+#   docker compose exec displayhive flask dh check-config   (see application/cli.py)
 
 # Run as an unprivileged user; give it ownership of the writable data dirs.
 # The old /app/static/media* dirs are still created so a pre-DATA_DIR

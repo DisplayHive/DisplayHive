@@ -86,3 +86,6 @@ At least one active Superadmin always keeps password login, so you can still
 get in when a provider is down or misconfigured. DisplayHive refuses any
 change that would remove the last one: turning off password login,
 deactivating or deleting the account, or changing its groups.
+
+If you're locked out anyway, reset a password on the server with
+[`flask dh reset-password <name> --activate`](cli.md#reset-password-username).

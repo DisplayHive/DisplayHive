@@ -11,6 +11,10 @@ automatically:
 
 Check your server logs after the first deploy to find this initial
 password, log in at `/admin/`, and set a real password for day-to-day use.
+Alternatively, create the first account yourself with
+[`flask dh create-admin`](cli.md#create-admin-username). If you lose
+access, [`flask dh reset-password`](cli.md#reset-password-username) gets
+you back in.
 
 Sessions use a JSON Web Token, valid for 12 hours; you'll be asked to log
 in again once it expires.

@@ -120,12 +120,21 @@ def ensure_dirs(paths: DataPaths) -> None:
         _warn_if_db_readable(paths.db_path)
 
 
-def _warn_if_db_readable(db_path: str) -> None:
+def db_exposed(db_path: str) -> bool:
+    """True if users other than the owner can actually read *db_path*: the
+    file is group/other-readable *and* its directory lets them in. A 0644
+    file inside the 0700 db/ directory is not exposed."""
     try:
         mode = os.stat(db_path).st_mode
+        dir_mode = os.stat(os.path.dirname(os.path.abspath(db_path))).st_mode
     except OSError:
-        return  # not created yet
-    if mode & (stat.S_IRGRP | stat.S_IROTH):
+        return False
+    return bool((mode & (stat.S_IRGRP | stat.S_IROTH)) and (dir_mode & (stat.S_IXGRP | stat.S_IXOTH)))
+
+
+def _warn_if_db_readable(db_path: str) -> None:
+    if db_exposed(db_path):
+        mode = os.stat(db_path).st_mode
         logger.warning(
             'The SQLite database %s is readable by other users (mode %o). It holds password hashes '
             'and secrets — consider: chmod 600 %s', db_path, stat.S_IMODE(mode), db_path,

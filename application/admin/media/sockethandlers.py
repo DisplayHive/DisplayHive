@@ -29,34 +29,7 @@ def register_admin_media_handlers(socketio, app, db):
         """Return True if *filename* has an allowed extension."""
         return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-    def create_preview(source_path, preview_path, is_video=False):
-        """Create a preview/thumbnail for media file."""
-        try:
-            if is_video:
-                # Placeholder for video thumbnail generation
-                # Would use ffmpeg here: ffmpeg -i input.mp4 -ss 00:00:01 -vframes 1 output.jpg
-                return
-            # Image thumbnail using Pillow
-            from PIL import Image
-
-            with Image.open(source_path) as img:
-                # Convert to RGB if necessary (for PNG with transparency, etc.)
-                if img.mode in ('RGBA', 'LA', 'P'):
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode == 'P':
-                        img = img.convert('RGBA')
-                    background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
-                    img = background
-                elif img.mode != 'RGB':
-                    img = img.convert('RGB')
-
-                # Resize maintaining aspect ratio
-                img.thumbnail((400, 400), Image.Resampling.LANCZOS)
-
-                # Save as JPEG
-                img.save(preview_path, 'JPEG', quality=85)
-        except Exception:
-            logger.exception('Error creating preview for %s', source_path)
+    create_preview = media_renditions.create_preview
 
     def _build_media_list_payload():
         """Build a structured list of all media items for the Vue SPA."""

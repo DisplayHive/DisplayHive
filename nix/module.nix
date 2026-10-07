@@ -7,6 +7,7 @@
 #   • its own PostgreSQL database and role (displayhive-<name>)
 #   • its own TCP port
 #   • optionally: a Gogs/GitHub push webhook listener (displayhive-<name>-webhook.service)
+#   • a `displayhive-<name>` command for maintenance (`flask dh …`, application/cli.py)
 #
 # Instance names must be valid in Linux usernames and PostgreSQL role names
 # (letters, digits, dashes — no spaces or underscores at the start).
@@ -635,16 +636,9 @@ let
   };
 
   # ── App service builder ───────────────────────────────────────────────────
-  mkService = name: icfg:
-    let hasGit = icfg.gitRepository != ""; in {
-    description = "DisplayHive instance '${name}'";
-    after    = [ "network.target" "postgresql.service" ]
-               ++ optional hasGit "displayhive-${name}-deploy.service";
-    requires = [ "postgresql.service" ]
-               ++ optional hasGit "displayhive-${name}-deploy.service";
-    wantedBy = [ "multi-user.target" ];
-
-    environment = {
+  # The service's environment — shared with the CLI wrapper below, so
+  # maintenance commands see exactly the database and DATA_DIR the server uses.
+  mkServiceEnv = name: icfg: {
       DATABASE_URL             = "postgresql:///displayhive-${name}?host=/run/postgresql";
       FLASK_PORT               = toString icfg.port;
       SECRET_KEY               = icfg.secretKey;
@@ -657,6 +651,36 @@ let
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
       ADMIN_BOOTSTRAP_PASSWORD = icfg.adminBootstrapPassword;
     } // icfg.extraEnv;
+
+  # `displayhive-<name> <command>` = `flask dh <command>` as the instance's
+  # user, in its source tree, with its environment. Run it as root, e.g.
+  #   displayhive-main check-config
+  #   displayhive-main reset-password admin --activate
+  mkCli = name: icfg: pkgs.writeShellScriptBin "displayhive-${name}" ''
+    set -euo pipefail
+    if [ "$(${pkgs.coreutils}/bin/id -u)" -ne 0 ]; then
+      echo "displayhive-${name}: run as root — it switches to the user displayhive-${name}" >&2
+      exit 1
+    fi
+    cd ${escapeShellArg icfg.sourceDirectory}
+    exec ${pkgs.util-linux}/bin/runuser -u displayhive-${name} -- \
+      ${pkgs.coreutils}/bin/env \
+      ${concatStringsSep " " (mapAttrsToList (k: v: escapeShellArg "${k}=${v}")
+          # LOG_LEVEL: the CLI's own quieter default (WARNING) reads better.
+          (removeAttrs (mkServiceEnv name icfg) [ "LOG_LEVEL" "FLASK_PORT" ]))} \
+      FLASK_APP=app ${cfg.pythonEnv}/bin/flask dh "$@"
+  '';
+
+  mkService = name: icfg:
+    let hasGit = icfg.gitRepository != ""; in {
+    description = "DisplayHive instance '${name}'";
+    after    = [ "network.target" "postgresql.service" ]
+               ++ optional hasGit "displayhive-${name}-deploy.service";
+    requires = [ "postgresql.service" ]
+               ++ optional hasGit "displayhive-${name}-deploy.service";
+    wantedBy = [ "multi-user.target" ];
+
+    environment = mkServiceEnv name icfg;
 
     serviceConfig = {
       Type             = "simple";
@@ -721,6 +745,8 @@ in {
   config = mkIf (cfg.instances != {}) {
 
     services.postgresql.enable = mkDefault true;
+
+    environment.systemPackages = mapAttrsToList mkCli cfg.instances;
 
     services.postgresql.ensureDatabases =
       mapAttrsToList (name: _: "displayhive-${name}") cfg.instances;

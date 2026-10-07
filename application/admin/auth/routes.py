@@ -16,6 +16,7 @@ from flask import request, jsonify, redirect
 from application.auth import (
     verify_password,
     hash_password,
+    password_problem,
     create_token,
     user_from_token,
     decode_token,
@@ -204,8 +205,8 @@ def register_auth_routes(app, db):
             return jsonify({'success': False, 'error': 'Current password is incorrect'}), 400
         clear_failed_login(request.remote_addr, user.username)
 
-        if len(new_password) < 8:
-            return jsonify({'success': False, 'error': 'Password must be at least 8 characters'}), 400
+        if password_problem(new_password):
+            return jsonify({'success': False, 'error': password_problem(new_password)}), 400
         if verify_password(new_password, user.password_hash):
             return jsonify({'success': False, 'error': 'New password must differ from the current one'}), 400
 

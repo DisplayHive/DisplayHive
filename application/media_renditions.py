@@ -100,6 +100,43 @@ def render_renditions(source_path: str, renditions_root: str, rel: str) -> list:
         return []
 
 
+PREVIEW_SIZE = (400, 400)
+
+
+def preview_path(previews_root: str, rel: str) -> str:
+    """Thumbnail location for the media file *rel*: same folder, ``<stem>_preview.jpg``."""
+    folder, filename = os.path.split(rel)
+    return os.path.join(previews_root, folder, f'{os.path.splitext(filename)[0]}_preview.jpg')
+
+
+def create_preview(source_path: str, dest_path: str, is_video: bool = False) -> None:
+    """Write a 400px JPEG thumbnail of *source_path* to *dest_path* (best effort).
+
+    Videos get none yet (that would need ffmpeg); the media list falls back
+    to a placeholder for them.
+    """
+    if is_video:
+        return
+    try:
+        from PIL import Image
+
+        with Image.open(source_path) as img:
+            # Flatten transparency onto white — JPEG has no alpha channel.
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            img.thumbnail(PREVIEW_SIZE, Image.Resampling.LANCZOS)
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            img.save(dest_path, 'JPEG', quality=85)
+    except Exception:
+        logger.exception('Error creating preview for %s', source_path)
+
+
 def remove_renditions(renditions_root: str, rel: str) -> None:
     """Delete every tier's rendition of the media file *rel* (best effort)."""
     for tier, _edge in TIERS:

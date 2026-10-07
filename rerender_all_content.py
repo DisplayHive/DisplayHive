@@ -13,6 +13,9 @@ frozen at original creation time.
 Usage:
     python rerender_all_content.py
 
+Superseded by ``flask dh rerender-content`` (application/cli.py), which does
+the same; this script stays for existing habits and docs.
+
 Uses the same DATABASE_URL / SQLite resolution as the Flask app (application/paths.py).
 """
 
@@ -24,8 +27,8 @@ from flask import Flask
 sys.path.insert(0, os.path.dirname(__file__))
 
 from application import paths as data_paths
-from application.models import db, Contenttype
-from application.admin.content.helper import rerender_content_element_for_contenttype
+from application.models import db
+from application.cli import rerender_all
 
 
 def build_app() -> Flask:
@@ -40,15 +43,10 @@ def build_app() -> Flask:
 
 
 def main() -> None:
+    print('Note: this is now `flask dh rerender-content`.')
     app = build_app()
     with app.app_context():
-        contenttype_ids = db.session.execute(db.select(Contenttype.id)).scalars().all()
-        total_updated = 0
-        for ct_id in contenttype_ids:
-            updated_ids = rerender_content_element_for_contenttype(db, ct_id)
-            total_updated += len(updated_ids)
-            print(f'Contenttype {ct_id}: re-rendered {len(updated_ids)} content element(s)')
-        print(f'Done. Re-rendered {total_updated} content element(s) across {len(contenttype_ids)} contenttype(s).')
+        rerender_all(db, echo=print)
 
 
 if __name__ == '__main__':

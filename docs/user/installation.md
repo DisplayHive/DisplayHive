@@ -253,6 +253,8 @@ export DATA_DIR=/var/lib/displayhive   # e.g. in your systemd unit or .env
 ```
 
 The notice disappears as soon as nothing is left in the old locations.
+[`flask dh check-config`](cli.md#check-config) lists the same and checks the
+rest of the setup.
 
 ## Debian
 
