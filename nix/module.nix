@@ -441,7 +441,10 @@ let
     };
 
   # ── Default Python environment ────────────────────────────────────────────
-  defaultPythonEnv = pkgs.python3.withPackages (ps: with ps; [
+  # Same interpreter version as the dev shell, CI and Docker image:
+  # .python-version via nix/python.nix (not pkgs.python3, which moves on with
+  # nixpkgs to versions the app isn't tested on).
+  defaultPythonEnv = (import ./python.nix { inherit pkgs; }).withPackages (ps: with ps; [
     flask
     flask-socketio
     flask-sqlalchemy
@@ -723,10 +726,12 @@ in {
       type        = types.package;
       default     = defaultPythonEnv;
       defaultText = literalExpression
-        "pkgs.python3.withPackages (ps: [ flask flask-socketio ... ])";
+        "(import <displayhive>/nix/python.nix { inherit pkgs; }).withPackages (ps: [ flask flask-socketio ... ])";
       description = ''
-        Python environment used by every instance.
-        Override to pin versions or add extra packages.
+        Python environment used by every instance. The default uses the
+        Python version from the repository's .python-version (the one the
+        app is tested on). Override to add packages; keep the interpreter
+        from nix/python.nix rather than picking another version.
       '';
     };
 

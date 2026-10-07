@@ -5,7 +5,22 @@
 See the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)
 for environment setup — `nix develop` provisions everything (Python, Node,
 SQLite) and runs first-time setup automatically. Without Nix, you'll need
-Python 3.13, Node.js, and SQLite installed manually.
+the Python version from `.python-version` (currently 3.13), Node.js, and
+SQLite installed manually.
+
+### Python version
+
+`.python-version` is the one place that sets it, for the dev shell and the
+NixOS module (`nix/python.nix`), CI (`actions/setup-python`'s
+`python-version-file`) and the Docker image (`PYTHON_VERSION` build arg). To
+move to a new version:
+
+1. Change `.python-version`.
+2. Change the `ARG PYTHON_VERSION=` default in the `Dockerfile` to match.
+   `tests/test_python_version.py` fails until both agree, and also when a
+   workflow or Nix file picks a version of its own.
+3. If `nix develop` can't find `pythonXY`, update the flake's nixpkgs
+   (`nix flake update`).
 
 ## Running things
 

@@ -3,6 +3,11 @@
 # Outputs land in /build/dist/{admin,screen} because each vite.config.ts
 # has outDir "../../dist/<name>" relative to its frontends/<name> folder.
 # =====================================================================
+# Python version: from .python-version — CI passes it in (docker-image.yml);
+# this default is for plain `docker build` / `docker compose build` and is
+# kept equal to .python-version by tests/test_python_version.py.
+ARG PYTHON_VERSION=3.13
+
 FROM node:22-bookworm-slim AS frontend
 WORKDIR /build
 
@@ -30,7 +35,7 @@ RUN npm --prefix frontends/screen run build
 # =====================================================================
 # Stage 2 — Python runtime (Flask + Socket.IO via gunicorn's gthread worker)
 # =====================================================================
-FROM python:3.13-slim AS runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

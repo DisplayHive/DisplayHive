@@ -1,7 +1,8 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  python = pkgs.python313.withPackages (ps: with ps; [
+  # Version from .python-version, see nix/python.nix.
+  python = (import ./nix/python.nix { inherit pkgs; }).withPackages (ps: with ps; [
     flask
     flask-socketio
     flask-bootstrap

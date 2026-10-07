@@ -46,11 +46,17 @@ jobs:
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Read Python version
+        id: python
+        run: echo "version=$(tr -d '[:space:]' < .python-version)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
+          build-args: |
+            PYTHON_VERSION=${{ steps.python.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
