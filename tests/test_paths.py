@@ -117,7 +117,7 @@ def test_deployment_kind(value, expected):
 
 
 def test_media_urls_are_served_from_data_dir(flask_app):
-    media_dir = flask_app.DATA_PATHS.media
+    media_dir = flask_app.app.config['MEDIA_FOLDER']
     with open(os.path.join(media_dir, 'pytest-served.txt'), 'w') as f:
         f.write('hello')
     try:
@@ -134,7 +134,7 @@ def test_media_urls_are_served_from_data_dir(flask_app):
 
 def test_media_routes_take_precedence_over_the_static_folder(flask_app):
     adapter = flask_app.app.url_map.bind('localhost')
-    assert adapter.match('/static/media/a/b.png')[0] == 'static_media'
-    assert adapter.match('/static/media_previews/a.png')[0] == 'static_media_previews'
-    assert adapter.match('/static/media_renditions/fhd/a.png')[0] == 'static_media_renditions'
+    assert adapter.match('/static/media/a/b.png')[0] == 'static_files.static_media'
+    assert adapter.match('/static/media_previews/a.png')[0] == 'static_files.static_media_previews'
+    assert adapter.match('/static/media_renditions/fhd/a.png')[0] == 'static_files.static_media_renditions'
     assert adapter.match('/static/demo_logos/event.png')[0] == 'static'

@@ -132,3 +132,40 @@ def test_concurrent_writes_of_the_same_rendition_dont_collide(tmp_path):
     with Image.open(dest) as im:
         im.load()  # a file another thread wrote into half-way would fail here
     assert os.listdir(tmp_path / 'fhd') == ['same.png']
+
+
+def test_renditions_are_removed_again_if_the_source_vanishes_while_rendering(dirs, monkeypatch):
+    """e.g. an import wipes the media folder while a background backfill is mid-render."""
+    media, rend = dirs
+    src = os.path.join(media, 'gone.png')
+    _make(src, (5000, 3000))
+    real_save = mr._save
+
+    def save_then_delete_source(*args, **kwargs):
+        real_save(*args, **kwargs)
+        if os.path.exists(src):
+            os.remove(src)
+
+    monkeypatch.setattr(mr, '_save', save_then_delete_source)
+    assert mr.render_renditions(src, rend, 'gone.png') == []
+    assert not os.path.exists(mr.rendition_path(rend, 'fhd', 'gone.png'))
+    assert not os.path.exists(mr.rendition_path(rend, '4k', 'gone.png'))
+
+
+def test_nothing_is_written_if_the_source_is_already_gone_when_saving_starts(dirs, monkeypatch):
+    """A background job holds the opened image while an import wipes the folder."""
+    media, rend = dirs
+    src = os.path.join(media, 'wiped.png')
+    _make(src, (5000, 3000))
+    from PIL import ImageOps
+    real_transpose = ImageOps.exif_transpose
+
+    def transpose_then_wipe(img, *a, **k):
+        out = real_transpose(img, *a, **k)
+        os.remove(src)          # the folder is wiped after the image was opened
+        return out
+
+    monkeypatch.setattr(ImageOps, 'exif_transpose', transpose_then_wipe)
+    assert mr.render_renditions(src, rend, 'wiped.png') == []
+    assert not os.path.exists(os.path.join(rend, 'fhd', 'wiped.png'))
+    assert not any(n.endswith('.png') or '.tmp-' in n for _r, _d, files in os.walk(rend) for n in files)

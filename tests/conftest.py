@@ -1,22 +1,24 @@
 """Shared pytest fixtures for the backend test suite.
 
-`app.py` has no `create_app()` factory — it builds `app`/`db`/`socketio` and
-fully bootstraps the DB (create_all + bootstrap admin + right sync +
-superadmin group) at *module import time*, driven by env vars. So:
+`app.py` builds the default `app`/`db`/`socketio` with
+`application.factory.create_app()` and — as a server — fully bootstraps the DB
+(create_all + bootstrap admin + right sync + superadmin group) when it is
+imported, driven by env vars. For the bulk of the suite:
 
   - The env vars below must be set before the very first `import app`.
-  - Because Python only imports a module once per process, every test in
-    this whole pytest run shares the *same* app/db/engine instance — there
-    is no per-test app factory to call.
+  - Python imports a module once per process, so those tests share the *same*
+    default app/db/engine instance.
 
-Test isolation therefore comes from wrapping each test in a SQLAlchemy
+Isolation there comes from wrapping each test in a SQLAlchemy
 connection-level transaction (with a SAVEPOINT so code under test can still
 call `db.session.commit()`/`rollback()` without escaping it), rolled back in
-teardown, rather than from separate app instances. A real temp SQLite file
-(not `:memory:`) is used for TEST_DB_PATH so every connection the engine
-opens sees the same database — `:memory:` is per-connection unless the
-engine is explicitly configured with StaticPool, which app.py doesn't do
-(it's built for a real file or Postgres).
+teardown. A real temp SQLite file (not `:memory:`) is used for TEST_DB_PATH so
+every connection the engine opens sees the same database — `:memory:` is
+per-connection unless the engine is explicitly configured with StaticPool,
+which the app doesn't do (it's built for a real file or Postgres).
+
+Tests that need a genuinely separate app (own database, no startup work) build
+one with `create_app({...}, startup=False)` — see `tests/test_factory.py`.
 """
 
 import atexit

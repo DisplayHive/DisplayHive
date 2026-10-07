@@ -95,6 +95,8 @@ def render_renditions(source_path: str, renditions_root: str, rel: str) -> list:
 
             created = []
             for tier, edge, dest in todo:
+                if not os.path.exists(source_path):
+                    break  # deleted while we were busy — don't write anything for it
                 scale = edge / long_edge
                 size = (max(1, round(w * scale)), max(1, round(h * scale)))
                 work = img
@@ -102,7 +104,13 @@ def render_renditions(source_path: str, renditions_root: str, rel: str) -> list:
                     work = work.convert('RGBA' if 'transparency' in work.info else 'RGB')
                 _save(work.resize(size, Image.Resampling.LANCZOS), dest, fmt, info)
                 created.append(tier)
-            return created
+        # Rendering takes a while; if the original was deleted meanwhile (an
+        # import that wiped the media folder, a delete), don't leave orphaned
+        # renditions behind that would be served for a file that no longer exists.
+        if created and not os.path.exists(source_path):
+            remove_renditions(renditions_root, rel)
+            return []
+        return created
     except Exception:
         logger.exception('Could not render renditions for %s', source_path)
         return []

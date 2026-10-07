@@ -8,7 +8,27 @@
 
 ## Backend entrypoint
 
-Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/main/app.py):
+`app.py` is a thin entry point: it calls the application factory
+`create_app()` ([`application/factory.py`](https://github.com/DisplayHive/DisplayHive/blob/main/application/factory.py))
+and exposes the result as `app` / `socketio` — what `gunicorn app:app`,
+`flask --app app …` and `python app.py` expect. The pieces:
+
+| Module | Responsibility |
+|---|---|
+| `application/factory.py` | `create_app(overrides=None, *, startup=True)` builds a complete, independent app and returns `(app, socketio)`; `run_dev()` is the `python app.py` server. Importing it has no side effects. |
+| `application/config.py` | Environment → configuration (CORS origins, pool options, proxy count, secret key, data paths) as small pure functions; `apply_config()` copies them onto the app. |
+| `application/startup.py` | The one-time work of a real server: raise the open-files limit, run the startup steps, start the log-retention and rendition-backfill tasks. |
+| `application/web/` | The HTTP surface outside Socket.IO and the admin API: `static_routes`, `screen_page`, `admin_spa` (Blueprints) and `importexport_routes` (`register_importexport_routes`, because its auth decorators take the app). |
+| `application/admin/importexport/service.py` | The import/export/demo workflow itself (parse uploads, stage, extract media, wipe, broadcast) — no request handling, so it is unit-tested directly. |
+
+`create_app(startup=False)` skips the startup work: that is what a
+`flask dh …` maintenance command gets when it is loaded next to a live
+instance (`app.py` detects the CLI), and what tests use to build their own
+apps. Tests may call `create_app({...overrides}, startup=False)` for an
+isolated app (`tests/test_factory.py`); `tests/conftest.py` still shares one
+default app for the bulk of the suite.
+
+The backend in detail:
 
 - Flask-SocketIO runs in **threading** mode (`async_mode='threading'`):
   every Socket.IO event, HTTP request and background task runs in its own OS
@@ -21,7 +41,7 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
   (`registry_lock` in `application/socketio_handlers/lifecycle.py`). New
   module-level state shared between requests needs the same — and tests
   for it need real `threading.Thread`s.
-- The Flask app is created and configured with the DB URI (`DATABASE_URL`
+- The Flask app is configured with the DB URI (`DATABASE_URL`
   for Postgres, falling back to local SQLite), CORS restricted to `/api/*`
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance
   sharing the same CORS origins. `max_http_buffer_size` is 10 MB — room
@@ -30,15 +50,19 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
   `application/admin/media/routes.py`) whose file part Werkzeug streams
   straight to a temp file in `DATA_DIR` (the app-wide `DataDirRequest`
   request class), which is then hard-linked into the media folder.
-- There are **no Flask blueprints** for the admin feature areas.
+- There are no Flask blueprints for the *admin feature areas*.
   `application/admin/auth/routes.py` registers plain `@app.route` HTTP
   routes for login/session check, wired via `register_auth_routes(app, db)`.
-  The JWT-protected export/import/demo endpoints are separate `@app.route`
-  handlers defined directly in `app.py` (`/admin/export/tree`,
+  The JWT-protected export/import/demo endpoints (`/admin/export/tree`,
   `/admin/export/download`, `/admin/import/preview`, `/admin/import/confirm`,
-  `/admin/demo/list`, `/admin/demo/import`). Everything else under
-  `application/admin/*` is Socket.IO handlers, not HTTP.
-- On startup (inside `app.app_context()`), the app resets stale
+  `/admin/demo/list`, `/admin/demo/import`) live in
+  `application/web/importexport_routes.py` and call
+  `application/admin/importexport/service.py`. Static files, the screen page
+  and the admin SPA are Blueprints in `application/web/`. Everything else
+  under `application/admin/*` is Socket.IO handlers, not HTTP.
+  `tests/test_route_map.py` pins the whole HTTP route table, so moving
+  routes between modules can't silently drop or rename one.
+- On startup (`application/startup.py`, inside `app.app_context()`), the app resets stale
   `Device.is_online` flags, enforces exactly one default design, prunes old
   screen logs, seeds the built-in Superadmin group and right-definition
   catalog (`sync_right_definitions()`, see `application/permissions.py`),
@@ -51,7 +75,7 @@ Everything starts in [`app.py`](https://github.com/DisplayHive/DisplayHive/blob/
 - In production, schema migrations are applied by running
   `alembic upgrade head` as a deploy step (see
   [`nix/module.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/module.nix)).
-  `db.create_all()` in `app.py` only runs for local SQLite as a dev
+  `db.create_all()` in the startup steps only runs for local SQLite as a dev
   convenience and is a no-op once tables exist.
 
 ## Data model
@@ -113,7 +137,7 @@ panel feature, using a `displayhive:admin:<feature>:cts:*` (client-to-server)
 | `contenttypes` | CRUD for `Contenttype` and its `TagConfig` fields |
 | `designs` | CRUD for `Design`, `Gradient`, and per-container/global style overrides |
 | `devices` | Connection/adoption handshake (`connection.py`) and management: list, ping, update, assign to screen, find, delete (`management.py`) |
-| `importexport` | Selective DB + media export/import as a zip (type/item tree selection, uuid-based dependency closure, reset/merge import modes) — no Socket.IO handlers of its own; the actual file transfer and selection endpoints are plain `@app.route`s in `app.py` |
+| `importexport` | Selective DB + media export/import as a zip (type/item tree selection, uuid-based dependency closure, reset/merge import modes) — no Socket.IO handlers of its own; the file transfer and selection endpoints are plain routes in `application/web/importexport_routes.py`, the workflow is `application/admin/importexport/service.py` |
 | `layouts` | CRUD for `Layout` and `ContentContainer` positioning/assignment |
 | `matrix` | No handlers of its own — the Matrix page calls the same `screens`/`screengroups` mutations directly |
 | `media` | Media library CRUD, folders, uploads |
