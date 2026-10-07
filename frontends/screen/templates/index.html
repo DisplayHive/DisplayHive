@@ -23,10 +23,13 @@
 
     <style id="design-css"></style>
     <script>
-        // Inject the Design's CSS at runtime to avoid editor CSS parsing errors
+        // Inject the Design's CSS at runtime to avoid editor CSS parsing errors.
+        // `tojson` makes it a real JS string literal (quotes, backslashes, `${`
+        // and `</script>` all escaped) — never interpolate it into a JS
+        // template literal, which a backtick or `${` in the CSS would break out of.
         (function(){
             try {
-                const css = `{{ design_css | safe }}`;
+                const css = {{ design_css | tojson }};
                 const el = document.getElementById('design-css');
                 if (el) el.textContent = css;
             } catch (e) {
