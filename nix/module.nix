@@ -451,6 +451,7 @@ let
     psycopg2
     requests
     pyjwt
+    cryptography # OIDC ID-token signatures (pyjwt RS256/ES256)
   ]);
 
   # ── Per-instance option schema ────────────────────────────────────────────

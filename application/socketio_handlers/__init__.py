@@ -26,6 +26,7 @@ from application.admin.media.sockethandlers import register_admin_media_handlers
 from application.admin.alerting.sockethandlers import register_admin_alerting_handlers
 from application.admin.pretalx.sockethandlers import register_admin_pretalx_handlers
 from application.admin.users.sockethandlers import register_admin_user_handlers
+from application.admin.authproviders.sockethandlers import register_admin_authprovider_handlers
 from application.admin.rights.sockethandlers import register_admin_rights_handlers
 from application.admin.help.sockethandlers import register_admin_help_handlers
 
@@ -58,5 +59,6 @@ def register_all_handlers(socketio, app, db):
     register_admin_alerting_handlers(socketio, app, db)
     register_admin_pretalx_handlers(socketio, app, db)
     register_admin_user_handlers(socketio, app, db)
+    register_admin_authprovider_handlers(socketio, app, db)
     register_admin_rights_handlers(socketio, app, db)
     register_admin_help_handlers(socketio, app, db)

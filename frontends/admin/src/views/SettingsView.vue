@@ -11,6 +11,7 @@ import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
+import LoginProvidersCard from '../components/LoginProvidersCard.vue'
 
 const { on, off, emit, emitWithAck } = useSocket()
 const toast = useToast()
@@ -398,6 +399,8 @@ const saveTimeSettings = async () => {
           </div>
         </template>
       </Card>
+
+      <LoginProvidersCard v-if="rightsStore.can('authproviders.manage')" />
 
     </template>
 

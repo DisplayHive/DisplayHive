@@ -1,4 +1,4 @@
-"""HTTP routes for admin authentication: login + session check.
+"""HTTP routes for admin authentication: password and SSO (OIDC) login, session check.
 
 Mounted under /admin/api/auth/* so they stay inside the same URL prefix an
 operator's reverse-proxy (htaccess, nginx, ...) already protects, in addition
@@ -7,9 +7,11 @@ decorator used to protect the existing export/import routes in app.py.
 """
 
 import json
+import logging
+import urllib.parse
 from functools import wraps
 
-from flask import request, jsonify
+from flask import request, jsonify, redirect
 
 from application.auth import (
     verify_password,
@@ -21,6 +23,8 @@ from application.auth import (
     record_failed_login,
     clear_failed_login,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def require_jwt_auth(app, allow_pending_password_change=False):
@@ -80,32 +84,8 @@ def register_auth_routes(app, db):
     ALLOWED_PREFERENCE_KEYS = {'theme'}
     ALLOWED_THEME_VALUES = {'light', 'dark', 'system'}
 
-    @app.route('/admin/api/auth/login', methods=['POST'])
-    def admin_auth_login():
-        """Authenticate a username/password pair and return a JWT."""
-        data = request.get_json(silent=True) or {}
-        username = str(data.get('username', '')).strip()
-        password = str(data.get('password', ''))
-
-        if is_login_rate_limited(request.remote_addr, username):
-            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
-
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Username and password are required'}), 400
-
-        user = db.session.execute(
-            db.select(AdminUser).where(AdminUser.username == username)
-        ).scalar_one_or_none()
-
-        if not user or not verify_password(password, user.password_hash):
-            record_failed_login(request.remote_addr, username)
-            return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
-
-        if not user.is_active:
-            record_failed_login(request.remote_addr, username)
-            return jsonify({'success': False, 'error': 'This account has been deactivated'}), 403
-
-        clear_failed_login(request.remote_addr, username)
+    def _record_login(user):
+        """Stamp last_login_at and add a login-history row (password or SSO)."""
         user.last_login_at = datetime.now(timezone.utc)
         db.session.add(AdminUserLogin(
             user_id=user.id,
@@ -127,6 +107,35 @@ def register_auth_routes(app, db):
             )
         )
 
+    @app.route('/admin/api/auth/login', methods=['POST'])
+    def admin_auth_login():
+        """Authenticate a username/password pair and return a JWT."""
+        data = request.get_json(silent=True) or {}
+        username = str(data.get('username', '')).strip()
+        password = str(data.get('password', ''))
+
+        if is_login_rate_limited(request.remote_addr, username):
+            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
+
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+        user = db.session.execute(
+            db.select(AdminUser).where(AdminUser.username == username)
+        ).scalar_one_or_none()
+
+        # Accounts without password login (e.g. created by an SSO login) get
+        # the same answer as a wrong password, so this doesn't reveal them.
+        if not user or not user.password_login_allowed or not verify_password(password, user.password_hash):
+            record_failed_login(request.remote_addr, username)
+            return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+
+        if not user.is_active:
+            record_failed_login(request.remote_addr, username)
+            return jsonify({'success': False, 'error': 'This account has been deactivated'}), 403
+
+        clear_failed_login(request.remote_addr, username)
+        _record_login(user)
         db.session.commit()
 
         token = create_token(app, user)
@@ -160,7 +169,8 @@ def register_auth_routes(app, db):
             'success': True,
             'username': user.username,
             'preferences': user.get_preferences(),
-            'must_change_password': bool(user.must_change_password) and 'imp' not in payload,
+            'must_change_password': (bool(user.must_change_password)
+                                     and 'imp' not in payload and payload.get('am') != 'oidc'),
         })
 
     @app.route('/admin/api/auth/me/password', methods=['POST'])
@@ -239,3 +249,103 @@ def register_auth_routes(app, db):
         db.session.commit()
 
         return jsonify({'success': True, 'preferences': preferences})
+
+    # --- SSO (OpenID Connect) -------------------------------------------------
+    # See application/oidc.py for the flow. These routes stay under
+    # /admin/api/auth/ like the password login, so a reverse proxy protecting
+    # that prefix covers them too.
+    from application.models import AuthProvider
+    from application import oidc
+
+    OIDC_COOKIE = 'dh_oidc'
+    OIDC_COOKIE_PATH = '/admin/api/auth/oidc'
+
+    def _oidc_redirect_uri(provider):
+        # host_url honours X-Forwarded-Proto/Host when TRUSTED_PROXY_COUNT is
+        # set (ProxyFix in app.py) — the Settings page shows admins this same
+        # URI to register at the provider.
+        return request.host_url.rstrip('/') + f'/admin/api/auth/oidc/{provider.slug}/callback'
+
+    def _back_to_admin(**fragment):
+        # Fragment, not query: browsers never send it to any server, so the
+        # handoff code doesn't end up in proxy access logs.
+        response = redirect('/admin/#' + urllib.parse.urlencode(fragment))
+        response.delete_cookie(OIDC_COOKIE, path=OIDC_COOKIE_PATH)
+        return response
+
+    @app.route('/admin/api/auth/providers', methods=['GET'])
+    def admin_auth_providers():
+        """Enabled SSO providers for the login page's buttons. Public: names only."""
+        providers = db.session.execute(
+            db.select(AuthProvider).where(AuthProvider.enabled.is_(True)).order_by(AuthProvider.name)
+        ).scalars().all()
+        return jsonify({'providers': [{'slug': p.slug, 'name': p.name} for p in providers]})
+
+    @app.route('/admin/api/auth/oidc/<slug>/start', methods=['GET'])
+    def admin_auth_oidc_start(slug):
+        """Send the browser to *slug*'s provider to log in."""
+        provider = db.session.execute(
+            db.select(AuthProvider).where(AuthProvider.slug == slug, AuthProvider.enabled.is_(True))
+        ).scalar_one_or_none()
+        if not provider:
+            return _back_to_admin(oidc_error='This login provider is not available.')
+        try:
+            url, browser_binding = oidc.begin_login(provider, _oidc_redirect_uri(provider))
+        except oidc.OidcError as e:
+            logger.warning("SSO login via '%s' could not start: %s", provider.name, e)
+            return _back_to_admin(oidc_error=f'{provider.name} is currently unavailable.')
+        response = redirect(url)
+        # SameSite=Lax still sends it on the provider's top-level redirect back.
+        response.set_cookie(
+            OIDC_COOKIE, browser_binding, max_age=oidc.PENDING_TTL_SECONDS, path=OIDC_COOKIE_PATH,
+            httponly=True, secure=request.is_secure, samesite='Lax',
+        )
+        return response
+
+    @app.route('/admin/api/auth/oidc/<slug>/callback', methods=['GET'])
+    def admin_auth_oidc_callback(slug):
+        """The provider's redirect back: finish the login, hand the SPA a one-time code."""
+        try:
+            pending = oidc.take_pending(request.args.get('state', ''), request.cookies.get(OIDC_COOKIE))
+            provider = db.session.get(AuthProvider, pending.provider_id)
+            if not provider or provider.slug != slug or not provider.enabled:
+                raise oidc.OidcError('This login provider is no longer available.')
+            if request.args.get('error'):
+                logger.info("SSO login via '%s' ended at the provider: %s %s", provider.name,
+                            request.args.get('error'), request.args.get('error_description', ''))
+                raise oidc.OidcError(f'The login at {provider.name} was cancelled or denied.')
+            code = request.args.get('code')
+            if not code:
+                raise oidc.OidcError(f'{provider.name} did not return a login code.')
+
+            claims = oidc.exchange_code(provider, pending, code)
+            user = oidc.resolve_user(db, provider, claims)
+            if not user.is_active:
+                raise oidc.OidcError('This account has been deactivated')
+            _record_login(user)
+            db.session.commit()
+        except oidc.OidcError as e:
+            db.session.rollback()
+            return _back_to_admin(oidc_error=str(e))
+        except Exception:
+            db.session.rollback()
+            logger.exception("SSO login via '%s' failed", slug)
+            return _back_to_admin(oidc_error='The login failed unexpectedly. Please try again.')
+
+        return _back_to_admin(oidc_code=oidc.create_handoff(user.id))
+
+    @app.route('/admin/api/auth/oidc/exchange', methods=['POST'])
+    def admin_auth_oidc_exchange():
+        """Swap a handoff code from the callback for a session token. data: {code}."""
+        data = request.get_json(silent=True) or {}
+        user_id = oidc.redeem_handoff(str(data.get('code', '')))
+        user = db.session.get(AdminUser, user_id) if user_id else None
+        if not user or not user.is_active:
+            return jsonify({'success': False, 'error': 'This login has expired. Please log in again.'}), 401
+        return jsonify({
+            'success': True,
+            'token': create_token(app, user, auth_method='oidc'),
+            'username': user.username,
+            'preferences': user.get_preferences(),
+            'must_change_password': False,
+        })

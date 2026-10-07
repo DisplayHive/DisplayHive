@@ -36,7 +36,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 # --- JWT ---------------------------------------------------------------------
 
 
-def create_token(app, user, impersonator_id=None) -> str:
+def create_token(app, user, impersonator_id=None, auth_method='password') -> str:
     """Issue a signed JWT for *user* (an AdminUser instance).
 
     If *impersonator_id* is given, the token is an impersonation session:
@@ -59,6 +59,10 @@ def create_token(app, user, impersonator_id=None) -> str:
     }
     if impersonator_id is not None:
         payload['imp'] = int(impersonator_id)
+    if auth_method == 'oidc':
+        # Signed, so a client can't add it: lets user_from_token() skip the
+        # password-only must_change_password lock for SSO sessions.
+        payload['am'] = 'oidc'
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm=TOKEN_ALGORITHM)
 
 
@@ -85,8 +89,9 @@ def user_from_token(app, db, token: str, allow_pending_password_change: bool = F
     *allow_pending_password_change* is set — only the self-service session
     check and password-change routes pass it, so such a session can do
     nothing else until a new password is chosen. Impersonation tokens are
-    exempt: the admin driving one is not the person who has to pick the
-    new password.
+    exempt (the admin driving one is not the person who has to pick the
+    new password), and so are SSO sessions (the flag is about the account's
+    password, which an SSO login didn't use).
     """
     payload = decode_token(app, token)
     if not payload:
@@ -100,7 +105,8 @@ def user_from_token(app, db, token: str, allow_pending_password_change: bool = F
         return None
     if int(payload.get('tv', 0) or 0) != int(getattr(user, 'token_version', 0) or 0):
         return None
-    if user.must_change_password and not allow_pending_password_change and 'imp' not in payload:
+    if (user.must_change_password and not allow_pending_password_change
+            and 'imp' not in payload and payload.get('am') != 'oidc'):
         return None
     return user
 

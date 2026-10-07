@@ -20,6 +20,7 @@ let
     eventlet
     requests
     pyjwt
+    cryptography
    
     
     

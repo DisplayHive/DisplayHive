@@ -12,7 +12,8 @@ pillow
 gunicorn>=23,<24
 eventlet
 requests
-pyjwt
+# [crypto] pulls in cryptography, needed to verify SSO (OIDC) ID tokens (RS256 etc.).
+pyjwt[crypto]
 # psycopg2-binary is only required when deploying with PostgreSQL (DATABASE_URL is set).
 # In the Nix production environment, python3Packages.psycopg2 from nixpkgs is used instead.
 psycopg2-binary

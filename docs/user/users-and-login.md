@@ -34,10 +34,17 @@ the same way.
 Additional admin accounts can be created, deactivated, reactivated, or
 deleted from the **Accounts** tab on the **Users** page (`/users`).
 
+Admins can also log in through an OpenID Connect provider (single sign-on).
+The first SSO login creates an account without groups or a password. See
+[Single sign-on](sso.md) for setup and for linking SSO logins to existing
+accounts. Each account's **Allow login with username and password** setting
+controls whether it can still use a password. At least one active
+Superadmin always keeps password login as a fallback.
+
 ### Forcing a password reset
 
-When creating or editing an account, tick **Force user to reset password on
-next login** (needs the `users.set_password` right). This is useful for
+When creating or editing an account that has password login, tick
+**Force user to reset password on next login** (needs the `users.set_password` right). This is useful for
 handing out an initial password that only the account owner should end up
 knowing.
 
@@ -51,6 +58,7 @@ knowing.
   to their name.
 - Impersonating such an account is unaffected; the impersonating admin is
   never asked to change the password.
+- Logging in via SSO is unaffected too: the flag only concerns the password.
 
 ## Rights & groups
 

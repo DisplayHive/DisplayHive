@@ -92,6 +92,7 @@ RIGHTS = [
 
     ('settings.page', 'settings', 'View Settings page'),
     ('settings.edit', 'settings', 'Edit system settings / active design'),
+    ('authproviders.manage', 'settings', 'Manage SSO login providers (OpenID Connect)'),
 
     ('alerting.page', 'alerting', 'View Alerting page'),
     ('alerting.manage', 'alerting', 'Manage alert recipients / subscriptions / test messages'),
@@ -262,6 +263,32 @@ def is_superadmin(db, user):
     if user is None:
         return False
     return any(g.is_superadmin for g in effective_group_closure(db, user))
+
+
+def password_superadmin_exists(db):
+    """True if at least one active Superadmin can still log in with a password.
+
+    That account is the break-glass path when every SSO provider is
+    unreachable or misconfigured. Handlers that could remove it (deactivate,
+    delete, turning off password login, group changes) apply their change,
+    call this before committing, and roll back if it returns False. The
+    session autoflushes, so pending changes are already visible here.
+    """
+    from application.models import AdminUser
+    candidates = db.session.execute(
+        db.select(AdminUser).where(
+            AdminUser.is_active.is_(True),
+            AdminUser.password_login_allowed.is_(True),
+            AdminUser.password_hash != '',
+        )
+    ).scalars().all()
+    return any(is_superadmin(db, user) for user in candidates)
+
+
+PASSWORD_SUPERADMIN_ERROR = (
+    'At least one active Superadmin must keep password login, as a fallback '
+    'when SSO is unavailable'
+)
 
 
 def would_create_cycle(db, group_id, new_parent_id):

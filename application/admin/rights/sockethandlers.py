@@ -22,6 +22,8 @@ def register_admin_rights_handlers(socketio, app, db):
         has_right,
         is_superadmin,
         would_create_cycle,
+        password_superadmin_exists,
+        PASSWORD_SUPERADMIN_ERROR,
     )
 
     def _gated_handler(right_key):
@@ -158,7 +160,13 @@ def register_admin_rights_handlers(socketio, app, db):
                 return {'success': False, 'error': 'Parent group not found'}
             if would_create_cycle(db, group.id, new_parent_id):
                 return {'success': False, 'error': 'That would create a group cycle'}
+            # Moving a group out from under Superadmin can strip its members
+            # of Superadmin, so this needs the break-glass check too.
+            had_break_glass = password_superadmin_exists(db)
             group.parent_group_id = new_parent_id
+            if had_break_glass and not password_superadmin_exists(db):
+                db.session.rollback()
+                return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
 
         db.session.commit()
         return {'success': True}
@@ -177,7 +185,11 @@ def register_admin_rights_handlers(socketio, app, db):
         ).first() is not None
         if has_children:
             return {'success': False, 'error': 'Reassign or delete subgroups first'}
+        had_break_glass = password_superadmin_exists(db)
         db.session.delete(group)
+        if had_break_glass and not password_superadmin_exists(db):
+            db.session.rollback()
+            return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
         db.session.commit()
         return {'success': True}
 
@@ -318,11 +330,15 @@ def register_admin_rights_handlers(socketio, app, db):
             if remaining <= 1:
                 return {'success': False, 'error': 'Cannot remove the last member of the Superadmin group'}
 
+        had_break_glass = password_superadmin_exists(db)
         for ug in current:
             if ug.group_id not in valid_ids:
                 db.session.delete(ug)
         for gid in valid_ids - current_ids:
             db.session.add(UserGroup(user_id=user.id, group_id=gid))
+        if had_break_glass and not password_superadmin_exists(db):
+            db.session.rollback()
+            return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
         db.session.commit()
         return {'success': True}
 

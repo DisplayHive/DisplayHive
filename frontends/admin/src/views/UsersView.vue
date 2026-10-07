@@ -6,7 +6,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
-import type { AdminUser, RightDefinition, RightsGroup, UserRightsRow, RightOverrideValue } from '../types/models'
+import type { AdminUser, AdminUserIdentity, RightDefinition, RightsGroup, UserRightsRow, RightOverrideValue } from '../types/models'
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -256,24 +256,127 @@ onUnmounted(() => {
 const showAccountDialog = ref(false)
 const isNewAccount = ref(false)
 const isSavingAccount = ref(false)
-const accountForm = ref<{ id: number | null; username: string; password: string; mustChangePassword: boolean }>({
+type AccountForm = {
+  id: number | null
+  username: string
+  password: string
+  mustChangePassword: boolean
+  passwordLoginAllowed: boolean
+}
+const accountForm = ref<AccountForm>({
   id: null,
   username: '',
   password: '',
   mustChangePassword: false,
+  passwordLoginAllowed: true,
 })
+
+// The live row for the account being edited, so its SSO identity list
+// refreshes when an unlink comes back through the users broadcast.
+const editingAccount = computed(() => users.value.find((u) => u.id === accountForm.value.id))
+
+// A password reset only means something for an account that logs in with a
+// password; typing a new password switches password login on (server-side too).
+const passwordLoginWillBeAllowed = computed(
+  () => isNewAccount.value || accountForm.value.passwordLoginAllowed || !!accountForm.value.password,
+)
 
 const openCreateAccountDialog = () => {
   isNewAccount.value = true
-  accountForm.value = { id: null, username: '', password: '', mustChangePassword: false }
+  accountForm.value = { id: null, username: '', password: '', mustChangePassword: false, passwordLoginAllowed: true }
   showAccountDialog.value = true
 }
 
 const openEditAccountDialog = (user: AdminUser) => {
   isNewAccount.value = false
-  accountForm.value = { id: user.id, username: user.username, password: '', mustChangePassword: !!user.must_change_password }
+  accountForm.value = {
+    id: user.id,
+    username: user.username,
+    password: '',
+    mustChangePassword: !!user.must_change_password,
+    passwordLoginAllowed: user.password_login_allowed !== false,
+  }
   showAccountDialog.value = true
 }
+
+const isSsoAccount = (user: AdminUser) => (user.identities?.length ?? 0) > 0
+
+const unlinkIdentity = (identity: AdminUserIdentity) => {
+  confirm.require({
+    message: `Unlink the SSO login "${identity.display_name || identity.subject}"? Its next SSO login creates a new, separate account.`,
+    header: 'Unlink SSO login',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const result = await emitWithAck<{ success: boolean; error?: string }>(
+        'displayhive:admin:users:cts:unlink_identity',
+        { id: identity.id },
+      )
+      if (result.success) {
+        toast.add({ severity: 'success', summary: 'Unlinked', detail: 'SSO login unlinked', life: 3000 })
+        loadUsers()
+      } else {
+        toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Unlink failed', life: 5000 })
+      }
+    },
+  })
+}
+
+// --- Merge an SSO-created account into an existing one ---------------------------
+// The admin-side way to link an SSO login to an existing account: an identity's
+// `sub` is unknown until its first login, which creates a new account; merging
+// moves the identity onto the real account and deletes the new one.
+
+const canMerge = computed(() => canEdit.value && canDelete.value)
+const showMergeDialog = ref(false)
+const mergeSource = ref<AdminUser | null>(null)
+const mergeTargetId = ref<number | null>(null)
+const isMerging = ref(false)
+const mergeTargetOptions = computed(() =>
+  users.value
+    .filter((u) => u.id !== mergeSource.value?.id)
+    .map((u) => ({ label: u.username, value: u.id })),
+)
+
+const openMergeDialog = (user: AdminUser) => {
+  mergeSource.value = user
+  mergeTargetId.value = null
+  showMergeDialog.value = true
+}
+
+const mergeAccount = async () => {
+  if (!mergeSource.value || !mergeTargetId.value) return
+  isMerging.value = true
+  try {
+    const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:users:cts:merge_user', {
+      source_id: mergeSource.value.id,
+      target_id: mergeTargetId.value,
+    })
+    if (result.success) {
+      toast.add({ severity: 'success', summary: 'Merged', detail: 'SSO login moved to the selected user', life: 3000 })
+      showMergeDialog.value = false
+      loadUsers()
+      loadRights()
+    } else {
+      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Merge failed', life: 5000 })
+    }
+  } finally {
+    isMerging.value = false
+  }
+}
+
+// SSO logins create accounts without groups (= no rights) and without a
+// password. List those so an admin notices, and either assigns groups or
+// merges them. "No password" tells them apart from a local account that merely
+// had an SSO login merged into it. Only knowable with the rights view, which
+// carries the group memberships.
+const ssoAccountsWithoutGroups = computed(() =>
+  canViewRights.value
+    ? users.value.filter(
+        (u) => isSsoAccount(u) && !u.has_password && !(userRightsById.value.get(u.id)?.group_ids.length),
+      )
+    : [],
+)
 
 const saveAccount = async () => {
   if (!accountForm.value.username.trim()) {
@@ -298,7 +401,10 @@ const saveAccount = async () => {
       payload.id = accountForm.value.id
       if (accountForm.value.password) payload.password = accountForm.value.password
       // Gated by users.set_password server-side, same as the password itself.
-      if (canSetPassword.value) payload.must_change_password = accountForm.value.mustChangePassword
+      if (canSetPassword.value) {
+        payload.password_login_allowed = passwordLoginWillBeAllowed.value
+        payload.must_change_password = passwordLoginWillBeAllowed.value && accountForm.value.mustChangePassword
+      }
     }
 
     const result = await emitWithAck<{ success: boolean; error?: string }>(event, payload)
@@ -678,6 +784,13 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
           <Message v-if="!canManageAccountsAny" severity="warn" :closable="false" class="users-warning">
             You have read-only access to Accounts — you can view accounts, but not create, edit, activate/deactivate, or delete them.
           </Message>
+          <Message v-if="ssoAccountsWithoutGroups.length" severity="info" :closable="false" class="users-warning" data-testid="sso-accounts-hint">
+            {{ ssoAccountsWithoutGroups.length === 1 ? 'An SSO login created an account' : `SSO logins created ${ssoAccountsWithoutGroups.length} accounts` }}
+            without any groups (so without rights):
+            <strong>{{ ssoAccountsWithoutGroups.map((u) => u.username).join(', ') }}</strong>.
+            Assign groups with <i class="pi pi-shield"></i>, or — if it belongs to someone who already has an account —
+            merge it into that account with <i class="pi pi-arrow-right-arrow-left"></i>.
+          </Message>
 
           <Card>
             <template #title>
@@ -702,6 +815,13 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                 <Column field="username" header="Username" sortable>
                   <template #body="{ data }">
                     {{ data.username }}
+                    <Tag
+                      v-if="isSsoAccount(data)"
+                      value="SSO"
+                      severity="info"
+                      class="ml-2"
+                      :title="data.identities.map((i: AdminUserIdentity) => `${i.provider_name || i.issuer}: ${i.display_name || i.subject}`).join('\n')"
+                    />
                     <Tag
                       v-if="data.must_change_password"
                       value="Password reset pending"
@@ -740,7 +860,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                 <Column field="last_login_at" header="Last Login">
                   <template #body="{ data }">{{ formatDate(data.last_login_at) }}</template>
                 </Column>
-                <Column header="Actions" style="width: 15rem">
+                <Column header="Actions" style="width: 18rem">
                   <template #body="{ data }">
                     <Button
                       icon="pi pi-info-circle"
@@ -768,6 +888,15 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
                       severity="secondary"
                       title="Edit account"
                       @click="openEditAccountDialog(data)"
+                    />
+                    <Button
+                      v-if="canMerge && isSsoAccount(data) && !data.has_password && data.username !== authStore.username"
+                      icon="pi pi-arrow-right-arrow-left"
+                      text
+                      rounded
+                      severity="secondary"
+                      title="Merge into existing user…"
+                      @click="openMergeDialog(data)"
                     />
                     <Button
                       v-if="canViewRights"
@@ -915,20 +1044,97 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 
         <template v-if="isNewAccount || canSetPassword">
           <label for="user-password">
-            {{ isNewAccount ? 'Password' : 'New Password (leave blank to keep current)' }}
+            {{
+              isNewAccount
+                ? 'Password'
+                : editingAccount?.has_password
+                  ? 'New Password (leave blank to keep current)'
+                  : 'Password (none set yet — setting one allows password login)'
+            }}
           </label>
           <Password id="user-password" v-model="accountForm.password" :feedback="false" toggle-mask />
 
-          <div class="must-change-password-row">
+          <div v-if="!isNewAccount" class="must-change-password-row">
+            <Checkbox
+              v-model="accountForm.passwordLoginAllowed"
+              input-id="user-password-login-allowed"
+              binary
+              :disabled="!!accountForm.password"
+            />
+            <label for="user-password-login-allowed">Allow login with username and password</label>
+          </div>
+
+          <div v-if="passwordLoginWillBeAllowed" class="must-change-password-row">
             <Checkbox v-model="accountForm.mustChangePassword" input-id="user-must-change-password" binary />
             <label for="user-must-change-password">Force user to reset password on next login</label>
           </div>
+        </template>
+
+        <template v-if="!isNewAccount && editingAccount?.identities?.length">
+          <label>SSO logins</label>
+          <ul class="identity-list">
+            <li v-for="identity in editingAccount.identities" :key="identity.id" class="identity-item">
+              <div class="identity-main">
+                <span class="identity-name">{{ identity.display_name || identity.subject }}</span>
+                <small class="muted">
+                  {{ identity.provider_name || identity.issuer }} · last login {{ formatDate(identity.last_login_at) }}
+                </small>
+              </div>
+              <Button
+                v-if="canEdit"
+                icon="pi pi-link"
+                text
+                rounded
+                severity="danger"
+                title="Unlink this SSO login"
+                @click="unlinkIdentity(identity)"
+              />
+            </li>
+          </ul>
         </template>
       </div>
 
       <template #footer>
         <Button data-tour="users-account-cancel" label="Cancel" text @click="showAccountDialog = false" />
         <Button label="Save" icon="pi pi-check" :loading="isSavingAccount" @click="saveAccount" />
+      </template>
+    </Dialog>
+
+    <!-- Merge an SSO-created account into an existing one -->
+    <Dialog v-model:visible="showMergeDialog" modal :style="{ width: '440px' }">
+      <template #header>
+        <div class="dialog-title">
+          <span class="dialog-title-icon-badge"><i class="pi pi-arrow-right-arrow-left dialog-title-icon"></i></span>
+          <span class="p-dialog-title">Merge into existing user</span>
+        </div>
+      </template>
+      <div class="dialog-form">
+        <p class="merge-explanation">
+          Moves the SSO login of <strong>{{ mergeSource?.username }}</strong> onto the user you pick, then
+          <strong>deletes {{ mergeSource?.username }}</strong>. From then on, that SSO login opens the picked account,
+          with its groups and settings.
+        </p>
+        <label for="merge-target">Merge into</label>
+        <Select
+          v-model="mergeTargetId"
+          input-id="merge-target"
+          :options="mergeTargetOptions"
+          option-label="label"
+          option-value="value"
+          filter
+          placeholder="Select a user"
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" text @click="showMergeDialog = false" />
+        <Button
+          label="Merge"
+          icon="pi pi-check"
+          severity="danger"
+          :disabled="!mergeTargetId"
+          :loading="isMerging"
+          @click="mergeAccount"
+        />
       </template>
     </Dialog>
 
@@ -1135,6 +1341,37 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 .dialog-form :deep(.p-password),
 .dialog-form :deep(input) {
   width: 100%;
+}
+
+.identity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.identity-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.identity-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.identity-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.merge-explanation {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
 }
 
 .must-change-password-row {

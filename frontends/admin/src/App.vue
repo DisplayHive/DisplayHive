@@ -179,6 +179,16 @@ watch(
 )
 
 onMounted(async () => {
+  // An SSO login comes back as /admin/#oidc_code=… (see stores/auth.ts).
+  // Strip it via the router once its initial navigation is done — doing it
+  // with history.replaceState earlier gets undone when that navigation
+  // finishes and writes the original URL back.
+  await router.isReady()
+  const ssoHash = route.hash
+  if (/oidc_(code|error)=/.test(ssoHash)) {
+    await router.replace({ path: route.path, query: route.query, hash: '' })
+    await authStore.consumeSsoRedirect(ssoHash)
+  }
   await authStore.restore()
   if (authStore.hasUsableSession) {
     connect()

@@ -68,6 +68,7 @@ nav:
       - Alerting: user/alerting.md
       - Import & export: user/import-export.md
       - Users & login: user/users-and-login.md
+      - Single sign-on (OIDC): user/sso.md
       - Settings: user/settings.md
       - FAQ: user/faq.md
   - Developer Guide:

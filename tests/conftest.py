@@ -39,6 +39,38 @@ import pytest
 import app as app_module  # noqa: E402 — must import after the env vars above are set
 
 
+def _make_pysqlite_transactions_real():
+    """Make the per-test SAVEPOINT isolation (db_session below) actually hold.
+
+    pysqlite doesn't emit BEGIN when SQLAlchemy starts a transaction, so the
+    test's outer transaction never really opened: the SAVEPOINT the code
+    under test commits into was the outermost one, and SQLite turns
+    RELEASE of an outermost SAVEPOINT into a real COMMIT — every committing
+    test silently leaked rows into the shared test database. This is
+    SQLAlchemy's documented fix ("Serializable isolation / Savepoints /
+    Transactional DDL" in its SQLite dialect docs): turn off pysqlite's own
+    transaction handling and emit BEGIN ourselves.
+    """
+    from sqlalchemy import event
+
+    with app_module.app.app_context():
+        engine = app_module.db.engine
+    if engine.dialect.name != 'sqlite':
+        return
+    engine.dispose()  # connections opened during app startup lack the hook
+
+    @event.listens_for(engine, 'connect')
+    def _disable_pysqlite_transactions(dbapi_connection, connection_record):
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(engine, 'begin')
+    def _emit_begin(conn):
+        conn.exec_driver_sql('BEGIN')
+
+
+_make_pysqlite_transactions_real()
+
+
 @pytest.fixture(scope='session')
 def flask_app():
     """The already-bootstrapped `app.py` module (app/db/socketio + first-run setup)."""
@@ -64,16 +96,23 @@ def db_session(flask_app):
     db = flask_app.db
     ctx = flask_app.app.app_context()
     ctx.push()
-    connection = db.engine.connect()
+    engines = db._app_engines[flask_app.app]
+    engine = engines[None]
+    connection = engine.connect()
     transaction = connection.begin()
-    db.session.configure(bind=connection, join_transaction_mode='create_savepoint')
+    # Flask-SQLAlchemy's Session.get_bind() ignores `session.bind` and always
+    # picks the app's engine — so route every session (including the ones
+    # test-client requests and socket handlers open in their own app
+    # context) through this connection by swapping it in as that engine.
+    engines[None] = connection
+    db.session.configure(join_transaction_mode='create_savepoint')
     try:
         yield db.session
     finally:
         db.session.remove()
+        engines[None] = engine
         transaction.rollback()
         connection.close()
-        db.session.configure(bind=db.engine)
         ctx.pop()
 
 

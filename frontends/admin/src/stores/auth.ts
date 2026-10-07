@@ -65,6 +65,9 @@ export const useAuthStore = defineStore('auth', () => {
   // Starts true whenever a token is present so the app doesn't flash the
   // login form while `restore()` confirms the token is still valid.
   const restoring = ref(!!token.value)
+  // Set when an SSO login came back with an error (see consumeSsoRedirect);
+  // LoginView shows it.
+  const ssoError = ref<string | null>(null)
 
   const isAuthenticated = computed(() => !!token.value)
   // While set, the server rejects this session everywhere except the
@@ -202,6 +205,45 @@ export const useAuthStore = defineStore('auth', () => {
       return null
     } catch (e) {
       return `Could not reach server: ${e}`
+    }
+  }
+
+  /**
+   * Finish an SSO login: the backend's callback redirects to `/admin/#oidc_code=…`
+   * (or `#oidc_error=…`). Swap the single-use code for a session token.
+   * App.vue calls this once on boot, before restore(), with the URL fragment —
+   * after removing it from the URL through the router, so a reload or a
+   * copied link never replays it.
+   */
+  const consumeSsoRedirect = async (hash: string) => {
+    const params = new URLSearchParams(hash.replace(/^#/, ''))
+    const code = params.get('oidc_code')
+    const error = params.get('oidc_error')
+    if (!code && !error) return
+    if (error) {
+      ssoError.value = error
+      return
+    }
+    restoring.value = true
+    try {
+      const response = await fetch('/admin/api/auth/oidc/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) {
+        ssoError.value = result.error || 'SSO login failed'
+        return
+      }
+      setMustChangePassword(false)
+      setSession(result.token, result.username, result.preferences || {})
+    } catch (e) {
+      ssoError.value = `Could not reach server: ${e}`
+    } finally {
+      // restore() (which runs next) clears it again; without a token it
+      // returns immediately, so make sure the login form shows.
+      if (!token.value) restoring.value = false
     }
   }
 
@@ -350,6 +392,8 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     restore,
+    consumeSsoRedirect,
+    ssoError,
     setPreferences,
     changePassword,
     authHeader,

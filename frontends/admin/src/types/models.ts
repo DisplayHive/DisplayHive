@@ -190,15 +190,45 @@ export interface MediaItem {
   tags?: string[]
 }
 
-/** An admin account (username/password login). */
+/** An SSO (OpenID Connect) identity linked to an admin account. */
+export interface AdminUserIdentity {
+  id: number
+  issuer: string
+  subject: string
+  /** Name of the login provider it last logged in through (null if since deleted). */
+  provider_name: string | null
+  /** Email / username from the provider — for telling identities apart only. */
+  display_name: string | null
+  created_at: string | null
+  last_login_at: string | null
+}
+
+/** An admin account (password and/or SSO login). */
 export interface AdminUser {
   id: number
   username: string
   is_active?: boolean
   /** Set by an admin: the account must pick a new password on its next login. */
   must_change_password?: boolean
+  /** Whether username + password login is allowed (off for SSO-created accounts). */
+  password_login_allowed?: boolean
+  /** Whether a password is set at all. */
+  has_password?: boolean
+  identities?: AdminUserIdentity[]
   created_at?: string | null
   last_login_at?: string | null
+}
+
+/** An SSO login provider (Settings → Login providers). The secret never comes back. */
+export interface AuthProvider {
+  id: number
+  slug: string
+  name: string
+  issuer: string
+  client_id: string
+  has_client_secret: boolean
+  scopes: string
+  enabled: boolean
 }
 
 /** A single checkable right in the user-rights system, e.g. "media.upload". */
