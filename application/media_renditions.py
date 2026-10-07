@@ -17,6 +17,7 @@ doesn't exist.
 
 import logging
 import os
+import uuid
 from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
@@ -33,9 +34,16 @@ def rendition_path(renditions_root: str, tier: str, rel: str) -> str:
 
 
 def _save(img, path: str, fmt: str, info: dict) -> None:
-    """Write *img* to *path* atomically (temp file in the same folder + replace)."""
+    """Write *img* to *path* atomically (temp file in the same folder + replace).
+
+    The temp name is unique per call, not just per process: run_blocking()
+    renders in a real thread pool, so two threads of one process can write
+    the same rendition at once (e.g. "Sync previews" while the startup
+    backfill is still running). With a shared per-pid name they overwrote
+    each other's half-written file or deleted it from under each other.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f'{path}.tmp-{os.getpid()}'
+    tmp = f'{path}.tmp-{uuid.uuid4().hex}'
     try:
         if fmt == 'JPEG':
             if img.mode not in ('RGB', 'L'):

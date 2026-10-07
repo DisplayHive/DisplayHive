@@ -98,3 +98,44 @@ def test_ensure_all_backfills_existing_uploads_and_skips_missing_sources(dirs):
     _make(os.path.join(media, 'tiny.png'), (100, 100))
     stats = mr.ensure_all(['one.png', 'sub/two.jpg', 'tiny.png', 'gone.png'], media, rend)
     assert stats == {'checked': 3, 'created': 3, 'skipped_no_source': 1}  # one.png: fhd+4k, two.jpg: fhd
+
+
+def test_concurrent_writes_of_the_same_rendition_dont_collide(tmp_path):
+    """Two threads saving one rendition at once (backfill + "Sync previews")
+    must both succeed and leave a complete file and no temp files behind."""
+    # Real OS threads: the test process imports app.py, whose
+    # eventlet.monkey_patch() turns threading.Thread into green threads
+    # that never overlap — exactly what run_blocking()'s pool is not.
+    try:
+        from eventlet import patcher
+        threading = patcher.original('threading')
+    except ImportError:
+        import threading
+
+    dest = str(tmp_path / 'fhd' / 'same.png')
+    # Noise doesn't compress, so each save takes long enough for the threads
+    # to actually overlap (zlib releases the GIL while compressing).
+    img = Image.frombytes('RGB', (1920, 1080), os.urandom(1920 * 1080 * 3))
+    errors = []
+
+    for _ in range(3):
+        start = threading.Barrier(6)
+
+        def write():
+            try:
+                start.wait()
+                mr._save(img, dest, 'PNG', {})
+            except Exception as e:  # noqa: BLE001 — surfaced via the assert below
+                errors.append(e)
+
+        threads = [threading.Thread(target=write) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert errors == []
+    assert _size(dest) == (1920, 1080)
+    with Image.open(dest) as im:
+        im.load()  # a file another thread wrote into half-way would fail here
+    assert os.listdir(tmp_path / 'fhd') == ['same.png']
