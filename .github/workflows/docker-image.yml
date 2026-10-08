@@ -57,6 +57,7 @@ jobs:
           push: true
           build-args: |
             PYTHON_VERSION=${{ steps.python.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

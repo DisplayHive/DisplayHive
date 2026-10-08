@@ -79,6 +79,7 @@ jobs:
           push: false
           build-args: |
             PYTHON_VERSION=${{ steps.python.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
           tags: displayhive:scan
           cache-from: type=gha
 

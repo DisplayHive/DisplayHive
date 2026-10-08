@@ -67,6 +67,9 @@ type SecurityStatus = {
   cors_wildcard?: boolean
   sqlite_in_use?: boolean
   debug_enabled?: boolean
+  // What the server runs (application/version.py).
+  version?: string
+  revision?: string
   // Only sent to holders of settings.page (application/admin/devices/connection.py).
   legacy_data_paths?: { kind: string; path: string }[]
   data_dir?: string | null
@@ -74,6 +77,9 @@ type SecurityStatus = {
 }
 
 const securityStatus = ref<SecurityStatus>({})
+// The server's version, once it has told us; the build-time commit until then.
+const serverVersion = computed(() => securityStatus.value.version ?? '…')
+const serverRevision = computed(() => securityStatus.value.revision ?? gitCommit.value)
 
 on('displayhive:system:stc:security_status', (data: SecurityStatus) => {
   securityStatus.value = data || {}
@@ -649,7 +655,7 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
 
       <div class="git-commit-badge">
         <a href="https://docs.displayhive.org/" target="_blank" rel="noopener" class="docs-link">DisplayHive Documentation</a>
-        · Commit: {{ gitCommit }}
+        · Version {{ serverVersion }} · Commit: {{ serverRevision }}
       </div>
     </template>
   </div>

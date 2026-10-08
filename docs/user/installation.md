@@ -182,6 +182,7 @@ variables are worth knowing about:
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | **Required.** The database: `postgresql://user:password@host:5432/dbname`. A `sqlite:///…` URL is accepted for development only (not in the Docker image or the NixOS module); see [Database](#database-postgresql-and-sqlite-for-development-only). |
+| `DISPLAYHIVE_REVISION` | The commit the instance was built from, shown in the admin footer and by `flask dh check-config`. The Docker image sets it at build time; with git checkouts (NixOS, development) it is read from git, so you normally never set it. |
 | `PUBLIC_URL` | The address people reach DisplayHive at, e.g. `https://signage.example.com` (scheme and host; a trailing slash is dropped). Set it in production. The **SSO redirect URI** is built from it (instead of from each request's `Host` header), and it is the default for **CORS**. An invalid value stops the app at start-up. NixOS: `publicUrl`. |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for the API and Socket.IO; an entry with a path is reduced to its origin. Wins over `PUBLIC_URL` when set. Unset: `PUBLIC_URL`'s origin; without that, local development origins only (the Docker compose file and the NixOS module fall back to `*`, i.e. any origin, which `flask dh check-config` and the admin panel flag as a warning). |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app. Set this whenever you put nginx (or similar) in front of DisplayHive, so rate-limiting uses the real client IP rather than the proxy's, and SSO redirect URIs use the public address. **Without it, every client looks like the proxy's IP, and the per-IP login limit (below) locks out everyone at once after a handful of failed logins.** |
@@ -331,6 +332,16 @@ places, the message names it. Nothing is moved or deleted.
    `DATA_DIR` or volumes.
 
 Keep the SQLite file until you have checked the result.
+
+## Version
+
+The admin panel's footer shows the running version and commit (for example
+`Version 0.1.0 · Commit: 2be5109`), the same values as
+`flask dh check-config` and the `version` / `revision` fields of
+`GET /admin/api/auth/me` (signed-in admins only; the health endpoints below
+don't reveal them). The screen client's JS and CSS are requested with the
+version and commit in the URL (`?v=0.1.0-2be5109`), so browsers load the new
+files after every update.
 
 ## Health checks
 

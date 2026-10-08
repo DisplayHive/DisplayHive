@@ -13,6 +13,7 @@ from functools import wraps
 
 from flask import request, jsonify, redirect
 
+from application import version
 from application.auth import (
     verify_password,
     hash_password,
@@ -170,6 +171,7 @@ def register_auth_routes(app, db):
             'success': True,
             'username': user.username,
             'preferences': user.get_preferences(),
+            **version.info(),
             'must_change_password': (bool(user.must_change_password)
                                      and 'imp' not in payload and payload.get('am') != 'oidc'),
         })

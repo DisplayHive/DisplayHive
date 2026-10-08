@@ -1,5 +1,12 @@
 # Contributing
 
+## Version
+
+The release version is the one line in the `VERSION` file in the repository
+root; bump it when you release. The build revision comes from git, or from the
+`DISPLAYHIVE_REVISION` variable / `GIT_COMMIT` build argument where there is no
+`.git` (the Docker image). See `application/version.py`.
+
 ## Getting set up
 
 See the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)

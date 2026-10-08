@@ -413,6 +413,8 @@ def check_config(online):
     proxies = os.environ.get('TRUSTED_PROXY_COUNT', '0') or '0'
     report('info', f'TRUSTED_PROXY_COUNT={proxies} — must equal the number of reverse proxies in front of the app')
     report('info', f"Deployment: {app.config.get('DEPLOYMENT_KIND', 'manual')}")
+    from application import version
+    report('info', f'Version: {version.display()}')
 
     report.section('Data directory')
     paths = app.DATA_PATHS if hasattr(app, 'DATA_PATHS') else data_paths.resolve()

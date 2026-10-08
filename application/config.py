@@ -12,6 +12,7 @@ from typing import Mapping, Optional, Union
 from urllib.parse import urlsplit
 
 from application import paths as data_paths
+from application import version
 from application.db_url import is_sqlite_url, resolve_database_url
 
 logger = logging.getLogger(__name__)
@@ -194,7 +195,9 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     # under gunicorn/production).
     cfg['DEBUG_ENABLED'] = False
     cfg['LOGGER_ROOM'] = 'logger_room'
-    cfg['ASSET_VERSION'] = '1'  # cache-busting for static files (bump on deploy)
+    cfg['APP_VERSION'] = version.release()
+    cfg['APP_REVISION'] = version.revision()
+    cfg['ASSET_VERSION'] = version.asset_version()  # cache-busting for the screen's JS/CSS: new per release/commit
 
     # Opt-in dev mode: the screen page loads its JS as an ES module straight
     # from the Vite dev server (with HMR) instead of dist/screen/screen.js.

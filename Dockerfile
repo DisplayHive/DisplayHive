@@ -11,26 +11,30 @@ ARG PYTHON_VERSION=3.13
 FROM node:22-bookworm-slim AS frontend
 WORKDIR /build
 
-# Admin SPA (Vue 3 + PrimeVue) — install deps first for better layer caching.
-# scripts/ is also copied here (not just package.json/-lock.json): `npm ci`
-# runs the "postinstall" script (scripts/copy-icons.mjs, populates the icon
-# field handler's assets from the icon-library packages), which needs to
-# exist before install runs, not just once the rest of the source lands.
+# Both frontends: install dependencies first for better layer caching. scripts/
+# is also copied (not just package.json/-lock.json): `npm ci` runs the
+# "postinstall" script (scripts/copy-icons.mjs, populates the icon field
+# handler's assets from the icon-library packages), which needs to exist before
+# install runs, not just once the rest of the source lands.
+# Admin SPA: Vue 3 + PrimeVue.
 COPY frontends/admin/package.json frontends/admin/package-lock.json frontends/admin/
 COPY frontends/admin/scripts/ frontends/admin/scripts/
 RUN npm --prefix frontends/admin ci
-COPY frontends/admin/ frontends/admin/
-# build-only skips vue-tsc type-checking (a CI concern, not a runtime one),
-# keeping image builds from failing on non-fatal type errors.
-RUN npm --prefix frontends/admin run build-only
-
-# Screen client (TypeScript, no framework). Same scripts/-before-ci reasoning
-# as the admin frontend above.
+# Screen client: TypeScript, no framework.
 COPY frontends/screen/package.json frontends/screen/package-lock.json frontends/screen/
 COPY frontends/screen/scripts/ frontends/screen/scripts/
 RUN npm --prefix frontends/screen ci
+COPY frontends/admin/ frontends/admin/
 COPY frontends/screen/ frontends/screen/
-RUN npm --prefix frontends/screen run build
+
+# The build context has no .git, so the commit comes in as a build argument (CI
+# passes github.sha; locally: --build-arg GIT_COMMIT=$(git rev-parse HEAD)). It is
+# declared only here, after the installs, so a new commit doesn't redo them.
+ARG GIT_COMMIT=
+# build-only skips vue-tsc type-checking (a CI concern, not a runtime one),
+# keeping image builds from failing on non-fatal type errors.
+RUN DISPLAYHIVE_REVISION="${GIT_COMMIT}" npm --prefix frontends/admin run build-only
+RUN DISPLAYHIVE_REVISION="${GIT_COMMIT}" npm --prefix frontends/screen run build
 
 # =====================================================================
 # Stage 2 — Python runtime (Flask + Socket.IO via gunicorn's gthread worker)
@@ -52,6 +56,12 @@ RUN pip install --no-cache-dir -r requirements.txt \
     # The app never needs pip at run time; its vendored libraries (msgpack,
     # urllib3, ...) lag behind and are what image scanners flag.
     && pip uninstall -y pip
+
+# Shown in the admin footer and the admin API, and part of the asset cache-busting
+# version (application/version.py). After the dependency install, so a new commit
+# doesn't redo it.
+ARG GIT_COMMIT=
+ENV DISPLAYHIVE_REVISION=${GIT_COMMIT}
 
 # Application source.
 COPY . .

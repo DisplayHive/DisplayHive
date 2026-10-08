@@ -6,7 +6,9 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import type { ServerResponse } from 'node:http'
 
+// The Docker build has no .git: the revision comes in as an environment variable.
 const gitCommit = (() => {
+  if (process.env.DISPLAYHIVE_REVISION) return process.env.DISPLAYHIVE_REVISION.trim().slice(0, 7)
   try {
     return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
   } catch {

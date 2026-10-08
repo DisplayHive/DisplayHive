@@ -146,6 +146,8 @@ def register_device_connection_handlers(socketio, app, db):
                     status['legacy_data_paths'] = app.config['LEGACY_DATA_PATHS']
                     status['data_dir'] = app.config.get('DATA_DIR')
                     status['deployment'] = app.config.get('DEPLOYMENT_KIND', 'manual')
+                from application import version
+                status.update(version.info())
                 socketio.emit('displayhive:system:stc:security_status', status, room=sid_info)
             except Exception:
                 logger.debug('Failed to send security_status to admin sid=%s', sid_info, exc_info=True)
