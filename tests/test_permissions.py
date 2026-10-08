@@ -99,6 +99,111 @@ def test_has_right_none_user_is_false(flask_app, db_session):
     assert has_right(flask_app.db, None, RIGHT_KEY) is False
 
 
+def _join(db_session, user, group):
+    from application.models import UserGroup
+    db_session.add(UserGroup(user_id=user.id, group_id=group.id))
+    db_session.commit()
+
+
+def test_has_right_is_inherited_from_a_parent_group(flask_app, db_session, make_user, make_group):
+    parent = make_group()
+    child = make_group(parent=parent)
+    user = make_user()
+    _join(db_session, user, child)
+    _grant(db_session, parent, RIGHT_KEY)
+
+    assert has_right(flask_app.db, user, RIGHT_KEY) is True
+
+
+def test_has_right_is_not_inherited_upwards_to_a_parent_groups_members(flask_app, db_session, make_user, make_group):
+    parent = make_group()
+    child = make_group(parent=parent)
+    member_of_parent = make_user()
+    _join(db_session, member_of_parent, parent)
+    _grant(db_session, child, RIGHT_KEY)
+
+    assert has_right(flask_app.db, member_of_parent, RIGHT_KEY) is False
+
+
+def test_has_right_unions_the_rights_of_several_groups(flask_app, db_session, make_user, make_group):
+    user = make_user()
+    first, second = make_group(), make_group()
+    _join(db_session, user, first)
+    _join(db_session, user, second)
+    _grant(db_session, first, RIGHT_KEY)
+    _grant(db_session, second, OTHER_RIGHT_KEY)
+
+    assert has_right(flask_app.db, user, RIGHT_KEY) is True
+    assert has_right(flask_app.db, user, OTHER_RIGHT_KEY) is True
+
+
+def test_has_right_user_deny_override_beats_an_ordinary_group_grant(flask_app, db_session, make_user, make_group):
+    user = make_user()
+    group = make_group()
+    _join(db_session, user, group)
+    _grant(db_session, group, RIGHT_KEY)
+    assert has_right(flask_app.db, user, RIGHT_KEY) is True
+
+    _set_override(db_session, user, RIGHT_KEY, 'deny')
+    assert has_right(flask_app.db, user, RIGHT_KEY) is False
+
+
+def test_has_right_override_applies_to_its_own_right_only(flask_app, db_session, make_user):
+    user = make_user()
+    _set_override(db_session, user, RIGHT_KEY, 'allow')
+
+    assert has_right(flask_app.db, user, OTHER_RIGHT_KEY) is False
+
+
+def test_has_right_ends_when_the_user_leaves_the_group(flask_app, db_session, make_user, make_group):
+    from application.models import UserGroup
+
+    user = make_user()
+    group = make_group()
+    _join(db_session, user, group)
+    _grant(db_session, group, RIGHT_KEY)
+    assert has_right(flask_app.db, user, RIGHT_KEY) is True
+
+    db_session.query(UserGroup).filter_by(user_id=user.id, group_id=group.id).delete()
+    db_session.commit()
+    assert has_right(flask_app.db, user, RIGHT_KEY) is False
+
+
+def test_a_superadmin_group_grants_every_right_including_inherited_via_a_parent(flask_app, db_session, make_user, make_group):
+    parent = make_group(is_superadmin=True)
+    child = make_group(parent=parent)
+    user = make_user()
+    _join(db_session, user, child)
+
+    assert has_right(flask_app.db, user, RIGHT_KEY) is True
+    assert has_right(flask_app.db, user, OTHER_RIGHT_KEY) is True
+
+
+def test_password_superadmin_exists_needs_an_active_password_login_superadmin(flask_app, db_session, make_user, make_group):
+    from application.permissions import password_superadmin_exists
+
+    # Other tests' committed users are rolled back, but the app's own
+    # bootstrap admin may exist: neutralise every superadmin first.
+    from application.models import AdminUser
+    for existing in db_session.query(AdminUser).all():
+        existing.is_active = False
+    db_session.commit()
+    assert password_superadmin_exists(flask_app.db) is False
+
+    admin = make_user()
+    _join(db_session, admin, make_group(is_superadmin=True))
+    assert password_superadmin_exists(flask_app.db) is True
+
+    admin.password_login_allowed = False
+    db_session.commit()
+    assert password_superadmin_exists(flask_app.db) is False
+
+    admin.password_login_allowed = True
+    admin.is_active = False
+    db_session.commit()
+    assert password_superadmin_exists(flask_app.db) is False
+
+
 # --- effective_group_closure ---------------------------------------------------
 
 
