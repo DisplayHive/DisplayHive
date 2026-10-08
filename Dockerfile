@@ -80,4 +80,10 @@ RUN useradd --system --create-home --uid 10001 displayhive \
     && chown -R displayhive:displayhive /app /data
 USER displayhive
 
+# Liveness only (/healthz: the process answers) — a database outage must not
+# make Docker report the app itself as broken; /readyz is for proxies and
+# monitoring. python, because the slim image has no curl.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=4)"]
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

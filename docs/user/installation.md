@@ -269,6 +269,37 @@ The notice disappears as soon as nothing is left in the old locations.
 [`flask dh check-config`](cli.md#check-config) lists the same and checks the
 rest of the setup.
 
+## Health checks
+
+DisplayHive has two unauthenticated endpoints for monitoring and proxies:
+
+| Endpoint | Answers | Use it for |
+|---|---|---|
+| `GET /healthz` | `200` as long as the process responds. Does not touch the database. | "Is the process alive?" |
+| `GET /readyz` | `200` when the database answers **and** its schema is at the newest migration (`alembic upgrade head` has run). `503` otherwise. | "Can the instance serve requests?" |
+
+```json
+{"status": "ok", "checks": {"database": "ok", "migrations": "head"}}
+```
+
+`migrations` is `head`, `behind` (the database is not at the newest migration,
+or was never migrated) or `untracked` (a SQLite file created without Alembic,
+as in local development; counts as ready). The answers contain no versions,
+addresses or error messages.
+
+Nothing acts on these endpoints by itself:
+
+- The **Docker image** has a `HEALTHCHECK` on `/healthz`, so `docker ps` shows
+  `healthy` or `unhealthy`. Docker does not restart the container because of
+  it. It checks the process only, so a database outage does not mark the
+  container itself as broken.
+- Point an **external monitor** at `/readyz`, for example
+  [Uptime Kuma](https://github.com/louislam/uptime-kuma) with an HTTP check
+  that expects status `200`, and let it notify you.
+- A reverse proxy or orchestrator that needs a readiness probe can use
+  `/readyz` as well. Restarting the app automatically on a failed probe drops
+  every connected screen, so do that only if you accept it.
+
 ## Debian
 
 TBD
