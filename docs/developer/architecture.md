@@ -41,8 +41,10 @@ The backend in detail:
   (`registry_lock` in `application/socketio_handlers/lifecycle.py`). New
   module-level state shared between requests needs the same — and tests
   for it need real `threading.Thread`s.
-- The Flask app is configured with the DB URI (`DATABASE_URL`
-  for Postgres, falling back to local SQLite), CORS restricted to `/api/*`
+- The Flask app is configured with the DB URI (`DATABASE_URL`, required:
+  PostgreSQL, or an explicit `sqlite:///…` URL for development only — there is
+  no fallback file, and the Docker image and NixOS module refuse SQLite
+  (`application/db_url.py`)), CORS restricted to `/api/*`
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance
   sharing the same CORS origins. `max_http_buffer_size` is 10 MB — room
   for large content payloads, not files: media uploads are a separate HTTP
@@ -75,7 +77,7 @@ The backend in detail:
 - In production, schema migrations are applied by running
   `alembic upgrade head` as a deploy step (see
   [`nix/module.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/module.nix)).
-  `db.create_all()` in the startup steps only runs for local SQLite as a dev
+  `db.create_all()` in the startup steps only runs for SQLite (development) as a dev
   convenience and is a no-op once tables exist.
 
 ## Data model

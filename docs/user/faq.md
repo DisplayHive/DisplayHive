@@ -27,8 +27,7 @@ gunicorn --worker-class gthread -w 1 --threads 500 --bind 0.0.0.0:<port> app:app
 
 You can run that yourself on any Linux host with Python 3.13 (see
 `.python-version`), Node.js, and
-a database (SQLite for small/single-instance setups, or PostgreSQL via
-`DATABASE_URL`) — install dependencies from `requirements.txt`, build the
+a PostgreSQL database (`DATABASE_URL`, required) — install dependencies from `requirements.txt`, build the
 two frontends, put a reverse proxy (e.g. nginx) in front for TLS and
 WebSocket forwarding, and manage the process with systemd, another process
 supervisor, or a container of your own making. See the root

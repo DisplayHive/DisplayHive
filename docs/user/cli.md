@@ -56,13 +56,19 @@ Checks the setup and prints `OK` / `INFO` / `WARN` / `FAIL` lines. It covers:
 - **Data directory:** whether every part exists, can be written to and has
   the right permissions, and whether any data is still in an old location.
 - **Database:** whether it can be reached and its schema is up to date, plus
-  the permissions of the SQLite file.
+  the permissions of the SQLite file (a development database).
 - **Accounts:** whether there is an active admin, and a Superadmin who can
   still log in with a password.
 - **Admin frontend:** whether it has been built.
 
 It exits with status 1 if anything is `FAIL`, so it fits health checks and
 deploy scripts. `--online` also contacts each enabled SSO provider.
+
+### `copy-database --from URL [--upgrade-source] [--yes]`
+
+Moves an installation from SQLite to PostgreSQL: copies everything into the
+database `DATABASE_URL` points at. See
+[Moving from SQLite to PostgreSQL](installation.md#moving-from-sqlite-to-postgresql).
 
 ### `rerender`
 

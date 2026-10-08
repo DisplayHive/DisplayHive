@@ -8,7 +8,11 @@ SQLite) and runs first-time setup automatically: JS dependencies, the
 Python venv (`.venv`, see below) and `alembic upgrade head`. `nix-shell`
 works too — `flake.nix` just wraps `shell.nix`. Without Nix, you'll need
 the Python version from `.python-version` (currently 3.13), Node.js, and
-SQLite installed manually.
+SQLite installed manually, and set `DATABASE_URL` yourself, e.g.
+`export DATABASE_URL=sqlite:///$PWD/data/db/project.db` — SQLite is for
+development only and is never picked up implicitly. The test suite ignores
+that variable and uses its own temporary database (`TEST_DATABASE_URL` selects
+another one, e.g. PostgreSQL).
 
 With [direnv](https://direnv.net/) hooked into your shell
 (`eval "$(direnv hook bash)"`), run `direnv allow` once and the dev shell

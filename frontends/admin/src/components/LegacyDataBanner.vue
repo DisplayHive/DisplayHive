@@ -21,7 +21,6 @@ const KIND_LABELS: Record<string, string> = {
   media: 'media files',
   media_previews: 'media previews',
   media_renditions: 'media renditions',
-  database: 'the SQLite database',
 }
 
 const what = computed(() => {
@@ -29,21 +28,15 @@ const what = computed(() => {
   return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}` : labels[0]
 })
 
-const hasMedia = computed(() => props.legacyPaths.some((p) => p.kind !== 'database'))
-const hasDatabase = computed(() => props.legacyPaths.some((p) => p.kind === 'database'))
+const hasMedia = computed(() => props.legacyPaths.length > 0)
 const dataDir = computed(() => props.dataDir || '/var/lib/displayhive')
 
 // Shell commands for a manual install: move each legacy location to its new
-// place under DATA_DIR. The database goes into db/ (0700), see paths.py.
+// place under DATA_DIR (the database is not part of this: DATABASE_URL is required).
 const moveCommands = computed(() => {
   const lines = [`mkdir -p ${dataDir.value}`]
   for (const p of props.legacyPaths) {
-    if (p.kind === 'database') {
-      lines.push(`mkdir -p ${dataDir.value}/db && chmod 700 ${dataDir.value}/db`)
-      lines.push(`mv ${p.path} ${dataDir.value}/db/project.db`)
-    } else {
-      lines.push(`mv ${p.path} ${dataDir.value}/${p.kind}`)
-    }
+    lines.push(`mv ${p.path} ${dataDir.value}/${p.kind}`)
   }
   return lines.join('\n')
 })
@@ -79,10 +72,6 @@ const docsUrl = 'https://docs.displayhive.org/user/installation/#moving-data-to-
           the new paths, then run <code>docker compose up -d</code>:
         </p>
         <pre>{{ composeSnippet }}</pre>
-        <p v-if="hasDatabase">
-          You run without PostgreSQL: also mount a volume at <code>/data/db</code> and copy
-          <code>project.db</code> into it while the container is stopped.
-        </p>
       </template>
 
       <template v-else-if="deployment === 'nixos'">

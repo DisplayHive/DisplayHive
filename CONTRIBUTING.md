@@ -15,7 +15,9 @@ nix develop   # or: nix-shell — provisions Python, Node, SQLite and runs first
 npm run dev   # backend + admin panel + screen client together
 ```
 
-Without Nix, you'll need Python 3.13, Node.js, and SQLite installed manually.
+Without Nix, you'll need Python 3.13, Node.js, and SQLite installed manually,
+and `DATABASE_URL` set (e.g. `sqlite:///$PWD/data/db/project.db`; SQLite is for
+development only).
 See the [README](README.md#getting-started) for details.
 
 ## Before opening a PR

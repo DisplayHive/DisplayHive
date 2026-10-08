@@ -5,7 +5,7 @@ Everything the app writes lives under one data directory, ``DATA_DIR``
 and backups/volumes cover a single directory::
 
     DATA_DIR/                 0750
-    ├── db/                   0700  project.db (+ journal/WAL) — SQLite only
+    ├── db/                   0700  only if DATABASE_URL points into it (SQLite, development)
     ├── media/                0750  uploads, served at /static/media/
     ├── media_previews/       0750  thumbnails, served at /static/media_previews/
     ├── media_renditions/     0750  scaled copies, served at /static/media_renditions/
@@ -14,11 +14,13 @@ and backups/volumes cover a single directory::
 The URLs stay /static/media/… etc. (they're stored in content), only the
 files moved; app.py serves them from here explicitly.
 
-Older installs kept these inside the code tree (``static/media…`` and
-``project.db`` in the app root). Nothing is moved automatically — for every
-location whose old copy still holds data while the new one doesn't, the old
-path keeps being used and is reported in ``DataPaths.legacy``, which the
-admin UI turns into a banner with migration steps.
+Older installs kept the media inside the code tree (``static/media…``).
+Nothing is moved automatically — for every location whose old copy still holds
+data while the new one doesn't, the old path keeps being used and is reported in
+``DataPaths.legacy``, which the admin UI turns into a banner with migration
+steps. (The database has no such fallback any more: DATABASE_URL is required,
+see application/db_url.py; ``existing_sqlite_files`` finds files that earlier
+versions would have used silently.)
 
 Imported by app.py and migrations/env.py, so it
 must not depend on Flask or the app being set up.
@@ -28,6 +30,8 @@ import logging
 import os
 import stat
 from dataclasses import dataclass, field
+
+from application.db_url import normalize_database_url, sqlite_path_from_url
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ class DataPaths:
     media_previews: str
     media_renditions: str
     import_staging: str
-    # SQLite file, or None when DATABASE_URL points elsewhere (PostgreSQL).
+    # The SQLite file DATABASE_URL points at, or None (PostgreSQL, or unset).
     db_path: str | None
     # Old locations still in use: [{'kind': 'media', 'path': '/app/static/media'}, …]
     legacy: list[dict] = field(default_factory=list)
@@ -76,18 +80,7 @@ def resolve(environ=None, app_root: str | None = None) -> DataPaths:
         else:
             resolved[name] = new
 
-    db_path = None
-    if not env.get('DATABASE_URL'):
-        if env.get('TEST_DB_PATH'):
-            db_path = env['TEST_DB_PATH']
-        else:
-            new_db = os.path.join(data_dir, 'db', 'project.db')
-            old_db = os.path.join(app_root, 'project.db')
-            if os.path.isfile(old_db) and not os.path.isfile(new_db):
-                db_path = old_db
-                legacy.append({'kind': 'database', 'path': old_db})
-            else:
-                db_path = new_db
+    db_path = sqlite_path_from_url(normalize_database_url(env.get('DATABASE_URL') or ''))
 
     return DataPaths(
         data_dir=data_dir,
@@ -98,6 +91,16 @@ def resolve(environ=None, app_root: str | None = None) -> DataPaths:
         db_path=db_path,
         legacy=legacy,
     )
+
+
+def existing_sqlite_files(environ=None, app_root: str | None = None) -> list[str]:
+    """SQLite files at the places earlier versions used when DATABASE_URL was
+    unset (DATA_DIR/db/project.db, project.db in the app root)."""
+    env = os.environ if environ is None else environ
+    app_root = app_root or APP_ROOT
+    data_dir = os.path.abspath(env.get('DATA_DIR') or os.path.join(app_root, 'data'))
+    candidates = [os.path.join(data_dir, 'db', 'project.db'), os.path.join(app_root, 'project.db')]
+    return [path for path in candidates if os.path.isfile(path)]
 
 
 def _make_dir(path: str, mode: int) -> None:

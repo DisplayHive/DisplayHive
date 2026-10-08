@@ -1,7 +1,7 @@
 # Installation
 
 DisplayHive is a self-hosted app: a Flask + Socket.IO backend, a PostgreSQL
-(or SQLite, for local testing) database, and two built frontends (the admin
+database (SQLite only for local development, see below), and two built frontends (the admin
 panel and the screen client) served by the same process. There's no external
 service dependency and no cloud component — everything runs on infrastructure
 you control.
@@ -28,8 +28,8 @@ nix develop   # or: nix-shell
 ```
 
 Entering the shell installs the JS dependencies for the root project and both
-frontends, and runs `alembic upgrade head` to bring the (SQLite, by default)
-database schema up to date. With [direnv](https://direnv.net/) hooked into
+frontends, and runs `alembic upgrade head` to bring the development database (a SQLite
+file in `data/db/`, chosen by the shell through `DATABASE_URL`) up to date. With [direnv](https://direnv.net/) hooked into
 your shell, this happens automatically on `cd` into the repo (`direnv allow`).
 
 Then start everything with:
@@ -181,6 +181,7 @@ variables are worth knowing about:
 
 | Variable | Purpose |
 |---|---|
+| `DATABASE_URL` | **Required.** The database: `postgresql://user:password@host:5432/dbname`. A `sqlite:///…` URL is accepted for development only (not in the Docker image or the NixOS module); see [Database](#database-postgresql-and-sqlite-for-development-only). |
 | `PUBLIC_URL` | The address people reach DisplayHive at, e.g. `https://signage.example.com` (scheme and host; a trailing slash is dropped). Set it in production. The **SSO redirect URI** is built from it (instead of from each request's `Host` header), and it is the default for **CORS**. An invalid value stops the app at start-up. NixOS: `publicUrl`. |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for the API and Socket.IO; an entry with a path is reduced to its origin. Wins over `PUBLIC_URL` when set. Unset: `PUBLIC_URL`'s origin; without that, local development origins only (the Docker compose file and the NixOS module fall back to `*`, i.e. any origin, which `flask dh check-config` and the admin panel flag as a warning). |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app. Set this whenever you put nginx (or similar) in front of DisplayHive, so rate-limiting uses the real client IP rather than the proxy's, and SSO redirect URIs use the public address. **Without it, every client looks like the proxy's IP, and the per-IP login limit (below) locks out everyone at once after a handful of failed logins.** |
@@ -208,7 +209,7 @@ itself can stay read-only and a single path covers backups:
 | `media_previews/` | Thumbnails | `0750` |
 | `media_renditions/` | Scaled copies for screens (can be regenerated) | `0750` |
 | `import-staging/` | Uploaded import files between preview and confirm | `0700` |
-| `db/project.db` | The SQLite database, only without `DATABASE_URL` | `0700` (directory) |
+| `db/project.db` | A SQLite *development* database, only if `DATABASE_URL` points into it. Never used implicitly. | `0700` (directory) |
 
 DisplayHive creates missing directories with these permissions on start and
 leaves existing ones alone. The SQLite database holds password hashes and
@@ -270,6 +271,66 @@ export DATA_DIR=/var/lib/displayhive   # e.g. in your systemd unit or .env
 The notice disappears as soon as nothing is left in the old locations.
 [`flask dh check-config`](cli.md#check-config) lists the same and checks the
 rest of the setup.
+
+## Database: PostgreSQL, and SQLite for development only
+
+`DATABASE_URL` is required. DisplayHive runs on PostgreSQL
+(`postgresql://user:password@host:5432/displayhive`). SQLite works for local
+development and tests, but only when you ask for it explicitly with a
+`sqlite:///…` URL, and the Docker image and the NixOS module refuse it.
+
+Earlier versions silently created a SQLite file when `DATABASE_URL` was unset
+(in a container, outside every volume, so it was lost whenever the container
+was recreated). That fallback is gone: without `DATABASE_URL` the app and
+`alembic` stop with an error. If an old SQLite file exists at one of its former
+places, the message names it. Nothing is moved or deleted.
+
+### Moving from SQLite to PostgreSQL
+
+1. **Secure the file.** On a normal install it is `DATA_DIR/db/project.db`
+   (or `project.db` in the app directory of a very old install). In a
+   **Docker container** it sits inside the container, so copy it out *before*
+   the container is removed or recreated:
+
+   ```bash
+   docker cp displayhive:/data/db/project.db ./project.db
+   ```
+
+2. **Prepare PostgreSQL.** Create an empty database and point `DATABASE_URL`
+   at it. With Docker, use the current `compose.yml` (it includes PostgreSQL)
+   and start it: the container creates the schema itself. Without Docker, run
+   `alembic upgrade head` against the new database. The freshly started
+   instance creates a bootstrap admin account; the copy in the next step
+   replaces it.
+
+3. **Copy.** The old file is brought up to the current schema version on the
+   way (`--upgrade-source`, in place, so work on a copy of the file):
+
+   ```bash
+   flask dh copy-database --from sqlite:////absolute/path/project.db --upgrade-source
+   ```
+
+   With Docker, put the file into the running container first and run the
+   command there:
+
+   ```bash
+   docker compose cp ./project.db displayhive:/tmp/project.db
+   docker compose exec -u root displayhive chown displayhive /tmp/project.db
+   docker compose exec displayhive flask dh copy-database --from sqlite:////tmp/project.db --upgrade-source
+   ```
+
+   The command shows source and target, asks for confirmation (`--yes` skips
+   it) and then **replaces everything** in the target in one go: users,
+   groups and rights, SSO providers, devices and their keys, settings and
+   content. If anything fails, the target stays as it was. Rows that point at
+   rows that don't exist (SQLite doesn't always enforce that) are reported;
+   fix or delete them in the source copy and run it again.
+
+4. **Start DisplayHive** against PostgreSQL. Devices keep their keys and
+   reconnect by themselves. Media files are not in the database; keep the same
+   `DATA_DIR` or volumes.
+
+Keep the SQLite file until you have checked the result.
 
 ## Health checks
 

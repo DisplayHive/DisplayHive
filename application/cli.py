@@ -5,6 +5,7 @@
     flask --app app dh check-config [--online]
     flask --app app dh rerender [--missing-only]
     flask --app app dh rerender-content [--contenttype ID]
+    flask --app app dh copy-database --from SQLITE_URL [--upgrade-source] [--yes]
 
 (The Docker image sets FLASK_APP, so `flask dh …` is enough there; the
 NixOS module installs a `displayhive-<instance>` wrapper.)
@@ -240,6 +241,89 @@ def rerender_content(contenttype_ids):
     rerender_all(current_app.extensions['sqlalchemy'], list(contenttype_ids))
 
 
+# --- copy-database ----------------------------------------------------------------
+
+
+def _revision_of(engine):
+    from alembic.runtime.migration import MigrationContext
+    with engine.connect() as connection:
+        return MigrationContext.configure(connection).get_current_revision()
+
+
+def _upgrade_to_head(engine):
+    """`alembic upgrade head` on *engine*, whatever DATABASE_URL says (see migrations/env.py)."""
+    from pathlib import Path
+    from alembic import command
+    from alembic.config import Config
+
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / 'alembic.ini'))
+    config.set_main_option('script_location', str(root / 'migrations'))
+    try:
+        with engine.begin() as connection:
+            config.attributes['connection'] = connection
+            command.upgrade(config, 'head')
+    except Exception as exc:
+        raise click.ClickException(f'Could not upgrade the source database: {exc}')
+
+
+@dh.command('copy-database')
+@click.option('--from', 'source_url', required=True, metavar='URL',
+              help='Database to copy FROM, e.g. sqlite:////data/db/project.db. The configured DATABASE_URL is the target.')
+@click.option('--upgrade-source', is_flag=True,
+              help='First bring the --from database up to the current schema version (in place: work on a copy of the file).')
+@click.option('--yes', is_flag=True, help="Don't ask before replacing the target's contents.")
+def copy_database_command(source_url, upgrade_source, yes):
+    """Move a SQLite installation to PostgreSQL: copy everything into DATABASE_URL.
+
+    Copies users, groups and rights, SSO providers, devices and their keys,
+    settings and content 1:1 from the --from database into the configured one,
+    which is EMPTIED first (all or nothing: on an error the target is left as
+    it was). Prepare the target with `alembic upgrade head`, and stop the app
+    (screens reconnect afterwards). Media files are not in the database: keep
+    using the same DATA_DIR / volumes.
+    """
+    import sqlalchemy as sa
+    from flask import current_app
+    from application.dbcopy import CopyError, copy_database
+    from application.db_url import normalize_database_url
+    from application.web.health import _migration_heads
+
+    db = current_app.extensions['sqlalchemy']
+    target_url = current_app.config['SQLALCHEMY_DATABASE_URI']
+    source_url = normalize_database_url(source_url.strip())
+    if sa.engine.make_url(source_url) == sa.engine.make_url(target_url):
+        raise click.ClickException('--from and DATABASE_URL are the same database.')
+    if current_app.config.get('SQLITE_IN_USE'):
+        click.secho('Note: the target (DATABASE_URL) is SQLite — the usual target is PostgreSQL.', fg='yellow')
+
+    source = sa.create_engine(source_url)
+    target = db.engine
+    heads = set(_migration_heads())
+    if upgrade_source:
+        _upgrade_to_head(source)
+    for label, engine, hint in (('Source', source, 'add --upgrade-source (it migrates the --from database in place; work on a copy)'),
+                                ('Target', target, 'run `alembic upgrade head` on it')):
+        try:
+            revision = _revision_of(engine)
+        except Exception as exc:
+            raise click.ClickException(f'{label} database is not reachable: {exc}')
+        if revision not in heads:
+            raise click.ClickException(
+                f'{label} database is not at the current schema version ({revision or "unmigrated"}): {hint}.')
+
+    host = lambda url: sa.engine.make_url(url).render_as_string(hide_password=True)  # noqa: E731
+    click.echo(f'From: {host(source_url)}\nTo:   {host(target_url)}')
+    if not yes:
+        click.confirm('This REPLACES everything in the target database. Continue?', abort=True)
+    try:
+        counts = copy_database(source, target, db.metadata, echo=click.echo)
+    except CopyError as exc:
+        raise click.ClickException(str(exc))
+    click.secho(f'Done: {sum(counts.values())} row(s) in {len(counts)} table(s) copied.', fg='green', bold=True)
+    click.echo('Start DisplayHive against the new database. Devices keep their keys and reconnect by themselves.')
+
+
 # --- check-config --------------------------------------------------------------
 
 
@@ -380,7 +464,7 @@ def _check_database(report, app, db, paths) -> bool:
 
     uri = app.config['SQLALCHEMY_DATABASE_URI']
     if app.config.get('SQLITE_IN_USE'):
-        report('warn', f'SQLite ({paths.db_path}) — fine for testing, use PostgreSQL (DATABASE_URL) in production')
+        report('warn', f'SQLite ({paths.db_path}) — for development only, use PostgreSQL (DATABASE_URL) in production')
         if paths.db_path and data_paths.db_exposed(paths.db_path):
             report('warn', f'{paths.db_path} is readable by other users — it holds password hashes and '
                            f'secrets: chmod 600 {paths.db_path}')

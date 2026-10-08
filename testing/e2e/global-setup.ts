@@ -110,7 +110,7 @@ export default async function globalSetup() {
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      TEST_DB_PATH: dbPath,
+      DATABASE_URL: `sqlite:///${dbPath}`,
       DATA_DIR: dataDir,
       FLASK_PORT: String(port),
       // Pin the first-run bootstrap admin account so fixtures.ts can log in

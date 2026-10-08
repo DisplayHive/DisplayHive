@@ -33,7 +33,6 @@ def test_fresh_install_uses_data_dir_for_everything(roots):
     assert p.media_previews == str(data_dir / 'media_previews')
     assert p.media_renditions == str(data_dir / 'media_renditions')
     assert p.import_staging == str(data_dir / 'import-staging')
-    assert p.db_path == str(data_dir / 'db' / 'project.db')
     assert p.legacy == []
 
 
@@ -66,15 +65,26 @@ def test_new_location_wins_once_it_has_data(roots):
     assert p.legacy == []
 
 
-def test_database_resolution(roots):
+def test_database_path_comes_only_from_an_explicit_sqlite_url(roots):
     app_root, data_dir = roots
-    (app_root / 'project.db').write_bytes(b'')
-    p = _resolve(roots)
-    assert p.db_path == str(app_root / 'project.db')
-    assert {'kind': 'database', 'path': str(app_root / 'project.db')} in p.legacy
-
+    (app_root / 'project.db').write_bytes(b'')       # an old file is never picked up implicitly
+    assert _resolve(roots).db_path is None
     assert _resolve(roots, DATABASE_URL='postgresql://x/y').db_path is None
-    assert _resolve(roots, TEST_DB_PATH='/tmp/x.db').db_path == '/tmp/x.db'
+    assert _resolve(roots, DATABASE_URL='sqlite:////var/dh/x.db').db_path == '/var/dh/x.db'
+    assert _resolve(roots, DATABASE_URL='sqlite://').db_path is None   # in-memory
+    assert _resolve(roots).legacy == []
+
+
+def test_existing_sqlite_files_finds_the_places_earlier_versions_used(roots):
+    app_root, data_dir = roots
+    env = {'DATA_DIR': str(data_dir)}
+    assert paths.existing_sqlite_files(env, app_root=str(app_root)) == []
+    (app_root / 'project.db').write_bytes(b'')
+    (data_dir / 'db').mkdir(parents=True)
+    (data_dir / 'db' / 'project.db').write_bytes(b'')
+    assert paths.existing_sqlite_files(env, app_root=str(app_root)) == [
+        str(data_dir / 'db' / 'project.db'), str(app_root / 'project.db'),
+    ]
 
 
 def test_ensure_dirs_creates_tight_permissions_but_leaves_existing_ones(roots):
@@ -82,7 +92,7 @@ def test_ensure_dirs_creates_tight_permissions_but_leaves_existing_ones(roots):
     (data_dir / 'media').mkdir(parents=True)
     os.chmod(data_dir / 'media', 0o755)  # admin's own choice
     os.chmod(data_dir, 0o755)
-    p = _resolve(roots)
+    p = _resolve(roots, DATABASE_URL=f'sqlite:///{data_dir}/db/project.db')
     paths.ensure_dirs(p)
     assert _mode(data_dir) == 0o755
     assert _mode(data_dir / 'media') == 0o755
@@ -93,7 +103,7 @@ def test_ensure_dirs_creates_tight_permissions_but_leaves_existing_ones(roots):
 
 def test_ensure_dirs_warns_about_a_readable_database(roots, caplog):
     app_root, data_dir = roots
-    p = _resolve(roots)
+    p = _resolve(roots, DATABASE_URL=f'sqlite:///{data_dir}/db/project.db')
     paths.ensure_dirs(p)
     with open(p.db_path, 'wb'):
         pass

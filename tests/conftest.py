@@ -12,7 +12,7 @@ imported, driven by env vars. For the bulk of the suite:
 Isolation there comes from wrapping each test in a SQLAlchemy
 connection-level transaction (with a SAVEPOINT so code under test can still
 call `db.session.commit()`/`rollback()` without escaping it), rolled back in
-teardown. A real temp SQLite file (not `:memory:`) is used for TEST_DB_PATH so
+teardown. A real temp SQLite file (not `:memory:`) is used for DATABASE_URL so
 every connection the engine opens sees the same database — `:memory:` is
 per-connection unless the engine is explicitly configured with StaticPool,
 which the app doesn't do (it's built for a real file or Postgres).
@@ -30,7 +30,10 @@ _tmp_db_fd, _tmp_db_path = tempfile.mkstemp(prefix='displayhive_pytest_', suffix
 os.close(_tmp_db_fd)
 atexit.register(lambda: os.path.exists(_tmp_db_path) and os.unlink(_tmp_db_path))
 
-os.environ.setdefault('TEST_DB_PATH', _tmp_db_path)
+# The tests' database is explicit (DATABASE_URL is required): a temp SQLite file,
+# or TEST_DATABASE_URL (the CI PostgreSQL job). It always overrides DATABASE_URL,
+# so a developer's own dev database is never touched by the suite.
+os.environ['DATABASE_URL'] = os.environ.get('TEST_DATABASE_URL') or f'sqlite:///{_tmp_db_path}'
 
 # Keep media/staging written by tests out of the checkout — and out of a
 # developer's real legacy static/media (application/paths.py would otherwise

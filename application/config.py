@@ -12,7 +12,7 @@ from typing import Mapping, Optional, Union
 from urllib.parse import urlsplit
 
 from application import paths as data_paths
-from application.db_url import normalize_database_url
+from application.db_url import is_sqlite_url, resolve_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -164,15 +164,16 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     # Uploaded files (media, imports) are streamed here, not into memory or
     # /tmp — see DataDirRequest in application/admin/media/routes.py.
     cfg['UPLOAD_STAGING_DIR'] = paths.import_staging
-    cfg['DEPLOYMENT_KIND'] = data_paths.deployment_kind()
+    cfg['DEPLOYMENT_KIND'] = data_paths.deployment_kind(environ)
 
-    # Production: DATABASE_URL (PostgreSQL). Otherwise a local SQLite file in
-    # DATA_DIR (TEST_DB_PATH lets each Playwright worker use its own).
-    database_url = environ.get('DATABASE_URL')
-    cfg['SQLALCHEMY_DATABASE_URI'] = (
-        normalize_database_url(database_url) if database_url else f'sqlite:///{paths.db_path}'
+    # DATABASE_URL is required (PostgreSQL; SQLite only explicitly, for development).
+    database_url = resolve_database_url(
+        environ,
+        deployment=cfg['DEPLOYMENT_KIND'],
+        existing_sqlite_files=data_paths.existing_sqlite_files(environ),
     )
-    cfg['SQLITE_IN_USE'] = not bool(database_url)
+    cfg['SQLALCHEMY_DATABASE_URI'] = database_url
+    cfg['SQLITE_IN_USE'] = is_sqlite_url(database_url)
     cfg['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options(environ)
 
     # Pick up template changes without a full process restart.

@@ -4,6 +4,7 @@ import pytest
 from flask import Flask
 
 from application import paths as data_paths
+from application.db_url import DatabaseConfigError
 from application.config import (
     DEV_CORS_ORIGINS, ConfigError, apply_config, engine_options, env_int, is_truthy,
     resolve_cors_origins, resolve_public_url, trusted_proxy_count,
@@ -85,7 +86,11 @@ def test_engine_options_defaults_and_overrides():
     assert engine_options({'DB_POOL_SIZE': '25', 'DB_MAX_OVERFLOW': 'x'})['max_overflow'] == 20
 
 
-def _apply(env, tmp_path):
+def _apply(env, tmp_path, database=True):
+    """apply_config on a bare Flask app. DATABASE_URL is required, so by
+    default a throw-away SQLite URL is supplied (database=False omits it)."""
+    if database:
+        env = {'DATABASE_URL': f'sqlite:///{tmp_path}/t.db', **env}
     app = Flask('t')
     paths = data_paths.resolve({'DATA_DIR': str(tmp_path), **env}, app_root=str(tmp_path / 'root'))
     cors = apply_config(app, paths, env)
@@ -98,9 +103,9 @@ def test_apply_config_database_url_is_made_explicit(tmp_path):
     assert app.config['SQLITE_IN_USE'] is False
 
 
-def test_apply_config_sqlite_fallback_and_media_folders(tmp_path):
+def test_apply_config_sqlite_only_when_asked_for_and_media_folders(tmp_path):
     app, _ = _apply({'SECRET_KEY': 's' * 32}, tmp_path)
-    assert app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite:///')
+    assert app.config['SQLALCHEMY_DATABASE_URI'] == f'sqlite:///{tmp_path}/t.db'
     assert app.config['SQLITE_IN_USE'] is True
     assert app.config['MEDIA_FOLDER'].startswith(str(tmp_path))
     assert app.config['MEDIA_RENDITIONS_FOLDER'].startswith(str(tmp_path))
@@ -119,3 +124,33 @@ def test_apply_config_flags_the_default_secret_key_and_wildcard_cors(tmp_path):
 def test_apply_config_screen_dev_server_flag(tmp_path):
     app, _ = _apply({'SECRET_KEY': 's' * 32, 'SCREEN_DEV_SERVER': 'yes'}, tmp_path)
     assert app.config['SCREEN_DEV_SERVER'] is True
+
+
+# --- DATABASE_URL is required -------------------------------------------------
+
+
+def test_apply_config_refuses_to_start_without_database_url(tmp_path):
+    with pytest.raises(DatabaseConfigError, match='DATABASE_URL is not set'):
+        _apply({'SECRET_KEY': 's' * 32}, tmp_path, database=False)
+
+
+def test_the_missing_url_error_names_an_existing_sqlite_file_and_the_way_out(tmp_path):
+    old = tmp_path / 'db'
+    old.mkdir()
+    (old / 'project.db').write_bytes(b'x')
+    with pytest.raises(DatabaseConfigError) as error:
+        _apply({'SECRET_KEY': 's' * 32, 'DATA_DIR': str(tmp_path)}, tmp_path, database=False)
+    message = str(error.value)
+    assert str(old / 'project.db') in message
+    assert f'sqlite:///{old / "project.db"}' in message and 'copy-database' in message
+    assert (old / 'project.db').read_bytes() == b'x'   # nothing moved or deleted
+
+
+@pytest.mark.parametrize('kind, where', [('docker', 'Docker image'), ('nixos', 'NixOS module')])
+def test_sqlite_is_refused_in_docker_and_nixos(tmp_path, kind, where):
+    with pytest.raises(DatabaseConfigError, match=where):
+        _apply({'SECRET_KEY': 's' * 32, 'DISPLAYHIVE_DEPLOYMENT': kind}, tmp_path)
+    # PostgreSQL is fine there.
+    app, _ = _apply({'SECRET_KEY': 's' * 32, 'DISPLAYHIVE_DEPLOYMENT': kind,
+                     'DATABASE_URL': 'postgresql://u:p@db/x'}, tmp_path)
+    assert app.config['SQLITE_IN_USE'] is False

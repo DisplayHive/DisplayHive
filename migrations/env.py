@@ -1,10 +1,8 @@
 """Alembic migration environment.
 
-Database URL resolution order:
-1. DATABASE_URL environment variable (PostgreSQL in production).
-2. Otherwise the same SQLite file the app uses — TEST_DB_PATH in tests,
-   else DATA_DIR/db/project.db (or a legacy project.db in the app root),
-   decided by application/paths.py.
+The database is DATABASE_URL, exactly as for the app (PostgreSQL; SQLite only
+as an explicit development URL) — application/db_url.py decides, and there is
+no fallback file.
 """
 
 import os
@@ -17,28 +15,36 @@ from alembic import context
 # Make the project root importable so models can be imported below.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from application.db_url import normalize_database_url  # noqa: E402
+from application.db_url import DatabaseConfigError, resolve_database_url  # noqa: E402
 from application import paths as data_paths  # noqa: E402
 
 # Alembic Config object, giving access to values in alembic.ini.
 config = context.config
 
-# Override sqlalchemy.url with the environment-supplied DATABASE_URL when
-# present, so that the same alembic.ini works for both SQLite (dev) and
-# PostgreSQL (production) without editing the file.
-_db_url = os.environ.get('DATABASE_URL')
-if _db_url:
-    config.set_main_option('sqlalchemy.url', normalize_database_url(_db_url))
-else:
-    # Never alembic.ini's relative default: that depends on the working
-    # directory and could migrate a different file than the app opens.
+# Override sqlalchemy.url with DATABASE_URL, so that the same alembic.ini
+# works for SQLite (dev) and PostgreSQL without editing the file. (Never
+# alembic.ini's relative default: that depends on the working directory and
+# could migrate a different file than the app opens.)
+# `flask dh copy-database --upgrade-source` hands in the connection of the
+# database to migrate (the old SQLite file), which is not DATABASE_URL.
+_given_connection = config.attributes.get('connection')
+if _given_connection is None:
+    try:
+        _db_url = resolve_database_url(
+            os.environ,
+            deployment=data_paths.deployment_kind(),
+            existing_sqlite_files=data_paths.existing_sqlite_files(),
+        )
+    except DatabaseConfigError as exc:
+        sys.exit(f'\nERROR: {exc}\n')
+    config.set_main_option('sqlalchemy.url', _db_url)
     _paths = data_paths.resolve()
-    data_paths.ensure_dirs(_paths)
-    config.set_main_option('sqlalchemy.url', f'sqlite:///{_paths.db_path}')
+    if _paths.db_path:
+        data_paths.ensure_dirs(_paths)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Import models so that target_metadata is populated.
 from application.models import db  # noqa: E402  (must come after sys.path setup)
@@ -61,6 +67,11 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode (with a live DB connection)."""
+    if _given_connection is not None:
+        context.configure(connection=_given_connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix='sqlalchemy.',

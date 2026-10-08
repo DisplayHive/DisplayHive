@@ -99,6 +99,18 @@ pkgs.mkShell {
       fi
     done
 
+    # DATABASE_URL is required; SQLite is only for development, so the dev shell
+    # chooses it explicitly (an existing DATABASE_URL wins). The test suite
+    # ignores this and uses its own temporary database. A project.db left in the
+    # repository root by an old version keeps being used, so dev data survives.
+    if [ -z "$DATABASE_URL" ]; then
+      if [ -f "$dh_root/project.db" ] && [ ! -f "$dh_root/data/db/project.db" ]; then
+        export DATABASE_URL="sqlite:///$dh_root/project.db"
+      else
+        export DATABASE_URL="sqlite:///$dh_root/data/db/project.db"
+      fi
+    fi
+
     # Run database migrations on shell entry so the schema is always up to date.
     if [ -f "$PWD/alembic.ini" ]; then
       echo "Running alembic upgrade head..."
