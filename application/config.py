@@ -9,6 +9,7 @@ import logging
 import os
 import warnings
 from typing import Mapping, Optional, Union
+from urllib.parse import urlsplit
 
 from application import paths as data_paths
 from application.db_url import normalize_database_url
@@ -59,17 +60,50 @@ def is_truthy(value: Optional[str]) -> bool:
     return (value or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
+class ConfigError(ValueError):
+    """An environment variable has a value the app cannot start with."""
+
+
+def resolve_public_url(environ: Mapping[str, str]) -> Optional[str]:
+    """PUBLIC_URL: the address people reach this instance at, e.g.
+    ``https://signage.example.com`` (a sub-path is allowed, a trailing slash is
+    dropped). ``None`` when unset. The CORS default and the SSO redirect URI
+    are derived from it, instead of from whatever Host header a request carries.
+    """
+    raw = (environ.get('PUBLIC_URL') or '').strip()
+    if not raw:
+        return None
+    parsed = urlsplit(raw)
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.query or parsed.fragment:
+        raise ConfigError(
+            f'PUBLIC_URL must look like https://signage.example.com (scheme and host, '
+            f'no query or fragment), got {raw!r}'
+        )
+    return raw.rstrip('/')
+
+
+def _origin_of(url: str) -> str:
+    """scheme://host[:port] of *url* — CORS compares origins, never paths."""
+    parsed = urlsplit(url)
+    return f'{parsed.scheme}://{parsed.netloc}' if parsed.scheme and parsed.netloc else url
+
+
 def resolve_cors_origins(environ: Mapping[str, str]) -> Union[list, str]:
     """The allowed CORS origins, shared by flask_cors (HTTP /api/*) and Socket.IO.
 
-    Unset → local dev origins only (plus this instance's own port when
-    FLASK_PORT overrides 5000, e.g. parallel Playwright workers: the screen
-    client served by this app connects back to its own origin). ``*`` →
-    everything, only if the operator explicitly accepts that. Otherwise a
-    comma-separated list.
+    ``CORS_ALLOWED_ORIGINS`` wins when set: ``*`` → everything, only if the
+    operator explicitly accepts that; otherwise a comma-separated list (an
+    entry with a path is reduced to its origin; set but empty allows
+    nothing). Unset → this instance's PUBLIC_URL when that is set; else local dev
+    origins only (plus this instance's own port when FLASK_PORT overrides 5000,
+    e.g. parallel Playwright workers: the screen client served by this app
+    connects back to its own origin).
     """
     raw = environ.get('CORS_ALLOWED_ORIGINS')
     if raw is None:
+        public_url = resolve_public_url(environ)
+        if public_url:
+            return [_origin_of(public_url)]
         origins = list(DEV_CORS_ORIGINS)
         own_port = environ.get('FLASK_PORT')
         if own_port and own_port != '5000':
@@ -77,7 +111,7 @@ def resolve_cors_origins(environ: Mapping[str, str]) -> Union[list, str]:
         return origins
     if raw.strip() == '*':
         return '*'
-    return [o.strip() for o in raw.split(',') if o.strip()]
+    return [_origin_of(o.strip()) for o in raw.split(',') if o.strip()]
 
 
 def trusted_proxy_count(environ: Mapping[str, str]) -> int:
@@ -169,6 +203,7 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     cfg['SCREEN_DEV_SERVER'] = is_truthy(environ.get('SCREEN_DEV_SERVER'))
     cfg['SCREEN_DEV_SERVER_URL'] = environ.get('SCREEN_DEV_SERVER_URL', 'http://localhost:5174')
 
+    cfg['PUBLIC_URL'] = resolve_public_url(environ)
     cors_origins = resolve_cors_origins(environ)
     cfg['CORS_WILDCARD'] = cors_origins == '*'
     return cors_origins

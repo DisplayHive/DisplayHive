@@ -208,6 +208,14 @@ def test_flow_uses_pkce_and_client_secret(flask_app, db_session, idp, provider):
     assert 'client_secret' not in request['data']
 
 
+def test_redirect_uri_comes_from_public_url_not_the_host_header(flask_app, db_session, idp, provider, monkeypatch):
+    monkeypatch.setitem(flask_app.app.config, 'PUBLIC_URL', 'https://signage.example.com')
+    client = flask_app.app.test_client()
+    response = client.get('/admin/api/auth/oidc/main/start', headers={'Host': 'attacker.example'})
+    query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(response.headers['Location']).query))
+    assert query['redirect_uri'] == 'https://signage.example.com/admin/api/auth/oidc/main/callback'
+
+
 @pytest.mark.parametrize('override, message', [
     ({'nonce': 'someone-elses-nonce'}, 'different login attempt'),
     ({'aud': 'another-app'}, 'could not be verified'),

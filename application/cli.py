@@ -314,10 +314,16 @@ def check_config(online):
         report('warn', f'SECRET_KEY is only {len(secret)} characters — use at least 32')
     else:
         report('ok', 'SECRET_KEY is set')
-    if app.config.get('CORS_WILDCARD'):
-        report('warn', 'CORS_ALLOWED_ORIGINS is unset (any origin allowed) — set it to your public URL(s)')
+    public_url = app.config.get('PUBLIC_URL')
+    if public_url:
+        report('ok', f'PUBLIC_URL={public_url}')
     else:
-        report('ok', 'CORS_ALLOWED_ORIGINS is restricted')
+        report('warn', 'PUBLIC_URL is unset — set it to the address people reach DisplayHive at '
+                       '(the SSO redirect URI then comes from each request\'s Host header)')
+    if app.config.get('CORS_WILDCARD'):
+        report('warn', 'CORS allows any origin — set PUBLIC_URL (or CORS_ALLOWED_ORIGINS)')
+    else:
+        report('ok', 'CORS is restricted')
     if os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes', 'on'):
         report('warn', 'FLASK_DEBUG is on — the Werkzeug debugger allows code execution; never on a reachable host')
     proxies = os.environ.get('TRUSTED_PROXY_COUNT', '0') or '0'

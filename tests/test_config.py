@@ -5,8 +5,8 @@ from flask import Flask
 
 from application import paths as data_paths
 from application.config import (
-    DEV_CORS_ORIGINS, apply_config, engine_options, env_int, is_truthy,
-    resolve_cors_origins, trusted_proxy_count,
+    DEV_CORS_ORIGINS, ConfigError, apply_config, engine_options, env_int, is_truthy,
+    resolve_cors_origins, resolve_public_url, trusted_proxy_count,
 )
 
 
@@ -26,6 +26,35 @@ def test_cors_wildcard_and_explicit_list():
         'https://a.example', 'https://b.example',
     ]
     assert resolve_cors_origins({'CORS_ALLOWED_ORIGINS': ''}) == []   # set but empty: allow nothing
+
+
+def test_public_url_is_normalised_and_optional():
+    assert resolve_public_url({}) is None
+    assert resolve_public_url({'PUBLIC_URL': '  '}) is None
+    assert resolve_public_url({'PUBLIC_URL': 'https://signage.example.com/'}) == 'https://signage.example.com'
+    assert resolve_public_url({'PUBLIC_URL': 'http://host:8080/dh'}) == 'http://host:8080/dh'
+
+
+@pytest.mark.parametrize('raw', ['signage.example.com', 'ftp://x.example', 'https://', 'https://a.example/?x=1', 'https://a.example/#f'])
+def test_public_url_rejects_values_the_app_cannot_use(raw):
+    with pytest.raises(ConfigError, match='PUBLIC_URL'):
+        resolve_public_url({'PUBLIC_URL': raw})
+
+
+def test_cors_defaults_to_the_origin_of_public_url():
+    assert resolve_cors_origins({'PUBLIC_URL': 'https://signage.example.com/dh'}) == ['https://signage.example.com']
+    # An explicit setting still wins, including the wildcard and "allow nothing".
+    assert resolve_cors_origins({'PUBLIC_URL': 'https://a.example', 'CORS_ALLOWED_ORIGINS': '*'}) == '*'
+    assert resolve_cors_origins({'PUBLIC_URL': 'https://a.example', 'CORS_ALLOWED_ORIGINS': ''}) == []
+    assert resolve_cors_origins({'PUBLIC_URL': 'https://a.example', 'CORS_ALLOWED_ORIGINS': 'https://b.example/x'}) == ['https://b.example']
+
+
+def test_apply_config_exposes_public_url(tmp_path):
+    app, cors = _apply({'PUBLIC_URL': 'https://signage.example.com/', 'SECRET_KEY': 'a-real-long-random-secret-key-123456'}, tmp_path)
+    assert app.config['PUBLIC_URL'] == 'https://signage.example.com'
+    assert cors == ['https://signage.example.com'] and app.config['CORS_WILDCARD'] is False
+    app2, _ = _apply({'SECRET_KEY': 'a-real-long-random-secret-key-123456'}, tmp_path)
+    assert app2.config['PUBLIC_URL'] is None
 
 
 @pytest.mark.parametrize('raw, expected', [

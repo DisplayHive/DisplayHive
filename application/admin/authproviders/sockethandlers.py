@@ -26,7 +26,12 @@ def register_admin_authprovider_handlers(socketio, app, db):
 
     def _providers_payload():
         providers = db.session.execute(db.select(AuthProvider).order_by(AuthProvider.name)).scalars().all()
-        return {'success': True, 'providers': [p.to_dict() for p in providers]}
+        return {
+            'success': True,
+            'providers': [p.to_dict() for p in providers],
+            # The base of the redirect URI to register at a provider (None: use the browser's origin).
+            'public_url': app.config.get('PUBLIC_URL'),
+        }
 
     @socketio.on('displayhive:admin:authproviders:cts:get_providers')
     @require_right('authproviders.manage')

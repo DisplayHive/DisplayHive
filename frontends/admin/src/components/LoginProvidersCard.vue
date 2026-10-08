@@ -24,24 +24,30 @@ const { emitWithAck } = useSocket()
 const toast = useToast()
 const confirm = useConfirm()
 
-type Result = { success: boolean; error?: string; providers?: AuthProvider[] }
+type Result = { success: boolean; error?: string; providers?: AuthProvider[]; public_url?: string | null }
 
 const providers = ref<AuthProvider[]>([])
+/** PUBLIC_URL of the server, when configured; else the browser's origin is used. */
+const publicUrl = ref<string | null>(null)
 const loading = ref(true)
 
 const load = async () => {
   const result = await emitWithAck<Result>('displayhive:admin:authproviders:cts:get_providers')
-  if (result.success) providers.value = result.providers || []
+  if (result.success) {
+    providers.value = result.providers || []
+    publicUrl.value = result.public_url || null
+  }
   loading.value = false
 }
 
 onMounted(load)
 
-// The callback URL an admin registers at the provider. Built from the
-// browser's own origin, which is what the backend sees too (behind a proxy,
-// as long as TRUSTED_PROXY_COUNT is set — see docs/user/installation.md).
+// The callback URL an admin registers at the provider: the server's
+// PUBLIC_URL when it is configured (the backend builds the same one), else the
+// browser's own origin, which is what the backend sees too (behind a proxy, as
+// long as TRUSTED_PROXY_COUNT is set — see docs/user/installation.md).
 const redirectUriFor = (slug: string) =>
-  `${window.location.origin}/admin/api/auth/oidc/${slug || '<identifier>'}/callback`
+  `${publicUrl.value || window.location.origin}/admin/api/auth/oidc/${slug || '<identifier>'}/callback`
 
 const copy = async (text: string) => {
   try {

@@ -175,12 +175,14 @@ below) so rate-limiting sees the real client IP instead of the proxy's.
 ## Configuration
 
 Beyond `SECRET_KEY`, `POSTGRES_PASSWORD`, and `ADMIN_BOOTSTRAP_*` (covered
-above) and `DATABASE_URL`/`CORS_ALLOWED_ORIGINS` (see
+above) and `DATABASE_URL` (see
 [Architecture](../developer/architecture.md)), a few more environment
 variables are worth knowing about:
 
 | Variable | Purpose |
 |---|---|
+| `PUBLIC_URL` | The address people reach DisplayHive at, e.g. `https://signage.example.com` (scheme and host; a trailing slash is dropped). Set it in production. The **SSO redirect URI** is built from it (instead of from each request's `Host` header), and it is the default for **CORS**. An invalid value stops the app at start-up. NixOS: `publicUrl`. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for the API and Socket.IO; an entry with a path is reduced to its origin. Wins over `PUBLIC_URL` when set. Unset: `PUBLIC_URL`'s origin; without that, local development origins only (the Docker compose file and the NixOS module fall back to `*`, i.e. any origin, which `flask dh check-config` and the admin panel flag as a warning). |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app. Set this whenever you put nginx (or similar) in front of DisplayHive, so rate-limiting uses the real client IP rather than the proxy's, and SSO redirect URIs use the public address. **Without it, every client looks like the proxy's IP, and the per-IP login limit (below) locks out everyone at once after a handful of failed logins.** |
 | `LOGIN_RATE_LIMIT_PER_IP` | Failed logins allowed from one IP address, across all usernames, within 15 minutes before that IP is locked out (default `20`). Separate from the stricter 5-failure limit per IP + username. |
 | `FLASK_DEBUG` | Enables the Werkzeug debugger. Local development only — never set this on a network-reachable host, since it allows arbitrary code execution from the browser. |

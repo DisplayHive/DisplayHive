@@ -97,9 +97,9 @@ const criticalSecurityIssues = computed<SecurityIssue[]>(() => {
   }
   if (securityStatus.value.cors_wildcard) {
     issues.push({
-      title: 'CORS_ALLOWED_ORIGINS is set to "*" (any origin).',
+      title: 'CORS allows any origin ("*").',
       detail:
-        'Any website may then make cross-origin requests to the API. Set it to the public URL(s) of this instance, for example https://signage.example.com, and restart.',
+        'Any website may then make cross-origin requests to the API. Set PUBLIC_URL to the address of this instance, for example https://signage.example.com, and restart. (CORS_ALLOWED_ORIGINS overrides it if you need several origins.)',
     })
   }
   return issues

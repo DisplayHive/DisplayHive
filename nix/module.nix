@@ -550,12 +550,24 @@ let
         '';
       };
 
+      publicUrl = mkOption {
+        type    = types.nullOr types.str;
+        default = null;
+        example = "https://signage.example.com";
+        description = ''
+          The address people reach this instance at (scheme and host).
+          CORS and the SSO redirect URI are derived from it, instead of from
+          the Host header of each request. Set this in production.
+        '';
+      };
+
       corsAllowedOrigins = mkOption {
-        type    = types.str;
-        default = "*";
+        type    = types.nullOr types.str;
+        default = null;
         description = ''
           Comma-separated list of allowed origins for Socket.IO CORS.
-          Set to the public URL of your reverse proxy in production.
+          When null: the origin of {option}`publicUrl` if that is set,
+          otherwise "*" (any origin — set one of the two in production).
         '';
       };
 
@@ -683,7 +695,9 @@ let
       DATABASE_URL             = "postgresql:///displayhive-${name}?host=/run/postgresql";
       FLASK_PORT               = toString icfg.port;
       SECRET_KEY               = icfg.secretKey;
-      CORS_ALLOWED_ORIGINS     = icfg.corsAllowedOrigins;
+      CORS_ALLOWED_ORIGINS     = if icfg.corsAllowedOrigins != null then icfg.corsAllowedOrigins
+                                 else if icfg.publicUrl != null then icfg.publicUrl
+                                 else "*";
       LOG_LEVEL                = icfg.logLevel;
       TRUSTED_PROXY_COUNT      = toString icfg.trustedProxyCount;
       DATA_DIR                 = icfg.dataDirectory;
@@ -694,6 +708,8 @@ let
       ADMIN_BOOTSTRAP_USERNAME = icfg.adminBootstrapUsername;
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
       ADMIN_BOOTSTRAP_PASSWORD = icfg.adminBootstrapPassword;
+    } // optionalAttrs (icfg.publicUrl != null) {
+      PUBLIC_URL = icfg.publicUrl;
     } // icfg.extraEnv;
 
   # `displayhive-<name> <command>` = `flask dh <command>` as the instance's
@@ -779,7 +795,7 @@ in {
             gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
             gitBranch       = "testing";
             secretKey       = "change-me";
-            corsAllowedOrigins = "https://staging.example.com";
+            publicUrl = "https://staging.example.com";
             webhook.enable     = true;
             webhook.port       = 9001;
             webhook.secretFile = "/run/secrets/displayhive-staging-webhook-secret";

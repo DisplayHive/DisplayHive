@@ -262,10 +262,13 @@ def register_auth_routes(app, db):
     OIDC_COOKIE_PATH = '/admin/api/auth/oidc'
 
     def _oidc_redirect_uri(provider):
-        # host_url honours X-Forwarded-Proto/Host when TRUSTED_PROXY_COUNT is
-        # set (ProxyFix in app.py) — the Settings page shows admins this same
-        # URI to register at the provider.
-        return request.host_url.rstrip('/') + f'/admin/api/auth/oidc/{provider.slug}/callback'
+        # PUBLIC_URL when configured: the redirect URI then no longer depends
+        # on the request's Host header. Otherwise host_url, which honours
+        # X-Forwarded-Proto/Host when TRUSTED_PROXY_COUNT is set (ProxyFix in
+        # the app factory). The Settings page shows admins this same URI to
+        # register at the provider.
+        base = app.config.get('PUBLIC_URL') or request.host_url.rstrip('/')
+        return base + f'/admin/api/auth/oidc/{provider.slug}/callback'
 
     def _back_to_admin(**fragment):
         # Fragment, not query: browsers never send it to any server, so the

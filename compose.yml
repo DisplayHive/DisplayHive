@@ -10,9 +10,13 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://displayhive:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/displayhive
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
-      # Comma-separated list of allowed origins for the API / Socket.IO.
-      # Set to your public URL(s) in production, e.g. https://signage.example.com
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      # The address people reach this instance at, e.g. https://signage.example.com
+      # CORS and the SSO redirect URI are derived from it.
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      # Comma-separated allowed origins for the API / Socket.IO. Unset: PUBLIC_URL
+      # when that is set, otherwise "*" (any origin — fine for a first try, not
+      # for production).
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-${PUBLIC_URL:-*}}
       # Initial admin account (created on first start if no users exist).
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}

@@ -107,7 +107,7 @@
       # gitSshKeyFile = config.age.secrets."displayhive-staging-deploy-key".path;
 
       secretKey          = "replace-with-a-real-secret-key";
-      corsAllowedOrigins = "https://staging.example.com";
+      publicUrl          = "https://staging.example.com";  # CORS + SSO redirect URI derive from it
 
       # ── Extra app env vars (all optional — see module.nix for defaults) ──
       # logLevel               = "INFO";
@@ -136,7 +136,7 @@
       gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
       gitBranch       = "main";
       secretKey       = "replace-with-a-real-secret-key-for-production";
-      corsAllowedOrigins = "https://example.com";
+      publicUrl          = "https://example.com";
       # No webhook for production — deploy manually via nixos-rebuild switch.
     };
 
