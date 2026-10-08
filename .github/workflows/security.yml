@@ -1,0 +1,90 @@
+name: security
+
+# Known-vulnerability scans: Python and npm dependencies, and the Docker image.
+# They also run weekly, because new advisories appear without any code change.
+
+on:
+  push:
+    branches: [main, development]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    # Runtime requirements only (requirements.txt is fully pinned with hashes);
+    # test/docs tools in requirements-dev.txt never ship.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit the runtime requirements
+        run: pip-audit -r requirements.txt --disable-pip --no-deps
+
+  npm-audit:
+    # Production dependencies, high severity and up. Dev tooling (vite,
+    # vitest, eslint, ...) is not shipped and is not gated. Fix with
+    # `npm audit fix --omit=dev` in the failing package, then `npm ci`.
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [admin, screen]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontends/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  trivy-image:
+    # Scans the image built from this commit for fixed HIGH/CRITICAL
+    # vulnerabilities in OS packages and in the Python/Node libraries.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Read Python version
+        id: python
+        run: echo "version=$(tr -d '[:space:]' < .python-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the image (not pushed)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          build-args: |
+            PYTHON_VERSION=${{ steps.python.outputs.version }}
+          tags: displayhive:scan
+          cache-from: type=gha
+
+      - name: Scan with Trivy
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln \
+            --exit-code 1 displayhive:scan

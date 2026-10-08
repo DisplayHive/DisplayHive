@@ -48,7 +48,10 @@ WORKDIR /app
 COPY requirements.txt ./
 # requirements.txt is the runtime lock (every package pinned, with hashes —
 # pip checks them); test/docs tools live in requirements-dev.txt only.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    # The app never needs pip at run time; its vendored libraries (msgpack,
+    # urllib3, ...) lag behind and are what image scanners flag.
+    && pip uninstall -y pip
 
 # Application source.
 COPY . .
