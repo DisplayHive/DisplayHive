@@ -68,6 +68,51 @@ jobs:
       - name: Run pytest
         run: pytest
 
+  backend-postgres:
+    # The suite normally runs on SQLite. This job runs the same tests on the
+    # PostgreSQL the Docker image uses, after migrating an empty database
+    # with `alembic upgrade head` — so a migration that only breaks on
+    # Postgres fails here.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: displayhive
+          POSTGRES_PASSWORD: displayhive
+          POSTGRES_DB: displayhive
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U displayhive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg2://displayhive:displayhive@localhost:5432/displayhive
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Migrate the empty database (alembic upgrade head)
+        run: alembic upgrade head
+
+      # Fails when a model change has no migration (or a migration drifts
+      # from the models) — write the migration, don't relax this check.
+      - name: Check the migrations match the models
+        run: alembic check
+
+      - name: Run pytest on PostgreSQL
+        run: pytest
+
   python-locks:
     # Fails when requirements.txt / requirements-dev.txt don't match their .in
     # inputs — someone edited an .in file without running `npm run deps:lock`.

@@ -10,7 +10,7 @@ from application.models import Design, Device, db
 def fresh_app(tmp_path):
     """A factory-built app on its own empty SQLite file, without startup work."""
     uri = f"sqlite:///{tmp_path / 'factory.db'}"
-    app, socketio = create_app({'SQLALCHEMY_DATABASE_URI': uri, 'TESTING': True}, startup=False)
+    app, socketio = create_app({'SQLALCHEMY_DATABASE_URI': uri, 'SQLITE_IN_USE': True, 'TESTING': True}, startup=False)
     with app.app_context():
         db.create_all()
     return app, socketio

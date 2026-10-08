@@ -40,7 +40,7 @@ class ContentElement(db.Model):
     uuid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False, default=lambda: str(uuid4()))
     active: Mapped[bool]
     title: Mapped[str] = mapped_column(String(255))
-    html: Mapped[str]
+    html: Mapped[str] = mapped_column(Text)
     duration: Mapped[int]
     # store serialized POST input
     serialized_input: Mapped[str] = mapped_column(Text)
@@ -411,7 +411,7 @@ class PretalxApiCache(db.Model):
     """Cached JSON response for a Pretalx API URL."""
     __tablename__ = 'pretalx_api_cache'
     id: Mapped[int] = mapped_column(primary_key=True)
-    api_url_id: Mapped[int] = mapped_column(Integer, ForeignKey('pretalx_api_url.id'))
+    api_url_id: Mapped[int] = mapped_column(Integer, ForeignKey('pretalx_api_url.id', ondelete='CASCADE'))
     cached_json: Mapped[str] = mapped_column(Text)
     fetched_at: Mapped[datetime] = mapped_column(DateTime)
     api_url: Mapped["PretalxApiUrl"] = relationship("PretalxApiUrl", back_populates="cache")
