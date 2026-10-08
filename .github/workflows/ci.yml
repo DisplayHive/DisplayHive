@@ -41,11 +41,23 @@ jobs:
       - name: Type-check
         run: npm run type-check
 
-      - name: Unit tests
-        # No spec files exist yet in either frontend — --passWithNoTests keeps
-        # this from failing until real tests are added, while still failing
-        # the build on an actual test failure once there are some.
-        run: npm run ${{ matrix.test_script }} -- --passWithNoTests
+      - name: Unit tests with coverage
+        # --passWithNoTests: a package without any spec file must not fail the
+        # build; an actual test failure still does.
+        run: npm run ${{ matrix.test_script }} -- --run --coverage --passWithNoTests
+
+      # Shown on the run's summary page; informational, nothing fails on it.
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            {
+              echo '### ${{ matrix.app }} frontend coverage'
+              echo '| Lines | Statements | Branches | Functions |'
+              echo '| ---: | ---: | ---: | ---: |'
+              jq -r '.total | "| \(.lines.pct)% | \(.statements.pct)% | \(.branches.pct)% | \(.functions.pct)% |"' coverage/coverage-summary.json
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Build
         run: npm run build
@@ -65,8 +77,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run pytest
-        run: pytest
+      - name: Run pytest with coverage
+        run: pytest --cov --cov-report=term
+
+      # Shown on the run's summary page; informational, nothing fails on it.
+      # The CI never writes back to the repository (no coverage badge commit).
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo '### Backend coverage (line + branch)'
+            coverage report --format=markdown --skip-covered
+          } >> "$GITHUB_STEP_SUMMARY"
 
   backend-postgres:
     # The suite normally runs on SQLite. This job runs the same tests on the

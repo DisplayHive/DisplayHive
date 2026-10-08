@@ -6,6 +6,7 @@
 -r requirements.in
 
 pytest
+pytest-cov
 # Docs (npm run docs:serve / docs:build)
 mkdocs
 mkdocs-material

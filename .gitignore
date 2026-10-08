@@ -26,3 +26,9 @@ static/media_renditions/
 testing/playwright-report/
 testing/playwright-report/index.html
 testing/test-results/
+
+# Test coverage (pytest --cov, vitest --coverage)
+.coverage
+coverage.xml
+htmlcov/
+coverage/

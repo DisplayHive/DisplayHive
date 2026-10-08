@@ -1,0 +1,11 @@
+[run]
+source =
+    application
+    app
+branch = True
+# Socket.IO handlers and background tasks run in their own threads.
+concurrency = thread
+
+[report]
+skip_empty = True
+show_missing = False
