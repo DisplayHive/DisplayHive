@@ -12,6 +12,7 @@ import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import LoginProvidersCard from '../components/LoginProvidersCard.vue'
+import OutboundPolicyCard from '../components/OutboundPolicyCard.vue'
 
 const { on, off, emit, emitWithAck } = useSocket()
 const toast = useToast()
@@ -401,6 +402,8 @@ const saveTimeSettings = async () => {
       </Card>
 
       <LoginProvidersCard v-if="rightsStore.can('authproviders.manage')" />
+
+      <OutboundPolicyCard />
 
     </template>
 

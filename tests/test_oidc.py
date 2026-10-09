@@ -3,7 +3,7 @@ in application/admin/auth/routes.py, and the account-management rules that
 come with it (password-login flag, merging, the break-glass Superadmin).
 
 The identity provider is faked in-process: its discovery document and token
-endpoint replace `requests.get`/`requests.post` inside application.oidc, and
+endpoint replace `net.get`/`net.post` (application/net.py) inside application.oidc, and
 its signing key replaces the JWKS client. Everything DisplayHive itself does
 — PKCE, state/nonce/cookie checks, ID-token verification, account mapping,
 the handoff code — runs for real.
@@ -104,8 +104,8 @@ def reset_oidc_state():
 @pytest.fixture()
 def idp(monkeypatch):
     fake = FakeIdP()
-    monkeypatch.setattr(oidc.requests, 'get', fake.get)
-    monkeypatch.setattr(oidc.requests, 'post', fake.post)
+    monkeypatch.setattr(oidc.net, 'get', fake.get)
+    monkeypatch.setattr(oidc.net, 'post', fake.post)
     published_key = fake.key.public_key()  # what the provider's JWKS serves, fixed now
     monkeypatch.setattr(oidc, '_jwks_client', lambda uri: _JwksClient(published_key))
     return fake
@@ -445,3 +445,38 @@ def test_provider_admin_rejects_bad_issuers(db_session, admin_socket, issuer):
         'slug': 'bad', 'name': 'Bad', 'issuer': issuer, 'client_id': 'dh',
     })
     assert result['success'] is False
+
+
+# --- Outgoing requests go through application/net.py ----------------------------------
+
+
+def test_the_providers_signing_keys_are_fetched_through_the_guarded_client(monkeypatch):
+    """The real JWKS client (not the test double): keys come via net.get, are matched by
+    key id, and an address net refuses surfaces as a verification failure."""
+    import jwt as pyjwt
+    fake = FakeIdP()
+    jwks = {'keys': [{**pyjwt.algorithms.RSAAlgorithm.to_jwk(fake.key.public_key(), as_dict=True), 'kid': 'k1', 'use': 'sig', 'alg': 'RS256'}]}
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append(url)
+        return _Response(jwks)
+    monkeypatch.setattr(oidc.net, 'get', get)
+    fake.nonce = 'n'
+    token = fake.id_token()
+
+    client = oidc._JwksClient(f'{ISSUER}/certs')
+    assert client.get_signing_key_from_jwt(token).key_id == 'k1'
+    client.get_signing_key_from_jwt(token)
+    assert calls == [f'{ISSUER}/certs']                                   # cached
+
+    monkeypatch.setattr(oidc.net, 'get', lambda url, **kw: (_ for _ in ()).throw(oidc.net.OutboundBlocked('internal address')))
+    with pytest.raises(pyjwt.PyJWTError, match='internal address'):
+        oidc._JwksClient(f'{ISSUER}/other').get_signing_key_from_jwt(token)
+
+
+def test_a_provider_on_a_private_address_is_refused_with_the_reason(monkeypatch):
+    monkeypatch.setattr(oidc.net, 'get', lambda url, **kw: (_ for _ in ()).throw(
+        oidc.net.OutboundBlocked('keycloak.lan resolves to 10.0.0.5, an address inside a private or internal network.')))
+    with pytest.raises(oidc.OidcError, match='10.0.0.5'):
+        oidc.discover('https://keycloak.lan/realms/main', force=True)

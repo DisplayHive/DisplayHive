@@ -19,6 +19,22 @@ Global display settings are also configured on this page: time format, an
 next" / invalid data, and an optional simulated date/time for previewing how
 the schedule will look at a future point.
 
+## Where Pretalx may be
+
+DisplayHive fetches the address you enter from the server, so it does not
+connect to addresses inside your own network by default — otherwise whoever can
+add a source could make the server reach internal services. An address that
+points to a private network (10.x.x.x, 192.168.x.x, 172.16–31.x.x, `localhost`,
+`fc00::/7`, …) is refused when you add it, with a message saying so. Public
+addresses work as before; so does a name that resolves to a public address.
+
+If your Pretalx really runs inside the network, a **Superadmin** switches on
+**Settings → Security → Allow requests to private networks** (or the operator
+sets `OUTBOUND_ALLOW_PRIVATE=1`). The cloud metadata address
+(`169.254.169.254`) and other special-purpose addresses stay blocked either way,
+and redirects are checked address by address. The same applies to the SSO
+provider addresses.
+
 ## Showing it on a screen
 
 Create a **Content Type** (see

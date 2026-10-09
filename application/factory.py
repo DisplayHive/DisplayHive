@@ -136,6 +136,8 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
     from application.cli import register_cli
     from application.socketio_handlers import register_all_handlers
 
+    from application import net
+    net.register_policy(app, db)
     register_all_handlers(socketio, app, db)
     register_auth_routes(app, db)             # /admin/api/auth/*
     app.request_class = DataDirRequest        # media upload streams to disk

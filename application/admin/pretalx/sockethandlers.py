@@ -2,8 +2,9 @@ import json as json_module
 import logging
 from datetime import datetime, timezone, timedelta
 
-import requests
 from flask import request
+
+from application import net
 
 logger = logging.getLogger(__name__)
 
@@ -177,10 +178,12 @@ def register_admin_pretalx_handlers(socketio, app, db):
         success = False
         json_data = None
         try:
-            resp = requests.get(fetch_target, timeout=15)
+            resp = net.get(fetch_target, timeout=15)
             resp.raise_for_status()
             json_data = resp.json()
             success = True
+        except net.OutboundBlocked as exc:
+            logger.warning('Pretalx URL %s (id %s) is not fetched: %s', fetch_target, url_id, exc)
         except Exception:
             logger.debug('Pretalx fetch failed for url_id=%s target=%s', url_id, fetch_target, exc_info=True)
 
@@ -329,10 +332,13 @@ def register_admin_pretalx_handlers(socketio, app, db):
         is_valid = False
         json_data = None
         try:
-            resp = requests.get(url, timeout=10)
+            resp = net.get(url, timeout=10)
             resp.raise_for_status()
             json_data = resp.json()
             is_valid = True
+        except net.OutboundBlocked as exc:
+            # Not saved at all: an address DisplayHive would never fetch (see application/net.py).
+            return {'ok': False, 'error': str(exc)}
         except Exception:
             logger.debug('Initial validation fetch failed for new pretalx url=%s', url, exc_info=True)
 

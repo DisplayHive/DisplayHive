@@ -35,6 +35,8 @@ from datetime import datetime, timezone
 import jwt
 import requests
 
+from application import net
+
 logger = logging.getLogger(__name__)
 
 HTTP_TIMEOUT_SECONDS = 10
@@ -68,9 +70,11 @@ def discover(issuer: str, *, force: bool = False) -> dict:
         return cached[1]
     url = issuer.rstrip('/') + '/.well-known/openid-configuration'
     try:
-        response = requests.get(url, timeout=HTTP_TIMEOUT_SECONDS)
+        response = net.get(url, timeout=HTTP_TIMEOUT_SECONDS)
         response.raise_for_status()
         doc = response.json()
+    except net.OutboundBlocked as e:
+        raise OidcError(str(e)) from e      # says why (a private address) and what to change
     except (requests.RequestException, ValueError) as e:
         raise OidcError(f'Could not load the provider configuration from {url}') from e
     if not isinstance(doc, dict):
@@ -86,10 +90,43 @@ def discover(issuer: str, *, force: bool = False) -> dict:
     return doc
 
 
-def _jwks_client(jwks_uri: str) -> jwt.PyJWKClient:
+class _JwksClient:
+    """The provider's signing keys, fetched through application/net.py (PyJWT's own
+    PyJWKClient would use urllib and fetch whatever address the provider's
+    configuration names, internal ones included)."""
+
+    def __init__(self, jwks_uri: str):
+        self.jwks_uri = jwks_uri
+        self._keys: dict[str, object] = {}
+        self._fetched_at = 0.0
+
+    def _refresh(self) -> None:
+        try:
+            response = net.get(self.jwks_uri, timeout=HTTP_TIMEOUT_SECONDS)
+            response.raise_for_status()
+            key_set = jwt.PyJWKSet.from_dict(response.json())
+        except net.OutboundBlocked as e:
+            raise jwt.PyJWTError(str(e)) from e
+        except (requests.RequestException, ValueError, jwt.PyJWTError) as e:
+            raise jwt.PyJWTError(f'Could not load the provider keys from {self.jwks_uri}') from e
+        self._keys = {key.key_id: key for key in key_set.keys if key.key_id}
+        self._fetched_at = time.time()
+
+    def get_signing_key_from_jwt(self, token: str):
+        kid = jwt.get_unverified_header(token).get('kid')
+        stale = time.time() - self._fetched_at >= DISCOVERY_TTL_SECONDS
+        if stale or kid not in self._keys:
+            if kid not in self._keys or time.time() - self._fetched_at >= 30:   # a new key id: look again, but not in a loop
+                self._refresh()
+        if kid not in self._keys:
+            raise jwt.PyJWTError(f'The provider has no signing key {kid!r}')
+        return self._keys[kid]
+
+
+def _jwks_client(jwks_uri: str) -> _JwksClient:
     client = _jwks_clients.get(jwks_uri)
     if client is None:
-        client = jwt.PyJWKClient(jwks_uri, cache_keys=True, lifespan=DISCOVERY_TTL_SECONDS, timeout=HTTP_TIMEOUT_SECONDS)
+        client = _JwksClient(jwks_uri)
         _jwks_clients[jwks_uri] = client
     return client
 
@@ -203,11 +240,14 @@ def exchange_code(provider, pending: PendingLogin, code: str) -> dict:
         data['client_id'] = provider.client_id  # public client, PKCE only
 
     try:
-        response = requests.post(
+        response = net.post(
             doc['token_endpoint'], data=data, auth=auth,
             headers={'Accept': 'application/json'}, timeout=HTTP_TIMEOUT_SECONDS,
         )
         body = response.json()
+    except net.OutboundBlocked as e:
+        logger.warning('OIDC token endpoint of %s not contacted: %s', provider.issuer, e)
+        raise OidcError('The provider could not be reached to complete the login.') from e
     except (requests.RequestException, ValueError) as e:
         raise OidcError('The provider could not be reached to complete the login.') from e
     if response.status_code != 200 or not isinstance(body, dict) or not body.get('id_token'):

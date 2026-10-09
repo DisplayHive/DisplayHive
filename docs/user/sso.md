@@ -62,6 +62,13 @@ field empty when editing to keep it.
 
 Scopes default to `openid profile email`. `openid` is always added.
 
+The provider's addresses (issuer, token endpoint, signing keys) must be public
+ones, like the Pretalx addresses: DisplayHive does not connect to private
+networks unless a Superadmin allows it (Settings → Security, or
+`OUTBOUND_ALLOW_PRIVATE=1`) — see
+[Where Pretalx may be](pretalx.md#where-pretalx-may-be). A provider inside your
+network (Keycloak on a private address) needs that switch.
+
 ## Linking SSO logins to existing accounts
 
 Only admins can link SSO logins to accounts. The provider's user ID isn't

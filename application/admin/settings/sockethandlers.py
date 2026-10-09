@@ -61,6 +61,44 @@ def register_admin_settings_handlers(socketio, app, db):
     def get_admin_settings(message=None):
         _emit_settings(getattr(request, 'sid', None))
 
+    # ── Outgoing requests to private networks (application/net.py) ─────────────
+    # Deliberately not one of ALLOWED_SETTING_KEYS: it is a security switch, so it
+    # is neither writable through the generic endpoint below nor part of an
+    # export/import file, and only a Superadmin may flip it.
+
+    def _outbound_state():
+        from application.models import SystemSetting
+        from application import net
+        row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == net.SETTING_KEY)).scalar_one_or_none()
+        stored = bool(row and (row.value or '').strip().lower() in ('1', 'true', 'yes', 'on'))
+        return {'success': True, 'allow_private': stored or net.env_allows_private(), 'forced_by_env': net.env_allows_private()}
+
+    @socketio.on('displayhive:admin:cts:get_outbound_policy')
+    @require_right('settings.page')
+    def get_outbound_policy(data=None):
+        return _outbound_state()
+
+    @socketio.on('displayhive:admin:cts:set_outbound_policy')
+    @require_right('settings.edit')
+    def set_outbound_policy(data=None):
+        from application.models import SystemSetting
+        from application import net
+        from application.permissions import is_superadmin
+        from application.socketio_handlers.auth import current_admin_user
+        if not is_superadmin(db, current_admin_user()):
+            return {'success': False, 'error': 'Only a Superadmin can change this.'}
+        value = 'true' if bool((data or {}).get('allow_private')) else 'false'
+        row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == net.SETTING_KEY)).scalar_one_or_none()
+        if row:
+            row.value = value
+        else:
+            db.session.add(SystemSetting(key=net.SETTING_KEY, value=value))
+        db.session.commit()
+        net.invalidate()
+        logger.warning('Outgoing requests to private networks %s by %s',
+                       'ALLOWED' if value == 'true' else 'blocked', getattr(current_admin_user(), 'username', '?'))
+        return _outbound_state()
+
     @socketio.on('displayhive:admin:cts:set_default_design')
     @require_right('settings.edit')
     def handle_set_default_design(data):

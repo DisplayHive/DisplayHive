@@ -513,6 +513,12 @@ def check_config(online):
     report('info', f"Deployment: {app.config.get('DEPLOYMENT_KIND', 'manual')}")
     from application import version
     report('info', f'Version: {version.display()}')
+    from application import net
+    if net.private_allowed():
+        report('warn', 'Outgoing requests to private networks are allowed (Settings / OUTBOUND_ALLOW_PRIVATE) — '
+                       'Pretalx and SSO URLs can reach internal addresses; fine if they must, e.g. an internal Pretalx')
+    else:
+        report('ok', 'Outgoing requests to private networks are blocked')
 
     report.section('Data directory')
     paths = app.DATA_PATHS if hasattr(app, 'DATA_PATHS') else data_paths.resolve()
