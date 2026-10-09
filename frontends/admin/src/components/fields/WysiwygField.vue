@@ -12,22 +12,6 @@ f.reportVisibleWhen(() => !f.isHidden(f.name))
 // finishes populating `fields`.
 const editorReady = ref(false)
 onMounted(() => { nextTick(() => { editorReady.value = true }) })
-
-// No @types/quill installed (see the same rationale in main.ts) — only the bit of the Quill
-// instance actually touched here is typed.
-interface QuillInstance {
-  clipboard?: { convert: (html: string) => unknown }
-  setContents: (delta: unknown, source: string) => void
-}
-
-const onEditorLoad = (event: { instance: QuillInstance }) => {
-  const quill = event.instance
-  const html = String(f.fields[f.name] || '')
-  if (html && quill && quill.clipboard) {
-    const delta = quill.clipboard.convert(html)
-    quill.setContents(delta, 'silent')
-  }
-}
 </script>
 
 <template>
@@ -38,7 +22,6 @@ const onEditorLoad = (event: { instance: QuillInstance }) => {
       @update:modelValue="(v: string | undefined) => f.set(f.name, v ?? '')"
       editorStyle="height: 220px"
       :readonly="f.isLocked(f.name)"
-      @load="(e: { instance: QuillInstance }) => onEditorLoad(e)"
     />
   </FieldSlot>
 </template>

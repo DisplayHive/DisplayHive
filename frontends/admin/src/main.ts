@@ -33,49 +33,6 @@ async function bootstrap() {
   const mod = await import('@primeuix/themes/aura')
   const preset = mod.default || mod
 
-  // If Quill is available as a module or on window, ensure it has a
-  // `getSemanticHTML` method. PrimeVue Editor expects `quill.getSemanticHTML()`
-  // but some Quill builds may not provide it; add a safe fallback to avoid
-  // runtime errors during Editor initialization.
-  //
-  // `quill` (v1.x here) ships no types and no @types/quill is installed, so
-  // its shape is genuinely unknown to TS — this minimal interface covers
-  // only what's actually touched below.
-  interface QuillCtorType {
-    prototype: { getSemanticHTML?: (this: { root?: { innerHTML?: string } }) => string }
-  }
-
-  try {
-    // Try to import the module (will be cached for later dynamic imports).
-    const quillModule: unknown = await (async () => {
-      try {
-        return await import('quill')
-      } catch {
-        return null
-      }
-    })()
-
-    const windowWithQuill = window as typeof window & { Quill?: QuillCtorType }
-    const QuillCtor: QuillCtorType | null = quillModule
-      ? ((quillModule as { default?: QuillCtorType }).default ?? (quillModule as QuillCtorType))
-      : typeof window !== 'undefined'
-        ? (windowWithQuill.Quill ?? null)
-        : null
-
-    if (QuillCtor && QuillCtor.prototype && !QuillCtor.prototype.getSemanticHTML) {
-      QuillCtor.prototype.getSemanticHTML = function () {
-        // fall back to the editor root HTML when semantic API is missing
-        return (this.root && this.root.innerHTML) || ''
-      }
-      // ensure window.Quill is set so PrimeVue path that reads window.Quill sees it
-      if (typeof window !== 'undefined' && !windowWithQuill.Quill) {
-        windowWithQuill.Quill = QuillCtor
-      }
-    }
-  } catch (e) {
-    console.warn('[main] could not preload/patch quill (ok if not installed)', e)
-  }
-
   app.use(PrimeVue, {
     theme: {
       preset,
