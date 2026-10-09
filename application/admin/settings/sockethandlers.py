@@ -18,6 +18,7 @@ ALLOWED_SETTING_KEYS = {
     'hide_user_tours', 'hide_admin_tours',
     'content_edit_preview_size',
     'content_list_preview_size',
+    'screen_log_max_age_hours', 'screen_log_max_rows',
 }
 
 
@@ -133,8 +134,14 @@ def register_admin_settings_handlers(socketio, app, db):
             raise Fail('No settings provided')
 
         from application.models import SystemSetting
+        from application import screen_logs
         rejected = []
         for key, value in settings.items():
+            if key in screen_logs.RETENTION_SETTINGS:
+                try:
+                    value = screen_logs.validate_retention_setting(key, value)
+                except ValueError as problem:
+                    raise Fail(str(problem)) from None
             if key not in ALLOWED_SETTING_KEYS:
                 logger.warning('Ignoring unknown system setting key: %r', key)
                 rejected.append(key)

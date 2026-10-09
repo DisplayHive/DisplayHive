@@ -397,7 +397,8 @@ one JSON object, from the app, gunicorn and the Docker entrypoint alike:
 ```
 
 `exception` holds the traceback of an error. The log of the **screens** (the
-logger view in the admin panel) is separate and not written to this stream.
+logger view in the admin panel) is separate and not written to this stream: it is kept in the
+database for 72 hours / 250,000 lines by default (Settings → Screen Log).
 
 On first start without admin users, the generated password of the bootstrap
 account is logged once at `WARNING` level (look for "created a bootstrap

@@ -35,6 +35,9 @@ const hideAdminTours = ref(false)
 const contentEditPreviewSize = ref(35)
 const contentListPreviewSize = ref(20)
 const contentSaving = ref(false)
+const screenLogMaxAgeHours = ref(72)
+const screenLogMaxRows = ref(250000)
+const logSaving = ref(false)
 
 // Time section
 const serverTimeBase = ref<Date | null>(null)
@@ -90,6 +93,8 @@ interface SystemSettings {
   hide_admin_tours?: boolean | string
   content_edit_preview_size?: number | string
   content_list_preview_size?: number | string
+  screen_log_max_age_hours?: number | string
+  screen_log_max_rows?: number | string
   timezone?: string
 }
 
@@ -108,6 +113,10 @@ const handleSettings = (data: { system_settings?: SystemSettings; server_time?: 
   contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
   const listPreviewSize = Number(sys.content_list_preview_size)
   contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
+  const logHours = Number(sys.screen_log_max_age_hours)
+  screenLogMaxAgeHours.value = Number.isFinite(logHours) && logHours > 0 ? logHours : 72
+  const logRows = Number(sys.screen_log_max_rows)
+  screenLogMaxRows.value = Number.isFinite(logRows) && logRows > 0 ? logRows : 250000
 
   if (data?.server_time) {
     serverTimeBase.value = new Date(data.server_time)
@@ -169,6 +178,25 @@ const saveContentSettings = async () => {
     )
   } finally {
     contentSaving.value = false
+  }
+}
+
+const saveLogSettings = async () => {
+  if (!canEdit.value) return
+  logSaving.value = true
+  try {
+    await request(
+      'displayhive:admin:cts:set_system_settings',
+      {
+        settings: {
+          screen_log_max_age_hours: String(screenLogMaxAgeHours.value),
+          screen_log_max_rows: String(screenLogMaxRows.value),
+        },
+      },
+      { success: 'Screen log settings updated', error: 'Save failed' },
+    )
+  } finally {
+    logSaving.value = false
   }
 }
 
@@ -383,6 +411,36 @@ const saveTimeSettings = async () => {
         </template>
       </Card>
 
+      <Card>
+        <template #title>
+          <div class="card-header-title">
+            <i class="pi pi-list card-header-icon" />
+            <span>Screen Log</span>
+          </div>
+        </template>
+        <template #content>
+          <div class="settings-form">
+            <p class="hint">
+              Screens report warnings and errors to the server, and everything while the Logger page is open.
+              Lines are deleted when they are older than the first limit or when the table grows past the second.
+            </p>
+            <div class="field-group" data-tour="settings-screenlog-fields">
+              <div class="field">
+                <label for="screen-log-max-age">Keep lines for</label>
+                <InputNumber id="screen-log-max-age" v-model="screenLogMaxAgeHours" :min="1" :max="8760" suffix=" hours" :disabled="!canEdit" />
+              </div>
+              <div class="field">
+                <label for="screen-log-max-rows">Keep at most</label>
+                <InputNumber id="screen-log-max-rows" v-model="screenLogMaxRows" :min="1000" :max="5000000" suffix=" lines" :disabled="!canEdit" />
+              </div>
+            </div>
+            <div class="field-actions" data-tour="settings-screenlog-save">
+              <Button v-if="canEdit" label="Save" icon="pi pi-check" :loading="logSaving" @click="saveLogSettings" />
+            </div>
+          </div>
+        </template>
+      </Card>
+
       <LoginProvidersCard v-if="rightsStore.can('authproviders.manage')" />
 
       <OutboundPolicyCard />
@@ -446,4 +504,10 @@ const saveTimeSettings = async () => {
   gap: 1rem;
 }
 
+
+.hint {
+  margin: 0 0 0.75rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
+}
 </style>

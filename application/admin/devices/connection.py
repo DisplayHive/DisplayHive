@@ -277,6 +277,14 @@ def register_device_connection_handlers(socketio, app, db):
                     except Exception as e:
                         logger.warning("[Auth] Error emitting device_authenticated: %s", e)
 
+                    # Tell a screen that connects while the Logger page is open to send everything
+                    try:
+                        from application.socketio_handlers.logger import get_logger_status
+                        if get_logger_status():
+                            socketio.emit('logger_active', {}, room=sid_info)
+                    except Exception:
+                        logger.debug("[Auth] Could not send logger_active to sid=%s", sid_info, exc_info=True)
+
                     # Send device config immediately after authentication
                     try:
                         from application.socketio_handlers.devconfig import send_upd_deviceconfig

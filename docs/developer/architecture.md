@@ -160,8 +160,8 @@ admin panel features:
 - **`content.py`** — legacy/basic screen-facing content and playlist
   queries, debug-mode and logger-state emits.
 - **`devconfig.py`** — emits `upd_deviceconfig` to a device/room.
-- **`logger.py`** — remote log streaming (subscribe/unsubscribe/get
-  history/log entry).
+- **`logger.py`** — the screen log: receives a screen's lines (stored via
+  `application/screen_logs.py`), live feed (subscribe/unsubscribe) and the filtered `query`.
 - **`screens.py`** — reload one or all screens, fetch a screen's groups,
   rename a screen; emits a `RELOAD` command and triggers a content push.
 - **`refresh_content.py`** — server time sync, and

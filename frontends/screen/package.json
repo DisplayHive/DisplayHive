@@ -1,15 +1,15 @@
 {
-  "name": "displayhive",
+  "name": "displayhive-screen",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
     "@types/node": "^24.10.9",
-    "@types/socket.io-client": "^1.4.36",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "jiti": "^2.6.1",
     "prettier": "3.8.1",
+    "socket.io-client": "^4.8.4",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.3.1",

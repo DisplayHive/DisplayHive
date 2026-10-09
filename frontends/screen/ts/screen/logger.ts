@@ -28,9 +28,10 @@ export function setLoggerConnected(connected: boolean): void {
 /**
  * Log wrapper that forwards messages to the server logger when connected.
  *
- * It preserves the original behaviour: always prints to the local console,
- * and if a socket emitter has been injected via `setLoggerSocketEmitter` and
- * the logger is connected it will emit a `screen_log` event with a simple payload.
+ * Always prints to the local console. With a socket emitter injected via `setLoggerSocketEmitter`
+ * it also reports to the server (`displayhive:logger:cts:log_entry`), which stores the line in the
+ * screen log: warnings and errors always, debug and info only while an admin watches the Logger
+ * page (`setLoggerConnected`), so a screen's normal chatter does not fill the database.
  */
 export function log(
   severity: LogSeverity,
@@ -52,7 +53,7 @@ export function log(
 
   // Forward to remote logger if connected
   try {
-    if (loggerConnected && _socketEmitter) {
+    if (_socketEmitter && (loggerConnected || severity === "warn" || severity === "error")) {
       const assigned = window.assignedScreen || "unnamed";
       const logPayload = {
         screen: assigned,

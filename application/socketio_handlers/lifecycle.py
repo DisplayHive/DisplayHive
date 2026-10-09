@@ -39,7 +39,9 @@ def register_lifecycle_handlers(socketio, app, db):
         # Done first so it always runs, even on the impersonation early-return below.
         try:
             from application.socketio_handlers.auth import clear_admin_session
+            from application.socketio_handlers.logger import forget_watcher
             clear_admin_session(sid)
+            forget_watcher(sid)
         except Exception:
             logger.debug('Failed to clear admin session for sid=%s on disconnect', sid, exc_info=True)
 

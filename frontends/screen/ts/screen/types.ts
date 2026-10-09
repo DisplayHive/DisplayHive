@@ -2,6 +2,8 @@
  * Type definitions for the screen client
  */
 
+import type { ManagerOptions, Socket, SocketOptions as SocketIoOptions } from "socket.io-client";
+
 /** One container's rendered fragment within a Scene, positioned in vh/vw. */
 export interface SceneContainer {
   name: string;
@@ -84,37 +86,15 @@ export interface Auth {
 // ---------------------------------------------------------------------------
 
 /**
- * The parts of a Socket.IO v4 client socket the screen uses. The client
- * itself is a pinned script (assets/socket.io.min.js, loaded by
- * templates/index.html), not an npm dependency — hence a hand-written type.
- *
- * `on` is generic so each handler can declare its payload type (one of the
- * *Message interfaces below) without `any`: the server is trusted to send
- * that shape, the same contract the old `any` encoded, but now written down.
+ * The Socket.IO v4 client types come from the `socket.io-client` package (a dev dependency, type
+ * imports only — nothing of it is bundled). The client itself is a pinned script
+ * (assets/socket.io.min.js, loaded by templates/index.html) that provides `window.io`; keep the
+ * package version in line with the version of that script.
  */
-export interface ScreenSocket {
-  on<A extends unknown[]>(event: string, handler: (...args: A) => void): ScreenSocket;
-  onAny(handler: (event: string, ...args: unknown[]) => void): ScreenSocket;
-  emit(event: string, ...args: unknown[]): ScreenSocket;
-  connect(): ScreenSocket;
-  disconnect(): ScreenSocket;
-}
+export type ScreenSocket = Socket;
 
 /** Options passed to the global `io()` factory. */
-export interface SocketOptions {
-  reconnection?: boolean;
-  reconnectionAttempts?: number;
-  reconnectionDelay?: number;
-  reconnectionDelayMax?: number;
-  timeout?: number;
-  query?: Record<string, string>;
-  auth?: Record<string, string>;
-  transportOptions?: {
-    polling?: {
-      extraHeaders?: Record<string, string>;
-    };
-  };
-}
+export type SocketOptions = Partial<ManagerOptions & SocketIoOptions>;
 
 /** Fire-and-forget emit, injected into modules that must not hold the socket. */
 export type SocketEmitter = (event: string, payload?: unknown) => void;

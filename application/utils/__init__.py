@@ -13,7 +13,7 @@ from .design import (
     reload_devices_on_screen,
     reload_devices_on_all_screens,
 )
-from .screenlog_retention import prune_screen_logs
+from application.screen_logs import prune as prune_screen_logs
 from application.admin.screengroups.helper import emit_screengroups_update
 
 

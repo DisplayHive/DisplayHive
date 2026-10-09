@@ -183,7 +183,9 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     try { socket.emit(event, payload); } catch { /* swallow emit errors */ }
   };
   setSocketEmitter(safeEmit);
-  setLoggerSocketEmitter(safeEmit);
+  // Log lines are only worth sending while connected: socket.io would otherwise queue them up
+  // during an outage and replay the whole backlog on reconnect.
+  setLoggerSocketEmitter((event, payload) => { if (socket.connected) safeEmit(event, payload); });
   setClockEmitter(safeEmit);
   initViewportTracking(safeEmit);
   startClockTicker();

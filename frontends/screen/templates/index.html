@@ -25,8 +25,10 @@
     <script>
         // Inject the Design's CSS at runtime to avoid editor CSS parsing errors.
         // `tojson` makes it a real JS string literal (quotes, backslashes, `${`
-        // and `</script>` all escaped) — never interpolate it into a JS
+        // and a closing script tag all escaped) — never interpolate it into a JS
         // template literal, which a backtick or `${` in the CSS would break out of.
+        // (Do not write that closing tag out in this comment: the HTML parser would end
+        // the script right here and show the rest of the page's script as text.)
         (function(){
             try {
                 const css = {{ design_css | tojson }};

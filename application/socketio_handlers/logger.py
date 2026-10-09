@@ -1,132 +1,143 @@
-"""Socket.IO handlers for logger-related events."""
+"""Socket.IO handlers for the screen log: screens report, the admin Logger page reads.
 
-import datetime
+A screen sends ``displayhive:logger:cts:log_entry``. The server stores the line (see
+application/screen_logs.py) under the screen of that connection — the payload's own idea of the
+screen is not trusted — and pushes it live to every admin watching the Logger page. The page loads
+older entries, filtered, with ``displayhive:logger:cts:query``.
+"""
+
 import logging
-from collections import deque
+import time
 
 from flask import request
-from flask_socketio import join_room, leave_room, emit
+from flask_socketio import emit, join_room, leave_room
+
+from application import screen_logs
 
 log = logging.getLogger(__name__)
 
+# Sockets of the admins currently watching the Logger page. While there are any, screens also send
+# their debug/info lines (they are told with `logger_active`; a screen that connects meanwhile is
+# told by the connect handler, see application/admin/devices/connection.py).
+_watchers: set = set()
+_socketio = None
 
-# Track logger connection status globally
-is_logger_connected = False
-# Store recent log history (max 100 entries)
-log_history = deque(maxlen=100)
+# A screen may send this many lines per window; the rest is dropped (a screen stuck in a loop must
+# not fill the database). Counted per socket.
+RATE_LIMIT = 100
+RATE_WINDOW_SECONDS = 10.0
+_rate: dict = {}
+
+
+def _within_rate_limit(sid: str, now: float | None = None) -> bool:
+    now = time.monotonic() if now is None else now
+    if len(_rate) > 1000:
+        for stale in [s for s, (start, _n) in _rate.items() if now - start > RATE_WINDOW_SECONDS]:
+            del _rate[stale]
+    start, count = _rate.get(sid, (now, 0))
+    if now - start > RATE_WINDOW_SECONDS:
+        start, count = now, 0
+    _rate[sid] = (start, count + 1)
+    return count < RATE_LIMIT
 
 
 def register_logger_handlers(socketio, app, db):
     """Register all logger-related socket.io event handlers."""
-    from application.socketio_handlers.auth import require_right
+    from application.models import Device, Screen
+    from application.socketio_handlers.actions import admin_action, ok
+    from application.socketio_handlers.auth import require_admin
+    from application.socketio_handlers.lifecycle import connected_devices, registry_lock
 
-    global is_logger_connected
+    global _socketio
+    _socketio = socketio
     logger_room = app.config.get('LOGGER_ROOM', 'logger_room')
 
-    @socketio.event
-    def logger_connected(message):
-        """Handle logger client connection"""
-        global is_logger_connected
-        is_logger_connected = True
-        join_room(logger_room)
-        # Broadcast to all screens that logger is active
-        emit('logger_active', {}, broadcast=True)
-        log.info("Logger connected to room '%s'", logger_room)
-
-    @socketio.event
-    def logger_disconnected(message):
-        """Handle logger client disconnection"""
-        global is_logger_connected
-        is_logger_connected = False
-        leave_room(logger_room)
-        emit('logger_inactive', {}, broadcast=True)
-        log.info("Logger disconnected from room '%s'", logger_room)
-
-    @socketio.event
-    def screen_log(message):
-        """Forward log message to logger room (converts old format to new)"""
-        try:
-            # Convert old format to new format
-            log_entry = {
-                'timestamp': message.get('timestamp') or datetime.datetime.now().isoformat(),
-                'severity': message.get('severity', 'info'),
-                'message': message.get('message') or message.get('data', ''),
-                'screen': message.get('screen', 'unknown'),
-                'function': message.get('function', '')
-            }
-
-            # Store in history
-            log_history.append(log_entry)
-
-            # Forward to logger room with old event name (for legacy compatibility)
-            emit('screen_log', message, room=logger_room)
-
-            # Also emit in new format for admin logger view
-            emit('displayhive:logger:stc:log_entry', log_entry, room=logger_room)
-            log.debug("Broadcast log to logger room: %s", log_entry['message'][:50])
-        except Exception:
-            log.exception("Error forwarding screen log")
-
-    # New namespaced handlers for admin logger view
-    @socketio.on('displayhive:logger:cts:subscribe')
-    @require_right('logger.page')
-    def handle_logger_subscribe(data=None):
-        """Subscribe client to logger room and send log history (admin only)."""
-        global is_logger_connected
+    def _screen_of_connection():
+        """``(screen_id, name)`` of the screen on the current socket, or None if it is no screen."""
         sid = request.sid
-        join_room(logger_room, sid=sid)
+        with registry_lock:
+            devicekey = next((k for k, info in connected_devices.items() if info.get('sid') == sid), None)
+        if not devicekey:
+            return None
+        device = db.session.execute(db.select(Device).where(Device.devicekey == devicekey)).scalar_one_or_none()
+        screen = db.session.get(Screen, device.screen_id) if device and device.screen_id else None
+        return (screen.id, screen.name) if screen else None
 
-        # Mark logger as connected and notify all screens
-        if not is_logger_connected:
-            is_logger_connected = True
+    @socketio.on('displayhive:logger:cts:subscribe')
+    @admin_action('logger.page')
+    def handle_logger_subscribe(data=None):
+        """Join the live feed of the Logger page and tell the screens to send everything."""
+        join_room(logger_room, sid=request.sid)
+        first = not _watchers
+        _watchers.add(request.sid)
+        if first:
             emit('logger_active', {}, broadcast=True)
             log.info('Logger now active, notified screens')
-
-        log.debug('Client %s subscribed to logger room', sid)
-
-        # Send log history to this client
-        emit('displayhive:logger:stc:log_history', {'logs': list(log_history)}, room=sid)
+        return ok()
 
     @socketio.on('displayhive:logger:cts:unsubscribe')
-    @require_right('logger.page')
+    @admin_action('logger.page')
     def handle_logger_unsubscribe(data=None):
-        """Unsubscribe client from logger room (admin only)."""
-        sid = request.sid
-        leave_room(logger_room, sid=sid)
-        log.debug('Client %s unsubscribed from logger room', sid)
+        """Leave the live feed (admin only)."""
+        leave_room(logger_room, sid=request.sid)
+        forget_watcher(request.sid)
+        return ok()
 
-    @socketio.on('displayhive:logger:cts:get_history')
-    @require_right('logger.page')
-    def handle_get_log_history(data=None):
-        """Send log history to requesting client (admin only)."""
-        sid = request.sid
-        emit('displayhive:logger:stc:log_history', {'logs': list(log_history)}, room=sid)
-        log.debug('Sent %s log entries to %s', len(log_history), sid)
+    @socketio.on('displayhive:logger:cts:query')
+    @admin_action('logger.page')
+    def handle_query(data=None):
+        """One page of stored entries, newest page first, oldest line first within it.
+
+        data: ``screen_id``, ``severities`` (list), ``search``, ``before_id`` (continue behind
+        an earlier page), ``limit``. Answers ``{success, logs, has_more}``.
+        """
+        data = data if isinstance(data, dict) else {}
+        severities = data.get('severities')
+        logs, has_more = screen_logs.query(
+            db,
+            screen_id=data.get('screen_id'),
+            severities=severities if isinstance(severities, list) else None,
+            search=(str(data['search']).strip() or None) if data.get('search') else None,
+            before_id=data.get('before_id'),
+            limit=data.get('limit') or screen_logs.PAGE_DEFAULT,
+        )
+        return ok(logs=logs, has_more=has_more)
 
     @socketio.on('displayhive:logger:cts:log_entry')
-    def handle_log_entry_from_screen(data):
-        """Receive log entry from screen and broadcast to logger room"""
+    def handle_log_entry(data):
+        """A line from a screen: store it, push it live. An admin's test line is only pushed."""
         try:
-            log_entry = {
-                'timestamp': data.get('timestamp') or datetime.datetime.now().isoformat(),
-                'severity': data.get('severity', 'info'),
-                'message': data.get('message', ''),
-                'screen': data.get('screen', 'unknown'),
-                'function': data.get('function', '')
-            }
-
-            # Store in history
-            log_history.append(log_entry)
-
-            # Broadcast to all logger subscribers
-            emit('displayhive:logger:stc:log_entry', log_entry, room=logger_room)
-            log.debug("Broadcast log to room %s: %s", logger_room, log_entry['message'][:50])
+            entry = screen_logs.normalize_entry(data)
+            screen = _screen_of_connection()
+            if screen:
+                if not _within_rate_limit(request.sid):
+                    return
+                row = screen_logs.record(db, screen[0], entry)
+                payload = screen_logs.entry_dict(row, screen[1])
+            elif require_admin():
+                # The Logger page's "send test line" button: shown live, never stored.
+                payload = {**entry, 'id': None, 'screen': 'admin', 'screen_id': None,
+                           'timestamp': screen_logs._now().isoformat() + 'Z'}
+            else:
+                return
+            emit('displayhive:logger:stc:log_entry', payload, room=logger_room)
         except Exception:
-            log.exception("Error handling log entry")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            log.exception('Error handling log entry')
 
-    # No return value needed; status is accessible via get_logger_status()
+
+def forget_watcher(sid: str) -> None:
+    """An admin left the Logger page (or its socket dropped); the last one leaving tells the screens."""
+    if sid in _watchers:
+        _watchers.discard(sid)
+        if not _watchers and _socketio is not None:
+            _socketio.emit('logger_inactive', {})
+            log.info('Logger no longer watched, notified screens')
 
 
 def get_logger_status():
-    """Return whether the logger client is currently connected."""
-    return is_logger_connected
+    """Return whether an admin currently watches the Logger page."""
+    return bool(_watchers)

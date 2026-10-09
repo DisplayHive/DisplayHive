@@ -2,34 +2,44 @@
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useRightsStore } from '../stores/rights'
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useScreensStore } from '../stores/screens'
+import { useAck } from '../composables/useAck'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import type { Screen } from '../types/models'
 
 // PrimeVue components
 import Card from 'primevue/card'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 
 const rightsStore = useRightsStore()
+const screensStore = useScreensStore()
+const { request } = useAck()
 
+// The screen log is stored on the server (kept for the time set on the Settings page); this page
+// shows its newest lines, older ones on demand, and new ones live. An admin's own test line is
+// only shown, never stored (id null).
 interface LogEntry {
+  id: number | null
   timestamp: string
   severity: string
   message: string
   screen: string
+  screen_id: number | null
   function: string
 }
 
-const { on, off, emit } = useSocket()
+const { on, off, emit, isConnected } = useSocket()
 
 const logs = ref<LogEntry[]>([])
+const hasMore = ref(false)
+const loading = ref(false)
 const logContainer = ref<HTMLElement | null>(null)
-const screens = ref<Screen[]>([])
-const screenIdByName = computed(() => new Map(screens.value.map((s) => [s.name, s.id])))
 const selectedSeverity = ref<string | null>(null)
-const selectedScreen = ref<string | null>(null)
+const selectedScreen = ref<number | null>(null)
+const search = ref('')
 const autoScroll = ref(true)
 const maxLogs = 1000
 
@@ -41,69 +51,104 @@ const severityOptions = [
   { label: 'Error', value: 'error' },
 ]
 
-const screenOptions = computed(() => {
-  const options: { label: string; value: string | null }[] = [{ label: 'All Screens', value: null }]
-  screens.value.forEach((s) => {
-    options.push({ label: s.name, value: s.name })
-  })
-  return options
+const screenOptions = computed(() => [
+  { label: 'All Screens', value: null as number | null },
+  ...screensStore.screens.map((s) => ({ label: s.name, value: s.id as number | null })),
+])
+const screenIdByName = computed(() => new Map(screensStore.screens.map((s) => [s.name, s.id])))
+
+const filters = () => ({
+  screen_id: selectedScreen.value,
+  severities: selectedSeverity.value ? [selectedSeverity.value] : [],
+  search: search.value.trim(),
 })
 
-const filteredLogs = computed(() => {
-  return logs.value.filter((log) => {
-    if (selectedSeverity.value && log.severity !== selectedSeverity.value) {
-      return false
-    }
-    if (selectedScreen.value && log.screen !== selectedScreen.value) {
-      return false
-    }
-    return true
-  })
-})
+const matches = (entry: LogEntry) => {
+  const f = filters()
+  if (f.screen_id !== null && entry.screen_id !== f.screen_id) return false
+  if (f.severities.length && !f.severities.includes(entry.severity)) return false
+  if (f.search && !entry.message.toLowerCase().includes(f.search.toLowerCase())) return false
+  return true
+}
+
+const oldestStoredId = () => logs.value.find((l) => l.id !== null)?.id ?? null
+
+/** Replace the list with the newest stored lines matching the filters. */
+const reload = async () => {
+  loading.value = true
+  try {
+    const ack = await request<{ success: boolean; logs?: LogEntry[]; has_more?: boolean }>(
+      'displayhive:logger:cts:query', filters(), { error: 'Could not load the log' })
+    if (!ack) return
+    logs.value = ack.logs ?? []
+    hasMore.value = !!ack.has_more
+    if (autoScroll.value) scrollToBottom()
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadOlder = async () => {
+  const before = oldestStoredId()
+  if (before === null || loading.value) return
+  loading.value = true
+  try {
+    const ack = await request<{ success: boolean; logs?: LogEntry[]; has_more?: boolean }>(
+      'displayhive:logger:cts:query', { ...filters(), before_id: before }, { error: 'Could not load older lines' })
+    if (!ack) return
+    logs.value = [...(ack.logs ?? []), ...logs.value]
+    hasMore.value = !!ack.has_more
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleLogEntry = (data: LogEntry) => {
+  if (!matches(data)) return
   logs.value.push(data)
   if (logs.value.length > maxLogs) {
     logs.value.shift()
+    hasMore.value = true
   }
-  if (autoScroll.value) {
-    scrollToBottom()
-  }
-}
-
-const handleScreensList = (data: { screens: Screen[] }) => {
-  screens.value = data.screens || []
-}
-
-const handleLogHistory = (data: { logs: LogEntry[] }) => {
-  logs.value = data.logs || []
+  if (autoScroll.value) scrollToBottom()
 }
 
 onMounted(() => {
   on('displayhive:logger:stc:log_entry', handleLogEntry)
-  on('displayhive:logger:stc:log_history', handleLogHistory)
-  on('displayhive:admin:stc:screens_list', handleScreensList)
-
-  emit('displayhive:logger:cts:subscribe')
-  emit('displayhive:logger:cts:get_history')
-  emit('displayhive:admin:cts:get_screens')
+  screensStore.fetch()
 })
+
+// (Re)join the live feed and load the stored lines whenever the socket comes up: a reconnect
+// drops the room, and lines that arrived meanwhile are only in the stored log.
+watch(isConnected, (connected) => {
+  if (!connected) return
+  emit('displayhive:logger:cts:subscribe')
+  reload()
+}, { immediate: true })
 
 onUnmounted(() => {
   off('displayhive:logger:stc:log_entry', handleLogEntry)
-  off('displayhive:logger:stc:log_history', handleLogHistory)
-  off('displayhive:admin:stc:screens_list', handleScreensList)
   emit('displayhive:logger:cts:unsubscribe')
+  clearTimeout(searchTimer)
+})
+
+watch([selectedSeverity, selectedScreen], reload)
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+watch(search, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(reload, 300)
 })
 
 const clearLogs = () => {
   logs.value = []
+  hasMore.value = false
 }
 
 const scrollToBottom = () => {
-  if (logContainer.value) {
-    logContainer.value.scrollTop = logContainer.value.scrollHeight
-  }
+  // after the new lines are drawn
+  setTimeout(() => {
+    if (logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight
+  })
 }
 
 const getSeverityClass = (severity: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' => {
@@ -128,10 +173,8 @@ const formatTimestamp = (ts: string) => {
 
 const sendTestLog = () => {
   emit('displayhive:logger:cts:log_entry', {
-    timestamp: new Date().toISOString(),
     severity: 'info',
     message: 'Test log from admin logger view',
-    screen: 'admin',
     function: 'sendTestLog'
   })
 }
@@ -190,15 +233,22 @@ const sendTestLog = () => {
               class="filter-select"
             />
           </div>
+          <div class="filter-item">
+            <label>Search</label>
+            <InputText v-model="search" placeholder="Text in the message" class="filter-search" data-testid="logger-search" />
+          </div>
           <div class="log-count">
-            <Tag :value="`${filteredLogs.length} logs`" />
+            <Tag :value="`${logs.length} logs`" />
           </div>
         </div>
 
         <div class="log-container" data-tour="logger-log-container" ref="logContainer">
+          <div v-if="hasMore" class="load-older">
+            <Button label="Load older lines" icon="pi pi-arrow-up" size="small" text :loading="loading" data-testid="logger-load-older" @click="loadOlder" />
+          </div>
           <div
-            v-for="(log, index) in filteredLogs"
-            :key="index"
+            v-for="(log, index) in logs"
+            :key="log.id ?? `live-${index}`"
             class="log-entry"
             :class="`log-${log.severity}`"
           >
@@ -211,7 +261,7 @@ const sendTestLog = () => {
             <span class="log-function" v-if="log.function">[{{ log.function }}]</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
-          <div v-if="filteredLogs.length === 0" class="no-logs">
+          <div v-if="logs.length === 0" class="no-logs">
             <i class="pi pi-inbox"></i>
             <p>No logs to display</p>
           </div>
@@ -256,6 +306,16 @@ const sendTestLog = () => {
 
 .filter-select {
   width: 150px;
+}
+
+.filter-search {
+  width: 220px;
+}
+
+.load-older {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 0.5rem;
 }
 
 .log-count {
