@@ -489,7 +489,7 @@ def check_config(online):
     report = _Report()
 
     report.section('Configuration')
-    secret = os.environ.get('SECRET_KEY', '')
+    secret = app.config.get('SECRET_KEY') or ''   # SECRET_KEY or the contents of SECRET_KEY_FILE
     if app.config.get('SECRET_KEY_IS_DEFAULT') or not secret:
         report('fail', 'SECRET_KEY is the insecure default — set it (e.g. openssl rand -hex 32)')
     elif len(secret) < 32:

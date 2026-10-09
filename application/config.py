@@ -71,6 +71,28 @@ class ConfigError(ValueError):
     """An environment variable has a value the app cannot start with."""
 
 
+def resolve_secret_key(environ: Mapping[str, str]) -> str:
+    """SECRET_KEY, or the contents of the file SECRET_KEY_FILE names (the
+    convention of Docker secrets, systemd credentials, agenix/sops-nix): the key
+    then never sits in an environment variable, a compose file or the Nix store.
+    SECRET_KEY wins if both are set. Neither: the insecure default (flagged by
+    ``flask dh check-config`` and the admin panel)."""
+    direct = environ.get('SECRET_KEY')
+    if direct:
+        return direct
+    path = (environ.get('SECRET_KEY_FILE') or '').strip()
+    if not path:
+        return DEFAULT_SECRET_KEY
+    try:
+        with open(path, encoding='utf-8') as handle:
+            key = handle.read().strip()
+    except OSError as exc:
+        raise ConfigError(f'SECRET_KEY_FILE {path!r} cannot be read: {exc.strerror or exc}') from exc
+    if not key:
+        raise ConfigError(f'SECRET_KEY_FILE {path!r} is empty')
+    return key
+
+
 def resolve_public_url(environ: Mapping[str, str]) -> Optional[str]:
     """PUBLIC_URL: the address people reach this instance at, e.g.
     ``https://signage.example.com`` (a sub-path is allowed, a trailing slash is
@@ -186,7 +208,7 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     # Pick up template changes without a full process restart.
     cfg['TEMPLATES_AUTO_RELOAD'] = True
 
-    secret_key = environ.get('SECRET_KEY', DEFAULT_SECRET_KEY)
+    secret_key = resolve_secret_key(environ)
     if secret_key == DEFAULT_SECRET_KEY:
         warnings.warn(
             "SECRET_KEY is using the insecure default 'secret!'. "

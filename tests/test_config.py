@@ -7,7 +7,7 @@ from application import paths as data_paths
 from application.db_url import DatabaseConfigError
 from application.config import (
     DEV_CORS_ORIGINS, ConfigError, apply_config, engine_options, env_int, is_truthy,
-    resolve_cors_origins, resolve_public_url, trusted_proxy_count,
+    resolve_cors_origins, resolve_public_url, resolve_secret_key, trusted_proxy_count,
 )
 
 
@@ -154,3 +154,32 @@ def test_sqlite_is_refused_in_docker_and_nixos(tmp_path, kind, where):
     app, _ = _apply({'SECRET_KEY': 's' * 32, 'DISPLAYHIVE_DEPLOYMENT': kind,
                      'DATABASE_URL': 'postgresql://u:p@db/x'}, tmp_path)
     assert app.config['SQLITE_IN_USE'] is False
+
+
+# --- SECRET_KEY / SECRET_KEY_FILE -----------------------------------------------
+
+
+def test_secret_key_from_the_environment_or_a_file(tmp_path):
+    key_file = tmp_path / 'key'
+    key_file.write_text('  from-a-file-0123456789abcdef0123456789\n')
+    assert resolve_secret_key({'SECRET_KEY': 'direct'}) == 'direct'
+    assert resolve_secret_key({'SECRET_KEY_FILE': str(key_file)}) == 'from-a-file-0123456789abcdef0123456789'
+    assert resolve_secret_key({'SECRET_KEY': 'direct', 'SECRET_KEY_FILE': str(key_file)}) == 'direct'
+    assert resolve_secret_key({}) == 'secret!'                      # the flagged insecure default
+
+
+def test_an_unreadable_or_empty_secret_key_file_stops_the_start(tmp_path):
+    empty = tmp_path / 'empty'
+    empty.write_text('\n')
+    with pytest.raises(ConfigError, match='is empty'):
+        resolve_secret_key({'SECRET_KEY_FILE': str(empty)})
+    with pytest.raises(ConfigError, match='cannot be read'):
+        resolve_secret_key({'SECRET_KEY_FILE': str(tmp_path / 'missing')})
+
+
+def test_apply_config_uses_the_key_file(tmp_path):
+    key_file = tmp_path / 'key'
+    key_file.write_text('a-real-long-random-secret-key-1234567890\n')
+    app, _ = _apply({'SECRET_KEY_FILE': str(key_file)}, tmp_path)
+    assert app.config['SECRET_KEY'] == 'a-real-long-random-secret-key-1234567890'
+    assert app.config['SECRET_KEY_IS_DEFAULT'] is False

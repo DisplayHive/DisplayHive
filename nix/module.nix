@@ -544,11 +544,54 @@ let
       };
 
       secretKey = mkOption {
-        type        = types.str;
+        type        = types.nullOr types.str;
+        default     = null;
         description = ''
-          Flask secret key used for session signing.
+          Flask secret key used for session signing, as a plain string — which
+          puts it in the world-readable Nix store. Fine for a test; in
+          production use {option}`secretKeyFile` (or {option}`environmentFile`).
           Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
-          Use agenix / sops-nix to keep this out of the Nix store in production.
+        '';
+      };
+
+      secretKeyFile = mkOption {
+        type        = types.nullOr types.str;
+        default     = null;
+        example     = "/run/secrets/displayhive-main-secret-key";
+        description = ''
+          Absolute path of a file holding the secret key (agenix, sops-nix, or
+          any root-only file). systemd loads it as a credential, so only the
+          service sees it and the service user needs no access to the file
+          itself; it never enters the Nix store or the environment listing.
+          Set exactly one of {option}`secretKey`, {option}`secretKeyFile` or a
+          SECRET_KEY line in {option}`environmentFile`.
+        '';
+      };
+
+      environmentFile = mkOption {
+        type        = types.nullOr types.str;
+        default     = null;
+        example     = "/run/secrets/displayhive-main.env";
+        description = ''
+          Absolute path of a file with further `NAME=value` lines (one per line,
+          no `export`, no spaces around `=`) added to the service's environment:
+          for example SECRET_KEY, ADMIN_BOOTSTRAP_PASSWORD or DB credentials that
+          should stay out of the Nix store. Read by systemd (EnvironmentFile=);
+          the `displayhive-<name>` command reads it too.
+        '';
+      };
+
+      bindAddress = mkOption {
+        type    = types.str;
+        default = "127.0.0.1";
+        example = "0.0.0.0";
+        description = ''
+          Address the app listens on. The default, loopback, suits a reverse
+          proxy on the same host (which you want in front for TLS anyway). Use
+          "0.0.0.0" (or one interface's address) only if the proxy runs on
+          another machine — the app then speaks plain HTTP on that interface, so
+          restrict it with the firewall. (Before this option existed the app
+          always listened on 0.0.0.0.)
         '';
       };
 
@@ -732,7 +775,6 @@ let
   mkServiceEnv = name: icfg: {
       DATABASE_URL             = "postgresql:///displayhive-${name}?host=/run/postgresql";
       FLASK_PORT               = toString icfg.port;
-      SECRET_KEY               = icfg.secretKey;
       CORS_ALLOWED_ORIGINS     = if icfg.corsAllowedOrigins != null then icfg.corsAllowedOrigins
                                  else if icfg.publicUrl != null then icfg.publicUrl
                                  else "*";
@@ -745,12 +787,16 @@ let
       UV_PYTHON_DOWNLOADS      = "never";
       DISPLAYHIVE_DEPLOYMENT   = "nixos";
       FLASK_APP                = "app";
+      # The source tree is read-only for the service; Python would try to write .pyc files there.
+      PYTHONDONTWRITEBYTECODE  = "1";
       BACKUP_INTERVAL_HOURS    = toString icfg.backup.intervalHours;
       BACKUP_KEEP              = toString icfg.backup.keep;
       MIGRATION_BACKUP         = if icfg.backup.beforeMigration then "on" else "off";
       ADMIN_BOOTSTRAP_USERNAME = icfg.adminBootstrapUsername;
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
       ADMIN_BOOTSTRAP_PASSWORD = icfg.adminBootstrapPassword;
+    } // optionalAttrs (icfg.secretKey != null) {
+      SECRET_KEY = icfg.secretKey;
     } // optionalAttrs (icfg.publicUrl != null) {
       PUBLIC_URL = icfg.publicUrl;
     } // icfg.extraEnv;
@@ -766,7 +812,16 @@ let
       exit 1
     fi
     cd ${escapeShellArg icfg.sourceDirectory}
-    exec ${pkgs.util-linux}/bin/runuser -u displayhive-${name} -- \
+    ${optionalString (icfg.environmentFile != null) ''
+    # The service's EnvironmentFile (NAME=value lines), for the command as well.
+    set -a
+    . ${escapeShellArg icfg.environmentFile}
+    set +a
+    ''}${optionalString (icfg.secretKeyFile != null) ''
+    # Read as root and handed over in the environment (not on a command line).
+    SECRET_KEY="$(${pkgs.coreutils}/bin/cat ${escapeShellArg icfg.secretKeyFile})"
+    export SECRET_KEY
+    ''}exec ${pkgs.util-linux}/bin/runuser -u displayhive-${name} -- \
       ${pkgs.coreutils}/bin/env \
       ${concatStringsSep " " (mapAttrsToList (k: v: escapeShellArg "${k}=${v}")
           # LOG_LEVEL: the CLI's own quieter default (WARNING) reads better.
@@ -809,15 +864,52 @@ let
         + " --worker-class gthread"
         + " -w 1"
         + " --threads ${toString icfg.threads}"
-        + " --bind 0.0.0.0:${toString icfg.port}"
+        + " --bind ${icfg.bindAddress}:${toString icfg.port}"
+        # gunicorn's control socket (gunicornc) is unused, and it wants to create a file
+        # in a directory the sandbox keeps read-only.
+        + " --no-control-socket"
         + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${icfg.sourceDirectory}/gunicorn-logging.json"
         + " app:app";
       Restart    = "on-failure";
       RestartSec = "5s";
-      NoNewPrivileges = true;
       # One open socket per connected screen / admin tab (see `threads`).
       LimitNOFILE     = 65536;
-      PrivateTmp      = true;
+    }
+    # Secrets that stay out of the Nix store (see secretKeyFile / environmentFile).
+    // optionalAttrs (icfg.secretKeyFile != null) {
+      LoadCredential = "secret_key:${icfg.secretKeyFile}";
+      Environment    = [ "SECRET_KEY_FILE=%d/secret_key" ];
+    }
+    // optionalAttrs (icfg.environmentFile != null) {
+      EnvironmentFile = icfg.environmentFile;
+    }
+    # Sandbox: the service reads the source tree and writes only its data and its
+    # Python environment (which includes uv's cache). It needs no capabilities and
+    # talks over unix sockets (PostgreSQL) and IP (clients, Pretalx, SSO) only.
+    // {
+      NoNewPrivileges        = true;
+      PrivateTmp             = true;
+      PrivateDevices         = true;
+      ProtectSystem          = "strict";
+      ReadWritePaths         = [ icfg.dataDirectory icfg.pythonEnvDirectory ];
+      # /home stays out of reach, unless the instance itself lives there.
+      ProtectHome            = if any (p: hasPrefix "/home" p || hasPrefix "/root" p)
+                                      [ icfg.sourceDirectory icfg.dataDirectory icfg.pythonEnvDirectory ]
+                               then "read-only" else true;
+      ProtectKernelTunables  = true;
+      ProtectKernelModules   = true;
+      ProtectKernelLogs      = true;
+      ProtectControlGroups   = true;
+      ProtectClock           = true;
+      ProtectHostname        = true;
+      LockPersonality        = true;
+      RestrictRealtime       = true;
+      RestrictSUIDSGID       = true;
+      RestrictNamespaces     = true;
+      RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+      CapabilityBoundingSet  = "";
+      AmbientCapabilities    = "";
+      SystemCallArchitectures = "native";
     };
   };
 
@@ -862,6 +954,22 @@ in {
 
   # ── Module implementation ─────────────────────────────────────────────────
   config = mkIf (cfg.instances != {}) {
+
+    assertions = concatLists (mapAttrsToList (name: icfg: [
+      {
+        assertion = icfg.secretKey != null || icfg.secretKeyFile != null || icfg.environmentFile != null;
+        message   = "services.displayhive.instances.${name}: set secretKeyFile (recommended), secretKey, "
+                    + "or a SECRET_KEY line in environmentFile — without one the app runs with an insecure default key.";
+      }
+      {
+        assertion = !(icfg.secretKey != null && icfg.secretKeyFile != null);
+        message   = "services.displayhive.instances.${name}: set secretKey or secretKeyFile, not both.";
+      }
+      {
+        assertion = all (f: f == null || hasPrefix "/" f) [ icfg.secretKeyFile icfg.environmentFile ];
+        message   = "services.displayhive.instances.${name}: secretKeyFile and environmentFile must be absolute paths.";
+      }
+    ]) cfg.instances);
 
     services.postgresql.enable = mkDefault true;
 

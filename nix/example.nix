@@ -106,7 +106,7 @@
       # gitSshKeyFile for private repos (see SSH deploy key setup above).
       # gitSshKeyFile = config.age.secrets."displayhive-staging-deploy-key".path;
 
-      secretKey          = "replace-with-a-real-secret-key";
+      secretKeyFile      = "/run/secrets/displayhive-staging-secret-key";   # agenix / sops-nix; or secretKey = "…" for a test
       publicUrl          = "https://staging.example.com";  # CORS + SSO redirect URI derive from it
 
       # ── Extra app env vars (all optional — see module.nix for defaults) ──
@@ -135,7 +135,7 @@
       sourceDirectory = "/opt/displayhive/production";
       gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
       gitBranch       = "main";
-      secretKey       = "replace-with-a-real-secret-key-for-production";
+      secretKeyFile   = "/run/secrets/displayhive-production-secret-key";
       publicUrl          = "https://example.com";
       # No webhook for production — deploy manually via nixos-rebuild switch.
     };

@@ -50,5 +50,6 @@ exec gunicorn \
     --workers 1 \
     --threads "${GUNICORN_THREADS:-500}" \
     --bind "0.0.0.0:5000" \
+    --no-control-socket \
     $log_args \
     app:app

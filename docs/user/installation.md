@@ -68,8 +68,11 @@ host can run multiple independent DisplayHive instances (e.g. `staging` and
     gitRepository = "https://gogs.example.com/yourorg/displayhive.git";
     gitBranch     = "main";
 
-    secretKey          = "replace-with-a-real-secret-key";
-    corsAllowedOrigins = "https://example.com";
+    # The secret key stays out of the (world-readable) Nix store: a root-only file,
+    # e.g. from agenix or sops-nix. (`secretKey = "…"` works for a quick test.)
+    secretKeyFile = "/run/secrets/displayhive-production-secret-key";
+    publicUrl     = "https://example.com";   # CORS and the SSO redirect URI derive from it
+    trustedProxyCount = 1;                   # one reverse proxy in front (see below)
   };
 
   # Pin the PostgreSQL major version to avoid unexpected upgrades.
@@ -99,6 +102,26 @@ What the module handles automatically for each declared instance:
   versions the Docker image ships. **The first start, and the first one
   after `requirements.txt` changed, needs internet access** to download
   them; other restarts don't. (The former `pythonEnv` option is gone.)
+- **Secrets outside the Nix store:** `secretKeyFile` (a root-only file, handed
+  to the service as a systemd credential, so the service user needs no access
+  to it) and `environmentFile` (further `NAME=value` lines, e.g. a bootstrap
+  password). `secretKey = "…"` as a plain string still works, but is readable by
+  every user on the host. The `displayhive-<name>` command reads both files too.
+  The build refuses an instance with no secret key at all.
+- **Listening on loopback only:** `bindAddress` defaults to `127.0.0.1`, which
+  is what a reverse proxy on the same host needs. Set it to `"0.0.0.0"` (or an
+  interface address) only if the proxy is on another machine — and then
+  restrict the port with the firewall. *(Earlier versions always listened on
+  `0.0.0.0`; if your proxy is not on the host, set `bindAddress` when you
+  update.)*
+- **A sandboxed service:** the unit gets a read-only file system except the
+  instance's `dataDirectory` and `pythonEnvDirectory`, no access to `/home`
+  (read-only if the instance lives there), no capabilities, only
+  `AF_UNIX`/`AF_INET`/`AF_INET6` sockets, a private `/tmp` and `/dev`, and
+  the kernel, control groups, clock and hostname are protected. `systemd-analyze
+  security displayhive-<name>` rates it 3.0 "OK" (an unsandboxed unit: 9.0
+  "UNSAFE"). The deploy and webhook units are not sandboxed — they have to run
+  git and npm and write the source tree.
 - A dedicated system user/group and a PostgreSQL database + role, both named
   `displayhive-<name>`.
 - Optionally, a `displayhive-<name>-deploy` one-shot service that clones/pulls
@@ -191,6 +214,7 @@ variables are worth knowing about:
 | `MIGRATION_BACKUP` / `MIGRATION_BACKUPS_KEEP` | A backup before every migration (default `on`; `off` migrates without one) and for how many upgrades to keep those (default `3`). |
 | `MIGRATE_ON_START` | Docker image only: `0` skips the migration at container start. The compose file sets it because its `migrate` service does that. |
 | `DISPLAYHIVE_REVISION` | The commit the instance was built from, shown in the admin footer and by `flask dh check-config`. The Docker image sets it at build time; with git checkouts (NixOS, development) it is read from git, so you normally never set it. |
+| `SECRET_KEY_FILE` | Path of a file holding the secret key, instead of `SECRET_KEY` itself (which wins if both are set): Docker secrets (`/run/secrets/…`), systemd credentials, agenix/sops-nix. The key then stays out of environment variables, compose files and the Nix store. NixOS: `secretKeyFile`. |
 | `PUBLIC_URL` | The address people reach DisplayHive at, e.g. `https://signage.example.com` (scheme and host; a trailing slash is dropped). Set it in production. The **SSO redirect URI** is built from it (instead of from each request's `Host` header), and it is the default for **CORS**. An invalid value stops the app at start-up. NixOS: `publicUrl`. |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for the API and Socket.IO; an entry with a path is reduced to its origin. Wins over `PUBLIC_URL` when set. Unset: `PUBLIC_URL`'s origin; without that, local development origins only (the Docker compose file and the NixOS module fall back to `*`, i.e. any origin, which `flask dh check-config` and the admin panel flag as a warning). |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app. Set this whenever you put nginx (or similar) in front of DisplayHive, so rate-limiting uses the real client IP rather than the proxy's, and SSO redirect URIs use the public address. **Without it, every client looks like the proxy's IP, and the per-IP login limit (below) locks out everyone at once after a handful of failed logins.** |
