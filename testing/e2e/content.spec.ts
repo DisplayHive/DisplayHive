@@ -12,7 +12,6 @@
  *  3.  Text filter narrows the content list
  *  4.  Toggle-active switch disables/re-enables a content item
  *  5.  Edit dialog renames the content item and updates the row
- *  6.  Refresh button reloads the content list
  *  7.  Delete button removes the content item after confirmation
  *
  * Strategy:
@@ -208,19 +207,19 @@ test.describe('Content page', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // 1. A card for the seeded Contenttype appears
+  // 1. The seeded content shows up in the table
   // ---------------------------------------------------------------------------
 
-  test('a card for the seeded contenttype appears', async ({ page, backendUrl }) => {
+  test('the seeded content appears in the table', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
-    await expect(page.locator('.container-card', { hasText: ctName })).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('tr', { hasText: contentTitleHolder.current })).toBeVisible({ timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------
   // 2. Seeded content appears in the contenttype card
   // ---------------------------------------------------------------------------
 
-  test('seeded content appears inside the contenttype card', async ({ page, backendUrl }) => {
+  test('seeded content appears in the table', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
@@ -237,8 +236,7 @@ test.describe('Content page', () => {
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    const card = page.locator('.container-card', { hasText: ctName })
-    const filterInput = card.locator('input[type="text"]').first()
+    const filterInput = page.getByPlaceholder('Search title or content...')
     await filterInput.fill('__no_match_xyz__')
     await expect(row).toBeHidden({ timeout: 3_000 })
 
@@ -282,39 +280,22 @@ test.describe('Content page', () => {
     await expect(row).toBeVisible({ timeout: 10_000 })
     await row.locator('button:has(.pi-pencil)').click()
 
-    const dialog = page.locator('.p-dialog', { hasText: 'Edit Content' })
-    await expect(dialog).toBeVisible({ timeout: 5_000 })
+    // Editing opens the full edit page (/content/:id/edit), not a dialog.
+    await expect(page).toHaveURL(/\/content\/\d+\/edit/, { timeout: 5_000 })
 
     const newTitle = `${contentTitleHolder.current}-ren`
-    const titleInput = dialog.locator('#create-title')
+    const titleInput = page.locator('#create-title')
+    await expect(titleInput).toBeVisible({ timeout: 10_000 })
     await titleInput.clear()
     await titleInput.fill(newTitle)
 
-    // "Update" saves but keeps the dialog open (edit-and-continue); "Save" saves
-    // and closes it — click "Save" since this test expects the dialog to close.
-    await dialog.getByRole('button', { name: 'Save' }).click()
-    await expect(dialog).toBeHidden({ timeout: 5_000 })
+    // "Update" saves and stays on the page (edit-and-continue); "Save" saves and
+    // returns to the list — click "Save" since this test expects the list.
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page).toHaveURL(/\/content$/, { timeout: 10_000 })
 
     await expect(page.locator('tr', { hasText: newTitle })).toBeVisible({ timeout: 10_000 })
     contentTitleHolder.current = newTitle
-  })
-
-  // ---------------------------------------------------------------------------
-  // 6. Refresh button reloads the content list
-  // ---------------------------------------------------------------------------
-
-  test('refresh action reloads the content list', async ({ page, backendUrl }) => {
-    await gotoContent(page, backendUrl)
-
-    const row = page.locator('tr', { hasText: contentTitleHolder.current })
-    await expect(row).toBeVisible({ timeout: 10_000 })
-
-    // Secondary page actions live in the "More actions" menu of the page header.
-    await page.getByRole('button', { name: 'More actions' }).click()
-    await page.getByRole('menuitem', { name: 'Refresh' }).click()
-
-    // Row must still be visible after refresh
-    await expect(row).toBeVisible({ timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------

@@ -139,7 +139,6 @@ onUnmounted(() => {
   off('displayhive:screens:stc:screen_deleted', handleScreenDeleted)
 })
 
-const refreshScreens = () => screensStore.fetch()
 
 const openCreateDialog = () => {
   createForm.value = { name: '' }
@@ -295,7 +294,7 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
   <div v-else data-tour="screens-page" class="screens-view">
     <PageActions
       :primary="canCreate ? { label: 'Add Screen', icon: 'pi pi-plus', tour: 'screens-new', onClick: openCreateDialog } : null"
-      :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', title: 'Reload every connected screen', onClick: reloadAllScreens }, { label: 'Refresh', icon: 'pi pi-sync', onClick: refreshScreens }]"
+      :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', title: 'Reload every connected screen', onClick: reloadAllScreens }]"
     />
     <Card>
       <template #content>

@@ -104,7 +104,7 @@ export const mediaTour: TourDefinition = {
       selector: '[data-tour="page-more-actions"]',
       title: 'More actions',
       description:
-        'Sync Previews compares every file against its generated preview and regenerates any that are missing — useful after a bulk import or a storage hiccup. Refresh re-reads the library.',
+        'Sync Previews compares every file against its generated preview and regenerates any that are missing — useful after a bulk import or a storage hiccup.',
       side: 'bottom',
     },
   ],

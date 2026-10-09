@@ -87,7 +87,7 @@ export const screensTour: TourDefinition = {
       selector: '[data-tour="page-more-actions"]',
       title: 'More actions',
       description:
-        'Reload All sends the same reload to every registered screen at once, and Refresh re-reads the list. Like on every list page, the secondary actions live in this menu.',
+        'Reload All sends the same reload to every registered screen at once. Rarely needed actions live in this menu; the lists update by themselves.',
       side: 'bottom',
     },
     {

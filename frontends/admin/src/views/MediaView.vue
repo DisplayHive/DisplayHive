@@ -300,7 +300,7 @@ const copyUrl = (url: string) => {
   <div v-else data-tour="media-page" class="media-view">
     <PageActions
       :primary="canUpload ? { label: 'Upload', icon: 'pi pi-upload', tour: 'media-upload', onClick: () => (showUploadDialog = true) } : null"
-      :secondary="[canUpload && { label: 'Sync Previews', icon: 'pi pi-sync', tour: 'media-sync-previews', title: 'Count images vs. previews and regenerate any missing ones', loading: syncingPreviews, onClick: syncPreviews }, { label: 'Refresh', icon: 'pi pi-refresh', onClick: () => mediaStore.fetch() }]"
+      :secondary="[canUpload && { label: 'Sync Previews', icon: 'pi pi-sync', tour: 'media-sync-previews', title: 'Count images vs. previews and regenerate any missing ones', loading: syncingPreviews, onClick: syncPreviews }]"
     />
     <div class="media-content">
       <Card>

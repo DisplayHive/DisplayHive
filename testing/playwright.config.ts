@@ -162,7 +162,10 @@ export default defineConfig({
      * Use the dev server by default for faster feedback loop.
      * Use the preview server on CI for more realistic testing.
      */
-    command: process.env.CI ? 'npm run preview' : 'npm run dev',
+    // CI serves the built app: build first, or the tests run against whatever dist/ held before
+    // (stale code gives phantom failures).
+    command: process.env.CI ? 'npm run build-only && npm run preview' : 'npm run dev',
+    timeout: 180_000,
     cwd: path.resolve(__dirname, '../frontends/admin'),
     port: process.env.CI ? 4173 : 5173,
     reuseExistingServer: !process.env.CI,

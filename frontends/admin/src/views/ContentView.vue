@@ -298,7 +298,6 @@ const copyContent = (content: ContentElement) => {
   <div v-else class="content-view">
     <PageActions
       :primary="canCreate ? { label: 'New Content', icon: 'pi pi-plus', tour: 'content-new', onClick: openCreateWorkflow } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
     />
     <Card>
       <template #content>

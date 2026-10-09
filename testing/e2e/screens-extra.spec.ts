@@ -4,7 +4,8 @@
  * Covered (extending the existing screens.spec.ts):
  *  1.  Edit screen name — dialog renames the screen and the row updates
  *  2.  Text filter narrows the screens table
- *  3.  Screen resolution is displayed in the row after creation with dimensions
+ *  3.  A screen created through the dialog appears as a row (resolution is reported by the
+ *      screen itself, not entered here)
  *
  * Strategy:
  *  - One screen is seeded via the UI dialog (Add Screen) and used across tests.
@@ -67,7 +68,7 @@ test.describe('Screens page — extra tests', () => {
   // 0. Create screen via UI (setup for subsequent tests)
   // ---------------------------------------------------------------------------
 
-  test('add screen with resolution — row shows resolution', async ({ page, backendUrl }) => {
+  test('add screen — row appears', async ({ page, backendUrl }) => {
     await gotoScreens(page, backendUrl)
 
     await page.getByRole('button', { name: 'Add Screen' }).click()
@@ -75,15 +76,11 @@ test.describe('Screens page — extra tests', () => {
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
     await dialog.locator('#create-name').fill(screenName)
-    await dialog.locator('#create-width').fill('1280')
-    await dialog.locator('#create-height').fill('720')
     await dialog.getByRole('button', { name: 'Create' }).click()
     await expect(dialog).toBeHidden({ timeout: 5_000 })
 
     const row = page.locator('tr', { hasText: screenName })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    // Resolution should be visible in the row
-    await expect(row).toContainText('1280')
   })
 
   // ---------------------------------------------------------------------------

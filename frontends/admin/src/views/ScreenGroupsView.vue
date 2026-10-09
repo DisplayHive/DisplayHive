@@ -178,7 +178,6 @@ onUnmounted(() => {
   off('displayhive:admin:stc:screengroup_deleted', handleScreenGroupDeleted)
 })
 
-const refreshData = () => screengroupsStore.fetch()
 
 const openNewDialog = () => {
   isNew.value = true
@@ -246,7 +245,6 @@ const removeScreenFromGroup = (screen: DialogScreen) => {
   screengroupsStore.removeScreenFromGroup(selectedScreenGroup.value.id, screen.id)
   assignedScreens.value = assignedScreens.value.filter((s) => s.id !== screen.id)
   availableScreens.value.push(screen)
-  screengroupsStore.fetch()
 }
 
 const addScreenToGroup = (screen: DialogScreen) => {
@@ -254,7 +252,6 @@ const addScreenToGroup = (screen: DialogScreen) => {
   screengroupsStore.addScreenToGroup(selectedScreenGroup.value.id, screen.id)
   availableScreens.value = availableScreens.value.filter((s) => s.id !== screen.id)
   assignedScreens.value.push(screen)
-  screengroupsStore.fetch()
 }
 
 const removeAllScreensFromGroup = () => {
@@ -267,7 +264,6 @@ const removeAllScreensFromGroup = () => {
     accept: () => {
       screengroupsStore.removeAllScreensFromGroup(selectedScreenGroup.value!.id)
       assignedScreens.value = []
-      screengroupsStore.fetch()
     },
   })
 }
@@ -295,7 +291,6 @@ const removeContentFromGroup = (content: Content) => {
   screengroupsStore.removeContentFromGroup(selectedScreenGroup.value.id, content.id)
   assignedContent.value = assignedContent.value.filter((c) => c.id !== content.id)
   availableContent.value.push(content)
-  screengroupsStore.fetch()
 }
 
 const addContentToGroup = (content: Content) => {
@@ -303,7 +298,6 @@ const addContentToGroup = (content: Content) => {
   screengroupsStore.addContentToGroup(selectedScreenGroup.value.id, content.id)
   availableContent.value = availableContent.value.filter((c) => c.id !== content.id)
   assignedContent.value.push(content)
-  screengroupsStore.fetch()
 }
 
 const removeAllContentFromGroup = () => {
@@ -317,7 +311,6 @@ const removeAllContentFromGroup = () => {
       screengroupsStore.removeAllContentFromGroup(selectedScreenGroup.value!.id)
       availableContent.value.push(...assignedContent.value)
       assignedContent.value = []
-      screengroupsStore.fetch()
     },
   })
 }
@@ -340,7 +333,6 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
   <div v-else data-tour="screengroups-page" class="screengroups-view">
     <PageActions
       :primary="canCreate ? { label: 'New Screen Group', icon: 'pi pi-plus', tour: 'screengroups-new', onClick: openNewDialog } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
     />
     <Card>
       <template #content>

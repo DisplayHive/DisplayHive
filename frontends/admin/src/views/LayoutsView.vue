@@ -136,7 +136,6 @@ const refreshData = () => {
   <div v-else data-tour="layouts-page" class="layouts-view">
     <PageActions
       :primary="canCreate ? { label: 'New Layout', icon: 'pi pi-plus', tour: 'layouts-new', onClick: openNewPage } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
     />
     <Card>
       <template #content>

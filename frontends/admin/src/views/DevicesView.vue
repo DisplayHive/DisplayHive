@@ -125,7 +125,6 @@ onMounted(() => {
   screensStore.fetch()
 })
 
-const refreshDevices = () => devicesStore.fetch()
 
 const openAdoptDialog = () => {
   adoptForm.value = { name: '', adoptiontoken: '', screen_id: null }
@@ -237,7 +236,6 @@ const saveRename = async (keepOpen = false) => {
     devicesStore.updateDevice(renamingDevice.value.id, { name: renameForm.value.name })
     toast.add({ severity: 'success', summary: 'Success', detail: 'Device renamed', life: 3000 })
     if (!keepOpen) showRenameDialog.value = false
-    devicesStore.fetch()
   } finally {
     isSavingRename.value = false
   }
@@ -256,7 +254,6 @@ const saveAssign = async () => {
     devicesStore.assignScreen(assigningDevice.value.id, assignForm.value.screen_id ?? null)
     toast.add({ severity: 'success', summary: 'Success', detail: 'Screen assignment updated', life: 3000 })
     showAssignDialog.value = false
-    devicesStore.fetch()
   } finally {
     isSavingAssign.value = false
   }
@@ -343,9 +340,10 @@ const deleteDevice = (device: Device) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: () => {
+      // The server pushes the new list to every admin once the device is gone; a fetch() right
+      // behind the delete can be answered first and put the deleted row back.
       devicesStore.deleteDevice(device.id)
       toast.add({ severity: 'success', summary: 'Success', detail: 'Device deleted', life: 3000 })
-      devicesStore.fetch()
     },
   })
 }
@@ -368,7 +366,6 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
   <div v-else data-tour="devices-page" class="devices-view">
     <PageActions
       :primary="canAdopt ? { label: 'Adopt Device', icon: 'pi pi-plus', tour: 'devices-adopt', onClick: openAdoptDialog } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshDevices }]"
     />
     <Card>
       <template #content>

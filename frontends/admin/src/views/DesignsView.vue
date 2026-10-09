@@ -897,7 +897,6 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
   <div v-else data-tour="designs-page" class="designs-view">
     <PageActions
       :primary="canCreate ? { label: 'New Design', icon: 'pi pi-plus', tour: 'designs-new', onClick: openNewDialog } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
     />
     <Card>
       <template #content>

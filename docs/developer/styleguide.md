@@ -198,16 +198,18 @@ never with their own buttons in the card header:
 <div v-else data-tour="screens-page" class="screens-view">
   <PageActions
     :primary="canCreate ? { label: 'Add Screen', icon: 'pi pi-plus', tour: 'screens-new', onClick: openCreateDialog } : null"
-    :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', onClick: reloadAllScreens },
-                 { label: 'Refresh', icon: 'pi pi-sync', onClick: refreshScreens }]"
+    :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', onClick: reloadAllScreens }]"
   />
   <Card>…</Card>
 </div>
 ```
 
 - **One primary action** (the "New X"/"Add X"/"Upload" button, a filled small button), or
-  none. **Everything else** — Refresh, Reload All, Sync Previews — is *secondary* and goes into the
-  "More actions" menu (`⋮`, an outlined small button). Actions the user has no right for are
+  none. **Rarely needed actions** — Reload All, Sync Previews — are *secondary* and go into the
+  "More actions" menu (`⋮`, an outlined small button). There is **no Refresh action**: the server
+  pushes every change to all admins over the socket, and a `fetch()` right behind a change can be
+  answered first and put the old state back — so don't add one, and don't call `fetch()` after a
+  mutation the server already broadcasts. Actions the user has no right for are
   passed as `null`/`false` and are left out; without secondary actions there is no menu.
 - `tour` sets the element's `data-tour`. Menu entries only exist while the menu is open, so a
   guided-tour step cannot highlight one: point it at `[data-tour="page-more-actions"]`
@@ -216,7 +218,9 @@ never with their own buttons in the card header:
 - Put it as the first child of the view's root element; it renders nothing in place (it teleports),
   and waits for the header to exist on a fresh page load.
 - In E2E tests, open the menu first: `getByRole('button', { name: 'More actions' })`, then
-  `getByRole('menuitem', { name: 'Refresh' })`.
+  `getByRole('menuitem', { name: 'Reload All' })`.
+- Pages whose actions belong to a tab or card (Users, Pretalx, Alerting) keep them there; a single
+  header button would be ambiguous.
 
 ## Tables
 

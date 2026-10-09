@@ -7,7 +7,6 @@
  *  3.  Copy-key button shows toast "Device key copied to clipboard"
  *  4.  Edit dialog renames a device
  *  5.  Edit dialog assigns a screen; Screen column updates
- *  6.  Refresh button reloads the device list
  *  7.  The "Play" (impersonation) button opens a new tab showing the screen
  *  8.  Online / offline filter tags hide and reveal rows
  *  9.  "Locate Device" button toggles the find state on a connected screen
@@ -296,20 +295,20 @@ test.describe('Devices page', () => {
     const row = page.locator('tr', { hasText: deviceName })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    await row.locator('button[title="Edit"]').click()
+    await row.locator('button[title="Rename"]').click()
 
-    const dialog = page.locator('.p-dialog', { hasText: 'Edit Device' })
+    const dialog = page.locator('.p-dialog', { hasText: 'Rename Device' })
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
     // Clear and type the new name — keep a known prefix so later tests still match
     const newName = `${deviceName}-ren`
-    const nameInput = dialog.locator('#edit-name')
+    const nameInput = dialog.locator('#rename-name')
     await nameInput.clear()
     await nameInput.fill(newName)
 
     await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(dialog).toBeHidden({ timeout: 5_000 })
-    await expect(page.locator('.p-toast')).toContainText(/Device updated/i, { timeout: 5_000 })
+    await expect(page.locator('.p-toast')).toContainText(/Device renamed/i, { timeout: 5_000 })
 
     // Row must now show the new name (socket push refreshes the list)
     const renamedRow = page.locator('tr', { hasText: newName })
@@ -341,13 +340,13 @@ test.describe('Devices page', () => {
     const row = page.locator('tr', { hasText: currentName })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    await row.locator('button[title="Edit"]').click()
+    await row.locator('button[title="Assign to Screen"]').click()
 
-    const dialog = page.locator('.p-dialog', { hasText: 'Edit Device' })
+    const dialog = page.locator('.p-dialog', { hasText: 'Assign to Screen' })
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 
     // Open the screen dropdown
-    await dialog.locator('#edit-screen').click()
+    await dialog.locator('#assign-screen').click()
 
     // Pick the option matching the screen we just created
     const option = page.locator('.p-select-option', { hasText: testScreenName })
@@ -356,42 +355,21 @@ test.describe('Devices page', () => {
 
     await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(dialog).toBeHidden({ timeout: 5_000 })
-    await expect(page.locator('.p-toast')).toContainText(/Device updated/i, { timeout: 5_000 })
+    await expect(page.locator('.p-toast')).toContainText(/Screen assignment updated/i, { timeout: 5_000 })
 
     // Screen column for this row must now show the assigned screen name
     await expect(row).toContainText(testScreenName, { timeout: 10_000 })
 
     // Unassign device from screen (set back to No Screen) so cleanup can delete the screen
-    await row.locator('button[title="Edit"]').click()
+    await row.locator('button[title="Assign to Screen"]').click()
     await expect(dialog).toBeVisible({ timeout: 5_000 })
-    await dialog.locator('#edit-screen').click()
+    await dialog.locator('#assign-screen').click()
     await page.locator('.p-select-option', { hasText: '-- No Screen --' }).click()
     await dialog.getByRole('button', { name: 'Save' }).click()
     await expect(dialog).toBeHidden({ timeout: 5_000 })
 
     // Delete the temporary screen
     await deleteScreenBySocket(page, testScreenName)
-  })
-
-  // ---------------------------------------------------------------------------
-  // 7. Refresh button re-requests the device list
-  // ---------------------------------------------------------------------------
-
-  test('refresh button reloads the device list', async ({ page, backendUrl }) => {
-    console.log('[devices.spec] init socket handlers')
-    await gotoDevices(page, backendUrl)
-
-    const currentName = deviceNameHolder.current
-    const row = page.locator('tr', { hasText: currentName })
-    await expect(row).toBeVisible({ timeout: 10_000 })
-
-    // Refresh is a secondary page action: in the "More actions" menu of the page header
-    await page.getByRole('button', { name: 'More actions' }).click()
-    await page.getByRole('menuitem', { name: 'Refresh' }).click()
-
-    // Table briefly shows a loading state then repopulates
-    // Row must still be visible after refresh
-    await expect(row).toBeVisible({ timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------

@@ -154,10 +154,6 @@ test.describe('Screens page', () => {
     // Fill in the screen name (required)
     await dialog.locator('#create-name').fill(screenName)
 
-    // Optionally set a resolution (validates the width/height fields render)
-    await dialog.locator('#create-width').fill('1920')
-    await dialog.locator('#create-height').fill('1080')
-
     // Submit
     await dialog.getByRole('button', { name: 'Create' }).click()
 
@@ -168,9 +164,6 @@ test.describe('Screens page', () => {
     // The new row appears in the table
     const row = page.locator('tr', { hasText: screenName })
     await expect(row).toBeVisible({ timeout: 10_000 })
-
-    // Resolution should be displayed in the row
-    await expect(row).toContainText('1920')
   })
 
   // ---------------------------------------------------------------------------
@@ -192,13 +185,13 @@ test.describe('Screens page', () => {
     // Assign the device to the screen we created in test 1 via the Edit dialog
     const devRow = page.locator('tr', { hasText: deviceName })
     await expect(devRow).toBeVisible({ timeout: 10_000 })
-    await devRow.locator('button[title="Edit"]').click()
+    await devRow.locator('button[title="Assign to Screen"]').click()
 
-    const editDialog = page.locator('.p-dialog', { hasText: 'Edit Device' })
+    const editDialog = page.locator('.p-dialog', { hasText: 'Assign to Screen' })
     await expect(editDialog).toBeVisible({ timeout: 5_000 })
 
     // Select the screen in the dropdown
-    const screenSelect = editDialog.locator('#edit-screen')
+    const screenSelect = editDialog.locator('#assign-screen')
     await screenSelect.click()
     // Pick option matching screenName
     await page.locator('.p-select-option', { hasText: screenName }).click()

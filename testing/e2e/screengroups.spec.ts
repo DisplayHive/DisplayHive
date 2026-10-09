@@ -434,18 +434,20 @@ test.describe('Screen Groups page', () => {
     const assignedSection = dialog.locator('.screens-section').first()
     await expect(assignedSection.locator('tr, p')).not.toHaveCount(0, { timeout: 5_000 }).catch(() => {})
 
+    const screensBadge = row.locator('.p-badge').nth(0)
+    let countBefore = parseInt((await screensBadge.textContent()) || '0', 10)
+
     const assignedRow = assignedSection.locator('tr', { hasText: /e2e-sgchk/ }).first()
     if (await assignedRow.isVisible()) {
       await assignedRow.locator('button[title="Remove from group"]').click()
       // Wait for it to leave the assigned section
       await expect(assignedRow).toBeHidden({ timeout: 5_000 })
+      // The server pushes the new count; wait for it so the number read below is the settled one.
+      countBefore -= 1
+      await expect(screensBadge).toHaveText(String(countBefore), { timeout: 8_000 })
     }
     await dialog.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }).click()
     await expect(dialog).toBeHidden({ timeout: 3_000 })
-
-    // Now record the badge count and test adding
-    const screensBadge = row.locator('.p-badge').nth(0)
-    const countBefore = parseInt((await screensBadge.textContent()) || '0', 10)
 
     await screensBadge.click()
     const dialog2 = page.locator('.p-dialog', { hasText: `Screens in ${sgNameHolder.current}` })
@@ -569,7 +571,9 @@ test.describe('Screen Groups page', () => {
     await expect(row).toBeVisible({ timeout: 10_000 })
 
     // Ensure the screen is assigned — add it via UI if it's currently in Not Assigned
-    await row.locator('.p-badge').nth(0).click()
+    const screensBadge = row.locator('.p-badge').nth(0)
+    const initialCount = parseInt((await screensBadge.textContent()) || '0', 10)
+    await screensBadge.click()
     const setupDialog = page.locator('.p-dialog', { hasText: `Screens in ${sgNameHolder.current}` })
     await expect(setupDialog).toBeVisible({ timeout: 5_000 })
     await expect(setupDialog.locator('.pi-spin')).toHaveCount(0, { timeout: 8_000 })
@@ -587,12 +591,14 @@ test.describe('Screen Groups page', () => {
           .first()
           .locator('tr', { hasText: /e2e-sgchk/ }),
       ).toBeVisible({ timeout: 5_000 })
+      // Wait until the server has stored it (its pushed count), so "Remove All" below can't run first.
+      await expect(screensBadge).toHaveText(String(initialCount + 1), { timeout: 8_000 })
     }
     await setupDialog.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }).click()
     await expect(setupDialog).toBeHidden({ timeout: 3_000 })
 
     // Now open the dialog and use Remove All
-    await row.locator('.p-badge').nth(0).click()
+    await screensBadge.click()
 
     const dialog = page.locator('.p-dialog', { hasText: `Screens in ${sgNameHolder.current}` })
     await expect(dialog).toBeVisible({ timeout: 5_000 })
@@ -746,7 +752,9 @@ test.describe('Screen Groups page', () => {
     await expect(row).toBeVisible({ timeout: 10_000 })
 
     // Ensure content is assigned — add it via UI if currently in Not Assigned
-    await row.locator('.p-badge').nth(1).click()
+    const contentBadge = row.locator('.p-badge').nth(1)
+    const initialCount = parseInt((await contentBadge.textContent()) || '0', 10)
+    await contentBadge.click()
     const setupDialog = page.locator('.p-dialog', { hasText: `Content in ${sgNameHolder.current}` })
     await expect(setupDialog).toBeVisible({ timeout: 5_000 })
     await expect(setupDialog.locator('.pi-spin')).toHaveCount(0, { timeout: 8_000 })
@@ -764,12 +772,14 @@ test.describe('Screen Groups page', () => {
           .first()
           .locator('tr', { hasText: /e2e-sgcnt/ }),
       ).toBeVisible({ timeout: 5_000 })
+      // Wait until the server has stored it (its pushed count), so "Remove All" below can't run first.
+      await expect(contentBadge).toHaveText(String(initialCount + 1), { timeout: 8_000 })
     }
     await setupDialog.locator('.p-dialog-footer').getByRole('button', { name: 'Close' }).click()
     await expect(setupDialog).toBeHidden({ timeout: 3_000 })
 
     // Now open the dialog and use Remove All
-    await row.locator('.p-badge').nth(1).click()
+    await contentBadge.click()
 
     const dialog = page.locator('.p-dialog', { hasText: `Content in ${sgNameHolder.current}` })
     await expect(dialog).toBeVisible({ timeout: 5_000 })

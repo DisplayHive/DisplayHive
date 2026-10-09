@@ -484,7 +484,6 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
   <div v-else data-tour="contenttypes-page" class="contenttypes-view">
     <PageActions
       :primary="canCreate ? { label: 'New Content Type', icon: 'pi pi-plus', tour: 'contenttypes-new', onClick: openNewDialog } : null"
-      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
     />
     <Card>
       <template #content>
