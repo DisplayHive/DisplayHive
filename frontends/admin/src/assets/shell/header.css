@@ -1,0 +1,208 @@
+.app-header {
+  background: #0b0b0b;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* allow the brand to shrink on small widths to avoid pushing controls */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.brand-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.header-logo {
+  height: 70px;
+  width: auto;
+  display: inline-block;
+  object-fit: contain;
+  margin-right: 0.75rem;
+}
+
+.connection-status {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.connection-status.connected {
+  background-color: rgba(76, 175, 80, 0.3);
+  color: #a5d6a7;
+}
+
+.connection-status.disconnected {
+  background-color: rgba(244, 67, 54, 0.3);
+  color: #ef9a9a;
+}
+
+.demo-mode-badge {
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: white;
+  transition: background-color 0.15s;
+}
+
+.demo-mode-badge i {
+  color: #94a3b8;
+}
+
+.demo-mode-badge:hover,
+.demo-mode-badge.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-menubar {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Navigating while the socket is down would just dead-end on pages that
+   can't fetch anything — grey the toolbar out and block clicks until the
+   connection (and with it, the disconnect-overlay below) comes back. */
+.app-menubar--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  /* allow controls to wrap on narrow screens to prevent overlap */
+  flex-wrap: wrap;
+}
+
+.current-user {
+  font-size: 1rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.current-user i {
+  /* Match the muted grey used by the menubar icons (see .p-menubar-item-icon). */
+  color: #94a3b8;
+}
+
+.logout-button.p-button {
+  color: white;
+  padding: 0.5rem 0.75rem;
+}
+
+.logout-button.p-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.logout-button.p-button .p-button-icon {
+  color: #94a3b8;
+}
+
+.theme-toggle-button.p-button {
+  color: white;
+  padding: 0.5rem 0.75rem;
+}
+
+.theme-toggle-button.p-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.theme-toggle-button.p-button .p-button-icon {
+  color: #94a3b8;
+}
+
+.theme-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 140px;
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.theme-menu-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.theme-menu-item.active {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-item-content {
+  background: transparent !important;
+}
+
+.app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-item-content .p-menubar-item-link {
+  color: white !important;
+}
+
+/* ensure submenu/menuitem links use readable default text color */
+.app-menubar .p-submenu-list .p-menuitem-link,
+.app-menubar .p-menubar .p-menuitem-link {
+  color: inherit !important;
+}
+
+.app-menubar .p-menubar-item-link:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.app-menubar .p-menubar-root-list > .p-menubar-item > .p-menubar-submenu {
+  position: fixed !important;
+  top: var(--header-height) !important;
+  max-width: calc(100vw - 1rem) !important;
+}
+
+/* Nested submenus (e.g. grouped Admin items) must stay anchored to their
+   parent item rather than the header — the rule above only pins the
+   first-level flyout so it isn't clipped below the sticky header.
+   They open to the left instead of the right: their parent item ("Admin")
+   sits at the right edge of the bar, so opening rightward (left: 100%)
+   pushed them off the edge of the window. */
+.app-menubar .p-menubar-submenu .p-menubar-submenu {
+  position: absolute !important;
+  left: auto !important;
+  right: 100% !important;
+  top: 0 !important;
+  max-width: calc(100vw - 1rem) !important;
+}
+

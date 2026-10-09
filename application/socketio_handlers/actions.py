@@ -56,6 +56,21 @@ def failure(message: str) -> dict:
     return {'success': False, 'error': message}
 
 
+def _as_primary_key(model, ident):
+    """*ident* in the type of the model's primary key, or raise ValueError/TypeError.
+
+    PostgreSQL refuses a non-number for an integer column with a database error (SQLite
+    just finds nothing), so a made-up id is turned away before it gets to the database.
+    """
+    from sqlalchemy import inspect
+    columns = inspect(model).primary_key
+    if len(columns) == 1 and getattr(columns[0].type, 'python_type', None) is int:
+        if isinstance(ident, bool) or isinstance(ident, float):
+            raise TypeError('not an id')
+        return int(ident)
+    return ident
+
+
 def get_or_fail(db, model, ident, label: str = 'Item'):
     """``db.session.get(model, ident)``, or ``Fail`` when no id was sent or the row is gone.
 
@@ -64,7 +79,7 @@ def get_or_fail(db, model, ident, label: str = 'Item'):
     if ident is None or ident == '':
         raise Fail('Missing id')
     try:
-        row = db.session.get(model, ident)
+        row = db.session.get(model, _as_primary_key(model, ident))
     except (TypeError, ValueError):
         row = None
     if row is None:

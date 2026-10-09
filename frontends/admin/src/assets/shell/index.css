@@ -1,0 +1,9 @@
+/* The app shell's global styles (App.vue, AppHeader.vue, AppBanners.vue, PageHeader.vue).
+   Split by area but loaded in this exact order — the cascade between the parts (the
+   responsive and dark-mode blocks override the ones before them) depends on it. */
+@import './base.css';
+@import './banners.css';
+@import './header.css';
+@import './page.css';
+@import './responsive.css';
+@import './dark.css';

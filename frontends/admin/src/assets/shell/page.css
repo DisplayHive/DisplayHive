@@ -1,0 +1,113 @@
+.app-main {
+  flex: 1;
+  padding: 1.5rem;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  position: relative;
+}
+
+.disconnect-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(80, 80, 80, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  backdrop-filter: blur(2px);
+}
+
+.disconnect-message {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  font-size: 1.05rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.disconnect-icon {
+  font-size: 1.5rem;
+  color: #f59e0b;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Title and the one-line description under it. */
+.page-title-block {
+  min-width: 0;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The muted token follows the theme, so no .dark-mode override is needed. */
+.page-summary {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+/* Teleport target for PageActions (components/PageActions.vue): a list page's primary
+   action and its "More actions" menu, or a routed view's own page-level action (e.g. a
+   "Back to X" link), on the same row as the title instead of its own line. */
+.page-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.page-title-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.page-title-icon {
+  font-size: 1.9rem;
+  color: #facc15;
+}
+
+.page-help-icon {
+  font-size: 1.1rem;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.page-help-icon:hover,
+.page-help-icon:focus-visible {
+  color: #6b7280;
+}
+
+.page-help-text {
+  max-width: 280px;
+  font-size: 0.9rem;
+  color: #374151;
+}
+

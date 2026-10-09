@@ -1,0 +1,98 @@
+/* Dark mode overrides for the app shell's own raw HTML/CSS (the header is
+   already dark-on-light by default and needs no override). PrimeVue's own
+   components restyle themselves via the aura preset's darkModeSelector
+   (see main.ts) and need nothing here. */
+.dark-mode body {
+  background-color: #14181c;
+}
+
+.dark-mode .page-header h1 {
+  color: #e5e7eb;
+}
+
+.dark-mode .page-help-icon {
+  color: #9ca3af;
+}
+
+.dark-mode .page-help-icon:hover,
+.dark-mode .page-help-icon:focus-visible {
+  color: #d1d5db;
+}
+
+.dark-mode .page-help-text {
+  color: #d1d5db;
+}
+
+.dark-mode .disconnect-message {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+
+.dark-mode .theme-menu-item:hover,
+.dark-mode .theme-menu-item.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .git-commit-badge {
+  color: #9ca3af;
+}
+
+/* Dark mode: PrimeVue's own dark Card background resolves very close to the
+   page's own dark background (#14181c above), leaving every plain <Card> on
+   every page barely distinguishable from the page behind it — this was first
+   found on the Dashboard's welcome/stat cards, but every page uses <Card>
+   (see docs/developer/styleguide.md), so it's fixed globally here rather
+   than per-page. Any page-specific card class (e.g. DashboardView's
+   .stat-card) that already sets its own background overrides this by
+   selector specificity and can keep doing so unchanged. */
+.dark-mode .p-card {
+  background: var(--p-surface-800, #1e293b);
+  border: 1px solid var(--p-surface-700, #334155);
+}
+
+/* Dark mode: PrimeVue's striped DataTable rows use a fixed ramp token
+   (--p-surface-950) completely independent of the .p-card background
+   above, so the "lighter" alternating rows never matched the card they
+   sit in. Pin it to the same value as the card override. */
+.dark-mode .p-datatable {
+  --p-datatable-row-striped-background: var(--p-surface-800, #1e293b);
+}
+
+/* Dark mode: PrimeVue's own default input border color (aura's dark
+   colorScheme sets formField.borderColor to surface.600, a medium-light
+   gray) isn't broken — it's just noticeably brighter than the darker
+   surface-700/-800 borders used everywhere else in this app, so inputs
+   visually read as "too white" next to a Card border or a button border.
+   Darken every form control's border to match. */
+.dark-mode .p-inputtext,
+.dark-mode .p-select,
+.dark-mode .p-textarea,
+.dark-mode .p-inputnumber-input,
+.dark-mode .p-checkbox-box,
+.dark-mode .p-datepicker-input,
+.dark-mode .p-password-input,
+.dark-mode .p-multiselect,
+.dark-mode .p-togglebutton {
+  border-color: var(--p-surface-700, #334155);
+}
+
+/* The Dialog close button is an unstyled default <Button> (no `text`
+   variant passed), so it renders with PrimeVue's full button chrome — a
+   visible border/background circle — unlike every other icon-only button
+   in the app (logout, theme toggle, table row actions), which are all
+   `text`/`outlined` and borderless until hovered. Strip the default chrome
+   so every Dialog's close button matches that convention. */
+.p-dialog-close-button {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+.p-dialog-close-button:hover {
+  background: var(--p-content-hover-background, rgba(0, 0, 0, 0.06)) !important;
+}
+
+.p-dialog-close-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--p-content-hover-background, rgba(0, 0, 0, 0.1)) !important;
+}

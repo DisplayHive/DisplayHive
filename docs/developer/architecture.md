@@ -220,6 +220,14 @@ def handle_delete_user(data):
   matching `:stc:*` responses.
 - `composables/useSocket.ts` — a singleton `socket.io-client` wrapper that
   queues listeners/emits until the connection is established.
+- `App.vue` is only the page frame. Its parts: `composables/useSessionLifecycle.ts` (session,
+  connect, reload after an outage), `composables/useSecurityStatus.ts` (server version and
+  configuration warnings), `composables/useAdminNavigation.ts` (the menu and the page titles — a
+  new page is one line in each table there), `components/AppBanners.vue`, `AppHeader.vue`,
+  `PageHeader.vue`, and the global CSS in `assets/shell/` (loaded in the order of `index.css`).
+- Calling the server: `composables/useAck.ts` (see "Writing an admin handler") and
+  `composables/useConfirmAction.ts` (the red delete confirmation); dialog headers are
+  `components/DialogTitle.vue`.
 - `views/`, `components/`, `router/`, `types/`, `utils/`.
 
 **Screen client** (`frontends/screen/ts/screen`) — vanilla TypeScript, no

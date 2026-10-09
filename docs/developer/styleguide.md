@@ -52,7 +52,7 @@ icon color identical for a given variant.
 | `1rem` | Card icon size baseline |
 | `1.15rem` | Welcome headline (`font-weight: 600`) |
 | `1.4rem` | Link-card icon, demo-hint icon (`1.4rem` / `1.4rem`) |
-| `1.75rem` | Page `<h1>` (set globally in `App.vue`) |
+| `1.75rem` | Page `<h1>` (set globally in `assets/shell/page.css`) |
 | `2.75rem` | Stat card big number (`font-weight: 700`) |
 
 Uppercase + letter-spacing (`text-transform: uppercase; letter-spacing:
@@ -167,7 +167,7 @@ classes from `assets/views.css`:
 ```
 
 - **Every headline that has an icon uses `.card-header-icon`** (DH yellow,
-  `#facc15` — the same fixed brand accent as `App.vue`'s page-header icon,
+  `#facc15` — the same fixed brand accent as the page-header icon (`assets/shell/page.css`),
   not a semantic token, since it's a brand mark meant to look identical in
   both themes). Never color a headline icon any other way.
 - Icon + title text together need the `.card-header-title` wrapper *only*
@@ -182,7 +182,7 @@ classes from `assets/views.css`:
 
 ### Page header and page actions
 
-Every page has one header, built by `App.vue` from the route: icon badge, the page
+Every page has one header, built by `components/PageHeader.vue` from the route: icon badge, the page
 title (`<h1>`) with the help question mark next to it, and under the title a **one-line
 description** — the first sentence of the page's help text (`page.<route>` in the help
 topics), at most 140 characters; the whole text stays behind the question mark. The
@@ -279,7 +279,7 @@ PrimeVue's `stripedRows` alternate-row background is a fixed ramp token
 background the surrounding `<Card>` actually uses — so once the Card got
 its own explicit `--p-surface-800` (see [Card-vs-page
 contrast](#card-vs-page-contrast) below), the striped rows stopped
-matching it. Pinned globally in `App.vue`:
+matching it. Pinned globally in `assets/shell/`:
 
 ```css
 .dark-mode .p-datatable {
@@ -344,7 +344,7 @@ never the plain `header="..."` string prop. Width is the object-binding
   `.dialog-title`/`.dialog-title-icon-badge`/`.dialog-title-icon` global
   classes (`assets/views.css`) — a small circular black badge holding a
   DH-yellow icon, the same treatment as the page-level `<h1>` headline
-  (`App.vue`'s `.page-title-icon-badge`/`.page-title-icon`), just sized
+  (`assets/shell/page.css`'s `.page-title-icon-badge`/`.page-title-icon`), just sized
   down for a dialog header bar. Keep the `<span class="p-dialog-title">`
   wrapper around the text — that's PrimeVue's own title class, so it still
   gets the theme's font-size/weight even though the plain `header` prop is
@@ -370,7 +370,7 @@ the app, which is `text`/`outlined` and borderless until hovered. The
 chrome isn't a plain `border` — plain `border: none` alone didn't remove
 it, since PrimeVue renders it as a `box-shadow`/`outline` combination — so
 the override needs `!important` on all three to reliably win regardless of
-layer/specificity. Fixed globally in `App.vue` rather than per-dialog, with
+layer/specificity. Fixed globally in `assets/shell/dark.css` rather than per-dialog, with
 a subtle `box-shadow` kept on `:focus-visible` only, for keyboard
 accessibility:
 
@@ -459,10 +459,10 @@ grays instead of inventing new hex values.
 
 A plain `<Card>` with no custom background can still end up nearly invisible
 against the page: PrimeVue's dark card background and the page's own dark
-background (`body { background-color: #14181c }` in `App.vue`'s
+background (`body { background-color: #14181c }` in `assets/shell/base.css`'s
 `.dark-mode` block) land very close to each other. This isn't a per-page
 quirk — every page in the app uses `<Card>` — so it's fixed **once,
-globally**, in `App.vue`'s unscoped `<style>` block:
+globally**, in `assets/shell/dark.css` (loaded by `App.vue`):
 
 ```css
 .dark-mode .p-card {
@@ -562,7 +562,7 @@ gray), which is a legitimate default but noticeably lighter than the
 `surface-700`/`-800` borders used everywhere else in this app (Card,
 buttons, dialogs). Rather than a `.dark-mode` mismatch bug, this is a
 deliberate override to keep the whole app's border weight consistent, done
-once globally in `App.vue` across every form control's rendered border
+once globally in `assets/shell/dark.css` across every form control's rendered border
 (not a CSS variable rename, since the exact intermediate variable name
 isn't guaranteed to exist per-component — a direct `border-color` on each
 component's real root class is more reliable):
@@ -649,7 +649,7 @@ palette, same idea as the validity icons), `DesignsView.vue`'s `.var-chip`
 light-blue text, meant to look like a code chip regardless of theme), and
 `ContentTable.vue`/`DesignsView.vue`'s always-black screen/effect preview
 boxes (simulating a physical screen, not a themed surface), and the
-top-of-page notice banners — `App.vue`'s red `.security-warning` and
+top-of-page notice banners — the shell's red `.security-warning` (`assets/shell/banners.css`) and
 `LegacyDataBanner.vue`'s amber data-migration notice (fixed background *and*
 fixed text color, including the translucent `rgba(0,0,0,…)` code/button
 tints on top: chrome meant to look the same in both themes). None of these
