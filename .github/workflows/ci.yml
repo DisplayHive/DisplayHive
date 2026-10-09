@@ -127,6 +127,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # The backup tests dump and restore a real database; the tools must be
+      # the server's major version (see application/backup.py).
+      - name: Install the PostgreSQL 16 client tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client-16
+
       - name: Migrate the empty database (alembic upgrade head)
         run: alembic upgrade head
 

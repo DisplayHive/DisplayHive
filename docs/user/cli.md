@@ -64,6 +64,18 @@ Checks the setup and prints `OK` / `INFO` / `WARN` / `FAIL` lines. It covers:
 It exits with status 1 if anything is `FAIL`, so it fits health checks and
 deploy scripts. `--online` also contacts each enabled SSO provider.
 
+### `migrate [--no-backup]`
+
+Brings the database schema up to date: first a backup, then the migrations. Run
+by the Docker image, the compose `migrate` service and the NixOS unit before the
+app starts. Exits with status 78 if the backup or a migration fails. See
+[Backup & restore](backup.md#updating-safely).
+
+### `backup [--media]`, `backups`, `restore FILE [--yes]`
+
+Make a backup now (`--media` also archives the uploaded files), list the
+backups, and restore one. See [Backup & restore](backup.md).
+
 ### `copy-database --from URL [--upgrade-source] [--yes]`
 
 Moves an installation from SQLite to PostgreSQL: copies everything into the

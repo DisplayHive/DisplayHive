@@ -12,7 +12,7 @@ from typing import Mapping, Optional, Union
 from urllib.parse import urlsplit
 
 from application import paths as data_paths
-from application import version
+from application import backup, version
 from application.db_url import is_sqlite_url, resolve_database_url
 
 logger = logging.getLogger(__name__)
@@ -208,6 +208,8 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     cfg['SCREEN_DEV_SERVER_URL'] = environ.get('SCREEN_DEV_SERVER_URL', 'http://localhost:5174')
 
     cfg['PUBLIC_URL'] = resolve_public_url(environ)
+    cfg['BACKUP_DIR'] = paths.backups
+    cfg['BACKUP_SETTINGS'] = backup.Settings.from_env(environ)
     cors_origins = resolve_cors_origins(environ)
     cfg['CORS_WILDCARD'] = cors_origins == '*'
     return cors_origins

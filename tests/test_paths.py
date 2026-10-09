@@ -33,6 +33,7 @@ def test_fresh_install_uses_data_dir_for_everything(roots):
     assert p.media_previews == str(data_dir / 'media_previews')
     assert p.media_renditions == str(data_dir / 'media_renditions')
     assert p.import_staging == str(data_dir / 'import-staging')
+    assert p.backups == str(data_dir / 'backups')
     assert p.legacy == []
 
 
@@ -98,6 +99,7 @@ def test_ensure_dirs_creates_tight_permissions_but_leaves_existing_ones(roots):
     assert _mode(data_dir / 'media') == 0o755
     assert _mode(data_dir / 'media_previews') == 0o750
     assert _mode(data_dir / 'import-staging') == 0o700
+    assert _mode(data_dir / 'backups') == 0o700
     assert _mode(data_dir / 'db') == 0o700
 
 
@@ -138,6 +140,8 @@ def test_media_urls_are_served_from_data_dir(flask_app):
         # No escaping into the rest of DATA_DIR (e.g. the SQLite file in db/).
         assert client.get('/static/media/../db/project.db').status_code == 404
         assert client.get('/static/media/%2e%2e/import-staging/x').status_code == 404
+        assert client.get('/static/media/%2e%2e/backups/x').status_code == 404
+        assert client.get('/static/backups/x').status_code == 404
     finally:
         os.remove(os.path.join(media_dir, 'pytest-served.txt'))
 

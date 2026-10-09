@@ -112,10 +112,34 @@ def screen_log_retention_loop(app, db, socketio) -> None:
             logger.warning('Failed to prune screen_log: %s', e)
 
 
+def backup_loop(app, db, socketio) -> None:
+    """Scheduled database (and media) backups with their retention, while the
+    process runs. See application/backup.py; the settings are BACKUP_*."""
+    from application import backup
+    # Let the app settle first, so a crash loop doesn't write a dump per restart.
+    socketio.sleep(600)
+    while True:
+        pause = 900   # look again in 15 minutes whether something is due
+        try:
+            with app.app_context():
+                for path in backup.run_scheduled(db.engine, app.config['BACKUP_DIR'], app.config['MEDIA_FOLDER'],
+                                                 app.config['BACKUP_SETTINGS']):
+                    logger.info('Backup written: %s', path.name)
+        except backup.BackupError as e:
+            logger.warning('Scheduled backup failed: %s', e)
+            pause = 3600
+        except Exception:
+            logger.exception('Scheduled backup failed')
+            pause = 3600
+        socketio.sleep(pause)
+
+
 def start_background_tasks(app, db, socketio, paths) -> None:
-    """Hourly log retention, and a backfill of FHD/4K/8K renditions for every
+    """Hourly log retention, scheduled backups, and a backfill of FHD/4K/8K renditions for every
     already-uploaded image (uploads from before renditions existed, restored
     backups, copied files). The backfill only renders what's missing, so it's
     cheap on every start after the first."""
     socketio.start_background_task(screen_log_retention_loop, app, db, socketio)
+    if app.config['BACKUP_SETTINGS'].interval_hours > 0 or app.config['BACKUP_SETTINGS'].media_interval_days > 0:
+        socketio.start_background_task(backup_loop, app, db, socketio)
     media_renditions.schedule_backfill(socketio, app, db, paths.media, paths.media_renditions)

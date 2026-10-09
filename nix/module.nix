@@ -12,8 +12,10 @@
 # Instance names must be valid in Linux usernames and PostgreSQL role names
 # (letters, digits, dashes — no spaces or underscores at the start).
 #
-# Alembic migrations are applied automatically on every (re)start before the
-# app process is launched.
+# Database migrations (`flask dh migrate`) run before every start of the app:
+# after a database backup, and if one fails the app does not start — see
+# application/migration.py. The backups (and scheduled ones) are written to
+# <dataDirectory>/backups; see the `backup` options below.
 #
 # ── Webhook-triggered deployment ─────────────────────────────────────────────
 #
@@ -588,6 +590,32 @@ let
         '';
       };
 
+      backup = {
+        intervalHours = mkOption {
+          type    = types.ints.unsigned;
+          default = 24;
+          description = ''
+            A database backup every this many hours, kept in
+            <dataDirectory>/backups (BACKUP_INTERVAL_HOURS). 0 turns scheduled
+            backups off — the backup before each migration stays. That directory
+            is on the same disk as the data: copy it elsewhere as well.
+          '';
+        };
+        keep = mkOption {
+          type    = types.ints.positive;
+          default = 7;
+          description = "How many scheduled database backups to keep (BACKUP_KEEP).";
+        };
+        beforeMigration = mkOption {
+          type    = types.bool;
+          default = true;
+          description = ''
+            Back the database up before applying migrations (MIGRATION_BACKUP).
+            If that fails, nothing is migrated.
+          '';
+        };
+      };
+
       trustedProxyCount = mkOption {
         type    = types.ints.unsigned;
         default = 0;
@@ -705,6 +733,10 @@ let
       UV_CACHE_DIR             = "${icfg.pythonEnvDirectory}/uv-cache";
       UV_PYTHON_DOWNLOADS      = "never";
       DISPLAYHIVE_DEPLOYMENT   = "nixos";
+      FLASK_APP                = "app";
+      BACKUP_INTERVAL_HOURS    = toString icfg.backup.intervalHours;
+      BACKUP_KEEP              = toString icfg.backup.keep;
+      MIGRATION_BACKUP         = if icfg.backup.beforeMigration then "on" else "off";
       ADMIN_BOOTSTRAP_USERNAME = icfg.adminBootstrapUsername;
     } // optionalAttrs (icfg.adminBootstrapPassword != "") {
       ADMIN_BOOTSTRAP_PASSWORD = icfg.adminBootstrapPassword;
@@ -744,13 +776,24 @@ let
     wantedBy = [ "multi-user.target" ];
 
     environment = mkServiceEnv name icfg;
+    # pg_dump / pg_restore / psql of the database server's own version.
+    path = [ config.services.postgresql.package ];
+
+    # A failing migration (or backup) is retried a few times, then the unit stays
+    # failed: `journalctl -u displayhive-<name>` names the backup to restore.
+    unitConfig = {
+      StartLimitIntervalSec = 300;
+      StartLimitBurst       = 3;
+    };
 
     serviceConfig = {
       Type             = "simple";
       User             = "displayhive-${name}";
       Group            = "displayhive-${name}";
       WorkingDirectory = icfg.sourceDirectory;
-      ExecStartPre     = [ "${mkPythonSync name icfg}" "${venvOf icfg}/bin/alembic upgrade head" ];
+      # The migration backs up first and exits 78 if anything fails; the unit then
+      # fails and (StartLimit* below) is not retried for ever.
+      ExecStartPre     = [ "${mkPythonSync name icfg}" "${venvOf icfg}/bin/flask dh migrate" ];
       ExecStart = "${venvOf icfg}/bin/gunicorn"
         + " --worker-class gthread"
         + " -w 1"

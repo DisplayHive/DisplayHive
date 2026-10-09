@@ -47,6 +47,23 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# The PostgreSQL client tools: `flask dh backup` (pg_dump) and `restore`
+# (pg_restore, psql), and the backup before each migration, need them — in the
+# major version of the SERVER: a dump from pg_dump 17 does not restore on a
+# version 16 server. Debian ships only 17, so the PostgreSQL project's own
+# repository (PGDG) supplies 16 (what compose.yml runs) next to it; the tools of
+# the right version are picked at run time (application/backup.py).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/keyrings/pgdg.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-16 postgresql-client-17 \
+    && apt-get purge -y --auto-remove curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # psycopg2-binary and pillow ship manylinux wheels that bundle their native
 # libs, so no system build/runtime packages are required here.
 COPY requirements.txt ./
@@ -83,10 +100,10 @@ ENV DATA_DIR=/data \
 # compose.yml that mounts fresh volumes there keeps working (with the
 # migration notice) instead of failing on root-owned mount points.
 RUN useradd --system --create-home --uid 10001 displayhive \
-    && mkdir -p /data/media /data/media_previews /data/media_renditions /data/import-staging /data/db \
+    && mkdir -p /data/media /data/media_previews /data/media_renditions /data/import-staging /data/db /data/backups \
     && mkdir -p /app/static/media /app/static/media_previews /app/static/media_renditions \
     && chmod 750 /data /data/media /data/media_previews /data/media_renditions \
-    && chmod 700 /data/import-staging /data/db \
+    && chmod 700 /data/import-staging /data/db /data/backups \
     && chown -R displayhive:displayhive /app /data
 USER displayhive
 

@@ -5,6 +5,10 @@
     flask --app app dh check-config [--online]
     flask --app app dh rerender [--missing-only]
     flask --app app dh rerender-content [--contenttype ID]
+    flask --app app dh migrate [--no-backup]
+    flask --app app dh backup [--media]
+    flask --app app dh backups
+    flask --app app dh restore FILE [--yes]
     flask --app app dh copy-database --from SQLITE_URL [--upgrade-source] [--yes]
 
 (The Docker image sets FLASK_APP, so `flask dh …` is enough there; the
@@ -241,6 +245,98 @@ def rerender_content(contenttype_ids):
     rerender_all(current_app.extensions['sqlalchemy'], list(contenttype_ids))
 
 
+# --- migrate, backup, backups, restore -----------------------------------------------
+
+
+def _backup_context():
+    from flask import current_app
+    return (current_app.extensions['sqlalchemy'].engine, current_app.config['BACKUP_DIR'],
+            current_app.config['BACKUP_SETTINGS'])
+
+
+@dh.command('migrate')
+@click.option('--no-backup', is_flag=True, help='Migrate without the backup first (same as MIGRATION_BACKUP=off).')
+def migrate_command(no_backup):
+    """Bring the database schema up to date, with a backup first.
+
+    Run before the app starts (the Docker entrypoint and the NixOS unit do).
+    Exits with status 78 if the backup or the migration fails: the app must not
+    start on a database in an unknown state, and retrying will not help. The
+    message names the backup; `flask dh restore` puts it back.
+    """
+    from application import migration
+    engine, directory, settings = _backup_context()
+    try:
+        migration.migrate(engine, directory, settings, echo=click.echo, do_backup=not no_backup)
+    except migration.MigrationFailed as exc:
+        click.secho(f'\nMIGRATION FAILED: {exc}', fg='red', bold=True, err=True)
+        if exc.backup_path:
+            click.secho(f'The database was backed up first: {exc.backup_path}\n'
+                        f'Put it back with: flask dh restore {exc.backup_path.name}', fg='yellow', err=True)
+        sys.exit(migration.EXIT_FAILED)
+
+
+@dh.command('backup')
+@click.option('--media', 'with_media', is_flag=True, help='Also archive the uploaded media (previews are regenerated, not included).')
+def backup_command(with_media):
+    """Back up the database now (and, with --media, the uploaded files)."""
+    from flask import current_app
+    from application import backup
+    engine, directory, settings = _backup_context()
+    try:
+        written = [backup.create_db_backup(engine, directory, 'manual')]
+        if with_media:
+            written.append(backup.create_media_backup(current_app.config['MEDIA_FOLDER'], directory))
+    except backup.BackupError as exc:
+        raise click.ClickException(str(exc))
+    for path in written:
+        click.echo(f'Written: {path} ({path.stat().st_size // 1024} KB)')
+    click.echo('This directory is on the same disk as the data: copy the files elsewhere, too.')
+
+
+@dh.command('backups')
+def backups_command():
+    """List the backups (newest first)."""
+    from datetime import datetime, timezone
+    from application import backup
+    _engine, directory, _settings = _backup_context()
+    found = backup.list_backups(directory)
+    if not found:
+        click.echo(f'No backups in {directory}.')
+        return
+    now = datetime.now(timezone.utc)
+    for b in found:
+        age = now - b.created
+        ago = f'{age.days}d' if age.days else f'{age.seconds // 3600}h' if age.seconds >= 3600 else f'{age.seconds // 60}m'
+        click.echo(f'{b.path.name:<70} {b.size // 1024:>9} KB  {ago:>4} ago')
+
+
+@dh.command('restore')
+@click.argument('file')
+@click.option('--yes', is_flag=True, help="Don't ask for confirmation.")
+def restore_command(file, yes):
+    """Replace the database with a backup (a name from `backups`, or a path).
+
+    STOP DisplayHive first: it must not write while this runs. The current state
+    is saved as a `prerestore-…` backup before anything is replaced. Afterwards
+    start the app: it migrates the restored database to the current version.
+    """
+    from pathlib import Path
+    from application import backup
+    engine, directory, _settings = _backup_context()
+    path = Path(file)
+    if not path.is_absolute() and not path.exists():
+        path = Path(directory) / file
+    if not yes:
+        click.secho('The app must be stopped. This REPLACES the whole database.', fg='yellow')
+        click.confirm(f'Restore {path.name}?', abort=True)
+    try:
+        safety = backup.restore_with_safety_backup(engine, path, directory, echo=click.echo)
+    except backup.BackupError as exc:
+        raise click.ClickException(str(exc))
+    click.secho(f'Restored {path.name}. The previous state is kept as {safety.name}.', fg='green', bold=True)
+
+
 # --- copy-database ----------------------------------------------------------------
 
 
@@ -252,17 +348,9 @@ def _revision_of(engine):
 
 def _upgrade_to_head(engine):
     """`alembic upgrade head` on *engine*, whatever DATABASE_URL says (see migrations/env.py)."""
-    from pathlib import Path
-    from alembic import command
-    from alembic.config import Config
-
-    root = Path(__file__).resolve().parents[1]
-    config = Config(str(root / 'alembic.ini'))
-    config.set_main_option('script_location', str(root / 'migrations'))
+    from application.migration import upgrade_to_head
     try:
-        with engine.begin() as connection:
-            config.attributes['connection'] = connection
-            command.upgrade(config, 'head')
+        upgrade_to_head(engine)
     except Exception as exc:
         raise click.ClickException(f'Could not upgrade the source database: {exc}')
 
@@ -423,12 +511,16 @@ def check_config(online):
     for name in data_paths.MEDIA_DIRS:
         _check_dir(report, name, getattr(paths, name), private=False)
     _check_dir(report, 'import-staging', paths.import_staging, private=True)
+    _check_dir(report, 'backups', paths.backups, private=True)
     for legacy in paths.legacy:
         report('warn', f"{legacy['kind']} still in the legacy location {legacy['path']} — see "
                        "'Moving data to DATA_DIR' in the installation docs")
 
     report.section('Database')
     schema_ok = _check_database(report, app, db, paths)
+
+    report.section('Backups')
+    _check_backups(report, app, db)
 
     report.section('Accounts')
     if schema_ok:
@@ -490,6 +582,39 @@ def _check_database(report, app, db, paths) -> bool:
     else:
         report('fail', f"Schema revision {current} is not the latest ({', '.join(sorted(heads))}) — run: alembic upgrade head")
     return False
+
+
+def _check_backups(report, app, db):
+    """Is there a recent backup, and can the tools make the next one?"""
+    import shutil
+    from datetime import datetime, timezone
+    from application import backup
+
+    settings = app.config['BACKUP_SETTINGS']
+    directory = app.config['BACKUP_DIR']
+    if db.engine.dialect.name == 'postgresql':
+        for tool in ('pg_dump', 'pg_restore'):
+            if shutil.which(tool):
+                report('ok', f'{tool} is available')
+            else:
+                report('fail' if settings.interval_hours > 0 or settings.migration_backup else 'warn',
+                       f'{tool} not found — backups (and the backup before migrating) cannot be made; '
+                       'install the PostgreSQL client tools')
+    if not settings.migration_backup:
+        report('warn', 'MIGRATION_BACKUP is off — updates migrate the database without a backup first')
+    if settings.interval_hours <= 0:
+        report('warn', 'Scheduled backups are off (BACKUP_INTERVAL_HOURS=0) — make sure you back up some other way')
+        return
+    scheduled = [b for b in backup.list_backups(directory) if b.kind == 'scheduled']
+    if not scheduled:
+        report('warn', f'No scheduled backup yet in {directory} (the first one runs shortly after the app has started)')
+        return
+    age_hours = (datetime.now(timezone.utc) - scheduled[0].created).total_seconds() / 3600
+    if age_hours > settings.interval_hours * 2 + 1:
+        report('warn', f'The newest scheduled backup is {age_hours / 24:.1f} days old — see the log for backup errors')
+    else:
+        report('ok', f'Newest scheduled backup: {scheduled[0].path.name} (every {settings.interval_hours:g} h, keeping {settings.keep})')
+    report('info', f'Backups are in {directory}, on the same disk as the data. Copy them elsewhere too.')
 
 
 def _check_accounts(report, db):

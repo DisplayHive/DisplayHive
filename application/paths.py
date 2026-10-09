@@ -9,7 +9,8 @@ and backups/volumes cover a single directory::
     ├── media/                0750  uploads, served at /static/media/
     ├── media_previews/       0750  thumbnails, served at /static/media_previews/
     ├── media_renditions/     0750  scaled copies, served at /static/media_renditions/
-    └── import-staging/       0700  uploaded import files between preview and confirm
+    ├── import-staging/       0700  uploaded import files between preview and confirm
+    └── backups/              0700  database dumps and media archives (application/backup.py)
 
 The URLs stay /static/media/… etc. (they're stored in content), only the
 files moved; app.py serves them from here explicitly.
@@ -49,6 +50,7 @@ class DataPaths:
     media_previews: str
     media_renditions: str
     import_staging: str
+    backups: str
     # The SQLite file DATABASE_URL points at, or None (PostgreSQL, or unset).
     db_path: str | None
     # Old locations still in use: [{'kind': 'media', 'path': '/app/static/media'}, …]
@@ -88,6 +90,7 @@ def resolve(environ=None, app_root: str | None = None) -> DataPaths:
         media_previews=resolved['media_previews'],
         media_renditions=resolved['media_renditions'],
         import_staging=os.path.join(data_dir, 'import-staging'),
+        backups=os.path.join(data_dir, 'backups'),
         db_path=db_path,
         legacy=legacy,
     )
@@ -118,6 +121,7 @@ def ensure_dirs(paths: DataPaths) -> None:
     for name in MEDIA_DIRS:
         _make_dir(getattr(paths, name), 0o750)
     _make_dir(paths.import_staging, 0o700)
+    _make_dir(paths.backups, 0o700)
     if paths.db_path:
         _make_dir(os.path.dirname(os.path.abspath(paths.db_path)), 0o700)
         _warn_if_db_readable(paths.db_path)

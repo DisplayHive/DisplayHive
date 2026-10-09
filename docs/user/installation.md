@@ -88,7 +88,10 @@ What the module handles automatically for each declared instance:
 - A `displayhive-<name>.service` running the app under `gunicorn` (one
   `gthread` worker process with `threads` threads, default 500, and an open
   files limit of 65536), with
-  `alembic upgrade head` run on every (re)start before the app launches.
+  `flask dh migrate` run on every (re)start before the app launches: after a
+  database backup, and if it fails the app does not start (see
+  [Backup & restore](backup.md)). `backup.intervalHours`, `backup.keep` and
+  `backup.beforeMigration` configure the backups.
 - The Python packages: Nix provides the interpreter (the version in
   `.python-version`), the packages come from the lock file `requirements.txt`
   into a venv in `pythonEnvDirectory` (default
@@ -137,8 +140,9 @@ cp .env.example .env      # then edit .env and set the secrets
 docker compose up -d
 ```
 
-On startup the container applies Alembic migrations (`alembic upgrade head`),
-then launches gunicorn (one `gthread` worker with `GUNICORN_THREADS` threads,
+The one-shot `migrate` service brings the database schema up to date first —
+after a database backup; if that fails, the app is not started (see
+[Backup & restore](backup.md)) — then the app launches gunicorn (one `gthread` worker with `GUNICORN_THREADS` threads,
 default 500). Once it's up, everything is
 served from a single port:
 
@@ -151,8 +155,8 @@ served from a single port:
 Set at least `SECRET_KEY`, `POSTGRES_PASSWORD`, and `ADMIN_BOOTSTRAP_PASSWORD`
 in `.env` before first start. Uploaded media, previews and renditions persist
 in the `media`, `media_previews` and `media_renditions` volumes (mounted under
-`/data`, the image's data directory); the database persists in `pgdata`, so
-they survive container upgrades.
+`/data`, the image's data directory); the database persists in `pgdata`, and
+the database backups in `backups`, so they survive container upgrades.
 
 Useful commands:
 
@@ -182,6 +186,9 @@ variables are worth knowing about:
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | **Required.** The database: `postgresql://user:password@host:5432/dbname`. A `sqlite:///…` URL is accepted for development only (not in the Docker image or the NixOS module); see [Database](#database-postgresql-and-sqlite-for-development-only). |
+| `BACKUP_INTERVAL_HOURS` / `BACKUP_KEEP` | A database backup every this many hours (default `24`, `0` = off) and how many of them to keep (default `7`). See [Backup & restore](backup.md). |
+| `MIGRATION_BACKUP` / `MIGRATION_BACKUPS_KEEP` | A backup before every migration (default `on`; `off` migrates without one) and for how many upgrades to keep those (default `3`). |
+| `MIGRATE_ON_START` | Docker image only: `0` skips the migration at container start. The compose file sets it because its `migrate` service does that. |
 | `DISPLAYHIVE_REVISION` | The commit the instance was built from, shown in the admin footer and by `flask dh check-config`. The Docker image sets it at build time; with git checkouts (NixOS, development) it is read from git, so you normally never set it. |
 | `PUBLIC_URL` | The address people reach DisplayHive at, e.g. `https://signage.example.com` (scheme and host; a trailing slash is dropped). Set it in production. The **SSO redirect URI** is built from it (instead of from each request's `Host` header), and it is the default for **CORS**. An invalid value stops the app at start-up. NixOS: `publicUrl`. |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated allowed origins for the API and Socket.IO; an entry with a path is reduced to its origin. Wins over `PUBLIC_URL` when set. Unset: `PUBLIC_URL`'s origin; without that, local development origins only (the Docker compose file and the NixOS module fall back to `*`, i.e. any origin, which `flask dh check-config` and the admin panel flag as a warning). |

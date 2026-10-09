@@ -30,6 +30,7 @@ pkgs.mkShell {
     pkgs.eslint
     pkgs.prettier
     pkgs.sqlite
+    (pkgs.lib.getBin pkgs.postgresql_16)  # pg_dump/pg_restore/psql for the backup tests (the server version compose.yml and CI use)
     pkgs.ember-cli
     pkgs.ssl-proxy
     pkgs.chromium
