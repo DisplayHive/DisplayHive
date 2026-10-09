@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 def register_content_mutation_handlers(socketio, app, db):
     """Register the mutating Content handlers (create/update/delete/move)."""
-    from application.socketio_handlers.auth import admin_handler, fields, require_right, current_admin_user
+    from application.socketio_handlers.auth import fields, current_admin_user
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.permissions import has_right
 
     def _push_upd_content(content_id):
@@ -27,61 +28,53 @@ def register_content_mutation_handlers(socketio, app, db):
             logger.exception('Failed to send upd_content for %s', content_id)
 
     @socketio.on('displayhive:admin:cts:update_content_element_active')
-    @require_right('content.enable')
+    @admin_action('content.enable')
     def update_content_element_active(message):
         """Update content_element active status. Returns ack dict for emitWithAck callers."""
         content_element_id, active = fields(message, 'content_element_id', 'active')
-        if not content_element_id:
-            return {'success': False, 'error': 'Missing content_element_id'}
-
-        content_element = db.session.get(ContentElement, content_element_id)
-        if not content_element:
-            return {'success': False, 'error': 'ContentElement not found'}
+        content_element = get_or_fail(db, ContentElement, content_element_id, 'ContentElement')
         content_element.active = bool(active)
         db.session.add(content_element)
         db.session.commit()
 
         _push_upd_content(content_element_id)
         logger.info('ContentElement %s active status updated to: %s', content_element_id, active)
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:cts:update_content_element_duration')
-    @require_right('content.edit')
+    @admin_action('content.edit')
     def update_content_element_duration(message):
         """Update content_element duration"""
         content_element_id, duration = fields(message, 'content_element_id', 'duration')
-        if not content_element_id or duration is None:
-            return
-
-        content_element = db.session.get(ContentElement, content_element_id)
-        if not content_element:
-            return
-        content_element.duration = int(duration)
+        if duration is None:
+            raise Fail('Missing duration')
+        content_element = get_or_fail(db, ContentElement, content_element_id, 'ContentElement')
+        try:
+            content_element.duration = int(duration)
+        except (TypeError, ValueError):
+            raise Fail('Invalid duration')
         db.session.add(content_element)
         db.session.commit()
 
         _push_upd_content(content_element_id)
         logger.info('ContentElement %s duration updated to: %s', content_element_id, duration)
+        return ok()
 
     @socketio.on('displayhive:admin:cts:delete_content_element')
-    @require_right('content.delete')
+    @admin_action('content.delete')
     def delete_content_element(message):
         """Delete a content_element entry"""
         (content_element_id,) = fields(message, 'content_element_id')
-        if not content_element_id:
-            return
-
-        content_element = db.session.get(ContentElement, content_element_id)
-        if not content_element:
-            return
+        content_element = get_or_fail(db, ContentElement, content_element_id, 'ContentElement')
         db.session.delete(content_element)
         db.session.commit()
 
         push_content_list_to_all_screens(socketio, app, db)
         logger.info('ContentElement %s deleted', content_element_id)
+        return ok()
 
     @socketio.on('displayhive:admin:cts:create_content_element')
-    @admin_handler
+    @admin_action()
     def create_content_element(message):
         """Create or update a content_element entry via Socket.IO.
 
@@ -90,6 +83,8 @@ def register_content_mutation_handlers(socketio, app, db):
         with {'success': True, 'content_element_id': id} on success.
         """
         from application.admin.content.helper import render_content_fields
+
+        message = message if isinstance(message, dict) else {}
 
         # helper to safely get values
         def get_val(k, default=None):
@@ -102,7 +97,7 @@ def register_content_mutation_handlers(socketio, app, db):
         # existing one needs content.edit.
         required_right = 'content.edit' if message.get('id') else 'content.create'
         if not has_right(db, current_admin_user(), required_right):
-            return {'success': False, 'error': 'Permission denied'}
+            raise Fail('Permission denied')
 
         edit_id = get_val('id')
         contenttype_id = get_val('contenttype_id')
@@ -159,9 +154,7 @@ def register_content_mutation_handlers(socketio, app, db):
         rendered = json.dumps(rendered_by_container, ensure_ascii=False)
 
         if edit_id:
-            mc = db.session.get(ContentElement, int(edit_id))
-            if not mc:
-                return {'success': False, 'error': 'Content not found'}
+            mc = get_or_fail(db, ContentElement, edit_id, 'Content')
             mc.title = title
             mc.html = rendered
             mc.duration = duration
@@ -175,7 +168,7 @@ def register_content_mutation_handlers(socketio, app, db):
             push_content_list_to_all_screens(socketio, app, db)
 
             emit('displayhive:admin:stc:create_content_element_result', {'success': True, 'content_element_id': mc.id})
-            return {'success': True, 'content_element_id': mc.id}
+            return ok(content_element_id=mc.id)
 
         content_element = ContentElement(
             title=title,
@@ -194,4 +187,4 @@ def register_content_mutation_handlers(socketio, app, db):
         push_content_list_to_all_screens(socketio, app, db)
 
         emit('displayhive:admin:stc:create_content_element_result', {'success': True, 'content_element_id': content_element.id})
-        return {'success': True, 'content_element_id': content_element.id}
+        return ok(content_element_id=content_element.id)

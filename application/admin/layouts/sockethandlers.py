@@ -15,7 +15,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     Layout" meaning.
     """
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
-    from application.socketio_handlers.auth import require_right, require_any_right
+    from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list, same_ratio
     from application.admin.layouts.helper import all_member_container_ids, container_geometry, containers_for_ratio
     from application.models import Layout, LayoutVariation, ContainerPosition, ContentContainer, Contenttype, TagConfig
@@ -86,12 +86,12 @@ def register_admin_layouts_handlers(socketio, app, db):
         return next((v for v in layout.variations if v.aspect_ratio == ratio), None)
 
     @socketio.on('displayhive:admin:cts:get_aspect_ratios')
-    @require_any_right('layouts.page', 'screens.page', 'content.page', 'designs.page')
+    @admin_action('layouts.page', 'screens.page', 'content.page', 'designs.page')
     def get_aspect_ratios(message=None):
         socketio.emit('displayhive:admin:stc:aspect_ratios', {'ratios': _design_ratios()}, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:create_layout_variation')
-    @require_right('layouts.edit')
+    @admin_action('layouts.edit')
     def handle_create_layout_variation(data=None):
         """Add a variation of a Layout at *aspect_ratio* (must be one of the
         active Design's ratios). Starts as a copy of the base membership and
@@ -99,14 +99,14 @@ def register_admin_layouts_handlers(socketio, app, db):
         data = data if isinstance(data, dict) else {}
         layout = db.session.get(Layout, int(data.get('layout_id') or 0))
         if not layout:
-            return {'ok': False, 'error': 'Layout not found'}
+            raise Fail('Layout not found')
         ratio = normalize_ratio(data.get('aspect_ratio'))
         if not ratio or ratio == BASE_RATIO:
-            return {'ok': False, 'error': 'Invalid aspect ratio'}
+            raise Fail('Invalid aspect ratio')
         if ratio not in _design_ratios():
-            return {'ok': False, 'error': 'Aspect ratio is not defined in the active Design'}
+            raise Fail('Aspect ratio is not defined in the active Design')
         if any(same_ratio(ratio, v.aspect_ratio) for v in layout.variations):
-            return {'ok': False, 'error': 'This variation already exists'}
+            raise Fail('This variation already exists')
         variation = LayoutVariation(layout_id=layout.id, aspect_ratio=ratio)
         variation.contentcontainers = list(layout.contentcontainers)
         db.session.add(variation)
@@ -116,10 +116,10 @@ def register_admin_layouts_handlers(socketio, app, db):
         _emit_layouts()
         _emit_containers()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:delete_layout_variation')
-    @require_right('layouts.edit')
+    @admin_action('layouts.edit')
     def handle_delete_layout_variation(data=None):
         """Remove a Layout's variation. Payload: {layout_id, aspect_ratio}.
         Container positions at that ratio are kept (they belong to the
@@ -127,10 +127,10 @@ def register_admin_layouts_handlers(socketio, app, db):
         data = data if isinstance(data, dict) else {}
         layout = db.session.get(Layout, int(data.get('layout_id') or 0))
         if not layout:
-            return {'ok': False, 'error': 'Layout not found'}
+            raise Fail('Layout not found')
         variation = _find_variation(layout, normalize_ratio(data.get('aspect_ratio')) or '')
         if not variation:
-            return {'ok': False, 'error': 'Variation not found'}
+            raise Fail('Variation not found')
         db.session.delete(variation)
         db.session.flush()
         db.session.refresh(layout)
@@ -138,7 +138,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_layouts()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}
 
     def _resolve_container_ids(container_ids):
         ids = list(dict.fromkeys(
@@ -154,12 +154,12 @@ def register_admin_layouts_handlers(socketio, app, db):
     # --- Layouts ---------------------------------------------------------
 
     @socketio.on('displayhive:admin:cts:get_layouts')
-    @require_right('layouts.page')
+    @admin_action('layouts.page')
     def get_admin_layouts(message=None):
         _emit_layouts(room=request.sid)
 
     @socketio.on('displayhive:admin:cts:get_design_preview')
-    @require_right('layouts.page')
+    @admin_action('layouts.page')
     def get_design_preview(message=None):
         """Emit the active Design's {name, html, css} — same shape/CSS
         layering `upd_content` pushes to real screens — so the Layout editor
@@ -179,7 +179,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     # container without being granted the whole Designs page.
 
     @socketio.on('displayhive:admin:cts:get_container_design')
-    @require_any_right('designs.edit', 'contenttypes.edit_design')
+    @admin_action('designs.edit', 'contenttypes.edit_design')
     def get_container_design(message=None):
         """Emit the active Design's id and per-container style overrides.
 
@@ -202,7 +202,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         }, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:save_container_design')
-    @require_any_right('designs.edit', 'contenttypes.edit_design')
+    @admin_action('designs.edit', 'contenttypes.edit_design')
     def save_container_design(data=None):
         """Upsert one container's style overrides on the active Design.
 
@@ -213,16 +213,16 @@ def register_admin_layouts_handlers(socketio, app, db):
         from application.admin.designs.helper import build_design_payload, upsert_container_styles
         from application.utils.design import get_default_design
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         contentcontainer_id = data.get('contentcontainer_id')
         styles = data.get('styles')
         if not contentcontainer_id or not isinstance(styles, dict):
-            return {'ok': False, 'error': 'Missing contentcontainer_id or styles'}
+            raise Fail('Missing contentcontainer_id or styles')
         design = get_default_design(db)
         if design is None:
-            return {'ok': False, 'error': 'No active design'}
+            raise Fail('No active design')
         if db.session.get(ContentContainer, int(contentcontainer_id)) is None:
-            return {'ok': False, 'error': 'Container not found'}
+            raise Fail('Container not found')
 
         upsert_container_styles(db, design.id, int(contentcontainer_id), styles)
         db.session.commit()
@@ -232,10 +232,10 @@ def register_admin_layouts_handlers(socketio, app, db):
         except Exception:
             logger.exception('Failed to reload screens after container design change')
         socketio.emit('displayhive:admin:stc:design_preview', build_design_payload(db), room=request.sid)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:get_layout_default_content_preview')
-    @require_right('layouts.page')
+    @admin_action('layouts.page')
     def get_layout_default_content_preview(message=None):
         """Emit each of a Layout's containers' own fallback content, rendered
         through its default_field_handler and positioned per the Layout — same
@@ -290,12 +290,12 @@ def register_admin_layouts_handlers(socketio, app, db):
         )
 
     @socketio.on('displayhive:admin:cts:get_layout_snaplines')
-    @require_right('layouts.page')
+    @admin_action('layouts.page')
     def get_layout_snaplines(message=None):
         _emit_snaplines(room=request.sid)
 
     @socketio.on('displayhive:admin:cts:set_layout_snaplines')
-    @require_right('layouts.edit')
+    @admin_action('layouts.edit')
     def handle_set_layout_snaplines(data=None):
         """Replace the whole global snaplines list. data = {snaplines: [{axis, position}, ...]}"""
         import json
@@ -303,7 +303,7 @@ def register_admin_layouts_handlers(socketio, app, db):
 
         raw = (data or {}).get('snaplines')
         if not isinstance(raw, list):
-            return {'success': False, 'error': 'snaplines must be a list'}
+            raise Fail('snaplines must be a list')
 
         cleaned = []
         for item in raw:
@@ -334,10 +334,10 @@ def register_admin_layouts_handlers(socketio, app, db):
         return {'success': True}
 
     @socketio.on('displayhive:admin:cts:create_layout')
-    @require_right('layouts.create')
+    @admin_action('layouts.create')
     def handle_create_layout(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         layout = Layout(name=data.get('name', ''), description=data.get('description', ''))
         db.session.add(layout)
         db.session.flush()
@@ -361,19 +361,19 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_layouts()
         _push_screens()
-        return {'ok': True, 'id': layout.id}
+        return {'success': True, 'id': layout.id}
 
     @socketio.on('displayhive:admin:cts:update_layout')
-    @require_right('layouts.edit')
+    @admin_action('layouts.edit')
     def handle_update_layout(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         layout_id = data.get('id')
         if not layout_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         layout = db.session.get(Layout, int(layout_id))
         if not layout:
-            return {'ok': False, 'error': 'Layout not found'}
+            raise Fail('Layout not found')
 
         layout.name = data.get('name', layout.name)
         layout.description = data.get('description', layout.description)
@@ -388,7 +388,7 @@ def register_admin_layouts_handlers(socketio, app, db):
             else:
                 variation = _find_variation(layout, ratio)
                 if not variation:
-                    return {'ok': False, 'error': 'Variation not found'}
+                    raise Fail('Variation not found')
                 variation.contentcontainers = containers
                 for c in containers:
                     _ensure_position(c, ratio)
@@ -400,39 +400,39 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_layouts()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:delete_layout')
-    @require_right('layouts.delete')
+    @admin_action('layouts.delete')
     def handle_delete_layout(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         layout_id = data.get('id')
         if not layout_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         layout = db.session.get(Layout, int(layout_id))
         if not layout:
-            return {'ok': False, 'error': 'Layout not found'}
+            raise Fail('Layout not found')
         if layout.contenttypes:
-            return {'ok': False, 'error': f'Layout is used by {len(layout.contenttypes)} content type(s)'}
+            raise Fail(f'Layout is used by {len(layout.contenttypes)} content type(s)')
         db.session.delete(layout)
         db.session.commit()
         _emit_layouts()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}
 
     # --- Content Containers (standalone entities) -------------------------
 
     @socketio.on('displayhive:admin:cts:get_containers')
-    @require_right('layouts.page')
+    @admin_action('layouts.page')
     def get_admin_containers(message=None):
         _emit_containers(room=request.sid)
 
     @socketio.on('displayhive:admin:cts:create_container')
-    @require_right('layouts.create')
+    @admin_action('layouts.create')
     def handle_create_container(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         container = ContentContainer(
             name=data.get('name', ''),
             order=int(data.get('order') or 0),
@@ -448,19 +448,19 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_containers()
         _push_screens()
-        return {'ok': True, 'id': container.id}
+        return {'success': True, 'id': container.id}
 
     @socketio.on('displayhive:admin:cts:update_container')
-    @require_right('layouts.edit')
+    @admin_action('layouts.edit')
     def handle_update_container(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         container_id = data.get('id')
         if not container_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         container = db.session.get(ContentContainer, int(container_id))
         if not container:
-            return {'ok': False, 'error': 'Container not found'}
+            raise Fail('Container not found')
 
         # Apply 'locked' first so a request that unlocks and repositions in
         # the same call (e.g. the editor's own toggle-then-drag) is allowed,
@@ -471,7 +471,7 @@ def register_admin_layouts_handlers(socketio, app, db):
 
         position_fields = ('top', 'left', 'width', 'height')
         if container.locked and any(data.get(f) is not None for f in position_fields):
-            return {'ok': False, 'error': 'Container is locked'}
+            raise Fail('Container is locked')
 
         container.name = data.get('name', container.name)
         for field in ('order',):
@@ -505,27 +505,27 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_containers()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:delete_container')
-    @require_right('layouts.delete')
+    @admin_action('layouts.delete')
     def handle_delete_container(data=None):
         from application.models import TagConfig, DesignContainerStyle
         from application.models.content import layout_variation_container
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         container_id = data.get('id')
         if not container_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         container = db.session.get(ContentContainer, int(container_id))
         if not container:
-            return {'ok': False, 'error': 'Container not found'}
+            raise Fail('Container not found')
         used_by = db.session.execute(
             db.select(db.func.count()).select_from(TagConfig).where(TagConfig.contentcontainer_id == container.id)
         ).scalar_one()
         if used_by:
-            return {'ok': False, 'error': f'Container is used by {used_by} field(s)'}
+            raise Fail(f'Container is used by {used_by} field(s)')
         db.session.execute(
             db.delete(DesignContainerStyle).where(DesignContainerStyle.contentcontainer_id == container.id)
         )
@@ -538,4 +538,4 @@ def register_admin_layouts_handlers(socketio, app, db):
         db.session.commit()
         _emit_containers()
         _push_screens()
-        return {'ok': True}
+        return {'success': True}

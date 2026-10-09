@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import type { AuthProvider } from '../types/models'
@@ -21,6 +22,7 @@ import Message from 'primevue/message'
 // application/oidc.py.
 
 const { emitWithAck } = useSocket()
+const { request } = useAck()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -121,13 +123,13 @@ const testIssuer = async () => {
   testing.value = true
   testResult.value = null
   try {
-    const result = await emitWithAck<{ success: boolean; error?: string; issuer?: string; pkce?: boolean }>(
+    // The outcome is shown next to the form field, not as a toast.
+    const result = await request<Ack & { issuer?: string; pkce?: boolean }>(
       'displayhive:admin:authproviders:cts:test_provider',
       { issuer: form.value.issuer.trim() },
+      { error: 'Test failed', onError: (text) => { testResult.value = { ok: false, text } } },
     )
-    testResult.value = result.success
-      ? { ok: true, text: `Found ${result.issuer}${result.pkce ? '' : ' (note: it does not advertise PKCE support)'}` }
-      : { ok: false, text: result.error || 'Test failed' }
+    if (result) testResult.value = { ok: true, text: `Found ${result.issuer}${result.pkce ? '' : ' (note: it does not advertise PKCE support)'}` }
   } finally {
     testing.value = false
   }
@@ -136,7 +138,7 @@ const testIssuer = async () => {
 const save = async () => {
   saving.value = true
   try {
-    const result = await emitWithAck<Result>('displayhive:admin:authproviders:cts:save_provider', {
+    const result = await request<Result>('displayhive:admin:authproviders:cts:save_provider', {
       id: form.value.id,
       slug: form.value.slug,
       name: form.value.name,
@@ -146,13 +148,10 @@ const save = async () => {
       clear_client_secret: form.value.clear_client_secret,
       scopes: form.value.scopes,
       enabled: form.value.enabled,
-    })
-    if (result.success) {
+    }, { success: `Login provider "${form.value.name}" saved`, error: 'Save failed' })
+    if (result) {
       providers.value = result.providers || []
       showDialog.value = false
-      toast.add({ severity: 'success', summary: 'Saved', detail: `Login provider "${form.value.name}" saved`, life: 3000 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Save failed', life: 5000 })
     }
   } finally {
     saving.value = false
@@ -166,13 +165,8 @@ const remove = (p: AuthProvider) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const result = await emitWithAck<Result>('displayhive:admin:authproviders:cts:delete_provider', { id: p.id })
-      if (result.success) {
-        providers.value = result.providers || []
-        toast.add({ severity: 'success', summary: 'Deleted', detail: 'Login provider deleted', life: 3000 })
-      } else {
-        toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Delete failed', life: 5000 })
-      }
+      const result = await request<Result>('displayhive:admin:authproviders:cts:delete_provider', { id: p.id }, { success: 'Login provider deleted', error: 'Delete failed' })
+      if (result) providers.value = result.providers || []
     },
   })
 }

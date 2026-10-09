@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useRightsStore } from '../stores/rights'
-import { useToast } from 'primevue/usetoast'
 
 import Card from 'primevue/card'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -14,8 +14,8 @@ import Message from 'primevue/message'
 // who can open Settings sees the state; only a Superadmin can change it.
 
 const { emitWithAck } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
-const toast = useToast()
 
 type Policy = { success: boolean; error?: string; allow_private?: boolean; forced_by_env?: boolean }
 
@@ -41,19 +41,12 @@ const change = async (value: boolean) => {
   if (!canChange.value) return
   saving.value = true
   try {
-    const policy = await emitWithAck<Policy>('displayhive:admin:cts:set_outbound_policy', { allow_private: value })
-    if (policy?.success) {
-      apply(policy)
-      toast.add({
-        severity: 'success',
-        summary: 'Saved',
-        detail: policy.allow_private ? 'Private networks are now allowed' : 'Private networks are blocked',
-        life: 2500,
-      })
-    } else {
-      allowPrivate.value = !value
-      toast.add({ severity: 'error', summary: 'Not saved', detail: policy?.error || 'Could not save the setting', life: 4000 })
-    }
+    const policy = await request<Policy>('displayhive:admin:cts:set_outbound_policy', { allow_private: value }, {
+      success: (p) => (p.allow_private ? 'Private networks are now allowed' : 'Private networks are blocked'),
+      error: 'Could not save the setting',
+    })
+    if (policy) apply(policy)
+    else allowPrivate.value = !value
   } finally {
     saving.value = false
   }

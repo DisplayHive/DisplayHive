@@ -3,7 +3,7 @@ import PageActions from '../components/PageActions.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from 'primevue/usetoast'
+import { useAck } from '../composables/useAck'
 import { useConfirm } from 'primevue/useconfirm'
 
 import Card from 'primevue/card'
@@ -66,9 +66,9 @@ const getContentFields = (content: ContentElement | null | undefined): ContentFi
 }
 
 const router = useRouter()
-const toast = useToast()
 const confirm = useConfirm()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 const screensStore = useScreensStore()
 const canCreate = computed(() => rightsStore.can('content.create'))
@@ -230,25 +230,22 @@ const refreshData = () => {
 const toggleActive = async (content: ContentElement) => {
   const newActive = content.active
   try {
-    const result = await emitWithAck<{ success?: boolean; error?: string }>(
+    const ack = await request(
       'displayhive:admin:cts:update_content_element_active',
-      { content_element_id: content.id, active: newActive }
+      { content_element_id: content.id, active: newActive },
+      { error: 'Could not update' },
     )
-    if (result && result.success === false) {
-      content.active = !newActive
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Could not update', life: 3000 })
-    }
+    if (!ack) content.active = !newActive
   } catch {
     content.active = !newActive
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not reach server', life: 3000 })
   }
 }
 
 const updateDuration = (content: ContentElement) => {
-  emit('displayhive:admin:cts:update_content_element_duration', {
+  void request('displayhive:admin:cts:update_content_element_duration', {
     content_element_id: content.id,
     duration: content.duration
-  })
+  }, { error: 'Could not update the duration' })
 }
 
 const setDuration = (content: ContentElement, val: number) => {
@@ -262,11 +259,11 @@ const deleteContent = (content: ContentElement) => {
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_content_element', { content_element_id: content.id })
+    accept: async () => {
+      const ack = await request('displayhive:admin:cts:delete_content_element', { content_element_id: content.id }, { success: 'Content deleted', error: 'Could not delete' })
+      if (!ack) return
       allContent.value = allContent.value.filter(c => c.id !== content.id)
       unassignedContent.value = unassignedContent.value.filter(c => c.id !== content.id)
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Content deleted', life: 3000 })
     }
   })
 }

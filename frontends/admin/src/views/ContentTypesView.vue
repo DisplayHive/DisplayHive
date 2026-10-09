@@ -6,6 +6,7 @@ import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
@@ -54,7 +55,8 @@ const layoutHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
 const toggleLayoutHelp = (e: Event) => layoutHelpPopover.value?.toggle(e)
 const toast = useToast()
 const confirm = useConfirm()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('contenttypes.create'))
@@ -291,18 +293,13 @@ const handleContentTypeDetail = async (data: { contenttype?: RawContentTypeDetai
       contentcontainer_id: t.contentcontainer_id, order: t.order,
       default_value: t.default_value, option_flags: t.option_flags,
     }))
-    const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:create_contenttype', {
+    const ack = await request('displayhive:admin:cts:create_contenttype', {
       name,
       description: ct.description || '',
       layout_id: ct.layout_id,
       tagconfigs,
-    })
-    if (ack?.ok) {
-      toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
-      refreshData()
-    } else {
-      toast.add({ severity: 'error', summary: 'Copy failed', detail: ack?.error || 'Unknown error', life: 4000 })
-    }
+    }, { success: `"${name}" created`, error: 'Copy failed' })
+    if (ack) refreshData()
     return
   }
 
@@ -409,39 +406,19 @@ const saveContentType = async (keepOpen = false) => {
     ? 'displayhive:admin:cts:create_contenttype'
     : 'displayhive:admin:cts:update_contenttype'
 
-  try {
-    const ack = await emitWithAck<{ ok: boolean; error?: string }>(event, {
-      id: editForm.value.id,
-      name: editForm.value.name,
-      description: editForm.value.description,
-      layout_id: editForm.value.layout_id,
-      tagconfigs: prepareTagConfigsPayload(),
-    })
-
-    if (ack?.ok) {
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: isNew.value ? 'Content type created' : 'Content type updated',
-        life: 3000,
-      })
-      if (!keepOpen) showEditDialog.value = false
-      refreshData()
-    } else {
-      toast.add({
-        severity: 'error',
-        summary: 'Save failed',
-        detail: ack?.error || 'The server could not save the content type.',
-        life: 5000,
-      })
-    }
-  } catch {
-    toast.add({
-      severity: 'error',
-      summary: 'Save failed',
-      detail: 'Could not reach the server. Please try again.',
-      life: 5000,
-    })
+  const ack = await request(event, {
+    id: editForm.value.id,
+    name: editForm.value.name,
+    description: editForm.value.description,
+    layout_id: editForm.value.layout_id,
+    tagconfigs: prepareTagConfigsPayload(),
+  }, {
+    success: isNew.value ? 'Content type created' : 'Content type updated',
+    error: 'The server could not save the content type.',
+  })
+  if (ack) {
+    if (!keepOpen) showEditDialog.value = false
+    refreshData()
   }
 }
 
@@ -452,16 +429,11 @@ const deleteContentType = (ct: ContentType) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const ack = await emitWithAck<{ ok: boolean; error?: string }>(
-        'displayhive:admin:cts:delete_contenttype',
-        { id: ct.id },
-      )
-      if (ack.ok) {
-        toast.add({ severity: 'success', summary: 'Success', detail: 'Content type deleted', life: 3000 })
-        refreshData()
-      } else {
-        toast.add({ severity: 'error', summary: 'Error', detail: ack.error || 'Failed to delete content type', life: 5000 })
-      }
+      const ack = await request('displayhive:admin:cts:delete_contenttype', { id: ct.id }, {
+        success: 'Content type deleted',
+        error: 'Failed to delete content type',
+      })
+      if (ack) refreshData()
     },
   })
 }

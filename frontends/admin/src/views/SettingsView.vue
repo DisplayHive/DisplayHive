@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from 'primevue/usetoast'
+import { useAck } from '../composables/useAck'
 import { useRightsStore } from '../stores/rights'
 
 import Card from 'primevue/card'
@@ -14,8 +14,8 @@ import InputNumber from 'primevue/inputnumber'
 import LoginProvidersCard from '../components/LoginProvidersCard.vue'
 import OutboundPolicyCard from '../components/OutboundPolicyCard.vue'
 
-const { on, off, emit, emitWithAck } = useSocket()
-const toast = useToast()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canEdit = computed(() => rightsStore.can('settings.edit'))
@@ -132,7 +132,7 @@ const saveDashboardSettings = async () => {
   if (!canEdit.value) return
   saving.value = true
   try {
-    const ack = await emitWithAck<{ success: boolean; error?: string }>(
+    await request(
       'displayhive:admin:cts:set_system_settings',
       {
         settings: {
@@ -146,14 +146,8 @@ const saveDashboardSettings = async () => {
           hide_admin_tours: hideAdminTours.value ? 'true' : 'false',
         },
       },
+      { success: 'Dashboard settings updated', error: 'Save failed' },
     )
-    if (ack?.success) {
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Dashboard settings updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     saving.value = false
   }
@@ -163,7 +157,7 @@ const saveContentSettings = async () => {
   if (!canEdit.value) return
   contentSaving.value = true
   try {
-    const ack = await emitWithAck<{ success: boolean; error?: string }>(
+    await request(
       'displayhive:admin:cts:set_system_settings',
       {
         settings: {
@@ -171,14 +165,8 @@ const saveContentSettings = async () => {
           content_list_preview_size: String(contentListPreviewSize.value),
         },
       },
+      { success: 'Content editor settings updated', error: 'Save failed' },
     )
-    if (ack?.success) {
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Content editor settings updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     contentSaving.value = false
   }
@@ -188,17 +176,11 @@ const saveTimeSettings = async () => {
   if (!canEdit.value) return
   timeSaving.value = true
   try {
-    const ack = await emitWithAck<{ success: boolean; error?: string }>(
+    await request(
       'displayhive:admin:cts:set_system_settings',
       { settings: { timezone: selectedTimezone.value } },
+      { success: 'Timezone updated', error: 'Save failed' },
     )
-    if (ack?.success) {
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Timezone updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     timeSaving.value = false
   }

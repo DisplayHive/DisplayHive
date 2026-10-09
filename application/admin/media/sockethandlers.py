@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 def register_admin_media_handlers(socketio, app, db):
     """Register all media-related socket.io event handlers for admin media page."""
     from application.models.content import Media
-    from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
+    from application.socketio_handlers.auth import require_right, current_admin_user, fields
+    from application.socketio_handlers.actions import admin_action, get_or_fail, ok
     from application.permissions import has_right
 
     # Absolute paths inside DATA_DIR, set by app.py from application/paths.py.
@@ -63,12 +64,7 @@ def register_admin_media_handlers(socketio, app, db):
 
     def _do_media_edit(media_id, title, tags_raw):
         """Shared edit logic used by both legacy and namespaced handlers."""
-        if not media_id:
-            return {'success': False, 'error': 'No media ID provided'}
-
-        media = db.session.get(Media, media_id)
-        if not media:
-            return {'success': False, 'error': 'Media not found'}
+        media = get_or_fail(db, Media, media_id, 'Media')
 
         if title is not None:
             media.title = title
@@ -86,10 +82,10 @@ def register_admin_media_handlers(socketio, app, db):
         # Push refreshed list to the caller
         _push_media_list()
 
-        return {'success': True, 'id': media.id}
+        return ok(id=media.id)
 
     @socketio.on('displayhive:media:cts:update_media')
-    @admin_handler
+    @admin_action()
     def handle_update_media(data):
         """Namespaced: update title/tags for a media item.
 
@@ -98,18 +94,16 @@ def register_admin_media_handlers(socketio, app, db):
         silently dropped (not the whole call rejected) if the caller lacks
         the right for that specific field.
         """
-        data = data or {}
+        media_id, title, tags_raw = fields(data, 'id', 'title', 'tags')
         user = current_admin_user()
-        title = data.get('title')
         if title is not None and not has_right(db, user, 'media.rename'):
             title = None
-        tags_raw = data.get('tags')
         if tags_raw is not None and not has_right(db, user, 'media.tag'):
             tags_raw = None
-        return _do_media_edit(media_id=data.get('id'), title=title, tags_raw=tags_raw)
+        return _do_media_edit(media_id=media_id, title=title, tags_raw=tags_raw)
 
     @socketio.on('displayhive:media:cts:sync_previews')
-    @require_right('media.upload')
+    @admin_action('media.upload')
     def handle_sync_previews(data=None):
         """Compare the count of media files against their preview/thumbnail
         files on disk and regenerate any that are missing — and render any
@@ -158,30 +152,19 @@ def register_admin_media_handlers(socketio, app, db):
         if regenerated:
             _push_media_list()
 
-        return {
-            'success': True,
-            'total': len(all_media),
-            'missing': missing,
-            'regenerated': regenerated,
-            'skipped_no_source': skipped_no_source,
-            'renditions_created': renditions_created,
-        }
+        return ok(
+            total=len(all_media),
+            missing=missing,
+            regenerated=regenerated,
+            skipped_no_source=skipped_no_source,
+            renditions_created=renditions_created,
+        )
 
     @socketio.on('displayhive:media:cts:delete_media')
-    @require_right('media.delete')
+    @admin_action('media.delete')
     def handle_delete_media(data):
         """Namespaced: delete a media item."""
-        data = data or {}
-        media_id = data.get('id')
-
-        if not media_id:
-            emit('media_error', {'error': 'No media ID provided'})
-            return
-
-        media = db.session.get(Media, media_id)
-        if not media:
-            emit('media_error', {'error': 'Media not found'})
-            return
+        media = get_or_fail(db, Media, fields(data, 'id')[0], 'Media')
 
         # Delete files
         file_path = os.path.join(MEDIA_FOLDER, media.folder_path, media.filename) if media.folder_path else os.path.join(MEDIA_FOLDER, media.filename)

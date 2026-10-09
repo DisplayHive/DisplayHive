@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 def register_admin_screens_handlers(socketio, app, db):
     """Register admin socket handlers related to Screens (admin UI: Monitore)."""
 
-    from application.socketio_handlers.auth import require_right, fields, admin_handler, current_admin_user
+    from application.socketio_handlers.auth import fields, admin_handler, current_admin_user
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.permissions import has_right
     from application.models import Screen, Device, Screengroup
     from application.admin.screens.helper import emit_admin_screen
@@ -34,20 +35,20 @@ def register_admin_screens_handlers(socketio, app, db):
         return sg
 
     @socketio.on('displayhive:screens:cts:create_screen')
-    @require_right('screens.create')
+    @admin_action('screens.create')
     def handle_create_screen(data):
         """Create a new screen and a dedicated is_one_screen Screengroup for it."""
         logger.debug('create_screen data=%s', data)
         name, width, height = fields(data, 'name', 'width', 'height')
         name = (name or '').strip()
         if not name:
-            return {'success': False, 'error': 'name is required'}
+            raise Fail('name is required')
 
         existing = db.session.execute(
             db.select(Screen).where(Screen.name == name)
         ).scalar_one_or_none()
         if existing:
-            return {'success': False, 'error': f'Screen "{name}" already exists'}
+            raise Fail(f'Screen "{name}" already exists')
 
         screen = Screen(
             name=name,
@@ -64,20 +65,14 @@ def register_admin_screens_handlers(socketio, app, db):
 
         emit_admin_screen(socketio, app, db, room='admins')
         emit_screengroups_update(socketio, app, db, room='admins')
-        return {'success': True, 'screen_id': screen.id}
+        return ok(screen_id=screen.id)
 
     @socketio.on('displayhive:screens:cts:delete_screen')
-    @require_right('screens.delete')
+    @admin_action('screens.delete')
     def handle_delete_screen(data):
         """Delete a screen and its dedicated is_one_screen Screengroup."""
         logger.debug('delete_screen data=%s', data)
-        (screen_id,) = fields(data, 'screen_id')
-        if not screen_id:
-            return {'success': False, 'error': 'screen_id is required'}
-
-        screen = db.session.get(Screen, int(screen_id))
-        if not screen:
-            return {'success': False, 'error': 'Screen not found'}
+        screen = get_or_fail(db, Screen, fields(data, 'screen_id')[0], 'Screen')
 
         assigned_device_count = db.session.execute(
             db.select(db.func.count()).select_from(Device).where(Device.screen_id == screen.id)
@@ -85,7 +80,7 @@ def register_admin_screens_handlers(socketio, app, db):
         if assigned_device_count:
             error = f'Screen is used by {assigned_device_count} device(s) — unassign them first'
             socketio.emit('displayhive:screens:stc:screen_deleted', {'success': False, 'error': error}, room=request.sid)
-            return {'success': False, 'error': error}
+            raise Fail(error)
 
         screen_name = screen.name
         one_sg = db.session.execute(
@@ -100,7 +95,7 @@ def register_admin_screens_handlers(socketio, app, db):
         emit_admin_screen(socketio, app, db, room='admins')
         emit_screengroups_update(socketio, app, db, room='admins')
         socketio.emit('displayhive:screens:stc:screen_deleted', {'success': True}, room=request.sid)
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:cts:get_admin_screen')
     @admin_handler
@@ -116,46 +111,34 @@ def register_admin_screens_handlers(socketio, app, db):
         emit_admin_screen(socketio, app, db, room=request.sid)
 
     @socketio.on('displayhive:screens:cts:toggle_monitoring')
-    @require_right('screens.monitor')
+    @admin_action('screens.monitor')
     def handle_toggle_monitoring(data):
         """Toggle online monitoring for a screen."""
-        (screen_id,) = fields(data, 'screen_id')
-        if not screen_id:
-            return {'success': False, 'error': 'screen_id is required'}
-
-        screen = db.session.get(Screen, int(screen_id))
-        if not screen:
-            return {'success': False, 'error': 'Screen not found'}
+        screen = get_or_fail(db, Screen, fields(data, 'screen_id')[0], 'Screen')
 
         screen.monitoring_enabled = not bool(getattr(screen, 'monitoring_enabled', True))
         db.session.commit()
         logger.info('Screen "%s" monitoring_enabled=%s', screen.name, screen.monitoring_enabled)
 
         emit_admin_screen(socketio, app, db, room='admins')
-        return {'success': True, 'monitoring_enabled': screen.monitoring_enabled}
+        return ok(monitoring_enabled=screen.monitoring_enabled)
 
     @socketio.on('displayhive:screens:cts:reset_screen_size')
-    @require_right('screens.resize')
+    @admin_action('screens.resize')
     def handle_reset_screen_size(data):
         """Reset a screen's resolution to the connected device's max recorded resolution."""
-        (screen_id,) = fields(data, 'screen_id')
-        if not screen_id:
-            return {'success': False, 'error': 'screen_id is required'}
-
-        screen = db.session.get(Screen, int(screen_id))
-        if not screen:
-            return {'success': False, 'error': 'Screen not found'}
+        screen = get_or_fail(db, Screen, fields(data, 'screen_id')[0], 'Screen')
 
         device = db.session.execute(
             db.select(Device).where(Device.screen_id == screen.id)
         ).scalars().first()
         if not device:
-            return {'success': False, 'error': 'No device attached to screen'}
+            raise Fail('No device attached to screen')
 
         max_w = getattr(device, 'max_resolution_width', None)
         max_h = getattr(device, 'max_resolution_height', None)
         if not max_w or not max_h:
-            return {'success': False, 'error': 'No max resolution recorded for device'}
+            raise Fail('No max resolution recorded for device')
 
         screen.resolution_width = max_w
         screen.resolution_height = max_h
@@ -163,20 +146,17 @@ def register_admin_screens_handlers(socketio, app, db):
         logger.info('Reset screen "%s" resolution to %sx%s', screen.name, max_w, max_h)
 
         emit_admin_screen(socketio, app, db, room='admins')
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:screens:cts:toggle_debug')
-    @require_right('screens.debug')
+    @admin_action('screens.debug')
     def handle_toggle_debug(data):
         """Persist the debug flag for a screen and push updated deviceconfig."""
         logger.debug('toggle_debug data=%s', data)
         screen_id, new_debug = fields(data, 'screen_id', 'debug')
-        if screen_id is None or new_debug is None:
-            return {'success': False, 'error': 'missing screen_id or debug'}
-
-        screen = db.session.get(Screen, int(screen_id))
-        if not screen:
-            return {'success': False, 'error': 'screen not found'}
+        if new_debug is None:
+            raise Fail('missing screen_id or debug')
+        screen = get_or_fail(db, Screen, screen_id, 'Screen')
 
         screen.debug = bool(new_debug)
         db.session.add(screen)
@@ -203,4 +183,4 @@ def register_admin_screens_handlers(socketio, app, db):
         except Exception:
             logger.exception('toggle_debug: failed to fire debug alert')
 
-        return {'success': True, 'debug': screen.debug}
+        return ok(debug=screen.debug)

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def register_admin_pretalx_handlers(socketio, app, db):
     """Register socket handlers and background poller for the Pretalx admin page."""
-    from application.socketio_handlers.auth import require_right
+    from application.socketio_handlers.actions import admin_action, Fail, ok
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -277,15 +277,15 @@ def register_admin_pretalx_handlers(socketio, app, db):
     # ── Socket event handlers ─────────────────────────────────────────────────
 
     @socketio.on('displayhive:admin:pretalx:cts:get_settings')
-    @require_right('pretalx.page')
+    @admin_action('pretalx.page')
     def handle_get_settings(data=None):
         _emit_settings(request.sid)
 
     @socketio.on('displayhive:admin:pretalx:cts:save_settings')
-    @require_right('pretalx.manage')
+    @admin_action('pretalx.manage')
     def handle_save_settings(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         obj = _get_or_create_settings()
         if 'time_format' in data:
             obj.time_format = (data['time_format'] or 'HH:mm').strip()
@@ -310,24 +310,24 @@ def register_admin_pretalx_handlers(socketio, app, db):
                 with app.app_context():
                     _refresh_all_pretalx_content()
             socketio.start_background_task(_bg_refresh_all)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:pretalx:cts:get_urls')
-    @require_right('pretalx.page')
+    @admin_action('pretalx.page')
     def handle_get_urls(data=None):
         _emit_urls(request.sid)
 
     @socketio.on('displayhive:admin:pretalx:cts:add_url')
-    @require_right('pretalx.manage')
+    @admin_action('pretalx.manage')
     def handle_add_url(data=None):
         from application.models import PretalxApiUrl, PretalxApiCache
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         name = (data.get('name') or '').strip()
         url = (data.get('url') or '').strip()
         if not name or not url:
-            return {'ok': False, 'error': 'name and url are required'}
+            raise Fail('name and url are required')
 
         is_valid = False
         json_data = None
@@ -338,7 +338,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
             is_valid = True
         except net.OutboundBlocked as exc:
             # Not saved at all: an address DisplayHive would never fetch (see application/net.py).
-            return {'ok': False, 'error': str(exc)}
+            raise Fail(str(exc))
         except Exception:
             logger.debug('Initial validation fetch failed for new pretalx url=%s', url, exc_info=True)
 
@@ -364,22 +364,22 @@ def register_admin_pretalx_handlers(socketio, app, db):
 
         db.session.commit()
         _emit_urls(request.sid)
-        return {'ok': True, 'is_valid': is_valid}
+        return {'success': True, 'is_valid': is_valid}
 
     @socketio.on('displayhive:admin:pretalx:cts:update_url')
-    @require_right('pretalx.manage')
+    @admin_action('pretalx.manage')
     def handle_update_url(data=None):
         from application.models import PretalxApiUrl
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         url_id = data.get('id')
         if url_id is None:
-            return {'ok': False, 'error': 'id is required'}
+            raise Fail('id is required')
 
         obj = db.session.get(PretalxApiUrl, url_id)
         if not obj:
-            return {'ok': False, 'error': 'Not found'}
+            raise Fail('Not found')
 
         if 'name' in data:
             obj.name = (data['name'] or '').strip() or obj.name
@@ -390,18 +390,18 @@ def register_admin_pretalx_handlers(socketio, app, db):
 
         db.session.commit()
         _emit_urls(request.sid)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:pretalx:cts:delete_url')
-    @require_right('pretalx.manage')
+    @admin_action('pretalx.manage')
     def handle_delete_url(data=None):
         from application.models import PretalxApiUrl
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         url_id = data.get('id')
         if url_id is None:
-            return {'ok': False, 'error': 'id is required'}
+            raise Fail('id is required')
 
         obj = db.session.get(PretalxApiUrl, url_id)
         if obj:
@@ -409,26 +409,26 @@ def register_admin_pretalx_handlers(socketio, app, db):
             db.session.commit()
 
         _emit_urls(request.sid)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:pretalx:cts:get_rooms')
-    @require_right('pretalx.page')
+    @admin_action('pretalx.page')
     def handle_get_rooms(data=None):
         from application.models import PretalxApiUrl
         url_id = (data or {}).get('id')
         if not url_id:
-            return {'ok': False, 'rooms': []}
+            return {'success': False, 'rooms': []}
         obj = db.session.get(PretalxApiUrl, url_id)
         if not obj or not obj.cache:
-            return {'ok': True, 'rooms': []}
+            return {'success': True, 'rooms': []}
         cached = json_module.loads(obj.cache.cached_json)
         rooms: set[str] = set()
         for day in cached.get('schedule', {}).get('conference', {}).get('days', []):
             rooms.update(day.get('rooms', {}).keys())
-        return {'ok': True, 'rooms': sorted(rooms)}
+        return {'success': True, 'rooms': sorted(rooms)}
 
     @socketio.on('displayhive:admin:pretalx:cts:get_cache')
-    @require_right('pretalx.page')
+    @admin_action('pretalx.page')
     def handle_get_cache(data=None):
         from application.models import PretalxApiUrl
 
@@ -442,7 +442,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
         if not obj or not obj.cache:
             socketio.emit(
                 'displayhive:admin:pretalx:stc:cache',
-                {'ok': False, 'error': 'No cache available'},
+                {'success': False, 'error': 'No cache available'},
                 room=request.sid,
             )
             return
@@ -450,7 +450,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
         socketio.emit(
             'displayhive:admin:pretalx:stc:cache',
             {
-                'ok': True,
+                'success': True,
                 'url_id': url_id,
                 'name': obj.name,
                 'cached_json': obj.cache.cached_json,

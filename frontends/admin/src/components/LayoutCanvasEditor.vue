@@ -3,6 +3,7 @@ import PreviewFrame from './PreviewFrame.vue'
 import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -95,7 +96,8 @@ const props = defineProps<{
   layouts: Layout[]
 }>()
 
-const { emit: socketEmit, emitWithAck, on, off } = useSocket()
+const { emit: socketEmit, on, off } = useSocket()
+const { request } = useAck()
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -522,33 +524,35 @@ const flushPendingPositions = async (): Promise<boolean> => {
     if (!proceed) return false
   }
 
-  await Promise.all([...ids].map((id) => {
+  const results = await Promise.all([...ids].map((id) => {
     const content = contentDraft[id]
     const design = designDraft[id]
-    const saves: Promise<unknown>[] = []
+    const saves: Promise<Ack | null>[] = []
     const posPayload = (p: Pos) => ({ top: round1(p.top), left: round1(p.left), width: round1(p.width), height: round1(p.height) })
     // Base position travels with the shared settings; each other ratio's
     // position is its own call, tagged with that ratio.
     const baseDraft = draftsByRatio[BASE_ASPECT_RATIO]?.[id]
     if (baseDraft || content) {
-      saves.push(emitWithAck('displayhive:admin:cts:update_container', {
+      saves.push(request('displayhive:admin:cts:update_container', {
         id,
         ...(baseDraft ? posPayload(baseDraft) : {}),
         ...(content ? { name: content.name, default_field_handler: content.default_field_handler, default_content: content.default_content, show_when_empty: content.show_when_empty } : {}),
-      }))
+      }, { error: 'Could not save the container' }))
     }
     for (const [ratio, drafts] of Object.entries(draftsByRatio)) {
       if (ratio === BASE_ASPECT_RATIO || !drafts[id]) continue
-      saves.push(emitWithAck('displayhive:admin:cts:update_container', { id, aspect_ratio: ratio, ...posPayload(drafts[id]) }))
+      saves.push(request('displayhive:admin:cts:update_container', { id, aspect_ratio: ratio, ...posPayload(drafts[id]) }, { error: 'Could not save the container position' }))
     }
     if (design) {
       // Every known property is sent so cleared ones are deleted server-side.
       const styles: Record<string, string> = {}
       for (const p of ALL_CONTAINER_STYLE_PROPERTIES) styles[p.key] = design[p.key] || ''
-      saves.push(emitWithAck('displayhive:admin:cts:save_container_design', { contentcontainer_id: id, styles }))
+      saves.push(request('displayhive:admin:cts:save_container_design', { contentcontainer_id: id, styles }, { error: 'Could not save the container design' }))
     }
     return Promise.all(saves)
   }))
+  // A refused save was already reported; keep the staged edits so nothing is lost.
+  if (results.flat().some((ack) => !ack)) return false
   for (const id of ids) {
     if (designDraft[id]) containerDesignStyles.value = { ...containerDesignStyles.value, [id]: designDraft[id] }
     delete contentDraft[id]
@@ -589,11 +593,7 @@ const resetContainerPosition = (c: ContentContainer) => {
 // Layout is saved) — it's a discrete, deliberate toggle rather than a
 // continuous drag, so there's nothing useful to "stage".
 const toggleContainerLock = async (c: ContentContainer) => {
-  try {
-    await emitWithAck('displayhive:admin:cts:update_container', { id: c.id, locked: !c.locked })
-  } catch (e) {
-    console.error('[LayoutCanvasEditor] toggleContainerLock failed', e)
-  }
+  await request('displayhive:admin:cts:update_container', { id: c.id, locked: !c.locked }, { error: 'Could not change the lock' })
 }
 
 // Belt-and-braces: whenever the Layout being edited actually changes (however
@@ -624,13 +624,7 @@ const newSnaplineAxis = ref<'h' | 'v'>('h')
 const newSnaplinePosition = ref<number>(50)
 
 const saveSnaplines = async (next: Snapline[]) => {
-  const result = await emitWithAck<{ success: boolean; error?: string }>(
-    'displayhive:admin:cts:set_layout_snaplines',
-    { snaplines: next },
-  )
-  if (!result?.success) {
-    toast.add({ severity: 'error', summary: 'Error', detail: result?.error || 'Could not save snapline', life: 3000 })
-  }
+  await request('displayhive:admin:cts:set_layout_snaplines', { snaplines: next }, { error: 'Could not save snapline' })
 }
 
 const addSnapline = () => {
@@ -852,23 +846,18 @@ const onCanvasDrawMove = (e: PointerEvent) => {
 // sidebar's "New Container" button.
 const createNewContainer = async (pos: { top: number; left: number; width: number; height: number }) => {
   const n = props.containers.length + 1
-  try {
-    const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
-      'displayhive:admin:cts:create_container',
-      {
-        name: `Container ${n}`,
-        order: n,
-        top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height),
-      }
-    )
-    if (ack?.ok && ack.id) {
-      await addContainerToLayout(ack.id)
-      selectedId.value = ack.id
-    } else {
-      toast.add({ severity: 'error', summary: 'Create failed', detail: ack?.error || 'Unknown error', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Create failed', detail: 'Could not reach the server.', life: 4000 })
+  const ack = await request<Ack & { id?: number }>(
+    'displayhive:admin:cts:create_container',
+    {
+      name: `Container ${n}`,
+      order: n,
+      top: round1(pos.top), left: round1(pos.left), width: round1(pos.width), height: round1(pos.height),
+    },
+    { error: 'Create failed' },
+  )
+  if (ack?.id) {
+    await addContainerToLayout(ack.id)
+    selectedId.value = ack.id
   }
 }
 
@@ -898,18 +887,18 @@ const drawRectStyle = computed(() => {
 const addContainerToLayout = async (containerId: number) => {
   const ids = activeContainerIds.value
   if (ids.includes(containerId)) return
-  await emitWithAck('displayhive:admin:cts:update_layout', {
+  await request('displayhive:admin:cts:update_layout', {
     id: props.layout.id,
     aspect_ratio: activeRatio.value,
     container_ids: [...ids, containerId],
-  })
+  }, { error: 'Could not add the container to the layout' })
 }
 
 const removeFromLayout = async (containerId: number | null) => {
   if (containerId == null) return
   const ids = activeContainerIds.value.filter((id) => id !== containerId)
-  await emitWithAck('displayhive:admin:cts:update_layout', { id: props.layout.id, aspect_ratio: activeRatio.value, container_ids: ids })
-  if (selectedId.value === containerId) selectedId.value = null
+  const ack = await request('displayhive:admin:cts:update_layout', { id: props.layout.id, aspect_ratio: activeRatio.value, container_ids: ids }, { error: 'Could not remove the container from the layout' })
+  if (ack && selectedId.value === containerId) selectedId.value = null
 }
 
 const confirmDeleteContainer = (containerId: number | null) => {
@@ -1109,18 +1098,12 @@ const addableRatios = computed(() =>
 const addVariation = async () => {
   const ratio = newVariationRatio.value
   if (!ratio) return
-  try {
-    const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:create_layout_variation', {
-      layout_id: props.layout.id, aspect_ratio: ratio,
-    })
-    if (ack?.ok) {
-      pendingRatio.value = ratio
-      newVariationRatio.value = null
-    } else {
-      toast.add({ severity: 'error', summary: 'Could not add variation', detail: ack?.error || 'Unknown error', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Could not add variation', detail: 'Could not reach the server.', life: 4000 })
+  const ack = await request('displayhive:admin:cts:create_layout_variation', {
+    layout_id: props.layout.id, aspect_ratio: ratio,
+  }, { error: 'Could not add variation' })
+  if (ack) {
+    pendingRatio.value = ratio
+    newVariationRatio.value = null
   }
 }
 
@@ -1131,10 +1114,9 @@ const confirmDeleteVariation = (ratio: string) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:delete_layout_variation', {
+      await request('displayhive:admin:cts:delete_layout_variation', {
         layout_id: props.layout.id, aspect_ratio: ratio,
-      })
-      if (!ack?.ok) toast.add({ severity: 'error', summary: 'Could not remove variation', detail: ack?.error || 'Unknown error', life: 4000 })
+      }, { error: 'Could not remove variation' })
     },
   })
 }

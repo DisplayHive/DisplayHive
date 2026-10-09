@@ -5,6 +5,7 @@ import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
@@ -20,7 +21,8 @@ import Column from 'primevue/column'
 const router = useRouter()
 const toast = useToast()
 const confirm = useConfirm()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('layouts.create'))
@@ -55,13 +57,8 @@ const deleteLayout = (l: Layout, onDeleted?: () => void) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:delete_layout', { id: l.id })
-      if (ack?.ok) {
-        toast.add({ severity: 'success', summary: 'Success', detail: 'Layout deleted', life: 3000 })
-        onDeleted?.()
-      } else {
-        toast.add({ severity: 'error', summary: 'Delete failed', detail: ack?.error || 'Unknown error', life: 4000 })
-      }
+      const ack = await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
+      if (ack) onDeleted?.()
     },
   })
 }
@@ -82,7 +79,7 @@ const openCopyDialog = (l: Layout) => {
 const executeCopyLayout = async () => {
   if (!copySource.value || !copyNewName.value.trim()) return
   const name = copyNewName.value.trim()
-  const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
+  const ack = await request(
     'displayhive:admin:cts:create_layout',
     {
       name,
@@ -90,13 +87,11 @@ const executeCopyLayout = async () => {
       container_ids: copySource.value.container_ids || [],
       variations: copySource.value.variations || [],
     },
+    { success: `"${name}" created`, error: 'Copy failed' },
   )
-  if (ack?.ok) {
-    toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
+  if (ack) {
     showCopyDialog.value = false
     refreshData()
-  } else {
-    toast.add({ severity: 'error', summary: 'Copy failed', detail: ack?.error || 'Unknown error', life: 4000 })
   }
 }
 

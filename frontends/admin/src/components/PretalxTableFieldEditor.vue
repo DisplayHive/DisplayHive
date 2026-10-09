@@ -77,8 +77,8 @@ async function fetchPretalxRooms(urlId: string) {
   if (!urlId || urlId in pretalxRoomsCache.value) return
   pretalxRoomsCache.value[urlId] = []
   try {
-    const ack = await socketEmitWithAck<{ ok?: boolean; rooms?: string[] }>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
-    if (ack?.ok) pretalxRoomsCache.value[urlId] = ack.rooms || []
+    const ack = await socketEmitWithAck<{ success?: boolean; rooms?: string[] }>('displayhive:admin:pretalx:cts:get_rooms', { id: Number(urlId) })
+    if (ack?.success) pretalxRoomsCache.value[urlId] = ack.rooms || []
   } catch { /* keep empty */ }
 }
 

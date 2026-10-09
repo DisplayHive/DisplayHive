@@ -116,7 +116,7 @@ async function seedContentType(page: Page, name: string, layoutId: number, conta
           content_handlers: [{ contentcontainer_id: containerId, html: '{{ title_field }}', css: '' }],
         }, (ack: any) => {
           clearTimeout(t)
-          if (ack?.ok) resolve(Number(ack.id))
+          if (ack?.success) resolve(Number(ack.id))
           else reject(new Error(`create_contenttype failed: ${JSON.stringify(ack)}`))
         })
       }),

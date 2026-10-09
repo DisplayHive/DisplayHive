@@ -17,7 +17,7 @@ def register_admin_designs_handlers(socketio, app, db):
         emit_designs_update, upsert_container_styles,
         clean_indicator_color, clean_indicator_height, clean_indicator_direction,
     )
-    from application.socketio_handlers.auth import require_right
+    from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
     def _ratios_json(raw):
@@ -45,13 +45,13 @@ def register_admin_designs_handlers(socketio, app, db):
             logger.exception('Failed to reload screens after container style change')
 
     @socketio.on('displayhive:admin:cts:get_designs')
-    @require_right('designs.page')
+    @admin_action('designs.page')
     def get_admin_designs(message=None):
         """Emit the current designs list to the requesting client."""
         _emit_designs(room=request.sid)
 
     @socketio.on('displayhive:admin:cts:get_design')
-    @require_right('designs.page')
+    @admin_action('designs.page')
     def get_design(message=None):
         """Emit full design detail (including html and css) for a single design id."""
         if not message or not isinstance(message, dict):
@@ -88,7 +88,7 @@ def register_admin_designs_handlers(socketio, app, db):
         socketio.emit('displayhive:admin:stc:design_detail', payload, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:create_design')
-    @require_right('designs.create')
+    @admin_action('designs.create')
     def handle_create_design(data=None):
         """Create a design from socket payload."""
         if not data or not isinstance(data, dict):
@@ -127,7 +127,7 @@ def register_admin_designs_handlers(socketio, app, db):
         _emit_designs()
 
     @socketio.on('displayhive:admin:cts:update_design')
-    @require_right('designs.edit')
+    @admin_action('designs.edit')
     def handle_update_design(data=None):
         """Update a design from socket payload."""
         if not data or not isinstance(data, dict):
@@ -183,7 +183,7 @@ def register_admin_designs_handlers(socketio, app, db):
                 logger.exception('update_design: failed to reload screens')
 
     @socketio.on('displayhive:admin:cts:delete_design')
-    @require_right('designs.delete')
+    @admin_action('designs.delete')
     def handle_delete_design(data=None):
         """Delete a design by id (socket)."""
         if not data or not isinstance(data, dict):
@@ -257,33 +257,33 @@ def register_admin_designs_handlers(socketio, app, db):
             gradient.stops = json.dumps(data['stops'])
 
     @socketio.on('displayhive:admin:cts:get_gradients')
-    @require_right('designs.page')
+    @admin_action('designs.page')
     def get_gradients(message=None):
         _emit_gradients(room=request.sid)
 
     @socketio.on('displayhive:admin:cts:create_gradient')
-    @require_right('designs.create')
+    @admin_action('designs.create')
     def handle_create_gradient(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         gradient = Gradient(name=data.get('name') or 'Gradient')
         _apply_gradient_fields(gradient, data)
         db.session.add(gradient)
         db.session.commit()
         _emit_gradients()
-        return {'ok': True, 'id': gradient.id}
+        return {'success': True, 'id': gradient.id}
 
     @socketio.on('displayhive:admin:cts:update_gradient')
-    @require_right('designs.edit')
+    @admin_action('designs.edit')
     def handle_update_gradient(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         gradient_id = data.get('id')
         if not gradient_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         gradient = db.session.get(Gradient, int(gradient_id))
         if not gradient:
-            return {'ok': False, 'error': 'Gradient not found'}
+            raise Fail('Gradient not found')
 
         _apply_gradient_fields(gradient, data)
         db.session.add(gradient)
@@ -298,35 +298,35 @@ def register_admin_designs_handlers(socketio, app, db):
         ).scalars().all()
         for design in db.session.execute(db.select(Design).where(Design.id.in_(design_ids))).scalars().all():
             _push_screens_if_active(design)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:delete_gradient')
-    @require_right('designs.delete')
+    @admin_action('designs.delete')
     def handle_delete_gradient(data=None):
         from application.models import DesignGradient
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         gradient_id = data.get('id')
         if not gradient_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         gradient = db.session.get(Gradient, int(gradient_id))
         if not gradient:
-            return {'ok': False, 'error': 'Gradient not found'}
+            raise Fail('Gradient not found')
 
         used_by = db.session.execute(
             db.select(db.func.count()).select_from(DesignGradient).where(DesignGradient.gradient_id == gradient.id)
         ).scalar_one()
         if used_by:
-            return {'ok': False, 'error': f'Gradient is used by {used_by} design(s)'}
+            raise Fail(f'Gradient is used by {used_by} design(s)')
 
         db.session.delete(gradient)
         db.session.commit()
         _emit_gradients()
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:get_design_gradients')
-    @require_right('designs.page')
+    @admin_action('designs.page')
     def get_design_gradients(message=None):
         """Emit the ordered list of Gradient ids applied to one Design."""
         from application.models import DesignGradient
@@ -351,7 +351,7 @@ def register_admin_designs_handlers(socketio, app, db):
         )
 
     @socketio.on('displayhive:admin:cts:set_design_gradients')
-    @require_right('designs.edit')
+    @admin_action('designs.edit')
     def handle_set_design_gradients(data=None):
         """Replace the full, ordered set of Gradients applied to one Design.
 
@@ -361,15 +361,15 @@ def register_admin_designs_handlers(socketio, app, db):
         from application.models import DesignGradient
 
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         design_id = data.get('design_id')
         gradient_ids = data.get('gradient_ids')
         if not design_id or not isinstance(gradient_ids, list):
-            return {'ok': False, 'error': 'Missing design_id or gradient_ids'}
+            raise Fail('Missing design_id or gradient_ids')
 
         design = db.session.get(Design, int(design_id))
         if not design:
-            return {'ok': False, 'error': 'Design not found'}
+            raise Fail('Design not found')
 
         design_id = int(design_id)
         db.session.execute(db.delete(DesignGradient).where(DesignGradient.design_id == design_id))
@@ -378,12 +378,12 @@ def register_admin_designs_handlers(socketio, app, db):
 
         db.session.commit()
         _push_screens_if_active(design)
-        return {'ok': True}
+        return {'success': True}
 
     # --- Global style overrides (applies to every container) --------------
 
     @socketio.on('displayhive:admin:cts:get_design_global_styles')
-    @require_right('designs.page')
+    @admin_action('designs.page')
     def get_design_global_styles(message=None):
         """Emit this Design's stored global style overrides.
 
@@ -409,7 +409,7 @@ def register_admin_designs_handlers(socketio, app, db):
         )
 
     @socketio.on('displayhive:admin:cts:save_design_global_styles')
-    @require_right('designs.edit')
+    @admin_action('designs.edit')
     def save_design_global_styles(data=None):
         """Upsert every (property, value) pair for a Design's global styles.
 
@@ -417,15 +417,15 @@ def register_admin_designs_handlers(socketio, app, db):
         value deletes that property's row (the UI's "not set" option).
         """
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         design_id = data.get('design_id')
         styles = data.get('styles')
         if not design_id or not isinstance(styles, dict):
-            return {'ok': False, 'error': 'Missing design_id or styles'}
+            raise Fail('Missing design_id or styles')
 
         design = db.session.get(Design, int(design_id))
         if not design:
-            return {'ok': False, 'error': 'Design not found'}
+            raise Fail('Design not found')
 
         design_id = int(design_id)
 
@@ -451,4 +451,4 @@ def register_admin_designs_handlers(socketio, app, db):
 
         db.session.commit()
         _push_screens_if_active(design)
-        return {'ok': True}
+        return {'success': True}

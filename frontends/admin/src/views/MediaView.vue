@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
-import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useMediaStore } from '../stores/media'
@@ -20,7 +20,7 @@ import ProgressBar from 'primevue/progressbar'
 
 const toast = useToast()
 const confirm = useConfirm()
-const { emitWithAck } = useSocket()
+const { request } = useAck()
 const mediaStore = useMediaStore()
 const rightsStore = useRightsStore()
 
@@ -249,18 +249,13 @@ const syncingPreviews = ref(false)
 const syncPreviews = async () => {
   syncingPreviews.value = true
   try {
-    const ack = await emitWithAck<{
-      success: boolean
+    const ack = await request<Ack & {
       total?: number
       missing?: number
       regenerated?: number
       skipped_no_source?: number
-      error?: string
-    }>('displayhive:media:cts:sync_previews')
-    if (!ack?.success) {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to sync previews', life: 4000 })
-      return
-    }
+    }>('displayhive:media:cts:sync_previews', undefined, { error: 'Failed to sync previews' })
+    if (!ack) return
     if (!ack.missing) {
       toast.add({ severity: 'success', summary: 'Up to date', detail: `All ${ack.total} images have previews`, life: 3000 })
     } else {
@@ -269,8 +264,6 @@ const syncPreviews = async () => {
       toast.add({ severity: 'success', summary: 'Previews synced', detail: parts.join(' — '), life: 5000 })
       mediaStore.fetch()
     }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Could not reach the server', life: 4000 })
   } finally {
     syncingPreviews.value = false
   }

@@ -13,6 +13,7 @@ import { useScreensStore } from '../stores/screens'
 import { useRightsStore } from '../stores/rights'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useAck } from '../composables/useAck'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -26,6 +27,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Card from 'primevue/card'
 import Popover from 'primevue/popover'
 
+const { request } = useAck()
 const toast = useToast()
 const confirm = useConfirm()
 const devicesStore = useDevicesStore()
@@ -233,9 +235,8 @@ const saveRename = async (keepOpen = false) => {
   if (!renamingDevice.value) return
   isSavingRename.value = true
   try {
-    devicesStore.updateDevice(renamingDevice.value.id, { name: renameForm.value.name })
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Device renamed', life: 3000 })
-    if (!keepOpen) showRenameDialog.value = false
+    const ack = await request('displayhive:devices:cts:update_device', { device_id: renamingDevice.value.id, name: renameForm.value.name }, { success: 'Device renamed', error: 'Rename failed' })
+    if (ack && !keepOpen) showRenameDialog.value = false
   } finally {
     isSavingRename.value = false
   }
@@ -251,9 +252,8 @@ const saveAssign = async () => {
   if (!assigningDevice.value) return
   isSavingAssign.value = true
   try {
-    devicesStore.assignScreen(assigningDevice.value.id, assignForm.value.screen_id ?? null)
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen assignment updated', life: 3000 })
-    showAssignDialog.value = false
+    const ack = await request('displayhive:devices:cts:assign_device_screen', { device_id: assigningDevice.value.id, screen_id: assignForm.value.screen_id ?? null }, { success: 'Screen assignment updated', error: 'Assignment failed' })
+    if (ack) showAssignDialog.value = false
   } finally {
     isSavingAssign.value = false
   }
@@ -263,10 +263,14 @@ const toggleFind = (device: Device) => {
   devicesStore.findDevice(device.id)
 }
 
-const toggleActiveDevice = (device: Device, val: boolean) => {
+const toggleActiveDevice = async (device: Device, val: boolean) => {
+  const previous = device.is_active
   device.is_active = val
-  devicesStore.updateDevice(device.id, { is_active: val })
-  toast.add({ severity: 'success', summary: 'Updated', detail: `Device ${device.name} ${val ? 'activated' : 'deactivated'}`, life: 2000 })
+  const ack = await request('displayhive:devices:cts:update_device', { device_id: device.id, is_active: val }, {
+    success: `Device ${device.name} ${val ? 'activated' : 'deactivated'}`,
+    error: 'Update failed',
+  })
+  if (!ack) device.is_active = previous
 }
 
 const playDevice = (device: Device) => {
@@ -339,11 +343,10 @@ const deleteDevice = (device: Device) => {
     header: 'Confirm Delete',
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
-    accept: () => {
+    accept: async () => {
       // The server pushes the new list to every admin once the device is gone; a fetch() right
       // behind the delete can be answered first and put the deleted row back.
-      devicesStore.deleteDevice(device.id)
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Device deleted', life: 3000 })
+      await request('displayhive:devices:cts:delete_device', { device_id: device.id }, { success: 'Device deleted', error: 'Delete failed' })
     },
   })
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { onRightsReady } from '../composables/useRightsReady'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -33,6 +34,7 @@ const confirm = useConfirm()
 const authStore = useAuthStore()
 const rightsStore = useRightsStore()
 const { on, off, emit, emitWithAck, isConnected } = useSocket()
+const { request } = useAck()
 
 // --- Rights gates ---------------------------------------------------------------
 
@@ -308,16 +310,8 @@ const unlinkIdentity = (identity: AdminUserIdentity) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const result = await emitWithAck<{ success: boolean; error?: string }>(
-        'displayhive:admin:users:cts:unlink_identity',
-        { id: identity.id },
-      )
-      if (result.success) {
-        toast.add({ severity: 'success', summary: 'Unlinked', detail: 'SSO login unlinked', life: 3000 })
-        loadUsers()
-      } else {
-        toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Unlink failed', life: 5000 })
-      }
+      const ack = await request('displayhive:admin:users:cts:unlink_identity', { id: identity.id }, { success: 'SSO login unlinked', error: 'Unlink failed' })
+      if (ack) loadUsers()
     },
   })
 }
@@ -348,17 +342,14 @@ const mergeAccount = async () => {
   if (!mergeSource.value || !mergeTargetId.value) return
   isMerging.value = true
   try {
-    const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:users:cts:merge_user', {
+    const ack = await request('displayhive:admin:users:cts:merge_user', {
       source_id: mergeSource.value.id,
       target_id: mergeTargetId.value,
-    })
-    if (result.success) {
-      toast.add({ severity: 'success', summary: 'Merged', detail: 'SSO login moved to the selected user', life: 3000 })
+    }, { success: 'SSO login moved to the selected user', error: 'Merge failed' })
+    if (ack) {
       showMergeDialog.value = false
       loadUsers()
       loadRights()
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Merge failed', life: 5000 })
     }
   } finally {
     isMerging.value = false
@@ -407,19 +398,11 @@ const saveAccount = async () => {
       }
     }
 
-    const result = await emitWithAck<{ success: boolean; error?: string }>(event, payload)
-    if (result.success) {
-      toast.add({
-        severity: 'success',
-        summary: 'Success',
-        detail: isNewAccount.value ? 'User created' : 'User updated',
-        life: 3000,
-      })
+    const ack = await request(event, payload, { success: isNewAccount.value ? 'User created' : 'User updated', error: 'Save failed' })
+    if (ack) {
       showAccountDialog.value = false
       loadUsers()
       loadRights()
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Save failed', life: 5000 })
     }
   } finally {
     isSavingAccount.value = false
@@ -429,21 +412,12 @@ const saveAccount = async () => {
 const toggleActiveUser = async (user: AdminUser, val: boolean) => {
   const previous = user.is_active
   user.is_active = val
-  const result = await emitWithAck<{ success: boolean; error?: string }>(
+  const ack = await request(
     'displayhive:admin:users:cts:set_active',
     { id: user.id, is_active: val },
+    { success: `User ${user.username} ${val ? 'activated' : 'deactivated'}`, error: 'Update failed' },
   )
-  if (result.success) {
-    toast.add({
-      severity: 'success',
-      summary: 'Updated',
-      detail: `User ${user.username} ${val ? 'activated' : 'deactivated'}`,
-      life: 2000,
-    })
-  } else {
-    user.is_active = previous
-    toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Update failed', life: 5000 })
-  }
+  if (!ack) user.is_active = previous
 }
 
 const deleteAccount = (user: AdminUser) => {
@@ -453,16 +427,10 @@ const deleteAccount = (user: AdminUser) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const result = await emitWithAck<{ success: boolean; error?: string }>(
-        'displayhive:admin:users:cts:delete_user',
-        { id: user.id },
-      )
-      if (result.success) {
-        toast.add({ severity: 'success', summary: 'Deleted', detail: 'User deleted', life: 3000 })
+      const ack = await request('displayhive:admin:users:cts:delete_user', { id: user.id }, { success: 'User deleted', error: 'Delete failed' })
+      if (ack) {
         loadUsers()
         loadRights()
-      } else {
-        toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Delete failed', life: 5000 })
       }
     },
   })
@@ -502,15 +470,12 @@ const toggleLogins = async (event: Event, user: AdminUser) => {
   loginsForUser.value = []
   loginsLoading.value = true
   try {
-    const result = await emitWithAck<{ success: boolean; logins?: LoginEntry[]; error?: string }>(
+    const ack = await request<Ack & { logins?: LoginEntry[] }>(
       'displayhive:admin:users:cts:get_user_logins',
       { id: user.id },
+      { error: 'Failed to load login history' },
     )
-    if (result.success) {
-      loginsForUser.value = result.logins || []
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Failed to load login history', life: 5000 })
-    }
+    if (ack) loginsForUser.value = ack.logins || []
   } finally {
     loginsLoading.value = false
   }
@@ -554,13 +519,10 @@ const saveGroup = async () => {
       parent_group_id: groupForm.value.parent_group_id,
     }
     if (!isGroupNew.value) payload.id = groupForm.value.id
-    const result = await emitWithAck<{ success: boolean; error?: string }>(event, payload)
-    if (result.success) {
-      toast.add({ severity: 'success', summary: 'Success', detail: isGroupNew.value ? 'Group created' : 'Group updated', life: 3000 })
+    const ack = await request(event, payload, { success: isGroupNew.value ? 'Group created' : 'Group updated', error: 'Save failed' })
+    if (ack) {
       showGroupDialog.value = false
       await loadRights()
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Save failed', life: 5000 })
     }
   } finally {
     isSavingGroup.value = false
@@ -574,13 +536,8 @@ const deleteGroup = (group: RightsGroup) => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:delete_group', { id: group.id })
-      if (result.success) {
-        toast.add({ severity: 'success', summary: 'Deleted', detail: 'Group deleted', life: 3000 })
-        await loadRights()
-      } else {
-        toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Delete failed', life: 5000 })
-      }
+      const ack = await request('displayhive:admin:rights:cts:delete_group', { id: group.id }, { success: 'Group deleted', error: 'Delete failed' })
+      if (ack) await loadRights()
     },
   })
 }
@@ -611,15 +568,12 @@ const applyGroupRightLocally = (rightKey: string, allow: boolean) => {
 const toggleGroupRight = async (rightKey: string, checked: boolean) => {
   if (!editingGroup.value) return
   const group = editingGroup.value
-  const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:set_group_right', {
+  const ack = await request('displayhive:admin:rights:cts:set_group_right', {
     group_id: group.id,
     right_key: rightKey,
     allow: checked,
-  })
-  if (!result.success) {
-    toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Update failed', life: 5000 })
-    return
-  }
+  }, { error: 'Update failed' })
+  if (!ack) return
   applyGroupRightLocally(rightKey, checked)
 
   // Unsetting a category's page right also clears every other right in that
@@ -641,15 +595,12 @@ const bulkSetGroupRights = async (rightKeys: string[], allow: boolean) => {
   // A single batched call, not N parallel set_group_right calls: this app runs
   // single-worker with eventlet, and N concurrent handler invocations sharing
   // one db.session can interleave and silently drop some of the N rights.
-  const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:set_group_rights_bulk', {
+  const ack = await request('displayhive:admin:rights:cts:set_group_rights_bulk', {
     group_id: group.id,
     right_keys: rightKeys,
     allow,
-  })
-  if (!result.success) {
-    toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Bulk update failed', life: 5000 })
-    return
-  }
+  }, { error: 'Bulk update failed' })
+  if (!ack) return
   for (const key of rightKeys) applyGroupRightLocally(key, allow)
 }
 
@@ -678,17 +629,14 @@ const saveUserGroups = async () => {
   if (!editingUser.value) return
   isSavingUserGroups.value = true
   try {
-    const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:set_user_groups', {
+    const ack = await request('displayhive:admin:rights:cts:set_user_groups', {
       user_id: editingUser.value.id,
       group_ids: editingUserGroupIds.value,
-    })
-    if (result.success) {
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Group membership updated', life: 3000 })
+    }, { success: 'Group membership updated', error: 'Update failed' })
+    if (ack) {
       await loadRights()
       const refreshed = userRightsById.value.get(editingUser.value.id)
       if (refreshed) editingUser.value = refreshed
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Update failed', life: 5000 })
     }
   } finally {
     isSavingUserGroups.value = false
@@ -714,15 +662,12 @@ const refetchUserRights = async () => {
 
 const setUserRight = async (rightKey: string, value: RightOverrideValue) => {
   if (!editingUser.value) return
-  const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:set_user_right', {
+  const ack = await request('displayhive:admin:rights:cts:set_user_right', {
     user_id: editingUser.value.id,
     right_key: rightKey,
     value,
-  })
-  if (!result.success) {
-    toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Update failed', life: 5000 })
-    return
-  }
+  }, { error: 'Update failed' })
+  if (!ack) return
   await refetchUserRights()
 
   // If this was a category's page right and it no longer resolves to
@@ -744,14 +689,11 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
   const userId = editingUser.value.id
   // A single batched call, not N parallel set_user_right calls — see the
   // comment on bulkSetGroupRights for why.
-  const result = await emitWithAck<{ success: boolean; error?: string }>('displayhive:admin:rights:cts:set_user_rights_bulk', {
+  await request('displayhive:admin:rights:cts:set_user_rights_bulk', {
     user_id: userId,
     right_keys: rightKeys,
     value,
-  })
-  if (!result.success) {
-    toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Bulk update failed', life: 5000 })
-  }
+  }, { error: 'Bulk update failed' })
   await refetchUserRights()
 }
 </script>

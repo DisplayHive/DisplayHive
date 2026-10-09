@@ -15,7 +15,8 @@ def register_admin_contenttypes_handlers(socketio, app, db):
     """
     from application.admin.contenttypes.helper import emit_contenttypes_update
     from application.admin.content.helper import rerender_content_element_for_contenttype
-    from application.socketio_handlers.auth import require_right, admin_handler, current_admin_user
+    from application.socketio_handlers.auth import current_admin_user
+    from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.permissions import has_right
     from application.utils import push_content_list_to_all_screens
     from application.models import Contenttype, TagConfig
@@ -103,7 +104,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
                 db.session.delete(tc)
 
     @socketio.on('displayhive:admin:cts:get_contenttypes')
-    @admin_handler
+    @admin_action()
     def get_admin_contenttypes(message=None):
         # Shared by the Content Types page (contenttypes.page) and the Content
         # editor, which needs the full contenttype list to create/edit content
@@ -137,7 +138,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         }
 
     @socketio.on('displayhive:admin:cts:get_contenttype')
-    @admin_handler
+    @admin_action()
     def get_contenttype(message=None):
         # Same either-right rule as get_contenttypes above.
         user = current_admin_user()
@@ -155,7 +156,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         socketio.emit('displayhive:admin:stc:contenttype_detail', payload, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:get_active_design_colors')
-    @admin_handler
+    @admin_action()
     def get_active_design_colors(message=None):
         # The active Design's color palette ({id, name, hex}), so the
         # contenttype editor's preset panel can offer the same "@default:<id>"
@@ -171,16 +172,16 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         socketio.emit('displayhive:admin:stc:active_design_colors', {'colors': colors}, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:update_contenttype')
-    @require_right('contenttypes.edit')
+    @admin_action('contenttypes.edit')
     def handle_update_contenttype(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         ct_id = data.get('id')
         if not ct_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         ct = db.session.get(Contenttype, int(ct_id))
         if not ct:
-            return {'ok': False, 'error': 'Contenttype not found'}
+            raise Fail('Contenttype not found')
 
         ct.name = data.get('name', ct.name)
         ct.description = data.get('description', ct.description)
@@ -205,19 +206,19 @@ def register_admin_contenttypes_handlers(socketio, app, db):
         except Exception:
             logger.exception('update_contenttype: failed to re-render content')
 
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:cts:create_contenttype')
-    @require_right('contenttypes.create')
+    @admin_action('contenttypes.create')
     def handle_create_contenttype(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         name = data.get('name')
         if not name:
-            return {'ok': False, 'error': 'Name is required'}
+            raise Fail('Name is required')
         layout_id = data.get('layout_id')
         if not layout_id:
-            return {'ok': False, 'error': 'Layout is required'}
+            raise Fail('Layout is required')
 
         ct = Contenttype(
             name=name,
@@ -231,28 +232,28 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
         db.session.commit()
         _emit_contenttypes()
-        return {'ok': True, 'id': ct.id}
+        return {'success': True, 'id': ct.id}
 
     @socketio.on('displayhive:admin:cts:delete_contenttype')
-    @require_right('contenttypes.delete')
+    @admin_action('contenttypes.delete')
     def handle_delete_contenttype(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         ct_id = data.get('id')
         if not ct_id:
-            return {'ok': False, 'error': 'Missing id'}
+            raise Fail('Missing id')
         ct = db.session.get(Contenttype, int(ct_id))
         if not ct:
-            return {'ok': False, 'error': 'Content type not found'}
+            raise Fail('Content type not found')
 
         from application.models import ContentElement
         used_by = db.session.execute(
             db.select(db.func.count()).select_from(ContentElement).where(ContentElement.contenttype_id == ct.id)
         ).scalar_one()
         if used_by:
-            return {'ok': False, 'error': f'Content type is used by {used_by} content item(s)'}
+            raise Fail(f'Content type is used by {used_by} content item(s)')
 
         db.session.delete(ct)
         db.session.commit()
         _emit_contenttypes()
-        return {'ok': True}
+        return {'success': True}

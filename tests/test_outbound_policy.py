@@ -96,12 +96,12 @@ def test_the_environment_switch_is_reported_as_forcing_it(superadmin, monkeypatc
 
 def test_a_pretalx_address_in_a_private_network_is_not_saved(superadmin, db_session):
     result = _call(superadmin, ADD_URL, {'name': 'Internal', 'url': 'http://127.0.0.1:9/api/events/x/'})
-    assert result['ok'] is False and '127.0.0.1' in result['error'] and 'private' in result['error']
+    assert result['success'] is False and '127.0.0.1' in result['error'] and 'private' in result['error']
     assert db_session.query(PretalxApiUrl).count() == 0
 
 
 def test_once_allowed_the_address_is_saved_even_if_nothing_answers_yet(superadmin, db_session):
     _call(superadmin, SET, {'allow_private': True})
     result = _call(superadmin, ADD_URL, {'name': 'Internal', 'url': 'http://127.0.0.1:9/api/events/x/'})   # port 9: nobody listens
-    assert result['ok'] is True and result['is_valid'] is False
+    assert result['success'] is True and result['is_valid'] is False
     assert db_session.query(PretalxApiUrl).count() == 1

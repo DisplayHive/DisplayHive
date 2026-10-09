@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 def register_admin_rights_handlers(socketio, app, db):
     """Register socket handlers for the rights system."""
     from application.socketio_handlers.auth import admin_handler, current_admin_user
+    from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.models import Group, RightDefinition, GroupRight, UserGroup, UserRight, AdminUser
     from application.permissions import (
         RIGHTS,
@@ -26,24 +27,8 @@ def register_admin_rights_handlers(socketio, app, db):
         PASSWORD_SUPERADMIN_ERROR,
     )
 
-    def _gated_handler(right_key):
-        """Like admin_handler, but also requires *right_key*; returns an explicit
-        error dict (rather than admin_handler's silent None) so the admin UI can
-        surface why an action was refused."""
-        from functools import wraps
-
-        def decorator(fn):
-            @admin_handler
-            @wraps(fn)
-            def wrapper(*args, **kwargs):
-                if not has_right(db, current_admin_user(), right_key):
-                    return {'success': False, 'error': 'Permission denied'}
-                return fn(*args, **kwargs)
-            return wrapper
-        return decorator
-
-    _view_handler = _gated_handler('rights.page')
-    _manage_handler = _gated_handler('rights.manage')
+    _view_handler = admin_action('rights.page')
+    _manage_handler = admin_action('rights.manage')
 
     def _right_row(right_key):
         return db.session.execute(
@@ -109,12 +94,12 @@ def register_admin_rights_handlers(socketio, app, db):
     @socketio.on('displayhive:admin:rights:cts:get_groups')
     @_view_handler
     def handle_get_groups(data=None):
-        return {'success': True, 'groups': _build_groups_payload()}
+        return ok(groups=_build_groups_payload())
 
     @socketio.on('displayhive:admin:rights:cts:get_users_rights')
     @_view_handler
     def handle_get_users_rights(data=None):
-        return {'success': True, 'users': _build_users_rights_payload()}
+        return ok(users=_build_users_rights_payload())
 
     @socketio.on('displayhive:admin:rights:cts:create_group')
     @_manage_handler
@@ -123,16 +108,16 @@ def register_admin_rights_handlers(socketio, app, db):
         name = str(data.get('name', '')).strip()
         parent_group_id = data.get('parent_group_id')
         if not name:
-            return {'success': False, 'error': 'Group name is required'}
+            raise Fail('Group name is required')
         existing = db.session.execute(db.select(Group).where(Group.name == name)).scalar_one_or_none()
         if existing:
-            return {'success': False, 'error': 'A group with that name already exists'}
+            raise Fail('A group with that name already exists')
         if parent_group_id is not None and not db.session.get(Group, parent_group_id):
-            return {'success': False, 'error': 'Parent group not found'}
+            raise Fail('Parent group not found')
         group = Group(name=name, parent_group_id=parent_group_id)
         db.session.add(group)
         db.session.commit()
-        return {'success': True, 'id': group.id}
+        return ok(id=group.id)
 
     @socketio.on('displayhive:admin:rights:cts:update_group')
     @_manage_handler
@@ -142,34 +127,33 @@ def register_admin_rights_handlers(socketio, app, db):
         group_id = data.get('id')
         group = db.session.get(Group, group_id) if group_id else None
         if not group:
-            return {'success': False, 'error': 'Group not found'}
+            raise Fail('Group not found')
 
         if 'name' in data:
             new_name = str(data.get('name', '')).strip()
             if not new_name:
-                return {'success': False, 'error': 'Group name is required'}
+                raise Fail('Group name is required')
             if new_name != group.name:
                 existing = db.session.execute(db.select(Group).where(Group.name == new_name)).scalar_one_or_none()
                 if existing:
-                    return {'success': False, 'error': 'A group with that name already exists'}
+                    raise Fail('A group with that name already exists')
                 group.name = new_name
 
         if 'parent_group_id' in data:
             new_parent_id = data.get('parent_group_id')
             if new_parent_id is not None and not db.session.get(Group, new_parent_id):
-                return {'success': False, 'error': 'Parent group not found'}
+                raise Fail('Parent group not found')
             if would_create_cycle(db, group.id, new_parent_id):
-                return {'success': False, 'error': 'That would create a group cycle'}
+                raise Fail('That would create a group cycle')
             # Moving a group out from under Superadmin can strip its members
             # of Superadmin, so this needs the break-glass check too.
             had_break_glass = password_superadmin_exists(db)
             group.parent_group_id = new_parent_id
             if had_break_glass and not password_superadmin_exists(db):
-                db.session.rollback()
-                return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
+                raise Fail(PASSWORD_SUPERADMIN_ERROR)
 
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:delete_group')
     @_manage_handler
@@ -177,21 +161,20 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         group = db.session.get(Group, data.get('id'))
         if not group:
-            return {'success': False, 'error': 'Group not found'}
+            raise Fail('Group not found')
         if group.is_superadmin:
-            return {'success': False, 'error': 'Cannot delete the Superadmin group'}
+            raise Fail('Cannot delete the Superadmin group')
         has_children = db.session.execute(
             db.select(Group).where(Group.parent_group_id == group.id)
         ).first() is not None
         if has_children:
-            return {'success': False, 'error': 'Reassign or delete subgroups first'}
+            raise Fail('Reassign or delete subgroups first')
         had_break_glass = password_superadmin_exists(db)
         db.session.delete(group)
         if had_break_glass and not password_superadmin_exists(db):
-            db.session.rollback()
-            return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
+            raise Fail(PASSWORD_SUPERADMIN_ERROR)
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:set_group_right')
     @_manage_handler
@@ -200,12 +183,12 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         group = db.session.get(Group, data.get('group_id'))
         if not group:
-            return {'success': False, 'error': 'Group not found'}
+            raise Fail('Group not found')
         if group.is_superadmin:
-            return {'success': False, 'error': 'The Superadmin group implicitly has every right'}
+            raise Fail('The Superadmin group implicitly has every right')
         right = _right_row(data.get('right_key'))
         if not right:
-            return {'success': False, 'error': 'Unknown right'}
+            raise Fail('Unknown right')
 
         existing = db.session.execute(
             db.select(GroupRight).where(GroupRight.group_id == group.id, GroupRight.right_id == right.id)
@@ -216,7 +199,7 @@ def register_admin_rights_handlers(socketio, app, db):
         elif not allow and existing:
             db.session.delete(existing)
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:set_group_rights_bulk')
     @_manage_handler
@@ -234,9 +217,9 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         group = db.session.get(Group, data.get('group_id'))
         if not group:
-            return {'success': False, 'error': 'Group not found'}
+            raise Fail('Group not found')
         if group.is_superadmin:
-            return {'success': False, 'error': 'The Superadmin group implicitly has every right'}
+            raise Fail('The Superadmin group implicitly has every right')
         right_keys = data.get('right_keys') or []
         allow = bool(data.get('allow'))
 
@@ -259,7 +242,7 @@ def register_admin_rights_handlers(socketio, app, db):
                 db.session.delete(gr)
 
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:set_user_rights_bulk')
     @_manage_handler
@@ -273,11 +256,11 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         user = db.session.get(AdminUser, data.get('user_id'))
         if not user:
-            return {'success': False, 'error': 'User not found'}
+            raise Fail('User not found')
         right_keys = data.get('right_keys') or []
         value = data.get('value')
         if value not in ('allow', 'deny', 'inherit'):
-            return {'success': False, 'error': 'value must be allow, deny, or inherit'}
+            raise Fail('value must be allow, deny, or inherit')
 
         rights = db.session.execute(
             db.select(RightDefinition).where(RightDefinition.key.in_(right_keys))
@@ -301,7 +284,7 @@ def register_admin_rights_handlers(socketio, app, db):
                     db.session.add(UserRight(user_id=user.id, right_id=right.id, value=value))
 
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:set_user_groups')
     @_manage_handler
@@ -310,7 +293,7 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         user = db.session.get(AdminUser, data.get('user_id'))
         if not user:
-            return {'success': False, 'error': 'User not found'}
+            raise Fail('User not found')
         group_ids = set(data.get('group_ids') or [])
         valid_ids = set(db.session.execute(db.select(Group.id).where(Group.id.in_(group_ids))).scalars().all())
 
@@ -328,7 +311,7 @@ def register_admin_rights_handlers(socketio, app, db):
                 db.select(db.func.count()).select_from(UserGroup).where(UserGroup.group_id == superadmin_group.id)
             ).scalar()
             if remaining <= 1:
-                return {'success': False, 'error': 'Cannot remove the last member of the Superadmin group'}
+                raise Fail('Cannot remove the last member of the Superadmin group')
 
         had_break_glass = password_superadmin_exists(db)
         for ug in current:
@@ -337,10 +320,9 @@ def register_admin_rights_handlers(socketio, app, db):
         for gid in valid_ids - current_ids:
             db.session.add(UserGroup(user_id=user.id, group_id=gid))
         if had_break_glass and not password_superadmin_exists(db):
-            db.session.rollback()
-            return {'success': False, 'error': PASSWORD_SUPERADMIN_ERROR}
+            raise Fail(PASSWORD_SUPERADMIN_ERROR)
         db.session.commit()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:rights:cts:set_user_right')
     @_manage_handler
@@ -349,13 +331,13 @@ def register_admin_rights_handlers(socketio, app, db):
         data = data or {}
         user = db.session.get(AdminUser, data.get('user_id'))
         if not user:
-            return {'success': False, 'error': 'User not found'}
+            raise Fail('User not found')
         right = _right_row(data.get('right_key'))
         if not right:
-            return {'success': False, 'error': 'Unknown right'}
+            raise Fail('Unknown right')
         value = data.get('value')
         if value not in ('allow', 'deny', 'inherit'):
-            return {'success': False, 'error': 'value must be allow, deny, or inherit'}
+            raise Fail('value must be allow, deny, or inherit')
 
         existing = db.session.execute(
             db.select(UserRight).where(UserRight.user_id == user.id, UserRight.right_id == right.id)
@@ -368,4 +350,4 @@ def register_admin_rights_handlers(socketio, app, db):
         else:
             db.session.add(UserRight(user_id=user.id, right_id=right.id, value=value))
         db.session.commit()
-        return {'success': True}
+        return ok()

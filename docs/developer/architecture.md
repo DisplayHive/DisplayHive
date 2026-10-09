@@ -174,6 +174,40 @@ admin panel features:
   payload to affected screens. See
   [Real-time content push](realtime-push.md) for the full trace.
 
+### Writing an admin handler
+
+Admin handlers (`application/admin/*/sockethandlers.py`) answer with an acknowledgement
+`{'success': True, …}` or `{'success': False, 'error': '…'}`. Use the helpers in
+`application/socketio_handlers/actions.py` instead of repeating the checks:
+
+```python
+@socketio.on('displayhive:admin:users:cts:delete_user')
+@admin_action('users.delete')            # any of the listed rights; none = any valid admin
+def handle_delete_user(data):
+    user = get_or_fail(db, AdminUser, fields(data, 'id')[0], 'User')   # 'Missing id' / 'User not found'
+    if total_users() <= 1:
+        raise Fail('Cannot delete the last remaining admin user')      # rolls back, answers the error
+    db.session.delete(user)
+    db.session.commit()
+    return ok()
+```
+
+- A socket that is not a valid admin gets no answer; an admin without the right gets
+  `Permission denied`; an unexpected exception is logged, rolled back and answered with
+  `Internal error` (never an empty answer).
+- Send replies to the requester with `room=request.sid` — an emit without a room reaches **every**
+  connected client, screens included.
+- Don't call `fetch()` on the page right after a change the handler already broadcasts (see the
+  styleguide's page-actions section).
+- The page side is `useAck()` (`frontends/admin/src/composables/useAck.ts`): 
+  `const ack = await request('displayhive:…', payload, { success: 'Saved', error: 'Save failed' })` sends the
+  event, shows the success or error toast, and returns the answer — or `null` when it failed (the person
+  has already been told). Don't write `try { emitWithAck … } catch { toast }` blocks by hand; pass
+  `onError` when the problem belongs inside a dialog instead of a toast.
+- Every handler answers `{success, …}`; the old `{ok, …}` format is gone.
+- Older handlers still use `@require_right` (silent denial, `None` on error); convert them when
+  you touch them.
+
 ## Frontends
 
 **Admin panel** (`frontends/admin/src`) — Vue 3 SPA:

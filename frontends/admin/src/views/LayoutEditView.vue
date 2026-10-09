@@ -4,6 +4,7 @@ import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
@@ -20,7 +21,8 @@ const goBack = () => router.push({ name: 'layouts' })
 
 const toast = useToast()
 const confirm = useConfirm()
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canEdit = computed(() => rightsStore.can('layouts.edit'))
@@ -66,23 +68,18 @@ const initFromRoute = () => {
 
 const saveLayout = async () => {
   if (isNewLayout.value) {
-    const ack = await emitWithAck<{ ok: boolean; id?: number; error?: string }>(
+    const ack = await request<Ack & { id?: number }>(
       'displayhive:admin:cts:create_layout',
       { name: layoutForm.value.name, description: layoutForm.value.description },
+      { success: 'Layout created — now add its containers below', error: 'Save failed' },
     )
-    if (ack?.ok && ack.id) {
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Layout created — now add its containers below', life: 3000 })
-      router.replace({ name: 'layout-edit', params: { id: ack.id } })
-    } else {
-      toast.add({ severity: 'error', summary: 'Save failed', detail: ack?.error || 'Unknown error', life: 4000 })
-    }
+    if (ack?.id) router.replace({ name: 'layout-edit', params: { id: ack.id } })
     return
   }
   if (!(await flushPendingPositions())) return
-  emit('displayhive:admin:cts:update_layout', {
+  await request('displayhive:admin:cts:update_layout', {
     id: layoutForm.value.id, name: layoutForm.value.name, description: layoutForm.value.description,
-  })
-  toast.add({ severity: 'success', summary: 'Success', detail: 'Layout updated', life: 3000 })
+  }, { success: 'Layout updated', error: 'Save failed' })
 }
 
 const deleteEditingLayout = () => {
@@ -98,13 +95,8 @@ const deleteEditingLayout = () => {
     icon: 'pi pi-exclamation-triangle',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const ack = await emitWithAck<{ ok: boolean; error?: string }>('displayhive:admin:cts:delete_layout', { id: l.id })
-      if (ack?.ok) {
-        toast.add({ severity: 'success', summary: 'Success', detail: 'Layout deleted', life: 3000 })
-        goBack()
-      } else {
-        toast.add({ severity: 'error', summary: 'Delete failed', detail: ack?.error || 'Unknown error', life: 4000 })
-      }
+      const ack = await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
+      if (ack) goBack()
     },
   })
 }

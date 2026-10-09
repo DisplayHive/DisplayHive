@@ -51,7 +51,8 @@ def broadcast_admin_settings(socketio, db, sid=None):
 
 def register_admin_settings_handlers(socketio, app, db):
     """Register socket handlers for the admin Settings page."""
-    from application.socketio_handlers.auth import require_right
+    from application.socketio_handlers.auth import require_right, fields
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
 
     def _emit_settings(sid=None):
         broadcast_admin_settings(socketio, db, sid)
@@ -71,7 +72,7 @@ def register_admin_settings_handlers(socketio, app, db):
         from application import net
         row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == net.SETTING_KEY)).scalar_one_or_none()
         stored = bool(row and (row.value or '').strip().lower() in ('1', 'true', 'yes', 'on'))
-        return {'success': True, 'allow_private': stored or net.env_allows_private(), 'forced_by_env': net.env_allows_private()}
+        return ok(allow_private=stored or net.env_allows_private(), forced_by_env=net.env_allows_private())
 
     @socketio.on('displayhive:admin:cts:get_outbound_policy')
     @require_right('settings.page')
@@ -79,15 +80,16 @@ def register_admin_settings_handlers(socketio, app, db):
         return _outbound_state()
 
     @socketio.on('displayhive:admin:cts:set_outbound_policy')
-    @require_right('settings.edit')
+    @admin_action('settings.edit')
     def set_outbound_policy(data=None):
         from application.models import SystemSetting
         from application import net
         from application.permissions import is_superadmin
         from application.socketio_handlers.auth import current_admin_user
         if not is_superadmin(db, current_admin_user()):
-            return {'success': False, 'error': 'Only a Superadmin can change this.'}
-        value = 'true' if bool((data or {}).get('allow_private')) else 'false'
+            raise Fail('Only a Superadmin can change this.')
+        (allow_private,) = fields(data, 'allow_private')
+        value = 'true' if bool(allow_private) else 'false'
         row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == net.SETTING_KEY)).scalar_one_or_none()
         if row:
             row.value = value
@@ -100,23 +102,15 @@ def register_admin_settings_handlers(socketio, app, db):
         return _outbound_state()
 
     @socketio.on('displayhive:admin:cts:set_default_design')
-    @require_right('settings.edit')
+    @admin_action('settings.edit')
     def handle_set_default_design(data):
         sid = getattr(request, 'sid', None)
-        design_id = data.get('id') if data else None
-        if design_id is None:
-            return
+        (design_id,) = fields(data, 'id')
 
         from application.models import Design
-        all_designs = db.session.execute(db.select(Design)).scalars().all()
-        for d in all_designs:
+        new_default = get_or_fail(db, Design, design_id, 'Design')
+        for d in db.session.execute(db.select(Design)).scalars().all():
             d.isDefault = False
-
-        new_default = db.session.get(Design, design_id)
-        if not new_default:
-            logger.warning('Design with id %s not found', design_id)
-            return
-
         new_default.isDefault = True
         db.session.commit()
 
@@ -127,15 +121,16 @@ def register_admin_settings_handlers(socketio, app, db):
             logger.exception('set_default_design: failed to push content to screens')
 
         _emit_settings(sid)
+        return ok()
 
     @socketio.on('displayhive:admin:cts:set_system_settings')
-    @require_right('settings.edit')
+    @admin_action('settings.edit')
     def handle_set_system_settings(data):
         """Upsert one or more system settings. data = {settings: {key: value, ...}}"""
         sid = getattr(request, 'sid', None)
-        settings = data.get('settings', {}) if data else {}
-        if not settings:
-            return {'success': False, 'error': 'No settings provided'}
+        (settings,) = fields(data, 'settings')
+        if not settings or not isinstance(settings, dict):
+            raise Fail('No settings provided')
 
         from application.models import SystemSetting
         rejected = []
@@ -156,5 +151,6 @@ def register_admin_settings_handlers(socketio, app, db):
         _emit_settings(sid)
 
         if rejected:
-            return {'success': False, 'error': f'Unknown setting(s): {", ".join(rejected)}'}
-        return {'success': True}
+            # The known keys above are already saved; only the unknown ones are refused.
+            raise Fail(f'Unknown setting(s): {", ".join(rejected)}')
+        return ok()

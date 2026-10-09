@@ -14,7 +14,8 @@ def register_device_management_handlers(socketio, app, db):
     from application.admin.devices.helper import emit_devices_update
     from flask import request
     from datetime import datetime, timezone
-    from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
+    from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user, fields
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.permissions import has_right
 
     def _assign_screen_to_device(device, screen):
@@ -144,7 +145,7 @@ def register_device_management_handlers(socketio, app, db):
                 pass
 
     @socketio.on('displayhive:devices:cts:update_device')
-    @admin_handler
+    @admin_action()
     def handle_update_device(data):
         """Update device information.
 
@@ -154,22 +155,13 @@ def register_device_management_handlers(socketio, app, db):
         """
         from application.models import Device
 
-        device_id = data.get('device_id')
+        device_id, name = fields(data, 'device_id', 'name')
         user = current_admin_user()
-        name = data.get('name')
         if name is not None and not has_right(db, user, 'device.rename'):
             name = None
         allow_enable_change = has_right(db, user, 'device.enable')
 
-        if not device_id:
-            return {'success': False, 'error': 'No device_id provided'}
-
-        device = db.session.execute(
-            db.select(Device).where(Device.id == device_id)
-        ).scalar_one_or_none()
-
-        if not device:
-            return {'success': False, 'error': 'Device not found'}
+        device = get_or_fail(db, Device, device_id, 'Device')
 
         was_active = bool(getattr(device, 'is_active', True))
         if name is not None:
@@ -238,23 +230,19 @@ def register_device_management_handlers(socketio, app, db):
 
         emit_devices_update(socketio, db, room='admins')
         _emit_admin_screen_safe()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:devices:cts:assign_device_screen')
-    @require_right('device.assign')
+    @admin_action('device.assign')
     def handle_assign_device_screen(data):
         """Assign or unassign a screen from a device"""
         from application.models import Device, Screen
         from sqlalchemy.orm import joinedload
 
-        device_id = data.get('device_id')
-        screen_id = data.get('screen_id')
-        screen_name = data.get('screen_name')
+        device_id, screen_id, screen_name = fields(data, 'device_id', 'screen_id', 'screen_name')
         screen_name = screen_name.strip() if isinstance(screen_name, str) else screen_name
 
-        device = db.session.get(Device, device_id)
-        if not device:
-            return {'success': False, 'error': 'Device not found'}
+        device = get_or_fail(db, Device, device_id, 'Device')
 
         target_screen = None
         if screen_id is not None:
@@ -262,17 +250,17 @@ def register_device_management_handlers(socketio, app, db):
                 target_screen = db.session.execute(
                     db.select(Screen).options(joinedload(Screen.screengroups)).where(Screen.id == int(screen_id))
                 ).unique().scalar_one_or_none()
-                if not target_screen:
-                    return {'success': False, 'error': 'Screen not found'}
             except (ValueError, TypeError):
-                return {'success': False, 'error': 'Invalid screen_id'}
+                raise Fail('Invalid screen_id')
+            if not target_screen:
+                raise Fail('Screen not found')
         elif screen_name:
             target_screen = db.session.execute(
                 db.select(Screen).options(joinedload(Screen.screengroups))
                 .where(Screen.name == screen_name).order_by(Screen.lastseen.desc())
             ).unique().scalars().first()
             if not target_screen:
-                return {'success': False, 'error': 'Screen not found'}
+                raise Fail('Screen not found')
 
         _assign_screen_to_device(device, target_screen)
         db.session.commit()
@@ -293,10 +281,10 @@ def register_device_management_handlers(socketio, app, db):
         emit_devices_update(socketio, db, room='admins')
         _emit_admin_screen_safe()
 
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:devices:cts:find_device')
-    @admin_handler
+    @admin_action()
     def handle_find_device(data):
         """Toggle the 'find' flag on a device and notify the device via upd_deviceconfig.
 
@@ -304,9 +292,7 @@ def register_device_management_handlers(socketio, app, db):
         If 'active' is omitted, the flag will be toggled.
         """
         from application.models import Device, Screen
-        device_id = data.get('device_id') if isinstance(data, dict) else None
-        devicekey = data.get('devicekey') if isinstance(data, dict) else None
-        active = data.get('active') if isinstance(data, dict) else None
+        device_id, devicekey, active = fields(data, 'device_id', 'devicekey', 'active')
 
         device = None
         if device_id:
@@ -315,7 +301,7 @@ def register_device_management_handlers(socketio, app, db):
             device = db.session.execute(db.select(Device).where(Device.devicekey == devicekey)).scalar_one_or_none()
 
         if not device:
-            return {'success': False, 'error': 'Device not found'}
+            raise Fail('Device not found')
 
         new_state = not bool(device.find) if active is None else bool(active)
         device.find = new_state
@@ -345,10 +331,10 @@ def register_device_management_handlers(socketio, app, db):
         except Exception:
             logger.exception('find_device: error firing find alert')
 
-        return {'success': True, 'find': new_state}
+        return ok(find=new_state)
 
     @socketio.on("displayhive:devices:cts:delete_device")
-    @require_right('device.delete')
+    @admin_action('device.delete')
     def admin_handle_delete_device(data):
         """Handle admin-initiated device deletion.
 
@@ -356,9 +342,9 @@ def register_device_management_handlers(socketio, app, db):
         """
         from application.models import Device
 
-        device_id = data.get("device_id") if isinstance(data, dict) else None
+        (device_id,) = fields(data, "device_id")
         if not device_id:
-            return
+            raise Fail('Missing id')
 
         device = db.session.execute(
             db.select(Device).where(Device.id == device_id)
@@ -379,10 +365,10 @@ def register_device_management_handlers(socketio, app, db):
         db.session.commit()
 
         emit_devices_update(socketio, db, room='admins')
-        return {"success": True}
+        return ok()
 
     @socketio.on("displayhive:devices:cts:approve_registration")
-    @require_right('device.adopt')
+    @admin_action('device.adopt')
     def admin_handle_approve_registration(data):
         """Approve a registration token and create a device (admin action).
 

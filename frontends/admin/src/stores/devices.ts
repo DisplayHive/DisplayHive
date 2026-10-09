@@ -22,18 +22,6 @@ export const useDevicesStore = defineStore('devices', () => {
     emit('displayhive:devices:cts:get_devices')
   }
 
-  const updateDevice = (deviceId: number, fields: { name?: string; is_active?: boolean }) => {
-    emit('displayhive:devices:cts:update_device', { device_id: deviceId, ...fields })
-  }
-
-  const assignScreen = (deviceId: number, screenId: number | null) => {
-    emit('displayhive:devices:cts:assign_device_screen', { device_id: deviceId, screen_id: screenId })
-  }
-
-  const deleteDevice = (deviceId: number) => {
-    emit('displayhive:devices:cts:delete_device', { device_id: deviceId })
-  }
-
   const findDevice = (deviceId: number) => {
     emit('displayhive:devices:cts:find_device', { device_id: deviceId })
   }
@@ -67,9 +55,6 @@ export const useDevicesStore = defineStore('devices', () => {
     devices,
     loading,
     fetch,
-    updateDevice,
-    assignScreen,
-    deleteDevice,
     findDevice,
     adoptDevice,
     onlineDevices,

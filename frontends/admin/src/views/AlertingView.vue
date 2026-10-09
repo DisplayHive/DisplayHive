@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from 'primevue/usetoast'
+import { useAck, type Ack } from '../composables/useAck'
 import { useRightsStore } from '../stores/rights'
 
 import Card from 'primevue/card'
@@ -11,8 +11,8 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Checkbox from 'primevue/checkbox'
 
-const { on, off, emit, emitWithAck } = useSocket()
-const toast = useToast()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 const canManage = computed(() => rightsStore.can('alerting.manage'))
 const canShowToken = computed(() => rightsStore.can('alerting.showtoken'))
@@ -53,10 +53,6 @@ const showMatrix = computed(() =>
   hasToken.value && savedUsers.value.length > 0 && alertTypes.value.length > 0
 )
 
-// Shape shared by every emitWithAck() response below: a success flag plus an
-// optional error message, and (per-call) whatever payload it carries.
-interface AckResponse { ok?: boolean; error?: string }
-
 // ── Socket handlers ───────────────────────────────────────────────────────────
 const handleSettings = (data: { has_telegram_token?: boolean }) => {
   loading.value = false
@@ -85,20 +81,15 @@ const handleAlertSubscriptions = (data: { subscriptions?: Array<{ user_id: numbe
 const saveToken = async () => {
   savingToken.value = true
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value })
-    if (ack?.ok) {
+    const ack = await request('displayhive:admin:alerting:cts:save_telegram_token', { token: tokenInput.value }, { success: 'Telegram token saved', error: 'Save failed' })
+    if (ack) {
       tokenInput.value = ''
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Telegram token saved', life: 2500 })
       if (hasToken.value) {
         fetchBotUsers()
         fetchSavedUsers()
         fetchAlertSubscriptions()
       }
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
     }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     savingToken.value = false
   }
@@ -108,17 +99,12 @@ const fetchBotUsers = async () => {
   loadingBotUsers.value = true
   botUsersError.value = ''
   try {
-    const ack = await emitWithAck<AckResponse & { users?: BotUser[] }>('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
+    // The reason is shown inside the card (botUsersError), not as a toast.
+    const ack = await request<Ack & { users?: BotUser[] }>('displayhive:admin:alerting:cts:get_telegram_users_from_bot', undefined, {
+      onError: (message) => { botUsersError.value = message },
+    })
     botUsersLoaded.value = true
-    if (ack?.ok) {
-      botUsers.value = ack.users || []
-    } else {
-      botUsersError.value = ack?.error || 'Failed to fetch users'
-      botUsers.value = []
-    }
-  } catch {
-    botUsersError.value = 'Request failed'
-    botUsersLoaded.value = true
+    botUsers.value = ack?.users || []
   } finally {
     loadingBotUsers.value = false
   }
@@ -130,17 +116,10 @@ const fetchAlertSubscriptions = () => emit('displayhive:admin:alerting:cts:get_a
 const addUser = async (user: BotUser) => {
   addingChatId.value = String(user.id)
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:add_telegram_user', {
+    await request('displayhive:admin:alerting:cts:add_telegram_user', {
       name: user.title,
       chat_id: String(user.id),
-    })
-    if (ack?.ok) {
-      toast.add({ severity: 'success', summary: 'Added', detail: `${user.title} added`, life: 2000 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to add user', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    }, { success: `${user.title} added`, error: 'Failed to add user' })
   } finally {
     addingChatId.value = null
   }
@@ -149,12 +128,7 @@ const addUser = async (user: BotUser) => {
 const removeUser = async (user: SavedUser) => {
   removingId.value = user.id
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id })
-    if (!ack?.ok) {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to remove', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    await request('displayhive:admin:alerting:cts:remove_telegram_user', { id: user.id }, { error: 'Failed to remove' })
   } finally {
     removingId.value = null
   }
@@ -163,14 +137,7 @@ const removeUser = async (user: SavedUser) => {
 const sendTest = async (user: SavedUser) => {
   testingId.value = user.id
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id })
-    if (ack?.ok) {
-      toast.add({ severity: 'success', summary: 'Sent', detail: `Test message sent to ${user.name}`, life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to send', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    await request('displayhive:admin:alerting:cts:send_telegram_test', { chat_id: user.chat_id }, { success: `Test message sent to ${user.name}`, error: 'Failed to send' })
   } finally {
     testingId.value = null
   }
@@ -188,23 +155,17 @@ const toggleSubscription = async (userId: number, alertKey: string) => {
   subscriptionSet.value = next
 
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:alerting:cts:toggle_alert_subscription', {
+    const ack = await request('displayhive:admin:alerting:cts:toggle_alert_subscription', {
       user_id: userId,
       alert_type: alertKey,
       enabled,
-    })
-    if (!ack?.ok) {
+    }, { error: 'Failed to save' })
+    if (!ack) {
       // Revert on failure
       const reverted = new Set(subscriptionSet.value)
       if (enabled) reverted.delete(key); else reverted.add(key)
       subscriptionSet.value = reverted
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to save', life: 4000 })
     }
-  } catch {
-    const reverted = new Set(subscriptionSet.value)
-    if (enabled) reverted.delete(key); else reverted.add(key)
-    subscriptionSet.value = reverted
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     togglingKey.value = null
   }

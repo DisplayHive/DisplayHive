@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
@@ -27,7 +28,8 @@ interface PretalxUrl {
   has_cache: boolean
 }
 
-const { on, off, emit, emitWithAck } = useSocket()
+const { on, off, emit } = useSocket()
+const { request } = useAck()
 const toast = useToast()
 const confirm = useConfirm()
 const rightsStore = useRightsStore()
@@ -167,19 +169,13 @@ async function addUrl() {
   if (!name || !url) return
   addLoading.value = true
   try {
-    const ack = await emitWithAck<AckResponse & { is_valid?: boolean }>('displayhive:admin:pretalx:cts:add_url', { name, url })
+    const ack = await request<Ack & { is_valid?: boolean }>('displayhive:admin:pretalx:cts:add_url', { name, url }, { error: 'Failed to add URL' })
     addDialogVisible.value = false
-    if (ack?.ok) {
-      if (ack.is_valid) {
-        toast.add({ severity: 'success', summary: 'Added', detail: 'URL added and returned valid JSON', life: 3000 })
-      } else {
-        toast.add({ severity: 'warn', summary: 'Added', detail: 'URL saved but did not return valid JSON', life: 4000 })
-      }
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Failed to add URL', life: 4000 })
+    if (ack?.is_valid) {
+      toast.add({ severity: 'success', summary: 'Added', detail: 'URL added and returned valid JSON', life: 3000 })
+    } else if (ack) {
+      toast.add({ severity: 'warn', summary: 'Added', detail: 'URL saved but did not return valid JSON', life: 4000 })
     }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
   } finally {
     addLoading.value = false
   }
@@ -199,19 +195,12 @@ async function saveEdit(keepOpen = false) {
   if (!editId.value || !editName.value.trim()) return
   editLoading.value = true
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:update_url', {
+    const ack = await request('displayhive:admin:pretalx:cts:update_url', {
       id: editId.value,
       name: editName.value.trim(),
       polling_interval: editInterval.value,
-    })
-    if (ack?.ok) {
-      if (!keepOpen) editDialogVisible.value = false
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'URL updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Update failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    }, { success: 'URL updated', error: 'Update failed' })
+    if (ack && !keepOpen) editDialogVisible.value = false
   } finally {
     editLoading.value = false
   }
@@ -220,14 +209,11 @@ async function saveEdit(keepOpen = false) {
 // ── Polling toggle (inline) ───────────────────────────────────────────────────
 
 async function onPollingToggle(url: PretalxUrl, val: boolean) {
-  const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:update_url', {
+  const ack = await request('displayhive:admin:pretalx:cts:update_url', {
     id: url.id,
     polling_enabled: val,
-  })
-  if (!ack?.ok) {
-    url.polling_enabled = !val
-    toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Update failed', life: 3000 })
-  }
+  }, { error: 'Update failed' })
+  if (!ack) url.polling_enabled = !val
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -240,10 +226,7 @@ function deleteUrl(url: PretalxUrl) {
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Delete', severity: 'danger' },
     accept: async () => {
-      const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:delete_url', { id: url.id })
-      if (!ack?.ok) {
-        toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Delete failed', life: 4000 })
-      }
+      await request('displayhive:admin:pretalx:cts:delete_url', { id: url.id }, { error: 'Delete failed' })
     },
   })
 }
@@ -256,14 +239,10 @@ function viewCache(url: PretalxUrl) {
 
 // ── Socket handlers ───────────────────────────────────────────────────────────
 
-// Shape shared by every emitWithAck() response below: a success flag plus an
-// optional error message, and (per-call) whatever payload it carries.
-interface AckResponse { ok?: boolean; error?: string }
-
 const handleUrls = (data: { urls?: PretalxUrl[] }) => { urls.value = data?.urls || [] }
 
-const handleCache = (data: AckResponse & { name?: string; fetched_at?: string; cached_json?: string }) => {
-  if (!data?.ok) {
+const handleCache = (data: Partial<Ack> & { name?: string; fetched_at?: string; cached_json?: string }) => {
+  if (!data?.success) {
     toast.add({ severity: 'error', summary: 'Error', detail: data?.error || 'No cache available', life: 3000 })
     return
   }
@@ -309,18 +288,11 @@ const savePretalxSettings = async () => {
     const simIso = _d
       ? `${_d.getFullYear()}-${pad(_d.getMonth() + 1)}-${pad(_d.getDate())}T${pad(_d.getHours())}:${pad(_d.getMinutes())}`
       : ''
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:save_settings', {
+    await request('displayhive:admin:pretalx:cts:save_settings', {
       time_format:   pretalxTimeFormat.value,
       end_of_day:    pretalxEndOfDay.value,
       sim_datetime:  simIso,
-    })
-    if (ack?.ok) {
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Date/Time settings updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    }, { success: 'Date/Time settings updated', error: 'Save failed' })
   } finally {
     settingsSaving.value = false
   }
@@ -329,18 +301,11 @@ const savePretalxSettings = async () => {
 const savePretalxTexts = async () => {
   textsSaving.value = true
   try {
-    const ack = await emitWithAck<AckResponse>('displayhive:admin:pretalx:cts:save_settings', {
+    await request('displayhive:admin:pretalx:cts:save_settings', {
       no_session_text:   pretalxNoSessionText.value,
       coming_up_text:    pretalxComingUpText.value,
       invalid_data_text: pretalxInvalidDataText.value,
-    })
-    if (ack?.ok) {
-      toast.add({ severity: 'success', summary: 'Saved', detail: 'Default texts updated', life: 2500 })
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: ack?.error || 'Save failed', life: 4000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Request failed', life: 4000 })
+    }, { success: 'Default texts updated', error: 'Save failed' })
   } finally {
     textsSaving.value = false
   }

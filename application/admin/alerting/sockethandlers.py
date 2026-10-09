@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def register_admin_alerting_handlers(socketio, app, db):
     """Register socket handlers for the admin Alerting page."""
-    from application.socketio_handlers.auth import require_right
+    from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.models import SystemSetting, TelegramUser, AlertSubscription
 
     def _get_setting(key):
@@ -54,7 +54,7 @@ def register_admin_alerting_handlers(socketio, app, db):
     # ── Settings ────────────────────────────────────────────────────────────
 
     @socketio.on('displayhive:admin:alerting:cts:get_settings')
-    @require_right('alerting.page')
+    @admin_action('alerting.page')
     def handle_get_alerting_settings(data=None):
         socketio.emit(
             'displayhive:admin:alerting:stc:settings',
@@ -63,10 +63,10 @@ def register_admin_alerting_handlers(socketio, app, db):
         )
 
     @socketio.on('displayhive:admin:alerting:cts:save_telegram_token')
-    @require_right('alerting.showtoken')
+    @admin_action('alerting.showtoken')
     def handle_save_telegram_token(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         token = (data.get('token') or '').strip()
         _set_setting('telegram_token', token)
         socketio.emit(
@@ -74,16 +74,16 @@ def register_admin_alerting_handlers(socketio, app, db):
             {'has_telegram_token': bool(token)},
             room=request.sid,
         )
-        return {'ok': True}
+        return {'success': True}
 
     # ── Bot user discovery ───────────────────────────────────────────────────
 
     @socketio.on('displayhive:admin:alerting:cts:get_telegram_users_from_bot')
-    @require_right('alerting.manage')
+    @admin_action('alerting.manage')
     def handle_get_telegram_users_from_bot(data=None):
         token = _get_token()
         if not token:
-            return {'ok': False, 'error': 'No token configured'}
+            raise Fail('No token configured')
 
         try:
             resp = requests.get(
@@ -93,10 +93,10 @@ def register_admin_alerting_handlers(socketio, app, db):
             resp.raise_for_status()
             result = resp.json()
         except requests.exceptions.RequestException as e:
-            return {'ok': False, 'error': f'Request failed: {e}'}
+            raise Fail(f'Request failed: {e}')
 
         if not result.get('ok'):
-            return {'ok': False, 'error': result.get('description', 'Telegram API error')}
+            raise Fail(result.get('description', 'Telegram API error'))
 
         seen = {}
         for update in result.get('result', []):
@@ -116,24 +116,24 @@ def register_admin_alerting_handlers(socketio, app, db):
                         'title': chat.get('first_name') or chat.get('username') or str(cid),
                     }
 
-        return {'ok': True, 'users': list(seen.values())}
+        return {'success': True, 'users': list(seen.values())}
 
     # ── Saved telegram users ─────────────────────────────────────────────────
 
     @socketio.on('displayhive:admin:alerting:cts:get_telegram_users')
-    @require_right('alerting.page')
+    @admin_action('alerting.page')
     def handle_get_telegram_users(data=None):
         _emit_telegram_users(request.sid)
 
     @socketio.on('displayhive:admin:alerting:cts:add_telegram_user')
-    @require_right('alerting.manage')
+    @admin_action('alerting.manage')
     def handle_add_telegram_user(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         name = (data.get('name') or '').strip()
         chat_id = str(data.get('chat_id') or '').strip()
         if not name or not chat_id:
-            return {'ok': False, 'error': 'name and chat_id are required'}
+            raise Fail('name and chat_id are required')
 
         existing = db.session.execute(
             db.select(TelegramUser).where(TelegramUser.chat_id == chat_id)
@@ -145,16 +145,16 @@ def register_admin_alerting_handlers(socketio, app, db):
         db.session.commit()
 
         _emit_telegram_users(request.sid)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:alerting:cts:remove_telegram_user')
-    @require_right('alerting.manage')
+    @admin_action('alerting.manage')
     def handle_remove_telegram_user(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         user_id = data.get('id')
         if user_id is None:
-            return {'ok': False, 'error': 'id is required'}
+            raise Fail('id is required')
 
         row = db.session.get(TelegramUser, user_id)
         if row:
@@ -164,20 +164,20 @@ def register_admin_alerting_handlers(socketio, app, db):
         _emit_telegram_users(request.sid)
         # Also push updated subscriptions (deleted user's rows cascade-deleted)
         _emit_subscriptions(request.sid)
-        return {'ok': True}
+        return {'success': True}
 
     @socketio.on('displayhive:admin:alerting:cts:send_telegram_test')
-    @require_right('alerting.manage')
+    @admin_action('alerting.manage')
     def handle_send_telegram_test(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         chat_id = str(data.get('chat_id') or '').strip()
         if not chat_id:
-            return {'ok': False, 'error': 'chat_id is required'}
+            raise Fail('chat_id is required')
 
         token = _get_token()
         if not token:
-            return {'ok': False, 'error': 'No token configured'}
+            raise Fail('No token configured')
 
         try:
             resp = requests.post(
@@ -188,16 +188,16 @@ def register_admin_alerting_handlers(socketio, app, db):
             resp.raise_for_status()
             result = resp.json()
         except requests.exceptions.RequestException as e:
-            return {'ok': False, 'error': f'Request failed: {e}'}
+            raise Fail(f'Request failed: {e}')
 
         if not result.get('ok'):
-            return {'ok': False, 'error': result.get('description', 'Telegram API error')}
-        return {'ok': True}
+            raise Fail(result.get('description', 'Telegram API error'))
+        return {'success': True}
 
     # ── Alert types & subscriptions ──────────────────────────────────────────
 
     @socketio.on('displayhive:admin:alerting:cts:get_alert_types')
-    @require_right('alerting.page')
+    @admin_action('alerting.page')
     def handle_get_alert_types(data=None):
         socketio.emit(
             'displayhive:admin:alerting:stc:alert_types',
@@ -206,21 +206,21 @@ def register_admin_alerting_handlers(socketio, app, db):
         )
 
     @socketio.on('displayhive:admin:alerting:cts:get_alert_subscriptions')
-    @require_right('alerting.page')
+    @admin_action('alerting.page')
     def handle_get_alert_subscriptions(data=None):
         _emit_subscriptions(request.sid)
 
     @socketio.on('displayhive:admin:alerting:cts:toggle_alert_subscription')
-    @require_right('alerting.manage')
+    @admin_action('alerting.manage')
     def handle_toggle_alert_subscription(data=None):
         if not data or not isinstance(data, dict):
-            return {'ok': False, 'error': 'Invalid payload'}
+            raise Fail('Invalid payload')
         user_id = data.get('user_id')
         alert_type = (data.get('alert_type') or '').strip()
         enabled = bool(data.get('enabled'))
 
         if not user_id or not alert_type:
-            return {'ok': False, 'error': 'user_id and alert_type are required'}
+            raise Fail('user_id and alert_type are required')
 
         existing = db.session.execute(
             db.select(AlertSubscription)
@@ -236,4 +236,4 @@ def register_admin_alerting_handlers(socketio, app, db):
             db.session.commit()
 
         _emit_subscriptions(request.sid)
-        return {'ok': True}
+        return {'success': True}
