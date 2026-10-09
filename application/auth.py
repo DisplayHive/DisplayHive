@@ -85,6 +85,32 @@ def create_token(app, user, impersonator_id=None, auth_method='password') -> str
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm=TOKEN_ALGORITHM)
 
 
+def begin_impersonation(app, db, actor, target_id, already_impersonating: bool):
+    """Start an impersonation session for *actor*. Returns ``(token, target, error)``.
+
+    Refuses to chain (a session that is itself an impersonation cannot start another,
+    even if the impersonated user holds special.impersonate), to impersonate yourself or
+    a deactivated or unknown user. The caller has checked the right special.impersonate.
+    """
+    from application.models import AdminUser
+    if already_impersonating:
+        return None, None, 'Cannot impersonate while already impersonating'
+    if not target_id:
+        return None, None, 'Missing user_id'
+    try:
+        target_id = int(target_id)
+    except (TypeError, ValueError):
+        return None, None, 'Invalid user_id'
+    if actor and target_id == actor.id:
+        return None, None, 'Cannot impersonate yourself'
+    target = db.session.get(AdminUser, target_id)
+    if not target:
+        return None, None, 'User not found'
+    if not target.is_active:
+        return None, None, 'Cannot impersonate a deactivated user'
+    return create_token(app, target, impersonator_id=actor.id), target, None
+
+
 def decode_token(app, token: str):
     """Return the decoded payload dict for *token*, or None if invalid/expired."""
     if not token:

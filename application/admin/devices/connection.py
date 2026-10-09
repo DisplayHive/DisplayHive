@@ -105,7 +105,21 @@ def register_device_connection_handlers(socketio, app, db):
                 logger.exception("[Auth] Connection rejected: error during adoption")
                 raise ConnectionRefusedError('db_error')
 
+        # A browser admin has no token to present: its HttpOnly session cookie comes with the
+        # handshake. Not for screens (they carry a device or adoption key, and a kiosk
+        # browser may keep no cookies at all), and only from our own origin: another site's
+        # page must not be able to open an admin socket with the visitor's cookie.
+        if not token and not adoptionkey and not devicekey:
+            from application import session as web_session
+            cookie_token, source = web_session.token_from_request(request)
+            if cookie_token and source == 'cookie':
+                if not web_session.origin_allowed(app, request, request.headers.get('Origin')):
+                    logger.info("[Auth] Connection rejected: session cookie from a foreign or missing origin")
+                    raise ConnectionRefusedError('invalid_origin')
+                token = cookie_token
+
         # Admin connection: client presents a JWT obtained via /admin/api/auth/login
+        # (in auth.token, or the session cookie above)
         if token:
             admin_user = user_from_token(app, db, token)
             if not admin_user:

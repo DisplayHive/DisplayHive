@@ -292,26 +292,13 @@ def register_admin_user_handlers(socketio, app, db):
         token cannot start a second one, even if the impersonated user also
         holds special.impersonate (see application.socketio_handlers.auth.is_impersonating).
         """
-        if is_impersonating():
-            return {'success': False, 'error': 'Cannot impersonate while already impersonating'}
-
-        data = data or {}
-        target_id = data.get('user_id')
-        if not target_id:
-            return {'success': False, 'error': 'Missing user_id'}
-
-        actor = current_admin_user()
-        if actor and int(target_id) == actor.id:
-            return {'success': False, 'error': 'Cannot impersonate yourself'}
-
-        target = db.session.get(AdminUser, target_id)
-        if not target:
-            return {'success': False, 'error': 'User not found'}
-        if not target.is_active:
-            return {'success': False, 'error': 'Cannot impersonate a deactivated user'}
-
         from flask import current_app
-        token = create_token(current_app._get_current_object(), target, impersonator_id=actor.id)
+        from application.auth import begin_impersonation
+        actor = current_admin_user()
+        token, target, error = begin_impersonation(
+            current_app._get_current_object(), db, actor, (data or {}).get('user_id'), is_impersonating())
+        if error:
+            return {'success': False, 'error': error}
         logger.info("Admin '%s' started impersonating '%s'", actor.username, target.username)
         return {
             'success': True,

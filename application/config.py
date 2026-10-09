@@ -240,4 +240,5 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     cfg['BACKUP_SETTINGS'] = backup.Settings.from_env(environ)
     cors_origins = resolve_cors_origins(environ)
     cfg['CORS_WILDCARD'] = cors_origins == '*'
+    cfg['CORS_ORIGINS'] = cors_origins
     return cors_origins

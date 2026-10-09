@@ -13,8 +13,10 @@ from functools import wraps
 
 from flask import request, jsonify, redirect
 
+from application import session as web_session
 from application import version
 from application.auth import (
+    begin_impersonation,
     verify_password,
     hash_password,
     password_problem,
@@ -29,7 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 def require_jwt_auth(app, allow_pending_password_change=False):
-    """Return a decorator that requires a valid `Authorization: Bearer <jwt>` header.
+    """Return a decorator that requires a valid session: `Authorization: Bearer <jwt>`
+    or the session cookie (application/session.py), the latter with its CSRF checks.
 
     *allow_pending_password_change* lets an account flagged
     `must_change_password` through — only for the self-service routes it
@@ -38,8 +41,10 @@ def require_jwt_auth(app, allow_pending_password_change=False):
     def decorator(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            auth_header = request.headers.get('Authorization', '')
-            token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+            token, source = web_session.token_from_request(request)
+            problem = web_session.csrf_problem(app, request, source)
+            if problem:
+                return jsonify({'success': False, 'error': problem}), 403
             # Re-validate the account on every request: a token stays
             # cryptographically valid for its full TTL, so reject it here if the
             # user has since been deleted, deactivated, or changed their password.
@@ -62,8 +67,10 @@ def require_http_right(app, right_key):
     def decorator(fn):
         @wraps(fn)
         def wrapped(*args, **kwargs):
-            auth_header = request.headers.get('Authorization', '')
-            token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+            token, source = web_session.token_from_request(request)
+            problem = web_session.csrf_problem(app, request, source)
+            if problem:
+                return jsonify({'success': False, 'error': problem}), 403
             from application.models import db
             from application.permissions import has_right
             user = user_from_token(app, db, token)
@@ -84,6 +91,22 @@ def register_auth_routes(app, db):
     # socket handlers: an explicit set, not "anything the client sends".
     ALLOWED_PREFERENCE_KEYS = {'theme'}
     ALLOWED_THEME_VALUES = {'light', 'dark', 'system'}
+
+    def _session_reply(payload, token, as_cookie):
+        """A JSON reply carrying a new session. For the browser (as_cookie) the token goes
+        into the HttpOnly cookie and NOT into the body, where a script could read it; other
+        clients get it in the body as before."""
+        payload = {**payload, 'expires_at': web_session.expires_at(app, token)}
+        if not as_cookie:
+            return jsonify({**payload, 'token': token})
+        response = jsonify(payload)
+        web_session.set_cookie(response, app, request, token)
+        return response
+
+    def _login_csrf_problem(as_cookie):
+        """Logging in with a cookie is as much a state change as anything else: a page of
+        another site must not be able to log the visitor into an account of its choice."""
+        return web_session.csrf_problem(app, request, 'cookie') if as_cookie else None
 
     def _record_login(user):
         """Stamp last_login_at and add a login-history row (password or SSO)."""
@@ -112,6 +135,10 @@ def register_auth_routes(app, db):
     def admin_auth_login():
         """Authenticate a username/password pair and return a JWT."""
         data = request.get_json(silent=True) or {}
+        as_cookie = data.get('session') == 'cookie'
+        problem = _login_csrf_problem(as_cookie)
+        if problem:
+            return jsonify({'success': False, 'error': problem}), 403
         username = str(data.get('username', '')).strip()
         password = str(data.get('password', ''))
 
@@ -140,14 +167,12 @@ def register_auth_routes(app, db):
         _record_login(user)
         db.session.commit()
 
-        token = create_token(app, user)
-        return jsonify({
+        return _session_reply({
             'success': True,
-            'token': token,
             'username': user.username,
             'preferences': user.get_preferences(),
             'must_change_password': bool(user.must_change_password),
-        })
+        }, create_token(app, user), as_cookie)
 
     @app.route('/admin/api/auth/me', methods=['GET'])
     @require_jwt_auth(app, allow_pending_password_change=True)
@@ -157,8 +182,7 @@ def register_auth_routes(app, db):
         Used by the SPA on load to confirm a stored token is still valid
         (e.g. the user hasn't been deleted) before restoring the session.
         """
-        auth_header = request.headers.get('Authorization', '')
-        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        token, source = web_session.token_from_request(request)
 
         user = user_from_token(app, db, token, allow_pending_password_change=True)
         if not user:
@@ -167,10 +191,16 @@ def register_auth_routes(app, db):
         # An impersonation session is never asked to change the impersonated
         # account's password (see user_from_token).
         payload = decode_token(app, token) or {}
+        impersonator = db.session.get(AdminUser, payload['imp']) if payload.get('imp') is not None else None
+        original, _ = web_session.token_from_request(request, web_session.ORIGINAL_COOKIE)
         return jsonify({
             'success': True,
             'username': user.username,
             'preferences': user.get_preferences(),
+            'session': source,
+            'expires_at': web_session.expires_at(app, token),
+            'impersonator_username': impersonator.username if impersonator else None,
+            'can_stop_impersonating': bool(impersonator and original),
             **version.info(),
             'must_change_password': (bool(user.must_change_password)
                                      and 'imp' not in payload and payload.get('am') != 'oidc'),
@@ -186,8 +216,7 @@ def register_auth_routes(app, db):
         token_version (revoking every other session), then returns a fresh
         token so the caller's own session carries on.
         """
-        auth_header = request.headers.get('Authorization', '')
-        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        token, source = web_session.token_from_request(request)
         user = user_from_token(app, db, token, allow_pending_password_change=True)
         if not user:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
@@ -217,7 +246,9 @@ def register_auth_routes(app, db):
         user.token_version = (user.token_version or 0) + 1
         db.session.commit()
 
-        return jsonify({'success': True, 'token': create_token(app, user), 'username': user.username})
+        # The session carries on under a new token (the old one was just revoked): in the
+        # same way it arrived.
+        return _session_reply({'success': True, 'username': user.username}, create_token(app, user), source == 'cookie')
 
     @app.route('/admin/api/auth/me/preferences', methods=['PATCH'])
     @require_jwt_auth(app)
@@ -229,8 +260,7 @@ def register_auth_routes(app, db):
         silently dropped, since this is a small explicit allowlist, not a
         general-purpose settings blob.
         """
-        auth_header = request.headers.get('Authorization', '')
-        token = auth_header[7:] if auth_header.startswith('Bearer ') else None
+        token, _source = web_session.token_from_request(request)
         user = user_from_token(app, db, token)
         if not user:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
@@ -344,14 +374,85 @@ def register_auth_routes(app, db):
     def admin_auth_oidc_exchange():
         """Swap a handoff code from the callback for a session token. data: {code}."""
         data = request.get_json(silent=True) or {}
+        as_cookie = data.get('session') == 'cookie'
+        problem = _login_csrf_problem(as_cookie)
+        if problem:
+            return jsonify({'success': False, 'error': problem}), 403
         user_id = oidc.redeem_handoff(str(data.get('code', '')))
         user = db.session.get(AdminUser, user_id) if user_id else None
         if not user or not user.is_active:
             return jsonify({'success': False, 'error': 'This login has expired. Please log in again.'}), 401
-        return jsonify({
+        return _session_reply({
             'success': True,
-            'token': create_token(app, user, auth_method='oidc'),
             'username': user.username,
             'preferences': user.get_preferences(),
             'must_change_password': False,
-        })
+        }, create_token(app, user, auth_method='oidc'), as_cookie)
+
+    # --- Logout and impersonation for cookie sessions ----------------------------------------------
+    # A cookie can only be set or removed by the server (it is HttpOnly), so these are
+    # routes rather than the socket events Bearer clients use for impersonation.
+
+    @app.route('/admin/api/auth/logout', methods=['POST'])
+    def admin_auth_logout():
+        """End the browser session: remove the cookies (also the stashed original one).
+        Always succeeds; the token itself stays valid until it expires or is revoked
+        (password change, deactivation) — only the browser forgets it."""
+        response = jsonify({'success': True})
+        web_session.clear_cookies(response)
+        return response
+
+    def _cookie_session():
+        """(token, user, payload, error_response) of an authenticated cookie/Bearer caller."""
+        token, source = web_session.token_from_request(request)
+        problem = web_session.csrf_problem(app, request, source)
+        if problem:
+            return (None, None), None, None, (jsonify({'success': False, 'error': problem}), 403)
+        user = user_from_token(app, db, token)
+        if not user:
+            return (None, None), None, None, (jsonify({'success': False, 'error': 'Unauthorized'}), 401)
+        return (token, source), user, decode_token(app, token) or {}, None
+
+    @app.route('/admin/api/auth/impersonate', methods=['POST'])
+    def admin_auth_impersonate():
+        """Log the caller in as another user. data: {user_id}. Needs special.impersonate and
+        refuses to chain (see begin_impersonation). A browser session keeps its own session
+        in a second cookie for "stop impersonating"; Bearer clients get the token back."""
+        from application.permissions import has_right
+        (token, source), actor, payload, error = _cookie_session()
+        if error:
+            return error
+        if not has_right(db, actor, 'special.impersonate'):
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+        data = request.get_json(silent=True) or {}
+        new_token, target, problem = begin_impersonation(app, db, actor, data.get('user_id'), 'imp' in payload)
+        if problem:
+            return jsonify({'success': False, 'error': problem}), 400
+        logger.info("Admin '%s' started impersonating '%s'", actor.username, target.username)
+        reply = {'success': True, 'username': target.username, 'impersonator_username': actor.username}
+        if source != 'cookie':
+            return jsonify({**reply, 'token': new_token, 'expires_at': web_session.expires_at(app, new_token)})
+        response = jsonify({**reply, 'expires_at': web_session.expires_at(app, new_token)})
+        web_session.set_cookie(response, app, request, token, web_session.ORIGINAL_COOKIE)
+        web_session.set_cookie(response, app, request, new_token)
+        return response
+
+    @app.route('/admin/api/auth/impersonate/stop', methods=['POST'])
+    def admin_auth_impersonate_stop():
+        """Go back to the session that started the impersonation (cookie sessions)."""
+        (token, source), _user, payload, error = _cookie_session()
+        if error:
+            return error
+        if 'imp' not in payload or source != 'cookie':
+            return jsonify({'success': False, 'error': 'Not impersonating'}), 400
+        original, _ = web_session.token_from_request(request, web_session.ORIGINAL_COOKIE)
+        owner = user_from_token(app, db, original)
+        if not owner or owner.id != payload.get('imp') or 'imp' in (decode_token(app, original) or {}):
+            response = jsonify({'success': False, 'error': 'The original session has expired. Please log in again.'})
+            web_session.clear_cookies(response)
+            return response, 401
+        response = jsonify({'success': True, 'username': owner.username, 'preferences': owner.get_preferences(),
+                            'expires_at': web_session.expires_at(app, original)})
+        web_session.set_cookie(response, app, request, original)
+        web_session.clear_cookies(response, web_session.ORIGINAL_COOKIE)
+        return response
