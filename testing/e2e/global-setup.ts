@@ -119,6 +119,17 @@ export default async function globalSetup() {
       ADMIN_BOOTSTRAP_PASSWORD: TEST_ADMIN_PASSWORD,
       // The tests log in with the pinned password: don't send them to the password-change screen first.
       ADMIN_BOOTSTRAP_MUST_CHANGE: 'off',
+      // The admin page (Vite dev server or `vite preview`) is a different origin than this
+      // worker's Flask instance, and the session cookie is only accepted from an origin the
+      // server knows (application/session.py origin_allowed): name them, `*` would not do.
+      CORS_ALLOWED_ORIGINS: [
+        process.env.PLAYWRIGHT_ADMIN_URL,
+        'http://localhost:5173',
+        'http://localhost:4173',
+        `http://localhost:${port}`,
+      ]
+        .filter(Boolean)
+        .join(','),
     }
 
     const proc = spawn(PYTHON, ['app.py'], {

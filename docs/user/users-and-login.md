@@ -21,8 +21,43 @@ Alternatively, create the first account yourself with
 access, [`flask dh reset-password`](cli.md#reset-password-username) gets
 you back in.
 
-Sessions use a JSON Web Token, valid for 12 hours; you'll be asked to log
-in again once it expires.
+## Sessions
+
+A login lasts 12 hours; you'll be asked to log in again once it has expired.
+
+In the browser the session lives in a **cookie** the page cannot read
+(`HttpOnly`), that is only sent on requests started from DisplayHive's own
+pages (`SameSite=Strict`) and, over https, only over https (`Secure`, name
+`__Host-dh_session`). So a script injected into a page cannot steal the login,
+and another website cannot use it. Requests that change something also have to
+come from DisplayHive's own page (the server checks the `Origin` and a header the
+page adds), and the admin WebSocket accepts the cookie only from DisplayHive's own
+origin.
+
+- **Logging out** removes the cookie from the browser. The signed session itself
+  stays valid until it expires or is revoked: changing a password, deactivating
+  or deleting the account ends all of that account's sessions at once.
+- **Impersonation** ("log in as") keeps your own session in a second cookie, so
+  "stop impersonating" brings you back without logging in again. You cannot
+  impersonate while impersonating.
+- **After an update** from a version that kept the login in the browser's local
+  storage, everybody logs in once more.
+- **Screens** do not use cookies at all (they identify themselves with their
+  device key), so kiosk browsers that refuse cookies work as before.
+- **Scripts and tools** can use the same API with `Authorization: Bearer <token>`:
+  `POST /admin/api/auth/login` (without `"session": "cookie"`) returns the token.
+  A Bearer request needs none of the cookie protections, because nothing sends it
+  by itself.
+
+Behind a **reverse proxy**, forward the `Host` header unchanged (nginx:
+`proxy_set_header Host $host;`) and set `PUBLIC_URL` to the public address;
+`TRUSTED_PROXY_COUNT` lets the app see that the visitor used https, which makes
+the cookie `Secure`. If the admin panel loads but its WebSocket is refused with
+"Admin socket refused: Origin … is not this site", one of these is missing — the
+log line says which origin it saw. Accessing the panel at an address other than
+the `PUBLIC_URL` (an IP address, say) also needs that address in
+`CORS_ALLOWED_ORIGINS`; a `*` there does *not* count, as a cookie must never be
+accepted from "any origin".
 
 Failed logins are rate-limited in two ways, both counted over 15 minutes:
 

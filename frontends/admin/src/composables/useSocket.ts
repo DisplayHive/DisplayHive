@@ -58,15 +58,13 @@ export function useSocket() {
       testWindow.__DISPLAYHIVE_TEST_BACKEND_URL__ ||
       (import.meta.env.VITE_SOCKET_URL as string) ||
       window.location.origin
-    // JWT issued by POST /admin/api/auth/login (see stores/auth.ts, which
-    // owns this same localStorage key — kept as a literal here to avoid a
-    // circular import between the auth store and this composable).
-    const token = localStorage.getItem('displayhive_admin_token')
-
     socket = io(url, {
-      // Sent only in the handshake `auth` payload (not `query`) so the JWT
-      // never ends up in a URL / access log.
-      auth: token ? { token } : undefined,
+      // The admin session is an HttpOnly cookie (see stores/auth.ts and
+      // application/session.py): the browser attaches it to the handshake by itself,
+      // so there is no token for this code to read or send — and none in a URL or
+      // access log. (`withCredentials` matters when the socket URL has another origin
+      // than the page, as in the E2E tests and the Vite dev setup.)
+      withCredentials: true,
       // Default transports: starts with HTTP long-polling, upgrades to a
       // WebSocket when the path allows it (same as the screen client). With
       // the server's thread-per-connection model a WebSocket holds one thread

@@ -473,17 +473,12 @@ const impersonateLoading = ref(false)
 const impersonate = async (user: AdminUser) => {
   impersonateLoading.value = true
   try {
-    const result = await emitWithAck<{
-      success: boolean
-      error?: string
-      token?: string
-      username?: string
-    }>('displayhive:admin:users:cts:impersonate', { user_id: user.id })
-    if (result.success && result.token && result.username) {
-      authStore.startImpersonation(result.token, result.username)
-      toast.add({ severity: 'info', summary: 'Impersonating', detail: `Now logged in as ${result.username}`, life: 3000 })
+    // Over HTTP, not the socket: the new session is a cookie, which only a response can set.
+    const error = await authStore.startImpersonation(user.id)
+    if (error) {
+      toast.add({ severity: 'error', summary: 'Error', detail: error, life: 5000 })
     } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Impersonation failed', life: 5000 })
+      toast.add({ severity: 'info', summary: 'Impersonating', detail: `Now logged in as ${user.username}`, life: 3000 })
     }
   } finally {
     impersonateLoading.value = false

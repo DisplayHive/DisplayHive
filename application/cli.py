@@ -506,6 +506,12 @@ def check_config(online):
         report('warn', 'CORS allows any origin — set PUBLIC_URL (or CORS_ALLOWED_ORIGINS)')
     else:
         report('ok', 'CORS is restricted')
+    if public_url and public_url.startswith('http://'):
+        report('warn', f'PUBLIC_URL {public_url} is not https — the admin session cookie is then sent without '
+                       'the Secure flag and travels in the clear; put DisplayHive behind TLS')
+    elif not public_url:
+        report('info', 'The admin session cookie is marked Secure when a request arrives over https '
+                       '(behind a proxy: TRUSTED_PROXY_COUNT) or PUBLIC_URL is https')
     if os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes', 'on'):
         report('warn', 'FLASK_DEBUG is on — the Werkzeug debugger allows code execution; never on a reachable host')
     proxies = os.environ.get('TRUSTED_PROXY_COUNT', '0') or '0'

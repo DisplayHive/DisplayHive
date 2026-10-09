@@ -12,8 +12,9 @@ import { TEST_ADMIN_USERNAME, TEST_ADMIN_PASSWORD } from './testAdminCredentials
  * - The default `page` fixture is overridden below so that EVERY test starts
  *   pre-authenticated: a real login is performed against this worker's backend
  *   (POST /admin/api/auth/login with the bootstrap admin credentials — see
- *   testAdminCredentials.ts / global-setup.ts) and the resulting JWT is seeded
- *   into localStorage before any navigation. This matches the old behavior
+ *   testAdminCredentials.ts / global-setup.ts); the session cookie goes into the
+ *   page's browser context and the SPA's "signed in" hint into localStorage
+ *   before any navigation. This matches the old behavior
  *   where a hardcoded devicekey made every admin page load "authenticated"
  *   automatically, without requiring every spec to opt in explicitly.
  * - `loginAsAdmin(page)` remains for specs that want to be explicit about it
@@ -42,18 +43,26 @@ function resolveWorkerBackendUrl(workerIndex: number): string {
 }
 
 /**
- * Log in against *workerBackendUrl* and seed the resulting JWT (plus the
- * worker's backend URL) into *page*'s localStorage via addInitScript, so the
- * SPA is authenticated and pointed at the right backend from its very first
- * load. Does not navigate — callers decide where to go.
+ * Log in against *workerBackendUrl* and give *page* the session: the server's
+ * HttpOnly cookie lands in the page's browser context (logging in through the
+ * context's own request client), and the small "signed in" hint the SPA keeps in
+ * localStorage (stores/auth.ts) plus the worker's backend URL are seeded with
+ * addInitScript, so the SPA is authenticated and pointed at the right backend from
+ * its very first load. Does not navigate — callers decide where to go.
+ *
+ * The cookie belongs to host `localhost`, whatever the port: the page (Vite) and this
+ * worker's Flask instance share it, as a real deployment's page and socket would.
  */
 export async function seedAdminAuth(
   page: Page,
   request: APIRequestContext,
   workerBackendUrl: string,
 ): Promise<void> {
-  const loginResponse = await request.post(`${workerBackendUrl}/admin/api/auth/login`, {
-    data: { username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD },
+  // (`request` is unused now: it is not tied to the page, so its cookies would not reach it.)
+  void request
+  const loginResponse = await page.context().request.post(`${workerBackendUrl}/admin/api/auth/login`, {
+    data: { username: TEST_ADMIN_USERNAME, password: TEST_ADMIN_PASSWORD, session: 'cookie' },
+    headers: { 'X-DisplayHive-Request': '1' },
     ignoreHTTPSErrors: true,
   })
   if (!loginResponse.ok()) {
@@ -61,22 +70,20 @@ export async function seedAdminAuth(
       `seedAdminAuth: login failed (${loginResponse.status()}): ${await loginResponse.text()}`,
     )
   }
-  const { token, username } = await loginResponse.json()
+  const { username, expires_at } = await loginResponse.json()
 
-  // Seed the JWT before the app boots so App.vue's authStore.restore()
-  // finds a valid session and useSocket.ts's connect() sends it immediately.
-  // Uses localStorage to match the app's token store (see stores/auth.ts).
+  // Seed the "signed in" hint before the app boots so App.vue's authStore.restore()
+  // asks the server (which accepts the cookie) and useSocket.ts's connect() goes ahead.
   await page.addInitScript(
-    ({ token, username }: { token: string; username: string }) => {
+    ({ username, expiresAt }: { username: string; expiresAt: number }) => {
       try {
         // Runs in the browser page; localStorage exists there at runtime but
         // isn't in the Node-oriented tsconfig lib, so reach it via globalThis.
         const ls = (globalThis as any).localStorage
-        ls.setItem('displayhive_admin_token', token)
-        ls.setItem('displayhive_admin_username', username)
+        ls.setItem('displayhive_admin_session', JSON.stringify({ username, expiresAt, impersonator: null }))
       } catch (e) {}
     },
-    { token, username },
+    { username, expiresAt: Date.parse(expires_at) },
   )
 
   // Inject the worker-specific backend URL so useSocket.ts connects to this

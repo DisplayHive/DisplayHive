@@ -42,13 +42,13 @@ async function gotoMedia(page: Page, workerBackendUrl: string) {
 /**
  * Upload a media item through the HTTP upload endpoint (multipart — the same
  * request the Media page sends). Returns the media id. Sent from Playwright's
- * own HTTP client straight to the worker's backend, with the session token
- * the page holds.
+ * own HTTP client straight to the worker's backend, with the page's session cookie.
  */
 async function seedMediaViaHttp(page: Page, backendUrl: string, filename: string): Promise<number> {
-  const token = await page.evaluate(() => localStorage.getItem('displayhive_admin_token'))
+  // `page.request` shares the page's cookies, so the session cookie goes along; a cookie
+  // session needs the CSRF header on anything that changes something.
   const response = await page.request.post(`${backendUrl}/admin/api/media/upload`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'X-DisplayHive-Request': '1' },
     multipart: {
       file: { name: filename, mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64') },
       title: filename,

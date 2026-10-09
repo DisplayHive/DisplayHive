@@ -114,7 +114,10 @@ def register_device_connection_handlers(socketio, app, db):
             cookie_token, source = web_session.token_from_request(request)
             if cookie_token and source == 'cookie':
                 if not web_session.origin_allowed(app, request, request.headers.get('Origin')):
-                    logger.info("[Auth] Connection rejected: session cookie from a foreign or missing origin")
+                    logger.warning(
+                        "[Auth] Admin socket refused: Origin %r is not this site (Host %r), PUBLIC_URL or an allowed "
+                        "CORS origin. Behind a reverse proxy, pass the Host header on and set PUBLIC_URL.",
+                        request.headers.get('Origin'), request.host)
                     raise ConnectionRefusedError('invalid_origin')
                 token = cookie_token
 

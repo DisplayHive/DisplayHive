@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 import { execSync } from 'node:child_process'
 
-import { defineConfig, type Connect, type ViteDevServer } from 'vite'
+import { defineConfig, type Connect, type PreviewServer, type ViteDevServer } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import type { ServerResponse } from 'node:http'
@@ -15,6 +15,20 @@ const gitCommit = (() => {
     return 'unknown'
   }
 })()
+
+const redirectAdminTrailingSlash = (req: Connect.IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+  try {
+    if (req.method === 'GET' && req.url && (req.url === '/admin' || req.url.startsWith('/admin?'))) {
+      res.statusCode = 301
+      res.setHeader('Location', '/admin/')
+      res.end()
+      return
+    }
+  } catch {
+    // ignore errors and continue
+  }
+  next()
+}
 
 // Backend URL: used both for the dev-server proxy and as the socket URL injected
 // into the client bundle when VITE_SOCKET_URL is not already set.
@@ -36,25 +50,14 @@ export default defineConfig({
     vue(),
     vueDevTools(),
     {
+      // /admin -> /admin/ : the app lives under that base, and the bare path is what the
+      // E2E tests and people type. For `vite dev` and `vite preview` alike.
       name: 'redirect-admin-trailing-slash',
       configureServer(server: ViteDevServer) {
-        server.middlewares.use((req: Connect.IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
-          try {
-            if (
-              req.method === 'GET' &&
-              req.url &&
-              (req.url === '/admin' || req.url.startsWith('/admin?'))
-            ) {
-              res.statusCode = 301
-              res.setHeader('Location', '/admin/')
-              res.end()
-              return
-            }
-          } catch {
-            // ignore errors and continue
-          }
-          next()
-        })
+        server.middlewares.use(redirectAdminTrailingSlash)
+      },
+      configurePreviewServer(server: PreviewServer) {
+        server.middlewares.use(redirectAdminTrailingSlash)
       },
     },
   ],

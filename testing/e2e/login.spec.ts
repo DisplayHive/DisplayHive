@@ -8,12 +8,12 @@ import { adminUrl } from './urls.js'
 
 test.describe('Login form', () => {
   test.beforeEach(async ({ page }) => {
-    // Runs after the fixture's own addInitScript calls, so this clears the
-    // session they seeded — the page loads unauthenticated from here on.
+    // Takes away the session the fixture seeded (the cookie and the "signed in" hint) —
+    // the page loads unauthenticated from here on. (The init script runs after the
+    // fixture's own, so it also wins over the hint it seeded.)
+    await page.context().clearCookies()
     await page.addInitScript(() => {
-      const ls = (globalThis as any).localStorage
-      ls.removeItem('displayhive_admin_token')
-      ls.removeItem('displayhive_admin_username')
+      ;(globalThis as any).localStorage.removeItem('displayhive_admin_session')
     })
   })
 
@@ -61,9 +61,12 @@ test.describe('Login form', () => {
     await page.locator('[data-testid="logout-button"]').click()
 
     await expect(page.locator('[data-testid="login-username"]')).toBeVisible({ timeout: 5000 })
-    const token = await page.evaluate(() =>
-      (globalThis as any).localStorage.getItem('displayhive_admin_token'),
+    // Nothing of the session is left: not the hint, and the server removed the cookie.
+    const hint = await page.evaluate(() =>
+      (globalThis as any).localStorage.getItem('displayhive_admin_session'),
     )
-    expect(token).toBeNull()
+    expect(hint).toBeNull()
+    const cookies = await page.context().cookies()
+    expect(cookies.filter((c) => c.name.endsWith('dh_session'))).toEqual([])
   })
 })
