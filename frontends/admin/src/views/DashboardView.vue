@@ -13,6 +13,7 @@ import { isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 
 // PrimeVue components
 import Card from 'primevue/card'
+import DashboardOverview from '../components/dashboard/DashboardOverview.vue'
 
 const router = useRouter()
 const { on, off, emit } = useSocket()
@@ -256,6 +257,8 @@ const debugWarn = computed(() => screensInDebug.value > 0)
       </Card>
 
     </div>
+
+    <DashboardOverview />
 
     <!-- Community & Links -->
     <div v-if="!hideCommunityLinks" class="community-section">

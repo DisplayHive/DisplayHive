@@ -3,6 +3,7 @@ import DialogTitle from '../components/DialogTitle.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useMediaStore } from '../stores/media'
@@ -35,7 +36,9 @@ const canTag = computed(() => rightsStore.can('media.tag'))
 const canEdit = computed(() => canRename.value || canTag.value)
 
 const selectedFolder = ref<string>('')
-const filterText = ref('')
+// `/media?search=<file>` (from the command palette) arrives with the search already typed.
+const route = useRoute()
+const filterText = ref(typeof route.query.search === 'string' ? route.query.search : '')
 const selectedTags = ref<string[]>([])
 const usageFilter = ref<'all' | 'unused' | 'used'>('all')
 const usageOptions = [

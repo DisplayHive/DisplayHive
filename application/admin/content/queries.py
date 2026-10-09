@@ -44,7 +44,7 @@ def emit_all_content_element(socketio, db, room):
     connected admin (``room='admins'``), e.g. after a database import.
     """
     items = db.session.execute(
-        db.select(ContentElement).order_by(ContentElement.title)
+        db.select(ContentElement).options(selectinload(ContentElement.screengroups)).order_by(ContentElement.title)
     ).scalars().all()
 
     content_list = [
@@ -54,6 +54,11 @@ def emit_all_content_element(socketio, db, room):
             'active': mc.active,
             'duration': mc.duration,
             'contenttypeName': mc.contenttype.name if mc.contenttype else '',
+            # The schedule is wall-clock text, read in the viewer's time zone — same as on a screen.
+            'start_time': fmt_dt(mc.start_time),
+            'end_time': fmt_dt(mc.end_time),
+            'updated_at': mc.updated_at.isoformat() + 'Z' if mc.updated_at else None,
+            'assigned': bool(mc.screengroups),
         }
         for mc in items
     ]

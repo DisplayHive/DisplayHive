@@ -15,12 +15,22 @@ export const useContentStore = defineStore('content', () => {
     title: string
     contenttypeName?: string
     contenttype_name?: string
+    active?: boolean
+    start_time?: string | null
+    end_time?: string | null
+    updated_at?: string | null
+    assigned?: boolean
   }
 
   const toContent = (c: RawContent): Content => ({
     id: c.id,
     title: c.title,
     contenttype_name: c.contenttypeName || c.contenttype_name,
+    active: c.active,
+    start_time: c.start_time,
+    end_time: c.end_time,
+    updated_at: c.updated_at,
+    assigned: c.assigned,
   })
 
   const handleAllContent = (data: { content?: RawContent[]; data?: RawContent[] }) => {

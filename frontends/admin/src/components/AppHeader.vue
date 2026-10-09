@@ -7,6 +7,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useRightsStore } from '../stores/rights'
 import { useTheme } from '../composables/useTheme'
 import { useAdminNavigation } from '../composables/useAdminNavigation'
+import { useCommandPalette } from '../composables/useCommandPalette'
 import Menubar from 'primevue/menubar'
 import Button from 'primevue/button'
 import Popover from 'primevue/popover'
@@ -24,6 +25,7 @@ const settingsStore = useSettingsStore()
 const rightsStore = useRightsStore()
 const { preference: themePreference, isDark, setTheme } = useTheme()
 const { menuItems } = useAdminNavigation()
+const palette = useCommandPalette()
 
 const themePopover = ref()
 const toggleThemePopover = (event: Event) => themePopover.value?.toggle(event)
@@ -83,6 +85,15 @@ const selectTheme = async (value: 'light' | 'dark' | 'system') => {
         <i class="pi pi-user"></i>
         {{ authStore.username }}
       </span>
+      <Button
+        icon="pi pi-search"
+        text
+        size="small"
+        data-testid="palette-button"
+        aria-label="Search (Ctrl+K)"
+        v-tooltip.bottom="'Search (Ctrl+K)'"
+        @click="palette.open()"
+      />
       <Button
         :icon="isDark ? 'pi pi-moon' : 'pi pi-sun'"
         text

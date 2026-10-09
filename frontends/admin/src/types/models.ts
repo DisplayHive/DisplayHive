@@ -176,6 +176,14 @@ export interface Content {
   id: number
   title: string
   contenttype_name?: string
+  active?: boolean
+  /** Wall-clock "YYYY-MM-DDTHH:MM" (read in the viewer's time zone, like on a screen). */
+  start_time?: string | null
+  end_time?: string | null
+  /** ISO instant (UTC) of the last write; null for rows older than the column. */
+  updated_at?: string | null
+  /** Shown on at least one screen group. */
+  assigned?: boolean
 }
 
 /** Something that uses a media file (see application/admin/media/usage.py). */

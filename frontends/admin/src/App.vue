@@ -9,6 +9,7 @@ import ChangePasswordView from './views/ChangePasswordView.vue'
 import AppBanners from './components/AppBanners.vue'
 import AppHeader from './components/AppHeader.vue'
 import PageHeader from './components/PageHeader.vue'
+import CommandPalette from './components/CommandPalette.vue'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 
@@ -37,6 +38,7 @@ const security = useSecurityStatus()
       <AppBanners :status="security.status.value" :critical-issues="security.criticalIssues.value" :warnings="security.warnings.value" />
 
       <AppHeader />
+      <CommandPalette />
 
       <main class="app-main p-fluid">
         <div v-if="!isConnected" class="disconnect-overlay" data-testid="disconnect-overlay">

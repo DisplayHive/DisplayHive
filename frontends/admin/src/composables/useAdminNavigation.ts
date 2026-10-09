@@ -124,8 +124,17 @@ export function useAdminNavigation() {
     ]
   })
 
+  /** Every page the person may open, flat — for the command palette. */
+  const pages = computed(() => {
+    const leaves = [...CONTENT, ...ADMIN_GROUPS.flatMap((g) => g.items), USERS]
+    return [
+      { label: 'Dashboard', icon: 'pi pi-home', path: '/' },
+      ...leaves.filter((leaf) => leaf.allowed(rights.can)).map(({ label, icon, path }) => ({ label, icon, path })),
+    ]
+  })
+
   const pageTitle = computed(() => PAGES[route.name as string]?.title || 'DisplayHive Admin')
   const pageIcon = computed(() => PAGES[route.name as string]?.icon || '')
 
-  return { menuItems, pageTitle, pageIcon }
+  return { menuItems, pages, pageTitle, pageIcon }
 }
