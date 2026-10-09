@@ -15,6 +15,7 @@
  *   command (CMD=RELOAD|DEVICE_DEACTIVATED|DEVICE_REVOKED)
  */
 
+import { setStatus, setStatusIndicatorEnabled, initStatusIndicator } from "./status-indicator";
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
 import type {
   AdoptionApprovedMessage,
@@ -191,7 +192,10 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
   startClockTicker();
   startCountdownTicker();
 
+  initStatusIndicator();
+
   socket.on("connect", () => {
+    setStatus("con", null);
     log("info", "socket.connect", "Connected to server", { deviceKey: window.deviceKey });
     if (!_isDeactivated) hideDeactivationOverlay();
     handlePreviewMode(socket);
@@ -237,6 +241,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
   });
 
   socket.on("connect_error", (error: Error) => {
+    setStatus("con", `connection error: ${error?.message ?? error}`);
     log("error", "socket.connect_error", "Connection error: " + error);
     const kind = classifyConnectError(error);
 
@@ -274,6 +279,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
 
   // Handle disconnect events
   socket.on("disconnect", (reason: string) => {
+    if (reason !== "io client disconnect") setStatus("con", `disconnected (${reason})`);
     log("warn", "socket.disconnect", "Socket disconnected", { reason });
     stopPingInterval();
     // "io client disconnect" means we called socket.disconnect() ourselves (e.g.
@@ -309,6 +315,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     // Normally already applied from storage at startup; the server reloads the
     // page when it changes, so this only fixes up a stale/missing stored value.
     setRotation(Number(cfg.rotation) || 0);
+    setStatusIndicatorEnabled(cfg.statusindicator !== "no");
     window._lastDeviceConfig = cfg;
   });
 

@@ -11,6 +11,25 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# SystemSetting: show the status dot on screens (frontends/screen/ts/screen/status-indicator.ts).
+# On unless switched off.
+STATUS_INDICATOR_SETTING = 'screen_status_indicator'
+
+
+def status_indicator_enabled(db) -> bool:
+    from application.models import SystemSetting
+    row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == STATUS_INDICATOR_SETTING)).scalar_one_or_none()
+    return not (row and (row.value or '').strip().lower() in ('false', '0', 'no', 'off'))
+
+
+def push_deviceconfig_to_connected_devices(socketio, db) -> None:
+    """Send every connected screen its device config again (after a setting that is part of it changed)."""
+    from application.socketio_handlers.lifecycle import connected_devices, registry_lock
+    with registry_lock:
+        keys = list(connected_devices)
+    for key in keys:
+        send_upd_deviceconfig(socketio, db, room=f'device_{key}')
+
 
 def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional[str] = None, sid: Optional[str] = None, *, device=None, screen=None):
     """Emit a fully-populated `upd_deviceconfig` payload using authoritative DB values."""
@@ -64,6 +83,7 @@ def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional
                 'devicedebugstate': devicedebugstate,
                 'glow':             glow_state,
                 'rotation':         int(getattr(screen_obj, 'rotation', 0) or 0) if screen_obj else 0,
+                'statusindicator':  'yes' if status_indicator_enabled(db) else 'no',
             }
         }
 

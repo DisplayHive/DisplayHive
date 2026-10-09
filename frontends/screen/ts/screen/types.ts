@@ -63,6 +63,8 @@ export interface DeviceConfig {
   glow: "yes" | "no";
   /** Clockwise rotation of the whole stage in degrees: 0, 90, 180 or 270. */
   rotation?: number;
+  /** Show the status dot (status-indicator.ts)? Missing means yes. */
+  statusindicator?: "yes" | "no";
 }
 
 export interface UpdDeviceConfigMessage {

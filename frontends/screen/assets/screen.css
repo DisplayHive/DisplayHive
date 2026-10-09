@@ -252,6 +252,39 @@ body {
     to { transform: scaleX(1); }
 }
 
+/* Status indicator (status-indicator.ts): codes of what is wrong, top-left; hidden when all is well. */
+#status-indicator {
+    position: absolute;
+    top: 0.8vmin;
+    left: 0.8vmin;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 0.6vmin;
+    padding: 0.3vmin 0.9vmin;
+    border-radius: 2vmin;
+    background: rgba(0, 0, 0, 0.6);
+    font: 600 1.6vmin/1 monospace;
+    color: #fff;
+    pointer-events: none;
+}
+
+#status-indicator[hidden] {
+    display: none;
+}
+
+#status-indicator::before {
+    content: "";
+    width: 1.4vmin;
+    height: 1.4vmin;
+    border-radius: 50%;
+    background: #f5c518;
+}
+
+#status-indicator[data-level="red"]::before {
+    background: #e5392b;
+}
+
 /* ── Persistent powered-by badge — bottom-right corner during normal playback.
    Only rendered when the "hide powered by" setting is off (see index.html). ── */
 #powered-by-badge {

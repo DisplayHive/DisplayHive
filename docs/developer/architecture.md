@@ -271,6 +271,9 @@ framework:
 - `content-display.ts` / `container-manager.ts` — render playlists and HTML
   into positioned containers.
 - `adopt.ts` — the device adoption flow (QR code / token).
+- `status-indicator.ts` — the dot in the corner that appears only when something is wrong: red `con`
+  (connection), yellow `mim` (content/media missing) and `js` (script error); the codes also go to the
+  screen log, and Settings can switch the dot off (`statusindicator` in `upd_deviceconfig`).
 - `clock.ts`, `storage.ts`, `debug-panel.ts`, `viewport-tracker.ts`,
   `preload-iframes.ts` — supporting concerns.
 

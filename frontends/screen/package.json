@@ -8,6 +8,7 @@
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "jiti": "^2.6.1",
+    "jsdom": "^29.1.1",
     "prettier": "3.8.1",
     "socket.io-client": "^4.8.4",
     "typescript": "~5.9.3",

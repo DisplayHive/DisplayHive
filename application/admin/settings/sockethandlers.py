@@ -19,6 +19,7 @@ ALLOWED_SETTING_KEYS = {
     'content_edit_preview_size',
     'content_list_preview_size',
     'screen_log_max_age_hours', 'screen_log_max_rows',
+    'screen_status_indicator',
 }
 
 
@@ -156,6 +157,10 @@ def register_admin_settings_handlers(socketio, app, db):
 
         db.session.commit()
         _emit_settings(sid)
+
+        if 'screen_status_indicator' in settings:
+            from application.socketio_handlers.devconfig import push_deviceconfig_to_connected_devices
+            push_deviceconfig_to_connected_devices(socketio, db)
 
         if rejected:
             # The known keys above are already saved; only the unknown ones are refused.

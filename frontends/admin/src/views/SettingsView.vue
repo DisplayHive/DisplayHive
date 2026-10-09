@@ -38,6 +38,7 @@ const contentSaving = ref(false)
 const screenLogMaxAgeHours = ref(72)
 const screenLogMaxRows = ref(250000)
 const logSaving = ref(false)
+const statusIndicator = ref(true)
 
 // Time section
 const serverTimeBase = ref<Date | null>(null)
@@ -93,6 +94,7 @@ interface SystemSettings {
   hide_admin_tours?: boolean | string
   content_edit_preview_size?: number | string
   content_list_preview_size?: number | string
+  screen_status_indicator?: boolean | string
   screen_log_max_age_hours?: number | string
   screen_log_max_rows?: number | string
   timezone?: string
@@ -113,6 +115,7 @@ const handleSettings = (data: { system_settings?: SystemSettings; server_time?: 
   contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
   const listPreviewSize = Number(sys.content_list_preview_size)
   contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
+  statusIndicator.value = !(sys.screen_status_indicator === false || sys.screen_status_indicator === 'false')
   const logHours = Number(sys.screen_log_max_age_hours)
   screenLogMaxAgeHours.value = Number.isFinite(logHours) && logHours > 0 ? logHours : 72
   const logRows = Number(sys.screen_log_max_rows)
@@ -191,9 +194,10 @@ const saveLogSettings = async () => {
         settings: {
           screen_log_max_age_hours: String(screenLogMaxAgeHours.value),
           screen_log_max_rows: String(screenLogMaxRows.value),
+          screen_status_indicator: statusIndicator.value ? 'true' : 'false',
         },
       },
-      { success: 'Screen log settings updated', error: 'Save failed' },
+      { success: 'Screen settings updated', error: 'Save failed' },
     )
   } finally {
     logSaving.value = false
@@ -415,11 +419,22 @@ const saveTimeSettings = async () => {
         <template #title>
           <div class="card-header-title">
             <i class="pi pi-list card-header-icon" />
-            <span>Screen Log</span>
+            <span>Screens: Status Dot &amp; Log</span>
           </div>
         </template>
         <template #content>
           <div class="settings-form">
+            <div class="toggle-group" data-tour="settings-status-indicator">
+              <div class="field toggle-field">
+                <label for="status-indicator-switch">Show a status dot on screens when something is wrong</label>
+                <ToggleSwitch id="status-indicator-switch" v-model="statusIndicator" :disabled="!canEdit" />
+              </div>
+            </div>
+            <p class="hint">
+              The dot is hidden while all is well. Red <code>con</code>: no connection to the server.
+              Yellow <code>mim</code>: content is missing or a picture/video did not load; yellow <code>js</code>: a script error.
+              The codes are also written to the screen log.
+            </p>
             <p class="hint">
               Screens report warnings and errors to the server, and everything while the Logger page is open.
               Lines are deleted when they are older than the first limit or when the table grows past the second.

@@ -10,6 +10,7 @@
 import type { Scene } from "./types.js";
 import { renderScene, clearAllContainers, getSocketEmitter } from "./container-manager.js";
 import { log } from "./logger.js";
+import { setContentMissing } from "./status-indicator.js";
 import { setIndicatorSuppressed, startIndicator, stopIndicator } from "./indicator.js";
 
 let scenes: Scene[] = [];
@@ -191,6 +192,7 @@ export function patchCurrentScene(sceneId: number, containerHtml: Record<string,
 export function startSceneRotation(newScenes: Scene[]): void {
   scenes = newScenes;
   syncIndicatorVisibility();
+  setContentMissing(newScenes.length === 0);
 
   if (scenes.length === 0) {
     clearAdvanceTimer();
