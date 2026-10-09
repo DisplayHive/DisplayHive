@@ -41,3 +41,23 @@ def test_service_worker_is_served_from_the_root_and_never_cached(flask_app, tmp_
 def test_page_names_its_release_for_the_service_worker(flask_app):
     html = flask_app.app.test_client().get('/').get_data(as_text=True)
     assert re.search(r'<meta name="asset-version" content="[^"]+">', html)
+
+
+def test_device_config_carries_the_reload_time_and_zone(db_session):
+    from application.models import SystemSetting, db
+    from application.socketio_handlers import devconfig
+
+    class Capture:
+        def emit(self, event, payload, **kwargs):
+            self.payload = payload
+
+    def config():
+        capture = Capture()
+        devconfig.send_upd_deviceconfig(capture, db, room='device_nobody')
+        return capture.payload['deviceconfig']
+
+    assert (config()['reloadat'], config()['timezone']) == ('', 'UTC')
+    db_session.add(SystemSetting(key='screen_reload_at', value='04:30'))
+    db_session.add(SystemSetting(key='timezone', value='Europe/Berlin'))
+    db_session.commit()
+    assert (config()['reloadat'], config()['timezone']) == ('04:30', 'Europe/Berlin')

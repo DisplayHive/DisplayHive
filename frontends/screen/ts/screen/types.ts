@@ -65,6 +65,10 @@ export interface DeviceConfig {
   rotation?: number;
   /** Show the status dot (status-indicator.ts)? Missing means yes. */
   statusindicator?: "yes" | "no";
+  /** Daily reload time "HH:MM" in `timezone`; empty = off (scheduled-reload.ts). */
+  reloadat?: string;
+  /** The instance's time zone (IANA name). */
+  timezone?: string;
 }
 
 export interface UpdDeviceConfigMessage {

@@ -1,11 +1,14 @@
 /**
- * E2E test for the screen's service worker (frontends/screen/ts/sw): a screen page that was
- * loaded once still loads, and shows the connection problem, when the server cannot be reached.
+ * E2E tests for the screen page's long-running behaviour (frontends/screen/ts/screen):
+ *  - the service worker (ts/sw): a screen page that was loaded once still loads, and shows the
+ *    connection problem, when the server cannot be reached;
+ *  - the mouse pointer hides itself when idle;
+ *  - the daily scheduled reload (Settings → Screens).
  */
 
 import test, { expect } from './fixtures.js'
 import { adminUrl } from './urls.js'
-import type { Page } from '@playwright/test'
+import type { Browser, BrowserContext, Page } from '@playwright/test'
 
 test.setTimeout(90_000)
 // Service workers and a "network down" switch that also covers them are Chromium's.
@@ -23,14 +26,14 @@ async function emitAck<T = any>(page: Page, event: string, data: unknown): Promi
   )
 }
 
-test('a screen that was loaded once starts again while the server is unreachable', async ({ page, browser, backendUrl }) => {
+/** An adopted device, and its own page connected to the server. */
+async function connectDevice(page: Page, browser: Browser, backendUrl: string) {
   await page.addInitScript((url: string) => {
     ;(window as any).__DISPLAYHIVE_TEST_BACKEND_URL__ = url
   }, backendUrl)
   await page.goto(`${adminUrl}/screens`)
   await expect(page.locator('.p-datatable')).toBeVisible({ timeout: 10_000 })
 
-  // An adopted device
   const token = `off-${Math.random().toString(36).slice(2, 7)}`
   const devicekey = await page.evaluate(
     ({ token }: { token: string }) =>
@@ -42,7 +45,6 @@ test('a screen that was loaded once starts again while the server is unreachable
       }),
     { token },
   )
-
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true })
   const screenPage = await ctx.newPage()
   await screenPage.addInitScript((key: string) => {
@@ -50,6 +52,28 @@ test('a screen that was loaded once starts again while the server is unreachable
   }, devicekey)
   await screenPage.goto(backendUrl)
   await screenPage.waitForFunction(() => (window as any).socket?.connected, undefined, { timeout: 20_000 })
+  return { ctx, screenPage, devicekey }
+}
+
+async function removeDevice(page: Page, ctx: BrowserContext, devicekey: string) {
+  await ctx.setOffline(false)
+  await ctx.close()
+  const id = await page.evaluate(
+    ({ devicekey }: { devicekey: string }) =>
+      new Promise<number | null>((resolve) => {
+        const socket = (window as any).__displayhive_socket__
+        socket.once('displayhive:devices:stc:devices_upd_devicelist', (d: any) => {
+          resolve((d?.devices || []).find((x: any) => x.devicekey === devicekey)?.id ?? null)
+        })
+        socket.emit('displayhive:devices:cts:get_devices')
+      }),
+    { devicekey },
+  )
+  if (id) await emitAck(page, 'displayhive:devices:cts:delete_device', { device_id: id })
+}
+
+test('a screen that was loaded once starts again while the server is unreachable', async ({ page, browser, backendUrl }) => {
+  const { ctx, screenPage, devicekey } = await connectDevice(page, browser, backendUrl)
 
   // The worker is installed, controls the page and holds the page and its bundle
   await screenPage.waitForFunction(async () => {
@@ -71,18 +95,49 @@ test('a screen that was loaded once starts again while the server is unreachable
   await expect(screenPage.locator('#status-indicator')).toHaveAttribute('data-level', 'red', { timeout: 30_000 })
   await expect(screenPage.locator('#status-indicator')).toContainText('con')
 
-  await ctx.setOffline(false)
-  await ctx.close()
-  const devices = await page.evaluate(
-    ({ devicekey }: { devicekey: string }) =>
-      new Promise<number | null>((resolve) => {
-        const socket = (window as any).__displayhive_socket__
-        socket.once('displayhive:devices:stc:devices_upd_devicelist', (d: any) => {
-          resolve((d?.devices || []).find((x: any) => x.devicekey === devicekey)?.id ?? null)
-        })
-        socket.emit('displayhive:devices:cts:get_devices')
-      }),
-    { devicekey },
+  await removeDevice(page, ctx, devicekey)
+})
+
+test('the mouse pointer hides when idle and comes back on movement', async ({ page, browser, backendUrl }) => {
+  const { ctx, screenPage, devicekey } = await connectDevice(page, browser, backendUrl)
+  const html = screenPage.locator('html')
+  await expect(html).toHaveClass(/cursor-hidden/, { timeout: 10_000 })
+  await screenPage.mouse.move(50, 50)
+  await screenPage.mouse.move(80, 90)
+  await expect(html).not.toHaveClass(/cursor-hidden/)
+  await expect(html).toHaveClass(/cursor-hidden/, { timeout: 10_000 })
+  await removeDevice(page, ctx, devicekey)
+})
+
+test('screens reload themselves at the daily reload time', async ({ page, browser, backendUrl }) => {
+  test.setTimeout(180_000)
+  const { ctx, screenPage, devicekey } = await connectDevice(page, browser, backendUrl)
+  await screenPage.evaluate(() => { (window as any).__notReloaded = true })
+
+  // Two minutes from now, in the instance's time zone (UTC unless set)
+  const tz = await page.evaluate(
+    () => new Promise<string>((resolve) => {
+      const socket = (window as any).__displayhive_socket__
+      socket.once('displayhive:admin:stc:admin_settings', (d: any) => resolve(d?.system_settings?.timezone || 'UTC'))
+      socket.emit('displayhive:admin:cts:get_admin_settings')
+    }),
   )
-  if (devices) await emitAck(page, 'displayhive:devices:cts:delete_device', { device_id: devices })
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(Date.now() + 2 * 60_000))
+  const at = `${parts.find((p) => p.type === 'hour')!.value}:${parts.find((p) => p.type === 'minute')!.value}`
+  const ack = await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_reload_at: at } })
+  expect(ack.success).toBe(true)
+
+  // A bad time is refused
+  expect((await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_reload_at: '25:99' } })).success).toBe(false)
+
+  // The screen reloads itself: the marker set on the page is gone
+  await expect.poll(
+    async () => screenPage.evaluate(() => (window as any).__notReloaded === true).catch(() => false),
+    { timeout: 170_000, intervals: [2_000] },
+  ).toBe(false)
+  await screenPage.waitForFunction(() => (window as any).socket?.connected, undefined, { timeout: 20_000 })
+
+  await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_reload_at: '' } })
+  await removeDevice(page, ctx, devicekey)
 })

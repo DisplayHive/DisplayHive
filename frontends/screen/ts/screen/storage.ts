@@ -99,3 +99,15 @@ export function getContentSnapshot(): string | null {
 export function setContentSnapshot(json: string): void {
   safeSet("contentSnapshot", json);
 }
+
+// ── Scheduled reload ─────────────────────────────────────────────────────────
+// The day ("YYYY-MM-DD" in the configured time zone) on which the daily reload last happened,
+// so a reload that restarts the page does not trigger itself again (see scheduled-reload.ts).
+
+export function getLastScheduledReload(): string | null {
+  return safeGet("lastScheduledReload");
+}
+
+export function setLastScheduledReload(day: string): void {
+  safeSet("lastScheduledReload", day);
+}

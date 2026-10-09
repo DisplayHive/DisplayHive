@@ -1,4 +1,7 @@
 import { registerServiceWorker } from "./sw-register";
+import { initCursorHider } from "./cursor-hider";
+import { initWakeLock } from "./wake-lock";
+import { reloadOnReleaseChange } from "./scheduled-reload";
 import { initializeSocketConnection } from "./socket-connection";
 import { initializeAuthentication } from "./auth_helper";
 import {
@@ -67,6 +70,9 @@ export function screenInit(): void {
   // or after adoption completes
 
   registerServiceWorker();
+  initCursorHider();
+  initWakeLock();
+  reloadOnReleaseChange();
 
   // Placeholder screen logic
   console.log("ts/screen loaded");

@@ -16,6 +16,7 @@
  */
 
 import { reconnectDelay } from "./reconnect";
+import { setConnectionCheck, setScheduledReload } from "./scheduled-reload";
 import { loadContentSnapshot, saveContentSnapshot } from "./content-snapshot";
 import { setStatus, setStatusIndicatorEnabled, initStatusIndicator } from "./status-indicator";
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
@@ -205,6 +206,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
   startCountdownTicker();
 
   initStatusIndicator();
+  setConnectionCheck(() => socket.connected);
 
   socket.io.on("reconnect", (attempt: number) => {
     log("info", "socket.reconnect", `Reconnected after ${attempt} attempt(s)`);
@@ -333,6 +335,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     // page when it changes, so this only fixes up a stale/missing stored value.
     setRotation(Number(cfg.rotation) || 0);
     setStatusIndicatorEnabled(cfg.statusindicator !== "no");
+    setScheduledReload(cfg.reloadat, cfg.timezone);
     window._lastDeviceConfig = cfg;
   });
 

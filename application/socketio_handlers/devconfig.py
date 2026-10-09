@@ -22,6 +22,17 @@ def status_indicator_enabled(db) -> bool:
     return not (row and (row.value or '').strip().lower() in ('false', '0', 'no', 'off'))
 
 
+# SystemSetting: "HH:MM" at which screens reload themselves once a day, in the instance's time zone
+# (the `timezone` setting); empty = off. See frontends/screen/ts/screen/scheduled-reload.ts.
+RELOAD_AT_SETTING = 'screen_reload_at'
+
+
+def system_setting(db, key: str, default: str = '') -> str:
+    from application.models import SystemSetting
+    row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == key)).scalar_one_or_none()
+    return (row.value or '').strip() if row and row.value is not None else default
+
+
 def push_deviceconfig_to_connected_devices(socketio, db) -> None:
     """Send every connected screen its device config again (after a setting that is part of it changed)."""
     from application.socketio_handlers.lifecycle import connected_devices, registry_lock
@@ -84,6 +95,8 @@ def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional
                 'glow':             glow_state,
                 'rotation':         int(getattr(screen_obj, 'rotation', 0) or 0) if screen_obj else 0,
                 'statusindicator':  'yes' if status_indicator_enabled(db) else 'no',
+                'reloadat':         system_setting(db, RELOAD_AT_SETTING),
+                'timezone':         system_setting(db, 'timezone', 'UTC') or 'UTC',
             }
         }
 

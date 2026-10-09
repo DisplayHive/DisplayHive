@@ -279,6 +279,11 @@ framework:
   (tested). Together with `content-snapshot.ts` (the last `upd_content`, kept in localStorage per device
   and shown at startup) a screen restarts and keeps playing without the server. Needs https or
   localhost; elsewhere browsers offer no service workers and the screen runs as before.
+- `cursor-hider.ts` (the pointer hides after 3 s without movement), `wake-lock.ts` (keeps the display awake;
+  needs https/localhost) and `scheduled-reload.ts`: the daily reload at the time of the `screen_reload_at`
+  setting (read in the `timezone` setting, sent in `upd_deviceconfig` as `reloadat`/`timezone`). It asks the
+  service worker to look for a new release first and waits for a connection; a new service worker taking
+  over (a deploy) also reloads the page after a few seconds.
 - `reconnect.ts` — how a screen comes back after losing the server: Socket.IO retries forever with a
   1 s → 30 s backoff (±25 % jitter, so many screens do not hit a restarting server together); a manual
   retry with the same timing covers what Socket.IO does not retry (server refused or closed the connection).

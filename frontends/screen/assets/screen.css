@@ -252,6 +252,12 @@ body {
     to { transform: scaleX(1); }
 }
 
+/* No mouse pointer on an unattended screen (cursor-hider.ts adds the class after a few idle seconds). */
+html.cursor-hidden,
+html.cursor-hidden * {
+    cursor: none !important;
+}
+
 /* Status indicator (status-indicator.ts): codes of what is wrong, top-left; hidden when all is well. */
 #status-indicator {
     position: absolute;

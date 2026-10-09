@@ -39,6 +39,8 @@ const screenLogMaxAgeHours = ref(72)
 const screenLogMaxRows = ref(250000)
 const logSaving = ref(false)
 const statusIndicator = ref(true)
+const reloadEnabled = ref(false)
+const reloadAt = ref('04:00')
 
 // Time section
 const serverTimeBase = ref<Date | null>(null)
@@ -95,6 +97,7 @@ interface SystemSettings {
   content_edit_preview_size?: number | string
   content_list_preview_size?: number | string
   screen_status_indicator?: boolean | string
+  screen_reload_at?: string
   screen_log_max_age_hours?: number | string
   screen_log_max_rows?: number | string
   timezone?: string
@@ -116,6 +119,8 @@ const handleSettings = (data: { system_settings?: SystemSettings; server_time?: 
   const listPreviewSize = Number(sys.content_list_preview_size)
   contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
   statusIndicator.value = !(sys.screen_status_indicator === false || sys.screen_status_indicator === 'false')
+  reloadEnabled.value = !!sys.screen_reload_at
+  if (sys.screen_reload_at) reloadAt.value = sys.screen_reload_at
   const logHours = Number(sys.screen_log_max_age_hours)
   screenLogMaxAgeHours.value = Number.isFinite(logHours) && logHours > 0 ? logHours : 72
   const logRows = Number(sys.screen_log_max_rows)
@@ -195,6 +200,7 @@ const saveLogSettings = async () => {
           screen_log_max_age_hours: String(screenLogMaxAgeHours.value),
           screen_log_max_rows: String(screenLogMaxRows.value),
           screen_status_indicator: statusIndicator.value ? 'true' : 'false',
+          screen_reload_at: reloadEnabled.value ? reloadAt.value : '',
         },
       },
       { success: 'Screen settings updated', error: 'Save failed' },
@@ -419,7 +425,7 @@ const saveTimeSettings = async () => {
         <template #title>
           <div class="card-header-title">
             <i class="pi pi-list card-header-icon" />
-            <span>Screens: Status Dot &amp; Log</span>
+            <span>Screens</span>
           </div>
         </template>
         <template #content>
@@ -430,6 +436,19 @@ const saveTimeSettings = async () => {
                 <ToggleSwitch id="status-indicator-switch" v-model="statusIndicator" :disabled="!canEdit" />
               </div>
             </div>
+            <div class="toggle-group" data-tour="settings-screen-reload">
+              <div class="field toggle-field">
+                <label for="screen-reload-switch">Reload screens once a day</label>
+                <ToggleSwitch id="screen-reload-switch" v-model="reloadEnabled" :disabled="!canEdit" />
+              </div>
+              <div v-if="reloadEnabled" class="field">
+                <label for="screen-reload-at">at (time zone: {{ selectedTimezone }})</label>
+                <InputText id="screen-reload-at" v-model="reloadAt" type="time" :disabled="!canEdit" data-testid="screen-reload-at" />
+              </div>
+            </div>
+            <p class="hint">
+              A daily reload picks up a new release of the screen page. A screen without a connection tries again until it is back.
+            </p>
             <p class="hint">
               The dot is hidden while all is well. Red <code>con</code>: no connection to the server.
               Yellow <code>mim</code>: content is missing or a picture/video did not load; yellow <code>js</code>: a script error.

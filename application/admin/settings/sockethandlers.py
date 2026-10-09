@@ -1,4 +1,5 @@
 import logging
+import re
 
 from flask import request
 
@@ -19,7 +20,7 @@ ALLOWED_SETTING_KEYS = {
     'content_edit_preview_size',
     'content_list_preview_size',
     'screen_log_max_age_hours', 'screen_log_max_rows',
-    'screen_status_indicator',
+    'screen_status_indicator', 'screen_reload_at',
 }
 
 
@@ -138,6 +139,10 @@ def register_admin_settings_handlers(socketio, app, db):
         from application import screen_logs
         rejected = []
         for key, value in settings.items():
+            if key == 'screen_reload_at':
+                value = (value or '').strip()
+                if value and not re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d', value):
+                    raise Fail('The reload time must look like 04:00')
             if key in screen_logs.RETENTION_SETTINGS:
                 try:
                     value = screen_logs.validate_retention_setting(key, value)
@@ -158,7 +163,7 @@ def register_admin_settings_handlers(socketio, app, db):
         db.session.commit()
         _emit_settings(sid)
 
-        if 'screen_status_indicator' in settings:
+        if {'screen_status_indicator', 'screen_reload_at', 'timezone'} & set(settings):
             from application.socketio_handlers.devconfig import push_deviceconfig_to_connected_devices
             push_deviceconfig_to_connected_devices(socketio, db)
 
