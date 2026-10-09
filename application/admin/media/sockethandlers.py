@@ -6,6 +6,7 @@ import logging
 from flask_socketio import emit
 
 from application import media_renditions
+from application.admin.media.usage import media_usage
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ def register_admin_media_handlers(socketio, app, db):
         all_media = db.session.execute(
             db.select(Media).order_by(Media.created_at.desc())
         ).scalars().all()
+        usage = media_usage(db, all_media)
         media_list = []
         for m in all_media:
             url, preview_url = media_file_urls(m)
@@ -43,6 +45,7 @@ def register_admin_media_handlers(socketio, app, db):
                 'preview_url': preview_url,
                 'file_size': m.file_size,
                 'created_at': m.created_at.isoformat() if m.created_at else None,
+                'used_by': usage.get(m.id, []),
             })
         return media_list
 

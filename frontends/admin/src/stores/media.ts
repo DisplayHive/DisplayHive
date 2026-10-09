@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
 import { unwrapEntity } from '../utils/entity'
-import type { MediaItem } from '../types/models'
+import type { MediaItem, MediaUsage } from '../types/models'
 
 type RawMediaItemJsonApi = {
   id: string | number
@@ -15,6 +15,7 @@ type RawMediaItemJsonApi = {
     preview_url?: string
     tags?: string[]
     folder?: string
+    used_by?: MediaUsage[]
   }
 }
 
@@ -30,6 +31,7 @@ type RawMediaItemFlat = {
   preview?: string
   tags?: string[]
   folder?: string
+  used_by?: MediaUsage[]
 }
 
 type RawMediaItem = RawMediaItemJsonApi | RawMediaItemFlat | string
@@ -49,6 +51,7 @@ function normalizeMediaItem(item: RawMediaItem, idx = 0, currentFolder = ''): Me
       preview_url: r.preview_url || r.preview || r.url || '',
       url: r.url || '',
       tags: r.tags || [],
+      used_by: r.used_by || [],
     }
   } catch {
     return { id: idx, title: '', filename: '', mimetype: '', folder: currentFolder, preview_url: '', url: '', tags: [] }

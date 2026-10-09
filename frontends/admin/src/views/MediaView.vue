@@ -8,6 +8,9 @@ import { useToast } from 'primevue/usetoast'
 import { useMediaStore } from '../stores/media'
 import { useRightsStore } from '../stores/rights'
 import { useAuthStore } from '../stores/auth'
+import { deleteWarning, isUnused, usageLabel, usageLink } from '../utils/mediaUsage'
+import RouteLink from '../components/RouteLink.vue'
+import SelectButton from 'primevue/selectbutton'
 import { uploadMedia, MAX_MEDIA_UPLOAD_BYTES } from '../utils/uploadMedia'
 import type { MediaItem } from '../types/models'
 
@@ -34,6 +37,13 @@ const canEdit = computed(() => canRename.value || canTag.value)
 const selectedFolder = ref<string>('')
 const filterText = ref('')
 const selectedTags = ref<string[]>([])
+const usageFilter = ref<'all' | 'unused' | 'used'>('all')
+const usageOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'Unused', value: 'unused' },
+  { label: 'In use', value: 'used' },
+]
+const unusedCount = computed(() => mediaStore.mediaItems.filter(isUnused).length)
 
 // Edit dialog
 const isSavingMedia = ref(false)
@@ -46,6 +56,7 @@ const editForm = ref({
   mimetype: '',
 })
 const editTags = ref<string[]>([])
+const editUsedBy = ref<MediaItem['used_by']>([])
 const newTagInput = ref('')
 
 const editAssignedSet = computed(() => new Set(editTags.value.map((t) => t.toLowerCase())))
@@ -177,6 +188,7 @@ const filteredMedia = computed(() => {
     const sel = selectedTags.value.map((s) => s.toLowerCase())
     items = items.filter((m) => (m.tags || []).some((t) => sel.includes(t.toLowerCase())))
   }
+  if (usageFilter.value !== 'all') items = items.filter((m) => isUnused(m) === (usageFilter.value === 'unused'))
   if (filterText.value) {
     const search = filterText.value.toLowerCase()
     items = items.filter(
@@ -210,6 +222,7 @@ const openEditDialog = (item: MediaItem) => {
     mimetype: item.mimetype || '',
   }
   editTags.value = [...(item.tags || [])]
+  editUsedBy.value = item.used_by ?? []
   newTagInput.value = ''
   showEditDialog.value = true
 }
@@ -229,7 +242,7 @@ const saveMedia = async (keepOpen = false) => {
 
 const deleteMedia = (item: MediaItem) => {
   confirmDanger({
-    message: `Are you sure you want to delete "${item.title || item.filename}"?`,
+    message: `Are you sure you want to delete "${item.title || item.filename}"?${deleteWarning(item)}`,
     // The server pushes the new list itself (no fetch() behind the delete).
     accept: async () => {
       await request('displayhive:media:cts:delete_media', { id: item.id }, { success: 'Media deleted', error: 'Could not delete the media' })
@@ -312,6 +325,16 @@ const copyUrl = (url: string) => {
 
           <div class="filter-bar">
             <InputText v-model="filterText" data-tour="media-search-field" placeholder="Search media..." class="filter-input" />
+            <SelectButton
+              v-model="usageFilter"
+              data-tour="media-usage-filter"
+              :options="usageOptions"
+              option-label="label"
+              option-value="value"
+              :allow-empty="false"
+              size="small"
+              :title="`${unusedCount} file(s) are not used anywhere`"
+            />
             <Tag :value="`${filteredMedia.length} items`" />
           </div>
 
@@ -322,6 +345,13 @@ const copyUrl = (url: string) => {
               class="media-item"
             >
               <div class="media-preview">
+                <Tag
+                  v-if="isUnused(item)"
+                  class="media-unused-tag"
+                  value="Unused"
+                  severity="warn"
+                  title="Not used by any content, preset, container default, design or setting"
+                />
                 <img v-if="isImage(item.mimetype)" :src="item.preview_url || item.url" :alt="item.title" />
                 <video v-else-if="isVideo(item.mimetype)" :src="item.url" />
                 <div v-else class="file-icon">
@@ -388,6 +418,18 @@ const copyUrl = (url: string) => {
           <div v-else class="edit-preview-file">
             <i class="pi pi-file" />
           </div>
+        </div>
+
+        <!-- Where the file is used -->
+        <div class="field edit-usage" data-tour="media-edit-usage">
+          <label>Used in</label>
+          <ul v-if="editUsedBy?.length" class="edit-usage-list">
+            <li v-for="u in editUsedBy" :key="u.kind + u.id">
+              <RouteLink v-if="usageLink(u)" :to="usageLink(u)!">{{ usageLabel(u) }}</RouteLink>
+              <span v-else>{{ usageLabel(u) }}</span>
+            </li>
+          </ul>
+          <span v-else class="hint">Not used anywhere.</span>
         </div>
 
         <!-- Title field -->
@@ -643,6 +685,7 @@ const copyUrl = (url: string) => {
 }
 
 .media-preview {
+  position: relative;
   height: 150px;
   background: var(--p-surface-200, #ddd);
   display: flex;
@@ -961,5 +1004,22 @@ const copyUrl = (url: string) => {
    placeholder shade for .edit-preview above — see docs/developer/styleguide.md. */
 .dark-mode .edit-preview {
   background: var(--p-surface-700, #334155);
+}
+
+/* Badge for a file nothing uses — a theme-aware PrimeVue Tag, so no dark-mode override needed. */
+.media-unused-tag {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  z-index: 1;
+}
+
+.edit-usage-list {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.edit-usage-list a {
+  text-decoration: underline;
 }
 </style>

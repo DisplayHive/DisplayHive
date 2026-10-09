@@ -39,6 +39,18 @@ async function gotoMedia(page: Page, workerBackendUrl: string) {
   await expect(page.locator('.media-view, .card')).toBeVisible({ timeout: 10_000 })
 }
 
+async function emitAck<T = any>(page: Page, event: string, data: unknown): Promise<T> {
+  return page.evaluate(
+    ({ event, data }: { event: string; data: unknown }) =>
+      new Promise<any>((resolve) => {
+        const socket = (window as any).__displayhive_socket__
+        setTimeout(() => resolve({ success: false, error: 'timeout' }), 8_000)
+        socket.emit(event, data, resolve)
+      }),
+    { event, data },
+  )
+}
+
 /**
  * Upload a media item through the HTTP upload endpoint (multipart — the same
  * request the Media page sends). Returns the media id. Sent from Playwright's
@@ -204,6 +216,59 @@ test.describe('Media page', () => {
     await expect(
       page.locator('.media-item, .p-card', { hasText: socketFilename }).first(),
     ).toBeVisible({ timeout: 10_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 6. Usage: badge, filter, "Used in", delete warning
+  // ---------------------------------------------------------------------------
+
+  test('shows where a file is used and filters unused files', async ({ page, backendUrl }) => {
+    await gotoMedia(page, backendUrl)
+    const suffix = Math.random().toString(36).slice(2, 8)
+    const usedName = `e2e-used-${suffix}.png`
+    const freeName = `e2e-free-${suffix}.png`
+    const usedId = await seedMediaViaHttp(page, backendUrl, usedName)
+    const freeId = await seedMediaViaHttp(page, backendUrl, freeName)
+    const designName = `e2e-media-design-${suffix}`
+    const designAck = await emitAck(page, 'displayhive:admin:cts:create_design', {
+      name: designName, html: '', css: '', background_image_url: `/static/media/${usedName}`,
+    })
+    expect(designAck.success).toBe(true)
+
+    await page.reload()
+    const usedCard = page.locator('.media-item', { hasText: usedName })
+    const freeCard = page.locator('.media-item', { hasText: freeName })
+    await expect(usedCard).toBeVisible({ timeout: 10_000 })
+    await expect(freeCard.getByText('Unused')).toBeVisible()
+    await expect(usedCard.getByText('Unused')).toHaveCount(0)
+
+    // Filter: only unused files
+    await page.locator('[data-tour="media-usage-filter"]').getByText('Unused').click()
+    await expect(freeCard).toBeVisible()
+    await expect(usedCard).toHaveCount(0)
+    await page.locator('[data-tour="media-usage-filter"]').getByText('In use').click()
+    await expect(usedCard).toBeVisible()
+    await expect(freeCard).toHaveCount(0)
+    await page.locator('[data-tour="media-usage-filter"]').getByText('All').click()
+
+    // The edit dialog names the design; the free file says so
+    await usedCard.locator('button:has(.pi-pencil)').click()
+    const dialog = page.locator('.p-dialog', { hasText: 'Edit Media' })
+    await expect(dialog.getByRole('link', { name: `Design: ${designName}` })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+
+    // Deleting a used file warns first
+    await usedCard.locator('button:has(.pi-trash)').click()
+    const confirm = page.locator('.p-confirmdialog')
+    await expect(confirm).toContainText('still used by')
+    await expect(confirm).toContainText(designName)
+    await confirm.getByRole('button', { name: /no|cancel/i }).click()
+
+    // Clean up
+    await emitAck(page, 'displayhive:admin:cts:delete_design', { id: designAck.id })
+    await deleteMediaById(page, usedId)
+    await deleteMediaById(page, freeId)
   })
 
   // ---------------------------------------------------------------------------

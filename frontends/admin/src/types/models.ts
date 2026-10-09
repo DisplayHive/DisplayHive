@@ -178,6 +178,13 @@ export interface Content {
   contenttype_name?: string
 }
 
+/** Something that uses a media file (see application/admin/media/usage.py). */
+export interface MediaUsage {
+  kind: 'content' | 'contenttype' | 'layout' | 'container' | 'design' | 'setting'
+  id: number
+  name: string
+}
+
 /** An item stored in the media library. */
 export interface MediaItem {
   id: number
@@ -188,6 +195,8 @@ export interface MediaItem {
   preview_url?: string
   url?: string
   tags?: string[]
+  /** Where the file is used; empty = unused. */
+  used_by?: MediaUsage[]
 }
 
 /** An SSO (OpenID Connect) identity linked to an admin account. */
