@@ -54,6 +54,7 @@ application.paths.APP_ROOT = _tmp_app_root
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-not-for-production')
 os.environ.setdefault('ADMIN_BOOTSTRAP_USERNAME', 'testadmin')
 os.environ.setdefault('ADMIN_BOOTSTRAP_PASSWORD', 'test-admin-password')
+os.environ.setdefault('ADMIN_BOOTSTRAP_MUST_CHANGE', 'off')
 os.environ.setdefault('LOG_LEVEL', 'WARNING')
 
 import pytest

@@ -12,6 +12,7 @@ x-displayhive-env: &displayhive-env
   # Initial admin account (created on first start if no users exist).
   ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
   ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+  ADMIN_BOOTSTRAP_MUST_CHANGE: ${ADMIN_BOOTSTRAP_MUST_CHANGE:-on}
   # Number of reverse proxies in front of the app (0 = reached directly).
   TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}

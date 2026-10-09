@@ -10,7 +10,12 @@ automatically:
   random password generated and printed once to the server logs.
 
 Check your server logs after the first deploy to find this initial
-password, log in at `/admin/`, and set a real password for day-to-day use.
+password (look for "created a bootstrap account") and log in at `/admin/`.
+**You are asked to choose a new password right away** — the generated one has
+been written to the log, and one from `ADMIN_BOOTSTRAP_PASSWORD` sits in an
+environment or compose file, so neither should stay. If you log in with a pinned
+password from automation, set `ADMIN_BOOTSTRAP_MUST_CHANGE=off` (it has no
+effect on a generated password).
 Alternatively, create the first account yourself with
 [`flask dh create-admin`](cli.md#create-admin-username). If you lose
 access, [`flask dh reset-password`](cli.md#reset-password-username) gets

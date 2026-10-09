@@ -490,3 +490,64 @@ def test_ensure_bootstrap_admin_creates_user_when_none_exist(flask_app, app_ctx,
     users = db_session.execute(select(AdminUser)).scalars().all()
     assert len(users) == 1
     assert users[0].username == 'fresh-admin'
+
+
+# --- The bootstrap account must choose its own password ------------------------------
+
+
+def _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, *, password, must_change=None):
+    from sqlalchemy import select
+    from application.models import AdminUser
+
+    for user in db_session.execute(select(AdminUser)).scalars().all():
+        db_session.delete(user)
+    db_session.commit()
+    monkeypatch.setenv('ADMIN_BOOTSTRAP_USERNAME', 'first-admin')
+    if password is None:
+        monkeypatch.delenv('ADMIN_BOOTSTRAP_PASSWORD', raising=False)
+    else:
+        monkeypatch.setenv('ADMIN_BOOTSTRAP_PASSWORD', password)
+    if must_change is None:
+        monkeypatch.delenv('ADMIN_BOOTSTRAP_MUST_CHANGE', raising=False)
+    else:
+        monkeypatch.setenv('ADMIN_BOOTSTRAP_MUST_CHANGE', must_change)
+    ensure_bootstrap_admin(app_ctx, flask_app.db)
+    return db_session.execute(select(AdminUser)).scalars().one()
+
+
+def test_a_generated_bootstrap_password_must_be_changed(flask_app, app_ctx, db_session, monkeypatch):
+    user = _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, password=None)
+    assert user.must_change_password is True
+
+
+def test_a_generated_password_is_changed_even_with_the_switch_off(flask_app, app_ctx, db_session, monkeypatch):
+    user = _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, password=None, must_change='off')
+    assert user.must_change_password is True
+
+
+def test_a_pinned_bootstrap_password_must_be_changed_by_default(flask_app, app_ctx, db_session, monkeypatch):
+    user = _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, password='pinned-password-123')
+    assert user.must_change_password is True
+
+
+@pytest.mark.parametrize('value', ['off', 'OFF', '0', 'false', 'no'])
+def test_a_pinned_bootstrap_password_can_stay_when_switched_off(flask_app, app_ctx, db_session, monkeypatch, value):
+    user = _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, password='pinned-password-123', must_change=value)
+    assert user.must_change_password is False
+
+
+def test_the_bootstrap_account_can_only_change_its_password_at_first(flask_app, app_ctx, db_session, monkeypatch):
+    _fresh_bootstrap(flask_app, app_ctx, db_session, monkeypatch, password='pinned-password-123')
+    client = flask_app.app.test_client()
+
+    login = client.post('/admin/api/auth/login', json={'username': 'first-admin', 'password': 'pinned-password-123'})
+    assert login.status_code == 200 and login.get_json()['must_change_password'] is True
+    headers = {'Authorization': f"Bearer {login.get_json()['token']}"}
+
+    assert client.get('/admin/api/auth/me', headers=headers).status_code == 200           # allowed ...
+    assert client.post('/admin/api/media/upload', headers=headers).status_code == 401      # ... nothing else
+    changed = client.post('/admin/api/auth/me/password', headers=headers,
+                          json={'current_password': 'pinned-password-123', 'new_password': 'a-new-strong-password-1'})
+    assert changed.status_code == 200
+    relogin = client.post('/admin/api/auth/login', json={'username': 'first-admin', 'password': 'a-new-strong-password-1'})
+    assert relogin.get_json()['must_change_password'] is False

@@ -117,6 +117,8 @@ export default async function globalSetup() {
       // with known credentials against this worker's isolated database.
       ADMIN_BOOTSTRAP_USERNAME: TEST_ADMIN_USERNAME,
       ADMIN_BOOTSTRAP_PASSWORD: TEST_ADMIN_PASSWORD,
+      // The tests log in with the pinned password: don't send them to the password-change screen first.
+      ADMIN_BOOTSTRAP_MUST_CHANGE: 'off',
     }
 
     const proc = spawn(PYTHON, ['app.py'], {

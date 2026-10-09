@@ -138,8 +138,13 @@ def ensure_bootstrap_admin(app, db):
 
     Username/password can be pinned via ADMIN_BOOTSTRAP_USERNAME /
     ADMIN_BOOTSTRAP_PASSWORD (useful for tests and scripted deployments).
-    Otherwise a random password is generated and printed once so the
-    operator can log in and change it via the Users page.
+    Otherwise a random password is generated and logged once.
+
+    Either way the account must choose a new password at its first login
+    (``must_change_password``): the generated one has been written to the log,
+    and a pinned one sits in an environment file or a compose file. For a pinned
+    password ADMIN_BOOTSTRAP_MUST_CHANGE=off turns that off (automated tests
+    and deployments that log in with it); a generated one is always changed.
     """
     from application.models import AdminUser
 
@@ -152,7 +157,10 @@ def ensure_bootstrap_admin(app, db):
     if generated:
         password = secrets.token_urlsafe(12)
 
-    user = AdminUser(username=username, password_hash=hash_password(password), is_active=True)
+    must_change = generated or (os.environ.get('ADMIN_BOOTSTRAP_MUST_CHANGE', 'on').strip().lower()
+                                not in ('0', 'off', 'no', 'false'))
+    user = AdminUser(username=username, password_hash=hash_password(password), is_active=True,
+                     must_change_password=must_change)
     db.session.add(user)
     db.session.commit()
 
@@ -161,9 +169,10 @@ def ensure_bootstrap_admin(app, db):
         # here. WARNING so that it shows at any LOG_LEVEL up to WARNING.
         logger.warning(
             'No admin users found — created a bootstrap account. username: %s  password: %s  '
-            '— log in and change this password from the Users page.', username, password)
+            '— log in at /admin/; you will be asked to choose a new password right away.', username, password)
     else:
-        logger.info("Created bootstrap admin user '%s' from ADMIN_BOOTSTRAP_PASSWORD", username)
+        logger.info("Created bootstrap admin user '%s' from ADMIN_BOOTSTRAP_PASSWORD%s", username,
+                    ' (must choose a new password at the first login)' if must_change else '')
 
 
 # --- Login rate limiting ------------------------------------------------------
