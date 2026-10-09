@@ -43,7 +43,11 @@ _tmp_data_dir = tempfile.mkdtemp(prefix='displayhive_pytest_data_')
 _tmp_app_root = tempfile.mkdtemp(prefix='displayhive_pytest_root_')
 atexit.register(lambda: shutil.rmtree(_tmp_data_dir, ignore_errors=True))
 atexit.register(lambda: shutil.rmtree(_tmp_app_root, ignore_errors=True))
-os.environ.setdefault('DATA_DIR', _tmp_data_dir)
+# pytest-xdist workers inherit the main process's environment, which already holds
+# ITS DATA_DIR from importing this file: every worker needs a directory of its own
+# (uploads, staging, backups), or parallel tests would see each other's files.
+if 'PYTEST_XDIST_WORKER' in os.environ or 'DATA_DIR' not in os.environ:
+    os.environ['DATA_DIR'] = _tmp_data_dir
 
 import application.paths  # noqa: E402
 application.paths.APP_ROOT = _tmp_app_root

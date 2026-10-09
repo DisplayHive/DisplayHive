@@ -77,6 +77,19 @@ npm run dev:screen       # screen client dev server, :5174
 
 ## Tests
 
+The backend tests (pytest, `tests/`):
+
+```bash
+pytest -n auto         # in parallel, one process per CPU core: the whole suite in ~13 s
+pytest                 # one process — better with -x, -k or a debugger (pdb)
+pytest --cov           # with the coverage report
+```
+
+Parallel runs work because every worker process gets its own temporary SQLite
+database and data directory (`tests/conftest.py`). Against PostgreSQL
+(`TEST_DATABASE_URL`, as in CI) run sequentially: the workers would share one
+database.
+
 End-to-end tests use Playwright, in `testing/`:
 
 ```bash

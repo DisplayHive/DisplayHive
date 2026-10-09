@@ -78,7 +78,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run pytest with coverage
-        run: pytest --cov --cov-report=term
+        run: pytest -n auto --cov --cov-report=term
 
       # Shown on the run's summary page; informational, nothing fails on it.
       # The CI never writes back to the repository (no coverage badge commit).

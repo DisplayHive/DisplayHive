@@ -40,7 +40,7 @@ def test_parse_json():
     ('x.json', b'{broken', 'Invalid JSON'),
     ('x.txt', b'hi', 'Unsupported file type'),
     ('', b'hi', 'Unsupported file type'),
-])
+], ids=['not-a-zip', 'zip-without-db-json', 'broken-json', 'unsupported-extension', 'no-filename'])   # (a generated zip's bytes carry a timestamp: no auto ids)
 def test_parse_rejects_bad_uploads(name, raw, message):
     with pytest.raises(service.ImportUploadError, match=message):
         service.parse_import_upload(name, raw)
