@@ -38,6 +38,7 @@ EXPECTED_ROUTES = [
     ('/logo_bl.png', 'GET'),
     ('/logo_wh.png', 'GET'),
     ('/readyz', 'GET'),
+    ('/screen-sw.js', 'GET'),
     ('/screen/assets/<path:filename>', 'GET'),
     ('/static/<path:filename>', 'GET'),
     ('/static/media/<path:filename>', 'GET'),

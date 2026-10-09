@@ -87,3 +87,15 @@ export function getStoredRotation(): number {
 export function setStoredRotation(deg: number): void {
   safeSet("screenRotation", String(deg));
 }
+
+// ── Last content snapshot ────────────────────────────────────────────────────
+// The last `upd_content` the server sent (see content-snapshot.ts), so a screen that restarts
+// while the server is unreachable still has something to show.
+
+export function getContentSnapshot(): string | null {
+  return safeGet("contentSnapshot");
+}
+
+export function setContentSnapshot(json: string): void {
+  safeSet("contentSnapshot", json);
+}

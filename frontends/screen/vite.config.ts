@@ -36,6 +36,8 @@ export default defineConfig({
       input: {
         // `screen` bundle is built from `ts/screen` + `ts/common`
         screen: path.resolve(__dirname, "ts/screen.ts"),
+        // The service worker: its own entry (no chunks), served by Flask as /screen-sw.js.
+        sw: path.resolve(__dirname, "ts/sw/screen-sw.ts"),
       },
       output: {
         // Keep entry filenames stable so templates can reference entry bundles.

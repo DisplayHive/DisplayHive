@@ -271,6 +271,14 @@ framework:
 - `content-display.ts` / `container-manager.ts` — render playlists and HTML
   into positioned containers.
 - `adopt.ts` — the device adoption flow (QR code / token).
+- `ts/sw/` — the service worker (built as `dist/screen/sw.js`, served as `/screen-sw.js`, registered by
+  `sw-register.ts` with the release's `ASSET_VERSION`): the screen page is network-first with its last
+  copy as fallback, the bundle/assets/logos are cached per release (`dh-screen-static-<version>`, old
+  releases' caches are deleted), uploaded media are cached cache-first and bounded (300 files).
+  Socket.IO, `/admin`, previews and impersonation pages are never touched. `routing.ts` holds the rules
+  (tested). Together with `content-snapshot.ts` (the last `upd_content`, kept in localStorage per device
+  and shown at startup) a screen restarts and keeps playing without the server. Needs https or
+  localhost; elsewhere browsers offer no service workers and the screen runs as before.
 - `reconnect.ts` — how a screen comes back after losing the server: Socket.IO retries forever with a
   1 s → 30 s backoff (±25 % jitter, so many screens do not hit a restarting server together); a manual
   retry with the same timing covers what Socket.IO does not retry (server refused or closed the connection).

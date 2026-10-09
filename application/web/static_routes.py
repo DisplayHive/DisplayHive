@@ -46,6 +46,19 @@ def screen_dist(filename):
     return send_from_directory(_DIST_SCREEN, filename)
 
 
+@bp.route('/screen-sw.js')
+def screen_service_worker():
+    """The screen's service worker (frontends/screen/ts/sw), at the root so its scope is the whole site.
+
+    Never cached by the browser itself: a new release is noticed on the next page load. The page
+    asks for it as ``/screen-sw.js?v=<ASSET_VERSION>``; the version is for the worker, not for caching.
+    """
+    response = send_from_directory(_DIST_SCREEN, 'sw.js', mimetype='text/javascript')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
 @bp.route('/screen/assets/<path:filename>')
 def screen_assets(filename):
     """Serve static screen assets (CSS etc.) directly from source, not via dist."""

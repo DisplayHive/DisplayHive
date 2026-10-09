@@ -1,3 +1,4 @@
+import { registerServiceWorker } from "./sw-register";
 import { initializeSocketConnection } from "./socket-connection";
 import { initializeAuthentication } from "./auth_helper";
 import {
@@ -64,6 +65,8 @@ export function screenInit(): void {
   // Note: Do NOT call initializeSocketConnection() here anymore
   // It will be called by initializeAuthentication() if devicekey exists
   // or after adoption completes
+
+  registerServiceWorker();
 
   // Placeholder screen logic
   console.log("ts/screen loaded");

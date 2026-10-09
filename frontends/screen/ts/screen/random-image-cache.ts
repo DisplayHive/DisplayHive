@@ -4,12 +4,12 @@
  *
  * Deliberately NOT the browser's ambient HTTP cache: that's an opaque cache
  * subject to eviction under storage pressure with no size/count control of
- * our own, and a plain `<img src>` never consults the Cache Storage API
- * without a Service Worker intercepting the fetch (this project doesn't
- * have one) — so this module fetches candidates explicitly, stores them in
+ * our own — so this module fetches candidates explicitly, stores them in
  * a named Cache Storage bucket, and hands back object URLs read straight
  * from the cached bytes, guaranteeing a picked image can always be shown
- * offline as long as it's in the manifest below.
+ * offline as long as it's in the manifest below. (The service worker,
+ * ts/sw, also keeps recently used media, bounded by count; this cache is
+ * the one with a byte budget and a say in *which* candidate is shown.)
  *
  * The manifest (url/size/lastUsed per entry) is the only thing persisted to
  * localStorage (see storage.ts) — tiny bookkeeping, not image bytes.

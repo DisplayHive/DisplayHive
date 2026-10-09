@@ -24,3 +24,20 @@ def test_design_css_with_script_end_tag_stays_inside_the_string(flask_app, db_se
     html = flask_app.app.test_client().get('/').get_data(as_text=True)
     assert '<b id="x">' not in html
     assert re.search(r'\\u003c/script\\u003e|<\\/script>', html)
+
+
+def test_service_worker_is_served_from_the_root_and_never_cached(flask_app, tmp_path, monkeypatch):
+    from application.web import static_routes
+    (tmp_path / 'sw.js').write_text('// worker')
+    monkeypatch.setattr(static_routes, '_DIST_SCREEN', tmp_path)
+    response = flask_app.app.test_client().get('/screen-sw.js?v=1.2.3')
+    assert response.status_code == 200
+    assert response.mimetype == 'text/javascript'
+    assert response.headers['Cache-Control'] == 'no-cache'
+    assert response.headers['Service-Worker-Allowed'] == '/'
+    assert response.get_data(as_text=True) == '// worker'
+
+
+def test_page_names_its_release_for_the_service_worker(flask_app):
+    html = flask_app.app.test_client().get('/').get_data(as_text=True)
+    assert re.search(r'<meta name="asset-version" content="[^"]+">', html)

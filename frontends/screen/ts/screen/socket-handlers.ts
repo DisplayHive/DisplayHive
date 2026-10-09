@@ -16,6 +16,7 @@
  */
 
 import { reconnectDelay } from "./reconnect";
+import { loadContentSnapshot, saveContentSnapshot } from "./content-snapshot";
 import { setStatus, setStatusIndicatorEnabled, initStatusIndicator } from "./status-indicator";
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
 import type {
@@ -36,7 +37,7 @@ import { startSceneRotation, patchCurrentScene } from "./content-display.js";
 import { applyServerTime, setClockEmitter, startClockTicker } from "./clock.js";
 import { startCountdownTicker } from "./countdown.js";
 import { startAdoptionFlow, hideAdoptionOverlay } from "./adopt.js";
-import { setDeviceKey, clearAdoptionToken } from "./storage";
+import { getDeviceKey, setDeviceKey, clearAdoptionToken } from "./storage";
 import { preloadIframesInHtml } from "./preload-iframes.js";
 import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
 import { applyBackgroundEffect } from "./background-effects.js";
@@ -370,70 +371,75 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
 
   // Listen for playlist response (IDs and durations only)
   // Unified full content snapshot pushed by server after deviceconfig
+  // Show a content snapshot: the server's upd_content, or the saved one of the last run.
+  const applyContent = (msg: UpdContentMessage): void => {
+    try {
+      if (
+        window.debugPanel &&
+        typeof window.debugPanel.markUpdContent === "function"
+      ) {
+        window.debugPanel.markUpdContent();
+      }
+    } catch (_) {}
+
+    if (msg.server_time) applyServerTime(String(msg.server_time));
+
+    const design = msg.design || null;
+    const scenes: Scene[] = msg.scenes || [];
+
+    log("debug", "socket.on(upd_content)", "Received content snapshot", {
+      sceneCount: scenes.length,
+    });
+
+    // Apply the Design background (a single global skin — see
+    // #design-background in index.html, kept separate from
+    // #scene-containers so re-rendering scenes never touches it).
+    if (design) {
+      window.debugPanel?.push?.(
+        "Screen Info",
+        "Design",
+        "Name",
+        typeof design.name === "string" && design.name ? design.name : "—",
+      );
+      if (typeof design.html === "string") {
+        const backgroundEl = document.getElementById("design-background");
+        if (backgroundEl) {
+          backgroundEl.innerHTML = adaptHtml(design.html);
+          adaptMediaImages(backgroundEl);
+        }
+      }
+      if (typeof design.css === "string") {
+        const styleEl = document.getElementById("design-css");
+        if (styleEl) {
+          const adapted = adaptCss(design.css);
+          styleEl.textContent = adapted;
+          // The Backdrop image: swap in the right-sized rendition once it's confirmed to exist.
+          void adaptMediaCss(adapted).then((withRenditions) => {
+            if (withRenditions !== adapted) styleEl.textContent = withRenditions;
+          });
+        }
+      }
+      applyIndicatorConfig(design.indicator);
+      applyBackgroundEffect(design.background_effect || null).catch((err) => {
+        log("error", "socket.on(upd_content)", "Failed to apply background effect", err);
+      });
+    }
+
+    // Preload any iframes embedded in scene HTML so they're warm by the
+    // time each scene's turn comes up in the rotation.
+    for (const scene of scenes) {
+      for (const container of Object.values(scene.containers)) {
+        if (container.html) preloadIframesInHtml(container.html);
+      }
+    }
+
+    startSceneRotation(scenes);
+  };
+
   socket.on("upd_content", (msg: UpdContentMessage, cb?: () => void) => {
     try {
-      try {
-        if (
-          window.debugPanel &&
-          typeof window.debugPanel.markUpdContent === "function"
-        ) {
-          window.debugPanel.markUpdContent();
-        }
-      } catch (_) {}
-
-      if (msg.server_time) applyServerTime(String(msg.server_time));
-
-      const design = msg.design || null;
-      const scenes: Scene[] = msg.scenes || [];
-
-      log("debug", "socket.on(upd_content)", "Received content snapshot", {
-        sceneCount: scenes.length,
-      });
-
-      // Apply the Design background (a single global skin — see
-      // #design-background in index.html, kept separate from
-      // #scene-containers so re-rendering scenes never touches it).
-      if (design) {
-        window.debugPanel?.push?.(
-          "Screen Info",
-          "Design",
-          "Name",
-          typeof design.name === "string" && design.name ? design.name : "—",
-        );
-        if (typeof design.html === "string") {
-          const backgroundEl = document.getElementById("design-background");
-          if (backgroundEl) {
-            backgroundEl.innerHTML = adaptHtml(design.html);
-            adaptMediaImages(backgroundEl);
-          }
-        }
-        if (typeof design.css === "string") {
-          const styleEl = document.getElementById("design-css");
-          if (styleEl) {
-            const adapted = adaptCss(design.css);
-            styleEl.textContent = adapted;
-            // The Backdrop image: swap in the right-sized rendition once it's confirmed to exist.
-            void adaptMediaCss(adapted).then((withRenditions) => {
-              if (withRenditions !== adapted) styleEl.textContent = withRenditions;
-            });
-          }
-        }
-        applyIndicatorConfig(design.indicator);
-        applyBackgroundEffect(design.background_effect || null).catch((err) => {
-          log("error", "socket.on(upd_content)", "Failed to apply background effect", err);
-        });
-      }
-
-      // Preload any iframes embedded in scene HTML so they're warm by the
-      // time each scene's turn comes up in the rotation.
-      for (const scene of scenes) {
-        for (const container of Object.values(scene.containers)) {
-          if (container.html) preloadIframesInHtml(container.html);
-        }
-      }
-
-      startSceneRotation(scenes);
-
+      applyContent(msg);
+      saveContentSnapshot(getDeviceKey(), msg);
       if (cb) cb();
     } catch (e) {
       log(
@@ -445,6 +451,18 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
       if (cb) cb();
     }
   });
+
+  // Until the server's content arrives (or while it cannot be reached) show what this screen
+  // showed last.
+  const snapshot = loadContentSnapshot(getDeviceKey());
+  if (snapshot) {
+    try {
+      applyContent(snapshot);
+      log("info", "content-snapshot", "Showing the saved content until the server answers");
+    } catch (e) {
+      log("warn", "content-snapshot", "Could not show the saved content", String(e));
+    }
+  }
 
   // Server-time resync response (triggered every 30 min by clock.ts)
   socket.on("displayhive:screen:stc:server_time", (msg: ServerTimeMessage) => {

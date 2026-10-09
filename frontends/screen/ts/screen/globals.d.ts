@@ -16,6 +16,8 @@ declare global {
   // paths correctly under this bundle's configured `base`) is declared here.
   interface ImportMetaEnv {
     readonly BASE_URL: string;
+    /** True in a production build (Vite). */
+    readonly PROD: boolean;
   }
 
   interface ImportMeta {
