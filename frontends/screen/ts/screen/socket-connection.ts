@@ -2,6 +2,7 @@
  * Shared Socket.IO connection logic.
  */
 
+import { reconnectionOptions } from "./reconnect";
 import { setupSocketHandlers } from "./socket-handlers";
 import { log } from "./logger";
 import { getDeviceKey, getAdoptionToken } from "./storage";
@@ -56,7 +57,7 @@ function buildSocketOptions(
   isImpersonation: boolean,
 ): SocketOptions | null {
   const base: SocketOptions = {
-    reconnection: false,
+    ...reconnectionOptions(),
     timeout: 20000,
   };
 

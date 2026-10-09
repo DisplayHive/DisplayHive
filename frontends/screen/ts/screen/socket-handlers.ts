@@ -9,12 +9,13 @@
  *                                   └─► content_updated (single item re-render)
  *     └─► adoption flow         → displayhive:devices:stc:adoption_approved
  *                                   └─► page reload with new deviceKey
- *     └─► device inactive       → showDeactivationOverlay, retry in 20 s
+ *     └─► device inactive       → showDeactivationOverlay, manual retry with backoff
  *     └─► invalid key           → startAdoptionFlow
- *   disconnect                  → reconnect in 20 s (manual, reconnection=false)
+ *   disconnect                  → Socket.IO reconnects with backoff (reconnect.ts); manual retry only if it will not
  *   command (CMD=RELOAD|DEVICE_DEACTIVATED|DEVICE_REVOKED)
  */
 
+import { reconnectDelay } from "./reconnect";
 import { setStatus, setStatusIndicatorEnabled, initStatusIndicator } from "./status-indicator";
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
 import type {
@@ -60,9 +61,19 @@ function hideDeactivationOverlay(): void {
 // Module-level helpers
 // ---------------------------------------------------------------------------
 
-/** Schedule a manual socket reconnect after `delayMs` ms (default 20 s). */
-function scheduleReconnect(socket: ScreenSocket, delayMs = 20_000): void {
-  setTimeout(() => socket.connect(), delayMs);
+let manualRetries = 0;
+
+/**
+ * Retry the connection by hand, for the cases Socket.IO does not retry itself (the server refused
+ * or closed the connection — `socket.active` is false then). The wait grows with every failed
+ * try and starts over after a successful connect (see reconnect.ts).
+ */
+function scheduleReconnect(socket: ScreenSocket): void {
+  if (socket.active) return; // Socket.IO is already retrying
+  const delay = reconnectDelay(manualRetries++);
+  setTimeout(() => {
+    if (!socket.connected && !socket.active) socket.connect();
+  }, delay);
 }
 
 /** Clear the device ping interval if one is running. */
@@ -194,7 +205,12 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
 
   initStatusIndicator();
 
+  socket.io.on("reconnect", (attempt: number) => {
+    log("info", "socket.reconnect", `Reconnected after ${attempt} attempt(s)`);
+  });
+
   socket.on("connect", () => {
+    manualRetries = 0;
     setStatus("con", null);
     log("info", "socket.connect", "Connected to server", { deviceKey: window.deviceKey });
     if (!_isDeactivated) hideDeactivationOverlay();
@@ -265,7 +281,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     }
 
     if (kind === "refused") {
-      log("warn", "socket.connect_error", "Connection refused, retrying in 20 s");
+      log("warn", "socket.connect_error", "Connection refused, retrying");
       scheduleReconnect(socket);
       return;
     }
@@ -273,7 +289,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     // Server unreachable (e.g. "xhr poll error") — keep the retry loop alive so
     // the device recovers automatically when the server comes back up, regardless
     // of whether it is in adoption or deactivated state.
-    log("warn", "socket.connect_error", "Transient network error, retrying in 20 s");
+    log("warn", "socket.connect_error", "Transient network error, retrying");
     scheduleReconnect(socket);
   });
 

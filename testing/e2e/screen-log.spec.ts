@@ -147,8 +147,12 @@ test('the status dot: hidden when well, red when disconnected, yellow without co
   await expect(dot).toHaveAttribute('data-level', 'red', { timeout: 15_000 })
   await expect(dot).toContainText('con')
 
+  // The screen reconnects by itself within seconds (backoff starts at 1 s, see reconnect.ts) and the
+  // red code goes away
+  await screenPage.waitForFunction(() => (window as any).socket?.connected, undefined, { timeout: 15_000 })
+  await expect(dot).not.toHaveAttribute('data-level', 'red')
+
   // Switch the dot off in the admin: the screen hides it (once reconnected it gets the config again)
-  await screenPage.waitForFunction(() => (window as any).socket?.connected, undefined, { timeout: 40_000 })
   await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_indicator: 'false' } })
   await expect(dot).toBeHidden({ timeout: 10_000 })
   await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_indicator: 'true' } })
