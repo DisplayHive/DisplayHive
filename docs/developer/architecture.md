@@ -237,6 +237,11 @@ def handle_delete_user(data):
   parts the components in `components/layout/`, which get the editor by injection. The pure parts
   (snapping, the preview document, default-content shapes) are in `utils/layoutGeometry.ts`,
   `layoutPreviewDoc.ts` and `containerDefaultContent.ts`, with unit tests.
+- Users & Rights: `views/UsersView.vue` is only the tabs; what the tabs and dialogs share (gates, account
+  list, rights data) is `composables/users/useUsersPage.ts`, the tabs and dialogs are `components/users/`.
+- The content edit page: `views/ContentEditView.vue` composes `components/contentEdit/`; the form, saving,
+  screen assignment and preview are `composables/contentEdit/` (`useContentEditor.ts` assembles them).
+  Starting values per field handler: `utils/contentFieldDefaults.ts`.
 - Put anything a page shows in the header's action area into `components/PageHeaderSlot.vue` (or use
   `PageActions`); a plain `<Teleport to="#page-header-actions">` crashes the page on a reload.
 - `views/`, `components/`, `router/`, `types/`, `utils/`.
