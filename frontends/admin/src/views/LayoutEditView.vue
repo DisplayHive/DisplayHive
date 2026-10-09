@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeaderSlot from '../components/PageHeaderSlot.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -132,9 +133,9 @@ watch(layouts, () => {
 </script>
 
 <template>
-  <Teleport to="#page-header-actions">
+  <PageHeaderSlot>
     <Button label="Back to Layouts" icon="pi pi-arrow-left" text @click="goBack" />
-  </Teleport>
+  </PageHeaderSlot>
 
   <div class="layout-edit-page">
     <div class="field" data-tour="layout-name-field">

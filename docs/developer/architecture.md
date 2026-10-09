@@ -228,6 +228,17 @@ def handle_delete_user(data):
 - Calling the server: `composables/useAck.ts` (see "Writing an admin handler") and
   `composables/useConfirmAction.ts` (the red delete confirmation); dialog headers are
   `components/DialogTitle.vue`.
+- The Designs page: `views/DesignsView.vue` is the list and the dialog shell; the dialog's sections are
+  `components/designs/Design*Panel.vue` (each in a collapsible `DesignPanel`, loading and saving its own
+  data), the Gradient library is `composables/designs/useGradients.ts` + `GradientDialogs.vue`.
+- The Layout editor: `components/LayoutCanvasEditor.vue` only composes; its state and behaviour are the
+  composables in `composables/layoutEditor/` (core, snaplines, design preview, persistence, container
+  actions, canvas pointer handling, ratio variations — assembled by `useLayoutEditor.ts`) and its screen
+  parts the components in `components/layout/`, which get the editor by injection. The pure parts
+  (snapping, the preview document, default-content shapes) are in `utils/layoutGeometry.ts`,
+  `layoutPreviewDoc.ts` and `containerDefaultContent.ts`, with unit tests.
+- Put anything a page shows in the header's action area into `components/PageHeaderSlot.vue` (or use
+  `PageActions`); a plain `<Teleport to="#page-header-actions">` crashes the page on a reload.
 - `views/`, `components/`, `router/`, `types/`, `utils/`.
 
 **Screen client** (`frontends/screen/ts/screen`) — vanilla TypeScript, no

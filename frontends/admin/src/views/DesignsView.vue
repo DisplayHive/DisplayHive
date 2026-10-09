@@ -1,22 +1,24 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import { useConfirmAction } from '../composables/useConfirmAction'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import PageActions from '../components/PageActions.vue'
+import DialogTitle from '../components/DialogTitle.vue'
+import DesignDefaultColorsPanel from '../components/designs/DesignDefaultColorsPanel.vue'
+import DesignAspectRatiosPanel from '../components/designs/DesignAspectRatiosPanel.vue'
+import DesignBackdropPanel from '../components/designs/DesignBackdropPanel.vue'
+import DesignIndicatorPanel from '../components/designs/DesignIndicatorPanel.vue'
+import DesignEffectPanel from '../components/designs/DesignEffectPanel.vue'
+import DesignGlobalStylesPanel from '../components/designs/DesignGlobalStylesPanel.vue'
+import DesignCodePanel from '../components/designs/DesignCodePanel.vue'
+import GradientDialogs from '../components/designs/GradientDialogs.vue'
+import { provideGradients } from '../composables/designs/useGradients'
+import { newColorId } from '../composables/designs/useDefaultColors'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useAck } from '../composables/useAck'
-import { useToast } from 'primevue/usetoast'
 import { useRightsStore } from '../stores/rights'
-import type { Design, Gradient, GradientStop, DefaultColor } from '../types/models'
-import ColorPalettePicker from '../components/ColorPalettePicker.vue'
-import {
-  BACKGROUND_EFFECTS,
-  getEffectDefinition,
-  defaultSettingsFor,
-  applyEffectAttributes,
-  type EffectParam,
-} from '../utils/backgroundEffects'
+import { blankDesignForm } from '../types/designForm'
+import type { Design, DefaultColor } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
@@ -27,342 +29,9 @@ import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Tag from 'primevue/tag'
-import Panel from 'primevue/panel'
-import Dropdown from 'primevue/dropdown'
-import MultiSelect from 'primevue/multiselect'
-import InputNumber from 'primevue/inputnumber'
-import ColorPicker from '../components/ColorPicker.vue'
-import Checkbox from 'primevue/checkbox'
-import MediaPickerDialog from '../components/MediaPickerDialog.vue'
-import { formatCss, formatHtml } from '../utils/codeFormat'
-import { FONT_PROPERTIES, keywordOptions, type FontOption, type FontProperty } from '../utils/containerFontProperties'
 
-import { Codemirror } from 'vue-codemirror'
-import { html as cmHtml } from '@codemirror/lang-html'
-import { css as cmCss } from '@codemirror/lang-css'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { EditorView } from '@codemirror/view'
-
-// "Format" buttons on the HTML/CSS editors (Prettier, loaded on first use). A
-// source that can't be parsed is left exactly as it is, with the reason shown.
-const formatting = ref<'html' | 'css' | null>(null)
-const formatEditor = async (which: 'html' | 'css') => {
-  formatting.value = which
-  try {
-    const result = await (which === 'html' ? formatHtml(editForm.value.html) : formatCss(editForm.value.css))
-    if (result.ok) {
-      if (which === 'html') editForm.value.html = result.code
-      else editForm.value.css = result.code
-    } else {
-      toast.add({ severity: 'warn', summary: `Could not format the ${which.toUpperCase()}`, detail: result.error, life: 6000 })
-    }
-  } finally {
-    formatting.value = null
-  }
-}
-
-const cmHtmlExtensions = [cmHtml(), oneDark, EditorView.lineWrapping]
-const cmCssExtensions = [cmCss(), oneDark, EditorView.lineWrapping]
-
-// --- Collapsible Panel state ------------------------------------------------
-// PrimeVue's Panel only toggles from its small chevron button, not the
-// header itself — these refs + a click handler on our custom #header slot
-// content make the whole header row clickable instead.
-const defaultColorsCollapsed = ref(true)
-const aspectRatiosCollapsed = ref(true)
-const indicatorCollapsed = ref(true)
-const backdropCollapsed = ref(true)
-const gradientPanelCollapsed = ref(true)
-const backgroundPanelCollapsed = ref(true)
-const effectPanelCollapsed = ref(true)
-const globalStylesCollapsed = ref(true)
-const customHtmlCssCollapsed = ref(true)
-
-const resetPanelCollapseState = () => {
-  defaultColorsCollapsed.value = true
-  aspectRatiosCollapsed.value = true
-  indicatorCollapsed.value = true
-  backdropCollapsed.value = true
-  gradientPanelCollapsed.value = true
-  backgroundPanelCollapsed.value = true
-  effectPanelCollapsed.value = true
-  globalStylesCollapsed.value = true
-  customHtmlCssCollapsed.value = true
-}
-
-// A stored value that no longer matches its property's current input type
-// (e.g. "xx-small" for font-size after it changed from a keyword dropdown to
-// a vh number) can't be shown OR cleared by that control. Discarding it on
-// load turns "invisible stale value" into a visible "not set".
-const isValidForType = (type: FontProperty['type'], value: string): boolean => {
-  if (!value) return true
-  if (type === 'vh-number') return /^-?\d+(\.\d+)?vh$/.test(value)
-  if (type === 'color') return /^#[0-9a-fA-F]{6}$/.test(value)
-  return true
-}
-
-// --- Global font styles (applied to every container via `.dh-container`) ---
-// A (property, value) pair per Design, not keyed by container. Precedence:
-// these global ones < per-container overrides (Layout editor) < the Design's
-// own hand-written CSS (see upd_content.py).
-const globalStyles = ref<Record<string, string>>({})
-
-const handleDesignGlobalStyles = (data: { design_id?: number; data?: Record<string, string> }) => {
-  if (!data || data.design_id !== editForm.value.id) return
-  const styles: Record<string, string> = { ...data.data }
-  for (const p of FONT_PROPERTIES) {
-    const v = styles[p.key]
-    if (v && !isValidForType(p.type, v)) delete styles[p.key]
-  }
-  globalStyles.value = styles
-}
-
-const getGlobalValue = (prop: string): string => globalStyles.value[prop] ?? ''
-
-let globalSaveDebounce: ReturnType<typeof setTimeout> | null = null
-
-const setGlobalValue = (prop: string, value: string | undefined) => {
-  globalStyles.value = { ...globalStyles.value, [prop]: value || '' }
-
-  if (!editForm.value.id) return
-  if (globalSaveDebounce) clearTimeout(globalSaveDebounce)
-  globalSaveDebounce = setTimeout(() => {
-    const styles: Record<string, string> = {}
-    for (const p of FONT_PROPERTIES) styles[p.key] = globalStyles.value[p.key] || ''
-    void request('displayhive:admin:cts:save_design_global_styles', { design_id: editForm.value.id, styles }, { error: 'Could not save the global styles' })
-  }, 400)
-}
-
-const getGlobalVhNumber = (prop: string): number | null => {
-  const raw = getGlobalValue(prop)
-  if (!raw) return null
-  const n = parseFloat(raw)
-  return isNaN(n) ? null : n
-}
-
-const setGlobalVhValue = (prop: string, n: number | null | undefined) => {
-  setGlobalValue(prop, n == null ? '' : `${n}vh`)
-}
-
-const getGlobalColorHex = (prop: string): string => {
-  const raw = getGlobalValue(prop)
-  return raw ? resolveColorRef(raw).replace(/^#/, '') : ''
-}
-
-const setGlobalColorHex = (prop: string, hex: string | undefined) => {
-  setGlobalValue(prop, hex ? `#${hex}` : '')
-}
-
-const setGlobalColorRef = (prop: string, ref: string) => {
-  setGlobalValue(prop, ref)
-}
-
-// --- Gradients: a reusable library. A Design can apply several, stacked as
-// layered `background-image` values (rendered ahead of the Design's own
-// hand-written CSS — see upd_content.py — so a manual CSS edit still wins).
-const gradients = ref<Gradient[]>([])
-
-const handleGradientsList = (data: { data?: Gradient[] }) => {
-  gradients.value = data?.data || []
-}
-
-const handleDesignGradients = (data: { design_id?: number; gradient_ids?: number[] }) => {
-  if (!data || data.design_id !== editForm.value.id) return
-  editForm.value.gradient_ids = data.gradient_ids || []
-}
-
-const selectedGradients = computed(() =>
-  editForm.value.gradient_ids
-    .map((id) => gradients.value.find((g) => g.id === id))
-    .filter((g): g is Gradient => !!g)
-)
-
-type GradientLike = { type: string; repeating: boolean; angle: number; shape: string; size: string; position_x: number; position_y: number; stops: GradientStop[] }
-
-// Mirrors gradient_css_value()'s alpha handling server-side: a stop's
-// opacity (0-100, default 100/opaque) becomes an 8-digit hex alpha channel
-// so a fully opaque top layer doesn't always hide gradients listed after it.
-const stopColorWithAlpha = (s: GradientStop): string => {
-  // resolveStopColorHex()'s contract (see its own doc comment) is "return
-  // stop.color as-is, resolving a same-Design ref first" — it makes no
-  // promise about a leading '#', and callers disagree on it: the Color
-  // Stops editor below strips it (gradientEditForm's stops are always
-  // hash-less), but a Gradient fetched straight from the server (the list
-  // swatch here, and the Backdrop's applied-gradient preview) keeps
-  // whatever's in the DB, which always has one (see saveGradientEdit,
-  // which sends `#${stop.color}`). Blindly prepending '#' as this used to
-  // do doubled it for that second case ("##eeff00"), an invalid CSS color
-  // that silently dropped the *entire* background-image — hence a blank
-  // swatch. Strip first so this works for both cases, matching the
-  // backend's gradient_css_value()/_stop_color(), which never had this bug
-  // since it just uses the DB value directly.
-  const hex = resolveStopColorHex(s).replace(/^#/, '')
-  const color = `#${hex}`
-  const opacity = s.opacity ?? 100
-  if (opacity >= 100 || !color.startsWith('#') || color.length !== 7) return color
-  const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255)
-  return `${color}${alpha.toString(16).padStart(2, '0')}`
-}
-
-const gradientCssValue = (g: GradientLike): string => {
-  if (!g.stops || g.stops.length < 2) return ''
-  const stopStr = g.stops.map((s) => `${stopColorWithAlpha(s)} ${s.position}%`).join(', ')
-  const prefix = g.repeating ? 'repeating-' : ''
-  const x = g.position_x ?? 50
-  const y = g.position_y ?? 50
-
-  if (g.type === 'radial') {
-    const shapeSize = [g.shape, g.size].filter(Boolean).join(' ')
-    const head = `${shapeSize} at ${x}% ${y}%`.trim()
-    return `${prefix}radial-gradient(${head}, ${stopStr})`
-  }
-  if (g.type === 'conic') {
-    return `${prefix}conic-gradient(from ${g.angle}deg at ${x}% ${y}%, ${stopStr})`
-  }
-  return `${prefix}linear-gradient(${g.angle}deg, ${stopStr})`
-}
-
-// Stacks every selected gradient's CSS into one combined preview value.
-const combinedGradientCss = (list: Gradient[]): string =>
-  list.map((g) => gradientCssValue(g)).filter(Boolean).join(', ')
-
-const setDesignGradients = (gradientIds: number[] | undefined) => {
-  editForm.value.gradient_ids = gradientIds || []
-  if (!editForm.value.id) return
-  void request('displayhive:admin:cts:set_design_gradients', { design_id: editForm.value.id, gradient_ids: editForm.value.gradient_ids }, { error: 'Could not save the gradients' })
-}
-
-// Manage (list) dialog
-const showGradientManageDialog = ref(false)
-
-// Create/edit dialog
-const GRADIENT_SHAPE_OPTIONS = [
-  { label: '(default: ellipse)', value: '' },
-  { label: 'Circle', value: 'circle' },
-  { label: 'Ellipse', value: 'ellipse' },
-]
-const GRADIENT_SIZE_OPTIONS = [
-  { label: '(default: farthest-corner)', value: '' },
-  { label: 'Closest Side', value: 'closest-side' },
-  { label: 'Closest Corner', value: 'closest-corner' },
-  { label: 'Farthest Side', value: 'farthest-side' },
-  { label: 'Farthest Corner', value: 'farthest-corner' },
-]
-
-const showGradientEditDialog = ref(false)
-const isNewGradient = ref(false)
-const blankGradientForm = () => ({
-  id: null as number | null,
-  name: 'New Gradient',
-  type: 'linear' as 'linear' | 'radial' | 'conic',
-  repeating: false,
-  angle: 180,
-  shape: '',
-  size: '',
-  position_x: 50,
-  position_y: 50,
-  stops: [
-    { color: 'ffffff', position: 0, opacity: 100 },
-    { color: '000000', position: 100, opacity: 100 },
-  ] as GradientStop[],
-})
-const gradientEditForm = ref(blankGradientForm())
-
-const openNewGradientDialog = () => {
-  isNewGradient.value = true
-  gradientEditForm.value = blankGradientForm()
-  showGradientEditDialog.value = true
-}
-
-const openEditGradientDialog = (g: Gradient) => {
-  isNewGradient.value = false
-  gradientEditForm.value = {
-    id: g.id, name: g.name, type: g.type, repeating: g.repeating, angle: g.angle,
-    shape: g.shape || '', size: g.size || '', position_x: g.position_x, position_y: g.position_y,
-    stops: g.stops.map((s) => ({ ...s, color: s.color.replace(/^#/, ''), opacity: s.opacity ?? 100 })),
-  }
-  showGradientEditDialog.value = true
-}
-
-const addGradientStop = () => {
-  gradientEditForm.value.stops.push({ color: '888888', position: 50, opacity: 100 })
-}
-
-const removeGradientStop = (idx: number) => {
-  if (gradientEditForm.value.stops.length <= 2) return
-  gradientEditForm.value.stops.splice(idx, 1)
-}
-
-// A stop's `ref` only resolves while editing the same Design it was picked
-// in — a Gradient is a shared library entity, so `stop.color` (the fallback
-// captured at pick time) is what's used everywhere else. Mirrors
-// gradient_css_value()'s _stop_color() server-side.
-const resolveStopColorHex = (stop: GradientStop): string => {
-  if (stop.ref && stop.ref.design_id === editForm.value.id) {
-    const c = editForm.value.default_colors.find((c) => c.id === stop.ref!.color_id)
-    if (c) return c.hex.replace(/^#/, '')
-  }
-  return stop.color
-}
-
-const setStopColorRef = (stop: GradientStop, color: DefaultColor) => {
-  stop.color = color.hex.replace(/^#/, '')
-  stop.ref = editForm.value.id ? { design_id: editForm.value.id, color_id: color.id } : undefined
-}
-
-const gradientEditPreview = computed(() => gradientCssValue(gradientEditForm.value))
-
-const saveGradientEdit = async () => {
-  const payload = {
-    ...gradientEditForm.value,
-    stops: gradientEditForm.value.stops.map((s) => ({ ...s, color: `#${s.color}` })),
-  }
-  const event = isNewGradient.value ? 'displayhive:admin:cts:create_gradient' : 'displayhive:admin:cts:update_gradient'
-  const ack = await request(event, payload, { success: isNewGradient.value ? 'Gradient created' : 'Gradient updated', error: 'Could not save the gradient' })
-  if (ack) showGradientEditDialog.value = false
-}
-
-const deleteGradient = (g: Gradient) => {
-  confirmDanger({
-    message: `Delete gradient "${g.name}"?`,
-    accept: async () => {
-      await request('displayhive:admin:cts:delete_gradient', { id: g.id }, { success: 'Gradient deleted', error: 'Could not delete the gradient' })
-    },
-  })
-}
-
-// Copy: duplicates a Gradient's type/angle/position and stops (including
-// each stop's Default Color `ref`, same as any other Design using it —
-// see resolveStopColorHex's doc comment) as a brand new, independent one.
-const showCopyGradientDialog = ref(false)
-const copyGradientSource = ref<Gradient | null>(null)
-const copyGradientNewName = ref('')
-
-const openCopyGradientDialog = (g: Gradient) => {
-  copyGradientSource.value = g
-  copyGradientNewName.value = `Copy of ${g.name}`
-  showCopyGradientDialog.value = true
-}
-
-const executeCopyGradient = async () => {
-  const source = copyGradientSource.value
-  const name = copyGradientNewName.value.trim()
-  if (!source || !name) return
-  const ack = await request('displayhive:admin:cts:create_gradient', {
-    name,
-    type: source.type,
-    repeating: source.repeating,
-    angle: source.angle,
-    shape: source.shape,
-    size: source.size,
-    position_x: source.position_x,
-    position_y: source.position_y,
-    stops: source.stops,
-  }, { success: `"${name}" created`, error: 'Could not copy the gradient' })
-  if (ack) showCopyGradientDialog.value = false
-}
-
-const toast = useToast()
+// The Designs page: the list, and the dialog that edits one Design. The dialog's sections are
+// components/designs/Design*Panel.vue; the Gradient library is composables/designs/useGradients.ts.
 const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
 const { request } = useAck()
@@ -375,6 +44,12 @@ const canDelete = computed(() => rightsStore.can('designs.delete'))
 const designs = ref<Design[]>([])
 const loading = ref(true)
 const filterText = ref('')
+
+// Edit dialog
+const showEditDialog = ref(false)
+const isNew = ref(false)
+const editForm = ref(blankDesignForm())
+const gradients = provideGradients(editForm)
 
 // Copy dialog
 const showCopyDialog = ref(false)
@@ -393,247 +68,6 @@ const executeCopyDesign = () => {
   pendingCopyName.value = copyNewName.value.trim()
   emit('displayhive:admin:cts:get_design', { id: copySourceId.value })
   showCopyDialog.value = false
-}
-
-// Edit dialog
-const showEditDialog = ref(false)
-const isNew = ref(false)
-const editForm = ref({
-  id: null as number | null,
-  name: '',
-  description: '',
-  html: '',
-  css: '',
-  background_color: '' as string,
-  background_image_url: '' as string,
-  background_repeat: '' as string,
-  background_size: '' as string,
-  background_opacity: 100 as number,
-  background_effect: '' as string,
-  background_effect_settings: {} as Record<string, number | string | string[]>,
-  default_colors: [] as DefaultColor[],
-  /** Extra aspect ratios ("W:H") offered for Screens and Layout variations; 16:9 is the implicit base. */
-  aspect_ratios: [] as string[],
-  /** Progress indicator along the bottom of the screen (fills over a scene's duration). */
-  indicator_enabled: false as boolean,
-  indicator_color: '' as string,
-  indicator_height: 0.8 as number,
-  indicator_direction: 'ltr' as 'ltr' | 'rtl',
-  gradient_ids: [] as number[],
-})
-
-// --- Background Effect: animated canvas backgrounds (beautiful-backgrounds) ---
-const EFFECT_OPTIONS = [{ label: 'None', value: '' }, ...BACKGROUND_EFFECTS.map((e) => ({ label: e.label, value: e.key }))]
-
-const selectedEffectDef = computed(() =>
-  editForm.value.background_effect ? getEffectDefinition(editForm.value.background_effect) : undefined,
-)
-
-const onSelectEffect = (key: string) => {
-  editForm.value.background_effect = key
-  const def = key ? getEffectDefinition(key) : undefined
-  editForm.value.background_effect_settings = def ? defaultSettingsFor(def) : {}
-  selectedPresetLabel.value = ''
-}
-
-const selectedPresetLabel = ref('')
-
-const onSelectPreset = (label: string) => {
-  const def = selectedEffectDef.value
-  const preset = def?.presets?.find((p) => p.label === label)
-  if (!def || !preset) return
-  editForm.value.background_effect_settings = {
-    ...defaultSettingsFor(def),
-    ...preset.values,
-  } as Record<string, number | string | string[]>
-  selectedPresetLabel.value = label
-}
-
-// --- Default Colors: a named palette scoped to this Design, offered as
-// quick-pick swatches by every other color field below (ColorPalettePicker).
-// Picking one stores a "@default:<id>" *reference*, not a copy of the hex —
-// so editing the palette entry later updates every field that picked it,
-// here and (once saved) on the actual screens — see resolve_default_color()
-// in application/admin/designs/helper.py for the backend side of this.
-const DEFAULT_COLOR_PREFIX = '@default:'
-const colorRefFor = (id: string) => `${DEFAULT_COLOR_PREFIX}${id}`
-const isColorRef = (v: string | undefined | null): boolean => !!v && v.startsWith(DEFAULT_COLOR_PREFIX)
-const resolveColorRef = (v: string | undefined | null): string => {
-  if (!isColorRef(v)) return v || ''
-  const id = (v as string).slice(DEFAULT_COLOR_PREFIX.length)
-  return editForm.value.default_colors.find((c) => c.id === id)?.hex || ''
-}
-// For the "(not set)"-style readouts: show the palette entry's name for a
-// reference, the literal value otherwise.
-const colorDisplayLabel = (v: string | undefined | null): string => {
-  if (!v) return '(not set)'
-  if (!isColorRef(v)) return v
-  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
-  const c = editForm.value.default_colors.find((c) => c.id === id)
-  return c ? `🎨 ${c.name || c.hex}` : '(deleted default color)'
-}
-
-// --- Aspect ratios: extra "W:H" shapes this Design supports, on top of the
-// always-available 16:9 base. Screens pick one, and Layouts get one
-// variation (own container membership + positions) per ratio. Duplicates are
-// by shape (4:3 == 8:6) and 16:9 itself is never listed.
-const RATIO_PRESETS = ['4:3', '16:10', '21:9', '1:1', '3:4', '10:16', '9:16']
-const newRatioW = ref<number | null>(null)
-const newRatioH = ref<number | null>(null)
-const ratioValue = (r: string) => { const [w = 1, h = 1] = r.split(':').map(Number); return w / h }
-const hasRatio = (r: string) =>
-  Math.abs(ratioValue(r) - 16 / 9) < 1e-9 || editForm.value.aspect_ratios.some((x) => Math.abs(ratioValue(x) - ratioValue(r)) < 1e-9)
-const addAspectRatio = (r: string) => {
-  if (!/^\d{1,4}:\d{1,4}$/.test(r) || r.startsWith('0:') || r.endsWith(':0') || hasRatio(r)) return
-  editForm.value.aspect_ratios = [...editForm.value.aspect_ratios, r]
-}
-const addCustomAspectRatio = () => {
-  if (!newRatioW.value || !newRatioH.value) return
-  addAspectRatio(`${newRatioW.value}:${newRatioH.value}`)
-  newRatioW.value = null
-  newRatioH.value = null
-}
-const removeAspectRatio = (r: string) => {
-  editForm.value.aspect_ratios = editForm.value.aspect_ratios.filter((x) => x !== r)
-}
-
-const newColorId = (): string =>
-  crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-const addDefaultColor = () => {
-  editForm.value.default_colors = [
-    ...editForm.value.default_colors,
-    { id: newColorId(), name: '', hex: '#ffffff' },
-  ]
-}
-const removeDefaultColor = (idx: number) => {
-  editForm.value.default_colors = editForm.value.default_colors.filter((_, i) => i !== idx)
-}
-const getDefaultColorHex = (idx: number): string =>
-  (editForm.value.default_colors[idx]?.hex || '').replace(/^#/, '')
-const setDefaultColorHex = (idx: number, hex: string | undefined) => {
-  const entry = editForm.value.default_colors[idx]
-  if (entry) entry.hex = hex ? `#${hex}` : ''
-}
-
-// Appends a swatch's reference to a comma-separated colorArray param's text
-// value (the raw, unresolved tokens — this field's plain-text editing is
-// intentionally low-level, see the param's placeholder in the template).
-const appendColorToParam = (param: EffectParam, color: DefaultColor) => {
-  const current = getEffectParamText(param)
-  const ref = colorRefFor(color.id)
-  setEffectParamValue(param, current ? `${current}, ${ref}` : ref)
-}
-
-// The live effect preview (<bb-neon-rails> etc.) is a plain web component
-// that only understands real CSS colors — resolve any "@default:<id>"
-// tokens to their current hex before handing settings to it. Mirrors
-// resolve_default_colors_deep() server-side (application/admin/designs/helper.py).
-const resolveEffectSettingsRefs = (
-  settings: Record<string, number | string | string[]>,
-): Record<string, number | string | string[]> => {
-  const out: Record<string, number | string | string[]> = {}
-  for (const [k, v] of Object.entries(settings)) {
-    if (Array.isArray(v)) out[k] = v.map((x) => (isColorRef(x) ? resolveColorRef(x) : x))
-    else if (typeof v === 'string' && isColorRef(v)) out[k] = resolveColorRef(v)
-    else out[k] = v
-  }
-  return out
-}
-
-const getEffectParamNumber = (param: EffectParam): number => {
-  const v = editForm.value.background_effect_settings[param.key] ?? param.default
-  return typeof v === 'number' ? v : Number(v) || 0
-}
-const getEffectParamText = (param: EffectParam): string => {
-  const v = editForm.value.background_effect_settings[param.key] ?? param.default
-  return Array.isArray(v) ? v.join(', ') : String(v ?? '')
-}
-const setEffectParamValue = (param: EffectParam, value: string | number | null | undefined) => {
-  if (param.type === 'colorArray') {
-    editForm.value.background_effect_settings[param.key] = String(value ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  } else if (param.type === 'number') {
-    editForm.value.background_effect_settings[param.key] = Number(value ?? 0)
-  } else {
-    editForm.value.background_effect_settings[param.key] = String(value ?? '')
-  }
-}
-
-// Live preview: mounted imperatively (not as a Vue-compiled tag) so no
-// isCustomElement compiler config is needed — mirrors how the screen client
-// itself manages these elements (frontends/screen/ts/screen/background-effects.ts).
-const effectPreviewEl = ref<HTMLDivElement | null>(null)
-let effectPreviewLoaded = false
-
-const renderEffectPreview = async () => {
-  const container = effectPreviewEl.value
-  if (!container) return
-  const def = selectedEffectDef.value
-  if (!def) {
-    container.replaceChildren()
-    return
-  }
-  if (!effectPreviewLoaded) {
-    await import('beautiful-backgrounds')
-    effectPreviewLoaded = true
-  }
-  let el = container.firstElementChild as HTMLElement | null
-  if (!el || el.tagName.toLowerCase() !== def.tag) {
-    el = document.createElement(def.tag)
-    el.style.display = 'block'
-    el.style.width = '100%'
-    el.style.height = '100%'
-    container.replaceChildren(el)
-  }
-  applyEffectAttributes(el, def, resolveEffectSettingsRefs(editForm.value.background_effect_settings))
-}
-
-watch(
-  () => [editForm.value.background_effect, editForm.value.background_effect_settings, effectPanelCollapsed.value] as const,
-  () => {
-    if (!showEditDialog.value || effectPanelCollapsed.value) return
-    nextTick(renderEffectPreview)
-  },
-  { deep: true },
-)
-
-const BACKGROUND_REPEAT_OPTIONS: FontOption[] = [
-  { label: '(default: repeat)', value: '' },
-  ...keywordOptions('repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round'),
-]
-const BACKGROUND_SIZE_OPTIONS: FontOption[] = [
-  { label: '(default: auto)', value: '' },
-  ...keywordOptions('auto', 'cover', 'contain'),
-]
-
-// color: PrimeVue's ColorPicker works in bare hex ("ff0000"), the stored
-// CSS value needs the leading "#" — same conversion as the per-container/
-// global font color fields above.
-const getBackdropColorHex = (): string => resolveColorRef(editForm.value.background_color).replace(/^#/, '')
-const setBackdropColorHex = (hex: string | undefined) => {
-  editForm.value.background_color = hex ? `#${hex}` : ''
-}
-const setBackdropColorRef = (ref: string) => {
-  editForm.value.background_color = ref
-}
-
-// Progress indicator colour: same literal-or-"@default:<id>" convention as the
-// Backdrop colour above.
-const INDICATOR_DIRECTIONS = [
-  { label: 'Left to right', value: 'ltr' },
-  { label: 'Right to left', value: 'rtl' },
-]
-const getIndicatorColorHex = (): string => resolveColorRef(editForm.value.indicator_color).replace(/^#/, '')
-const setIndicatorColorHex = (hex: string | undefined) => {
-  editForm.value.indicator_color = hex ? `#${hex}` : ''
-}
-
-const showBackgroundImagePicker = ref(false)
-const setBackgroundImage = (url: string) => {
-  editForm.value.background_image_url = url
 }
 
 // Loading state for when we request full design detail (html/css)
@@ -657,6 +91,51 @@ const handleDesignsList = (data: { data?: Design[]; designs?: Design[] }) => {
   loading.value = false
 }
 
+// The stored detail (html, css, backdrop, effect, palette, ratios, indicator) of the Design in the dialog.
+const applyDetail = (design: Design) => {
+  const form = editForm.value
+  form.html = design.html || ''
+  form.css = design.css || ''
+  form.background_color = design.background_color || ''
+  form.background_image_url = design.background_image_url || ''
+  form.background_repeat = design.background_repeat || ''
+  form.background_size = design.background_size || ''
+  form.background_opacity = design.background_opacity ?? 100
+  form.background_effect = design.background_effect || ''
+  try {
+    form.background_effect_settings = design.background_effect_settings
+      ? JSON.parse(design.background_effect_settings)
+      : {}
+  } catch {
+    form.background_effect_settings = {}
+  }
+  try {
+    const parsed = design.default_colors ? JSON.parse(design.default_colors) : []
+    form.default_colors = Array.isArray(parsed)
+      ? parsed.map((c: Partial<DefaultColor>) => ({ id: c.id || newColorId(), name: c.name || '', hex: c.hex || '' }))
+      : []
+  } catch {
+    form.default_colors = []
+  }
+  try {
+    const parsedRatios = design.aspect_ratios ? JSON.parse(design.aspect_ratios) : []
+    form.aspect_ratios = Array.isArray(parsedRatios) ? parsedRatios.filter((r: unknown) => typeof r === 'string') : []
+  } catch {
+    form.aspect_ratios = []
+  }
+  form.indicator_enabled = !!design.indicator_enabled
+  form.indicator_color = design.indicator_color || ''
+  form.indicator_height = design.indicator_height ?? 0.8
+  form.indicator_direction = design.indicator_direction === 'rtl' ? 'rtl' : 'ltr'
+}
+
+const stopLoadTimer = () => {
+  if (designLoadTimer) {
+    clearTimeout(designLoadTimer)
+    designLoadTimer = null
+  }
+}
+
 const handleDesignDetail = async (data: { design?: Design }) => {
   try {
     const design = data?.design || null
@@ -675,98 +154,44 @@ const handleDesignDetail = async (data: { design?: Design }) => {
       return
     }
 
-    const id = Number(design.id)
-    if (showEditDialog.value && editForm.value.id === id) {
-      editForm.value.html = design.html || ''
-      editForm.value.css = design.css || ''
-      editForm.value.background_color = design.background_color || ''
-      editForm.value.background_image_url = design.background_image_url || ''
-      editForm.value.background_repeat = design.background_repeat || ''
-      editForm.value.background_size = design.background_size || ''
-      editForm.value.background_opacity = design.background_opacity ?? 100
-      editForm.value.background_effect = design.background_effect || ''
-      try {
-        editForm.value.background_effect_settings = design.background_effect_settings
-          ? JSON.parse(design.background_effect_settings)
-          : {}
-      } catch {
-        editForm.value.background_effect_settings = {}
-      }
-      try {
-        const parsed = design.default_colors ? JSON.parse(design.default_colors) : []
-        editForm.value.default_colors = Array.isArray(parsed)
-          ? parsed.map((c: Partial<DefaultColor>) => ({ id: c.id || newColorId(), name: c.name || '', hex: c.hex || '' }))
-          : []
-      } catch {
-        editForm.value.default_colors = []
-      }
-      try {
-        const parsedRatios = design.aspect_ratios ? JSON.parse(design.aspect_ratios) : []
-        editForm.value.aspect_ratios = Array.isArray(parsedRatios) ? parsedRatios.filter((r: unknown) => typeof r === 'string') : []
-      } catch {
-        editForm.value.aspect_ratios = []
-      }
-      editForm.value.indicator_enabled = !!design.indicator_enabled
-      editForm.value.indicator_color = design.indicator_color || ''
-      editForm.value.indicator_height = design.indicator_height ?? 0.8
-      editForm.value.indicator_direction = design.indicator_direction === 'rtl' ? 'rtl' : 'ltr'
+    if (showEditDialog.value && editForm.value.id === Number(design.id)) {
+      applyDetail(design)
       loadingDesign.value = false
       loadingDesignError.value = ''
-      if (designLoadTimer) {
-        clearTimeout(designLoadTimer)
-        designLoadTimer = null
-      }
+      stopLoadTimer()
     }
   } catch (e) {
     console.warn('[DesignsView] handleDesignDetail error', e)
   }
 }
 
-onMounted(() => {
-  on('displayhive:admin:stc:upd_designs', handleDesignsList)
-  on('displayhive:admin:stc:design_detail', handleDesignDetail)
-  on('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
-  on('displayhive:admin:stc:upd_gradients', handleGradientsList)
-  on('displayhive:admin:stc:design_gradients', handleDesignGradients)
-  refreshData()
-  emit('displayhive:admin:cts:get_gradients')
-})
-
-onUnmounted(() => {
-  off('displayhive:admin:stc:upd_designs', handleDesignsList)
-  off('displayhive:admin:stc:design_detail', handleDesignDetail)
-  off('displayhive:admin:stc:design_global_styles', handleDesignGlobalStyles)
-  off('displayhive:admin:stc:upd_gradients', handleGradientsList)
-  off('displayhive:admin:stc:design_gradients', handleDesignGradients)
-})
-
 const refreshData = () => {
   loading.value = true
   emit('displayhive:admin:cts:get_designs')
 }
 
+onMounted(() => {
+  on('displayhive:admin:stc:upd_designs', handleDesignsList)
+  on('displayhive:admin:stc:design_detail', handleDesignDetail)
+  refreshData()
+})
+
+onUnmounted(() => {
+  off('displayhive:admin:stc:upd_designs', handleDesignsList)
+  off('displayhive:admin:stc:design_detail', handleDesignDetail)
+  stopLoadTimer()
+})
+
 const openNewDialog = () => {
   isNew.value = true
-  editForm.value = {
-    id: null, name: '', description: '', html: '', css: '',
-    background_color: '', background_image_url: '', background_repeat: '', background_size: '', background_opacity: 100,
-    background_effect: '', background_effect_settings: {},
-    default_colors: [],
-    aspect_ratios: [],
-    indicator_enabled: false,
-    indicator_color: '',
-    indicator_height: 0.8,
-    indicator_direction: 'ltr',
-    gradient_ids: [],
-  }
-  globalStyles.value = {}
-  resetPanelCollapseState()
+  editForm.value = blankDesignForm()
   showEditDialog.value = true
 }
 
 const openEditDialog = (design: Design) => {
   isNew.value = false
   editForm.value = {
+    ...blankDesignForm(),
     id: design.id,
     name: design.name,
     description: design.description || '',
@@ -778,31 +203,17 @@ const openEditDialog = (design: Design) => {
     background_size: design.background_size || '',
     background_opacity: design.background_opacity ?? 100,
     background_effect: design.background_effect || '',
-    background_effect_settings: {},
-    default_colors: [],
-    aspect_ratios: [],
-    indicator_enabled: false,
-    indicator_color: '',
-    indicator_height: 0.8,
-    indicator_direction: 'ltr',
-    gradient_ids: [],
   }
-  globalStyles.value = {}
-  resetPanelCollapseState()
-  try {
-    loadingDesign.value = true
-    loadingDesignError.value = ''
-    emit('displayhive:admin:cts:get_design', { id: design.id })
-    emit('displayhive:admin:cts:get_design_global_styles', { design_id: design.id })
-    emit('displayhive:admin:cts:get_design_gradients', { design_id: design.id })
-    if (designLoadTimer) clearTimeout(designLoadTimer)
-    designLoadTimer = window.setTimeout(() => {
-      loadingDesign.value = false
-      loadingDesignError.value = 'Timed out while fetching design content.'
-      designLoadTimer = null
-    }, 8000)
-  } catch {}
-
+  loadingDesign.value = true
+  loadingDesignError.value = ''
+  emit('displayhive:admin:cts:get_design', { id: design.id })
+  gradients.loadForDesign(design.id)
+  stopLoadTimer()
+  designLoadTimer = window.setTimeout(() => {
+    loadingDesign.value = false
+    loadingDesignError.value = 'Timed out while fetching design content.'
+    designLoadTimer = null
+  }, 8000)
   showEditDialog.value = true
 }
 
@@ -810,38 +221,36 @@ const closeDialog = () => {
   showEditDialog.value = false
   loadingDesign.value = false
   loadingDesignError.value = ''
-  if (designLoadTimer) {
-    clearTimeout(designLoadTimer)
-    designLoadTimer = null
-  }
+  stopLoadTimer()
 }
 
 const saveDesign = async (keepOpen = false) => {
+  const form = editForm.value
   const event = isNew.value
     ? 'displayhive:admin:cts:create_design'
     : 'displayhive:admin:cts:update_design'
 
   const ack = await request(event, {
-    id: editForm.value.id,
-    name: editForm.value.name,
-    description: editForm.value.description,
-    html: editForm.value.html,
-    css: editForm.value.css,
-    background_color: editForm.value.background_color,
-    background_image_url: editForm.value.background_image_url,
-    background_repeat: editForm.value.background_repeat,
-    background_size: editForm.value.background_size,
-    background_opacity: editForm.value.background_opacity,
-    background_effect: editForm.value.background_effect,
-    background_effect_settings: editForm.value.background_effect
-      ? JSON.stringify(editForm.value.background_effect_settings)
+    id: form.id,
+    name: form.name,
+    description: form.description,
+    html: form.html,
+    css: form.css,
+    background_color: form.background_color,
+    background_image_url: form.background_image_url,
+    background_repeat: form.background_repeat,
+    background_size: form.background_size,
+    background_opacity: form.background_opacity,
+    background_effect: form.background_effect,
+    background_effect_settings: form.background_effect
+      ? JSON.stringify(form.background_effect_settings)
       : '',
-    default_colors: JSON.stringify(editForm.value.default_colors.filter((c) => c.name.trim() && c.hex.trim())),
-    aspect_ratios: JSON.stringify(editForm.value.aspect_ratios),
-    indicator_enabled: editForm.value.indicator_enabled,
-    indicator_color: editForm.value.indicator_color,
-    indicator_height: editForm.value.indicator_height,
-    indicator_direction: editForm.value.indicator_direction,
+    default_colors: JSON.stringify(form.default_colors.filter((c) => c.name.trim() && c.hex.trim())),
+    aspect_ratios: JSON.stringify(form.aspect_ratios),
+    indicator_enabled: form.indicator_enabled,
+    indicator_color: form.indicator_color,
+    indicator_height: form.indicator_height,
+    indicator_direction: form.indicator_direction,
   }, { success: isNew.value ? 'Design created' : 'Design updated', error: 'Could not save the design' })
   if (ack && !keepOpen) showEditDialog.value = false
 }
@@ -955,6 +364,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
       </template>
     </Dialog>
 
+
     <!-- Edit Dialog -->
     <Dialog
       v-model:visible="showEditDialog"
@@ -977,383 +387,15 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
           <label for="design-description">Description</label>
           <Textarea id="design-description" v-model="editForm.description" rows="2" class="w-full" />
         </div>
-        <div v-if="!isNew" class="container-styles-section">
-          <Panel v-model:collapsed="defaultColorsCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" data-tour="designs-default-colors-header" @click="defaultColorsCollapsed = !defaultColorsCollapsed">
-                <span class="panel-header-title">Default Colors</span>
-                <small class="panel-header-desc">A named palette for this Design — pick the palette icon next to any color field below to reuse one of these.</small>
-              </div>
-            </template>
-            <div v-for="(c, idx) in editForm.default_colors" :key="c.id" class="default-color-row">
-              <ColorPicker :model-value="getDefaultColorHex(idx)" @update:model-value="(v) => setDefaultColorHex(idx, v)" />
-              <InputText v-model="c.name" placeholder="Name" size="small" class="w-full" />
-              <span class="color-field-value">{{ c.hex || '(not set)' }}</span>
-              <Button icon="pi pi-trash" text size="small" severity="danger" title="Remove" @click="removeDefaultColor(idx)" />
-            </div>
-            <Button label="Add Color" icon="pi pi-plus" text size="small" @click="addDefaultColor" />
-          </Panel>
-        </div>
-
-        <div v-if="!isNew" class="container-styles-section" data-tour="designs-aspect-ratios">
-          <Panel v-model:collapsed="aspectRatiosCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" @click="aspectRatiosCollapsed = !aspectRatiosCollapsed">
-                <span class="panel-header-title">Aspect Ratios</span>
-                <small class="panel-header-desc">16:9 is always available. Add more here, then give Screens a ratio and Layouts a variation per ratio.</small>
-              </div>
-            </template>
-            <div class="aspect-ratio-list">
-              <Tag value="16:9 (base)" severity="secondary" />
-              <Tag v-for="r in editForm.aspect_ratios" :key="r" severity="info" class="aspect-ratio-chip">
-                {{ r }}
-                <i class="pi pi-times aspect-ratio-remove" title="Remove" @click="removeAspectRatio(r)"></i>
-              </Tag>
-            </div>
-            <div class="aspect-ratio-presets">
-              <Button
-                v-for="r in RATIO_PRESETS.filter((x) => !hasRatio(x))" :key="r"
-                :label="r" icon="pi pi-plus" text size="small" @click="addAspectRatio(r)"
-              />
-            </div>
-            <div class="aspect-ratio-custom">
-              <InputNumber v-model="newRatioW" :min="1" :max="9999" placeholder="W" size="small" style="width: 5rem" />
-              <span>:</span>
-              <InputNumber v-model="newRatioH" :min="1" :max="9999" placeholder="H" size="small" style="width: 5rem" />
-              <Button label="Add ratio" icon="pi pi-plus" size="small" outlined :disabled="!newRatioW || !newRatioH" @click="addCustomAspectRatio" />
-            </div>
-          </Panel>
-        </div>
-
-        <div v-if="!isNew" class="container-styles-section">
-          <Panel v-model:collapsed="backdropCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" data-tour="designs-backdrop-header" @click="backdropCollapsed = !backdropCollapsed">
-                <span class="panel-header-title">Backdrop</span>
-                <small class="panel-header-desc">The body background: Gradients layered on top of a Background image/color — rendered ahead of the CSS editor below, so a manual edit there still wins.</small>
-              </div>
-            </template>
-            <Panel v-model:collapsed="gradientPanelCollapsed" toggleable class="container-style-panel nested-panel">
-              <template #header>
-                <div class="panel-header-clickable" @click="gradientPanelCollapsed = !gradientPanelCollapsed">
-                  <span class="panel-header-title">Gradient</span>
-                  <small class="panel-header-desc">Applied as the body background, stacked in the order picked below (first = frontmost layer).</small>
-                </div>
-              </template>
-              <div class="gradient-picker-row">
-                <MultiSelect
-                  :model-value="editForm.gradient_ids"
-                  :options="gradients"
-                  optionLabel="name"
-                  optionValue="id"
-                  placeholder="None"
-                  size="small"
-                  class="w-full"
-                  display="chip"
-                  @update:model-value="setDesignGradients"
-                />
-                <Button label="Manage Gradients" icon="pi pi-palette" outlined size="small" @click="showGradientManageDialog = true" />
-              </div>
-              <div
-                v-if="selectedGradients.length"
-                class="gradient-preview-box"
-                :style="{ backgroundImage: combinedGradientCss(selectedGradients) }"
-              ></div>
-            </Panel>
-
-            <Panel v-model:collapsed="backgroundPanelCollapsed" toggleable class="container-style-panel nested-panel">
-              <template #header>
-                <div class="panel-header-clickable" @click="backgroundPanelCollapsed = !backgroundPanelCollapsed">
-                  <span class="panel-header-title">Background</span>
-                  <small class="panel-header-desc">Image, color, repeat/size/opacity for the page background — beneath the Gradient layer above.</small>
-                </div>
-              </template>
-              <div class="field">
-                <label>Background Image</label>
-                <div class="background-image-row">
-                  <div
-                    v-if="editForm.background_image_url"
-                    class="background-image-preview"
-                    :style="{ backgroundImage: `url(${editForm.background_image_url})` }"
-                  ></div>
-                  <Button label="Select Image" icon="pi pi-image" outlined size="small" @click="showBackgroundImagePicker = true" />
-                  <Button
-                    v-if="editForm.background_image_url"
-                    icon="pi pi-times" label="Clear" text size="small"
-                    @click="setBackgroundImage('')"
-                  />
-                </div>
-              </div>
-              <div v-if="editForm.background_image_url" class="font-properties-grid">
-                <div class="field">
-                  <label>Repeat</label>
-                  <Dropdown
-                    v-model="editForm.background_repeat"
-                    :options="BACKGROUND_REPEAT_OPTIONS"
-                    optionLabel="label"
-                    optionValue="value"
-                    editable
-                    size="small"
-                    class="w-full"
-                  />
-                </div>
-                <div class="field">
-                  <label>Size</label>
-                  <Dropdown
-                    v-model="editForm.background_size"
-                    :options="BACKGROUND_SIZE_OPTIONS"
-                    optionLabel="label"
-                    optionValue="value"
-                    editable
-                    size="small"
-                    class="w-full"
-                  />
-                </div>
-                <div class="field">
-                  <label>Opacity</label>
-                  <InputNumber
-                    v-model="editForm.background_opacity"
-                    :min="0" :max="100" suffix=" %" size="small" class="w-full"
-                  />
-                </div>
-              </div>
-              <div class="field">
-                <label>Background Color</label>
-                <div class="color-field-row">
-                  <ColorPicker :model-value="getBackdropColorHex()" @update:model-value="(v) => setBackdropColorHex(v)" />
-                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setBackdropColorRef(colorRefFor(c.id))" />
-                  <span class="color-field-value">{{ colorDisplayLabel(editForm.background_color) }}</span>
-                  <Button
-                    v-if="editForm.background_color"
-                    icon="pi pi-times" text size="small" title="Clear"
-                    @click="editForm.background_color = ''"
-                  />
-                </div>
-              </div>
-            </Panel>
-          </Panel>
-        </div>
-
-        <MediaPickerDialog
-          v-model:visible="showBackgroundImagePicker"
-          :selected-url="editForm.background_image_url"
-          @select="(item) => setBackgroundImage(item.url)"
-        />
-
-        <div v-if="!isNew" class="container-styles-section" data-tour="designs-indicator">
-          <Panel v-model:collapsed="indicatorCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" @click="indicatorCollapsed = !indicatorCollapsed">
-                <span class="panel-header-title">Indicator</span>
-                <small class="panel-header-desc">A thin bar along the bottom of the screen that fills over the time the current content is shown.</small>
-              </div>
-            </template>
-            <div class="field indicator-enable-row">
-              <Checkbox v-model="editForm.indicator_enabled" inputId="indicator-enabled" binary />
-              <label for="indicator-enabled">Show the indicator</label>
-            </div>
-            <div class="font-properties-grid" :class="{ 'indicator-fields-off': !editForm.indicator_enabled }">
-              <div class="field">
-                <label>Color</label>
-                <div class="color-field-row">
-                  <ColorPicker :model-value="getIndicatorColorHex()" @update:model-value="(v) => setIndicatorColorHex(v)" />
-                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => (editForm.indicator_color = colorRefFor(c.id))" />
-                  <span class="color-field-value">{{ colorDisplayLabel(editForm.indicator_color) }}</span>
-                  <Button
-                    v-if="editForm.indicator_color"
-                    icon="pi pi-times" text size="small" title="Clear (white)"
-                    @click="editForm.indicator_color = ''"
-                  />
-                </div>
-              </div>
-              <div class="field">
-                <label for="indicator-height">Height</label>
-                <InputNumber
-                  v-model="editForm.indicator_height" inputId="indicator-height"
-                  :min="0.1" :max="10" :step="0.1" :max-fraction-digits="2" suffix=" vh" size="small" class="w-full"
-                />
-              </div>
-              <div class="field">
-                <label for="indicator-direction">Direction</label>
-                <Dropdown
-                  v-model="editForm.indicator_direction" inputId="indicator-direction"
-                  :options="INDICATOR_DIRECTIONS" optionLabel="label" optionValue="value" size="small" class="w-full"
-                />
-              </div>
-            </div>
-          </Panel>
-        </div>
-
-        <div v-if="!isNew" class="container-styles-section">
-          <Panel v-model:collapsed="effectPanelCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" data-tour="designs-effect-header" @click="effectPanelCollapsed = !effectPanelCollapsed">
-                <span class="panel-header-title">Background Effect</span>
-                <small class="panel-header-desc">An animated canvas effect rendered behind the Backdrop. Runs continuously on the screen client — test on real display hardware before relying on it, it has a real CPU/GPU cost.</small>
-              </div>
-            </template>
-            <div class="field">
-              <label>Effect</label>
-              <Dropdown
-                :model-value="editForm.background_effect"
-                :options="EFFECT_OPTIONS"
-                optionLabel="label"
-                optionValue="value"
-                size="small"
-                class="w-full"
-                @update:model-value="onSelectEffect"
-              />
-            </div>
-            <div class="field" v-if="selectedEffectDef?.presets?.length">
-              <label>Preset</label>
-              <Dropdown
-                :model-value="selectedPresetLabel"
-                :options="selectedEffectDef.presets.map((p) => p.label)"
-                placeholder="Custom"
-                size="small"
-                class="w-full"
-                @update:model-value="onSelectPreset"
-              />
-            </div>
-            <template v-if="selectedEffectDef">
-              <div class="gradient-preview-box effect-preview-box" ref="effectPreviewEl"></div>
-              <div class="font-properties-grid">
-                <div v-for="p in selectedEffectDef.params" :key="p.key" class="field">
-                  <label>{{ p.label }}</label>
-                  <InputNumber
-                    v-if="p.type === 'number'"
-                    :model-value="getEffectParamNumber(p)"
-                    :step="p.step ?? 1"
-                    :min="p.min"
-                    :max="p.max"
-                    :max-fraction-digits="6"
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v) => setEffectParamValue(p, v)"
-                  />
-                  <div v-else-if="p.type === 'colorArray'" class="color-field-row">
-                    <InputText
-                      :model-value="getEffectParamText(p)"
-                      size="small"
-                      class="w-full"
-                      placeholder="e.g. #ff0000, #00ff00"
-                      @update:model-value="(v) => setEffectParamValue(p, v)"
-                    />
-                    <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => appendColorToParam(p, c)" />
-                  </div>
-                  <InputText
-                    v-else
-                    :model-value="getEffectParamText(p)"
-                    size="small"
-                    class="w-full"
-                    @update:model-value="(v) => setEffectParamValue(p, v)"
-                  />
-                </div>
-              </div>
-            </template>
-          </Panel>
-        </div>
-
-        <div v-if="!isNew" class="container-styles-section">
-          <Panel v-model:collapsed="globalStylesCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" data-tour="designs-global-styles-header" @click="globalStylesCollapsed = !globalStylesCollapsed">
-                <span class="panel-header-title">Global Styles</span>
-                <small class="panel-header-desc">Applies to every container via the shared .dh-container class. Loses to anything in the CSS editor below. Per-container styling is edited in the Layout editor's Container Design card.</small>
-              </div>
-            </template>
-            <div class="font-properties-grid">
-              <div v-for="p in FONT_PROPERTIES" :key="p.key" class="field">
-                <label>{{ p.label }}</label>
-                <InputNumber
-                  v-if="p.type === 'vh-number'"
-                  :model-value="getGlobalVhNumber(p.key)"
-                  :min="0" :max="50" :step="0.1" :max-fraction-digits="2"
-                  suffix=" vh"
-                  size="small"
-                  class="w-full"
-                  @update:model-value="(v) => setGlobalVhValue(p.key, v)"
-                />
-                <div v-else-if="p.type === 'color'" class="color-field-row">
-                  <ColorPicker
-                    :model-value="getGlobalColorHex(p.key)"
-                    @update:model-value="(v) => setGlobalColorHex(p.key, v)"
-                  />
-                  <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setGlobalColorRef(p.key, colorRefFor(c.id))" />
-                  <span class="color-field-value">{{ colorDisplayLabel(getGlobalValue(p.key)) }}</span>
-                  <Button
-                    v-if="getGlobalColorHex(p.key)"
-                    icon="pi pi-times" text size="small" title="Clear"
-                    @click="setGlobalColorHex(p.key, '')"
-                  />
-                </div>
-                <Dropdown
-                  v-else
-                  :model-value="getGlobalValue(p.key)"
-                  :options="p.options"
-                  optionLabel="label"
-                  optionValue="value"
-                  editable
-                  size="small"
-                  class="w-full"
-                  @update:model-value="(v: string | undefined) => setGlobalValue(p.key, v)"
-                />
-              </div>
-            </div>
-          </Panel>
-        </div>
-
-        <div class="container-styles-section">
-          <Panel v-model:collapsed="customHtmlCssCollapsed" toggleable class="container-style-panel">
-            <template #header>
-              <div class="panel-header-clickable" data-tour="designs-custom-html-header" @click="customHtmlCssCollapsed = !customHtmlCssCollapsed">
-                <span class="panel-header-title">Custom HTML and CSS</span>
-                <small class="panel-header-desc">Hand-written background HTML/CSS — rendered last, so it always wins over every collapsible above.</small>
-              </div>
-            </template>
-            <div class="code-editors-row">
-              <div class="code-editor-field">
-                <div class="code-editor-header">
-                  <label>Background HTML</label>
-                  <Button
-                    icon="pi pi-align-left" label="Format" size="small" text
-                    :loading="formatting === 'html'" :disabled="!editForm.html.trim()"
-                    title="Auto-format the HTML (Prettier)"
-                    @click="formatEditor('html')"
-                  />
-                </div>
-                <Codemirror
-                  v-model="editForm.html"
-                  :extensions="cmHtmlExtensions"
-                  :style="{ height: '400px' }"
-                  :autofocus="false"
-                  :indent-with-tab="true"
-                  :tab-size="2"
-                />
-                <small class="hint">This renders once as the screen's static background — content containers are positioned on top of it via the Layouts page, not placed with tags here.</small>
-              </div>
-              <div class="code-editor-field">
-                <div class="code-editor-header">
-                  <label>CSS Styles</label>
-                  <Button
-                    icon="pi pi-align-left" label="Format" size="small" text
-                    :loading="formatting === 'css'" :disabled="!editForm.css.trim()"
-                    title="Auto-format the CSS (Prettier)"
-                    @click="formatEditor('css')"
-                  />
-                </div>
-                <Codemirror
-                  v-model="editForm.css"
-                  :extensions="cmCssExtensions"
-                  :style="{ height: '400px' }"
-                  :autofocus="false"
-                  :indent-with-tab="true"
-                  :tab-size="2"
-                />
-              </div>
-            </div>
-          </Panel>
-        </div>
+        <template v-if="!isNew">
+          <DesignDefaultColorsPanel v-model:form="editForm" />
+          <DesignAspectRatiosPanel v-model:form="editForm" />
+          <DesignBackdropPanel v-model:form="editForm" />
+          <DesignIndicatorPanel v-model:form="editForm" />
+          <DesignEffectPanel v-model:form="editForm" />
+          <DesignGlobalStylesPanel v-model:form="editForm" />
+        </template>
+        <DesignCodePanel v-model:form="editForm" />
       </div>
       <template #footer>
         <Button data-tour="designs-dialog-cancel" label="Cancel" @click="closeDialog" text />
@@ -1362,143 +404,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
       </template>
     </Dialog>
 
-    <!-- Manage Gradients Dialog -->
-    <Dialog v-model:visible="showGradientManageDialog" modal :style="{ width: '600px' }">
-      <template #header>
-        <DialogTitle icon="pi-sliders-h" title="Manage Gradients" />
-      </template>
-      <div class="gradient-manage-header">
-        <Button v-if="canCreate" label="New Gradient" icon="pi pi-plus" size="small" @click="openNewGradientDialog" />
-      </div>
-      <div v-if="!gradients.length" class="hint">No gradients yet.</div>
-      <div v-else class="gradient-list">
-        <div v-for="g in gradients" :key="g.id" class="gradient-list-item">
-          <div class="gradient-list-swatch" :style="{ backgroundImage: gradientCssValue(g) }"></div>
-          <div class="gradient-list-label">{{ g.name }} <small class="hint">({{ g.type }})</small></div>
-          <div class="action-buttons">
-            <Button v-if="canEdit" icon="pi pi-pencil" size="small" outlined title="Edit" @click="openEditGradientDialog(g)" />
-            <Button v-if="canCreate" icon="pi pi-copy" size="small" outlined title="Copy" @click="openCopyGradientDialog(g)" />
-            <Button v-if="canDelete" icon="pi pi-trash" size="small" severity="danger" outlined title="Delete" @click="deleteGradient(g)" />
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Close" @click="showGradientManageDialog = false" />
-      </template>
-    </Dialog>
-
-    <!-- Copy Gradient Dialog -->
-    <Dialog v-model:visible="showCopyGradientDialog" modal :style="{ width: '400px' }">
-      <template #header>
-        <DialogTitle icon="pi-copy" title="Copy Gradient" />
-      </template>
-      <div class="field">
-        <label for="copy-gradient-name">New Name</label>
-        <InputText
-          id="copy-gradient-name"
-          v-model="copyGradientNewName"
-          class="w-full"
-          autofocus
-          @keyup.enter="executeCopyGradient"
-        />
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="showCopyGradientDialog = false" text />
-        <Button label="Copy" icon="pi pi-copy" @click="executeCopyGradient" :disabled="!copyGradientNewName.trim()" />
-      </template>
-    </Dialog>
-
-    <!-- Edit Gradient Dialog -->
-    <Dialog
-      v-model:visible="showGradientEditDialog"
-      modal
-      :style="{ width: '500px' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-sliders-h" :title="isNewGradient ? 'New Gradient' : 'Edit Gradient'" />
-      </template>
-      <div class="dialog-content">
-        <div class="field">
-          <label>Name</label>
-          <InputText v-model="gradientEditForm.name" size="small" class="w-full" />
-        </div>
-        <div class="position-grid">
-          <div class="field">
-            <label>Type</label>
-            <Dropdown
-              v-model="gradientEditForm.type"
-              :options="[{ label: 'Linear', value: 'linear' }, { label: 'Radial', value: 'radial' }, { label: 'Conic', value: 'conic' }]"
-              optionLabel="label"
-              optionValue="value"
-              size="small"
-              class="w-full"
-            />
-          </div>
-          <div class="field repeating-field">
-            <label>&nbsp;</label>
-            <div class="repeating-checkbox-row">
-              <Checkbox v-model="gradientEditForm.repeating" binary inputId="gradient-repeating" />
-              <label for="gradient-repeating">Repeating</label>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="gradientEditForm.type !== 'radial'" class="field">
-          <label>{{ gradientEditForm.type === 'conic' ? 'Start Angle (deg)' : 'Angle (deg)' }}</label>
-          <InputNumber v-model="gradientEditForm.angle" :min="0" :max="360" size="small" class="w-full" />
-        </div>
-
-        <div v-if="gradientEditForm.type === 'radial'" class="position-grid">
-          <div class="field">
-            <label>Shape</label>
-            <Dropdown v-model="gradientEditForm.shape" :options="GRADIENT_SHAPE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
-          </div>
-          <div class="field">
-            <label>Size</label>
-            <Dropdown v-model="gradientEditForm.size" :options="GRADIENT_SIZE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
-          </div>
-        </div>
-
-        <div v-if="gradientEditForm.type !== 'linear'" class="position-grid">
-          <div class="field">
-            <label>Position X (%)</label>
-            <InputNumber v-model="gradientEditForm.position_x" :min="0" :max="100" size="small" class="w-full" />
-          </div>
-          <div class="field">
-            <label>Position Y (%)</label>
-            <InputNumber v-model="gradientEditForm.position_y" :min="0" :max="100" size="small" class="w-full" />
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Color Stops</label>
-          <div v-for="(stop, idx) in gradientEditForm.stops" :key="idx" class="gradient-stop-row">
-            <ColorPicker
-              :model-value="resolveStopColorHex(stop)"
-              @update:model-value="(v) => { stop.color = v || ''; stop.ref = undefined }"
-            />
-            <ColorPalettePicker :palette="editForm.default_colors" @select="(c) => setStopColorRef(stop, c)" />
-            <InputNumber v-model="stop.position" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Position" />
-            <InputNumber v-model="stop.opacity" :min="0" :max="100" suffix=" %" size="small" style="width: 110px" title="Opacity" />
-            <Button
-              icon="pi pi-trash" text size="small" severity="danger" title="Remove stop"
-              :disabled="gradientEditForm.stops.length <= 2"
-              @click="removeGradientStop(idx)"
-            />
-          </div>
-          <Button label="Add Stop" icon="pi pi-plus" text size="small" @click="addGradientStop" />
-        </div>
-
-        <div class="field">
-          <label>Preview</label>
-          <div class="gradient-preview-box" :style="{ backgroundImage: gradientEditPreview }"></div>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" @click="showGradientEditDialog = false" text />
-        <Button label="Save" @click="saveGradientEdit" />
-      </template>
-    </Dialog>
+    <GradientDialogs />
   </div>
 </template>
 
@@ -1515,45 +421,8 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
   justify-content: flex-end;
 }
 
-.hint {
-  color: #888;
-  font-size: 0.75rem;
-}
-
 .ml-2 {
   margin-left: 0.5rem;
-}
-
-.code-editors-row {
-  display: flex;
-  gap: 1rem;
-}
-
-.code-editor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.code-editor-field {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.code-editor-field label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color, #6b7280);
-}
-
-.code-editor-field .vue-codemirror {
-  border: 1px solid var(--p-inputtext-border-color, #d1d5db);
-  border-radius: 6px;
-  overflow: hidden;
 }
 
 .tpl-loading {
@@ -1570,198 +439,5 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
   color: var(--error-color, #c62828);
   margin-top: 0.25rem;
   font-size: 0.85rem;
-}
-
-.container-styles-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.container-styles-section > label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color, #6b7280);
-}
-
-.container-style-panel {
-  font-size: 0.875rem;
-}
-
-.panel-header-clickable {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  flex: 1;
-  cursor: pointer;
-  padding: 0.25rem 0;
-}
-
-.panel-header-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.panel-header-desc {
-  font-weight: 400;
-  font-size: 0.78rem;
-  color: var(--p-text-muted-color, #777);
-}
-
-.font-properties-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.75rem 1rem;
-  margin-top: 0.6rem;
-}
-
-.font-properties-grid .field label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #666;
-}
-
-.color-field-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.color-field-value {
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.position-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem 1rem;
-}
-
-.gradient-picker-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.gradient-preview-box {
-  margin-top: 0.6rem;
-  height: 60px;
-  border-radius: 6px;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  background-size: cover;
-}
-
-.effect-preview-box {
-  height: 220px;
-  overflow: hidden;
-  background: #000;
-}
-
-.nested-panel {
-  margin-top: 0.75rem;
-}
-
-.background-image-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.background-image-preview {
-  width: 60px;
-  height: 40px;
-  border-radius: 6px;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  background-size: cover;
-  background-position: center;
-}
-
-.gradient-manage-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 0.75rem;
-}
-
-.gradient-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.gradient-list-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  border-radius: 6px;
-}
-
-.gradient-list-swatch {
-  width: 48px;
-  height: 32px;
-  border-radius: 4px;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  flex-shrink: 0;
-  background-size: cover;
-}
-
-.gradient-list-label {
-  flex: 1;
-  min-width: 0;
-}
-
-.gradient-stop-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-}
-
-.indicator-enable-row {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.indicator-fields-off {
-  opacity: 0.55;
-}
-
-.aspect-ratio-list,
-.aspect-ratio-presets,
-.aspect-ratio-custom {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.5rem;
-}
-
-.aspect-ratio-remove {
-  margin-left: 0.4rem;
-  cursor: pointer;
-  font-size: 0.75rem;
-}
-
-.default-color-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-}
-
-.repeating-field {
-  justify-content: flex-end;
-}
-
-.repeating-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 2.25rem;
 }
 </style>

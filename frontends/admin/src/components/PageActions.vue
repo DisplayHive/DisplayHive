@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import Button from 'primevue/button'
+import PageHeaderSlot from './PageHeaderSlot.vue'
 import Menu from 'primevue/menu'
 
 // The page-level actions of a list page, in the app's page header (components/PageHeader.vue,
@@ -33,14 +34,6 @@ const props = defineProps<{
   secondary?: Array<PageAction | null | false>
 }>()
 
-// A Teleport needs its target in the document when it renders. On a fresh load of a page
-// the whole app is still being built then, so the header's target is not there yet: wait
-// until this component is mounted (by which time it is).
-const targetReady = ref(false)
-onMounted(() => {
-  targetReady.value = true
-})
-
 const secondaryActions = computed(() => (props.secondary ?? []).filter((a): a is PageAction => !!a))
 
 const menu = ref<InstanceType<typeof Menu> | null>(null)
@@ -59,7 +52,7 @@ const model = computed(() =>
 </script>
 
 <template>
-  <Teleport v-if="targetReady" to="#page-header-actions">
+  <PageHeaderSlot>
     <Button
       v-if="primary"
       :data-tour="primary.tour"
@@ -90,5 +83,5 @@ const model = computed(() =>
         </template>
       </Menu>
     </template>
-  </Teleport>
+  </PageHeaderSlot>
 </template>

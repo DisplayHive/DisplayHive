@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageHeaderSlot from '../components/PageHeaderSlot.vue'
 import DialogTitle from '../components/DialogTitle.vue'
 import PreviewFrame from '../components/PreviewFrame.vue'
 import RouteLink from '../components/RouteLink.vue'
@@ -777,9 +778,9 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     </template>
   </Dialog>
 
-  <Teleport to="#page-header-actions">
+  <PageHeaderSlot>
     <Button label="Back to Content" icon="pi pi-arrow-left" text @click="goBack" />
-  </Teleport>
+  </PageHeaderSlot>
 
   <div class="content-edit-page">
     <div v-if="loadingContentTypeDetail" class="loading-state">
