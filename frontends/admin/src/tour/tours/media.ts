@@ -101,9 +101,10 @@ export const mediaTour: TourDefinition = {
       before: closeEditDialogIfStillOpen,
     },
     {
-      selector: '[data-tour="media-sync-previews"]',
-      title: 'Sync Previews',
-      description: 'Compares every file against its generated preview and regenerates any that are missing — useful after a bulk import or a storage hiccup.',
+      selector: '[data-tour="page-more-actions"]',
+      title: 'More actions',
+      description:
+        'Sync Previews compares every file against its generated preview and regenerates any that are missing — useful after a bulk import or a storage hiccup. Refresh re-reads the library.',
       side: 'bottom',
     },
   ],

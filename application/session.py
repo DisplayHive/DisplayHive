@@ -81,6 +81,22 @@ def origin_allowed(app, request, origin: Optional[str]) -> bool:
     return False
 
 
+def handshake_origin_ok(app, request) -> bool:
+    """May a cookie-authenticated socket handshake come from this request?
+
+    A browser always names the page's origin on a cross-site request and on every
+    WebSocket, so a *foreign* ``Origin`` is refused. A missing one is normal for a
+    same-origin GET (the first Socket.IO polling request, also when the dev server's proxy
+    forwards it) and for non-browser clients, neither of which another site can make
+    happen — but if the browser says the request is not same-origin
+    (``Sec-Fetch-Site: cross-site`` or ``same-site``, e.g. a sibling sub-domain), it is
+    refused as well."""
+    origin = request.headers.get('Origin')
+    if origin:
+        return origin_allowed(app, request, origin)
+    return request.headers.get('Sec-Fetch-Site', '').lower() in ('', 'same-origin', 'none')
+
+
 def csrf_problem(app, request, source: Optional[str]) -> Optional[str]:
     """Why a cookie-authenticated request must be refused (cross-site request forgery
     protection), or None. Only cookie sessions on state-changing methods are checked."""

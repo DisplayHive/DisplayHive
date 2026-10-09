@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -6,7 +7,6 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
 import Card from 'primevue/card'
-import Button from 'primevue/button'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -296,22 +296,11 @@ const copyContent = (content: ContentElement) => {
     </Card>
   </div>
   <div v-else class="content-view">
+    <PageActions
+      :primary="canCreate ? { label: 'New Content', icon: 'pi pi-plus', tour: 'content-new', onClick: openCreateWorkflow } : null"
+      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button
-              v-if="canCreate"
-              data-tour="content-new"
-              icon="pi pi-plus"
-              label="New Content"
-              @click="openCreateWorkflow"
-              size="small"
-            />
-            <Button icon="pi pi-refresh" label="Refresh" @click="refreshData" size="small" outlined />
-          </div>
-        </div>
-      </template>
       <template #content>
         <div class="filter-bar filter-bar--modes">
           <SelectButton

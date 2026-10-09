@@ -176,11 +176,47 @@ classes from `assets/views.css`:
   group, actions group) or the icon and title end up pulled to opposite
   ends of the row. With no actions, icon and `<span>` can sit directly in
   `.card-header` as-is.
-- When a card's title is actions-only (no headline text at all — most list
-  pages' "New X" / refresh buttons), add a scoped
-  `.card-header { justify-content: flex-end; }` override — otherwise the
-  single remaining child collapses to the start instead of staying
-  right-aligned.
+- A card's title is **not** where a list page's own actions go any more: see
+  "Page header and page actions" below. (The `.card-header` shapes above still
+  apply to cards that are sections *within* a page — Settings, Pretalx, Alerting.)
+
+### Page header and page actions
+
+Every page has one header, built by `App.vue` from the route: icon badge, the page
+title (`<h1>`) with the help question mark next to it, and under the title a **one-line
+description** — the first sentence of the page's help text (`page.<route>` in the help
+topics), at most 140 characters; the whole text stays behind the question mark. The
+description's colour is `--p-text-muted-color`, which follows the theme, so it needs no
+`.dark-mode` override. On narrow screens the header wraps and the actions drop under the
+title.
+
+The page's **actions** sit at the right of that row, in the element `#page-header-actions`.
+Views put theirs there with the `PageActions` component (`components/PageActions.vue`) —
+never with their own buttons in the card header:
+
+```html
+<div v-else data-tour="screens-page" class="screens-view">
+  <PageActions
+    :primary="canCreate ? { label: 'Add Screen', icon: 'pi pi-plus', tour: 'screens-new', onClick: openCreateDialog } : null"
+    :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', onClick: reloadAllScreens },
+                 { label: 'Refresh', icon: 'pi pi-sync', onClick: refreshScreens }]"
+  />
+  <Card>…</Card>
+</div>
+```
+
+- **One primary action** (the "New X"/"Add X"/"Upload" button, a filled small button), or
+  none. **Everything else** — Refresh, Reload All, Sync Previews — is *secondary* and goes into the
+  "More actions" menu (`⋮`, an outlined small button). Actions the user has no right for are
+  passed as `null`/`false` and are left out; without secondary actions there is no menu.
+- `tour` sets the element's `data-tour`. Menu entries only exist while the menu is open, so a
+  guided-tour step cannot highlight one: point it at `[data-tour="page-more-actions"]`
+  and describe what is inside (see the Screens and Media tours).
+- Place `<PageActions>` only in the branch that shows the page, not in the "no access" branch.
+- Put it as the first child of the view's root element; it renders nothing in place (it teleports),
+  and waits for the header to exist on a fresh page load.
+- In E2E tests, open the menu first: `getByRole('button', { name: 'More actions' })`, then
+  `getByRole('menuitem', { name: 'Refresh' })`.
 
 ## Tables
 

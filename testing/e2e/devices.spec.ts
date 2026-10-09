@@ -385,10 +385,9 @@ test.describe('Devices page', () => {
     const row = page.locator('tr', { hasText: currentName })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    // Click the header refresh icon button (pi-refresh, no label)
-    const refreshBtn = page.locator('.card-header button.p-button-outlined .pi-refresh').first()
-    // PrimeVue wraps the icon in a span; click the button that contains it
-    await page.locator('.card-header button', { has: page.locator('.pi-refresh') }).click()
+    // Refresh is a secondary page action: in the "More actions" menu of the page header
+    await page.getByRole('button', { name: 'More actions' }).click()
+    await page.getByRole('menuitem', { name: 'Refresh' }).click()
 
     // Table briefly shows a loading state then repopulates
     // Row must still be visible after refresh

@@ -303,13 +303,15 @@ test.describe('Content page', () => {
   // 6. Refresh button reloads the content list
   // ---------------------------------------------------------------------------
 
-  test('refresh button reloads the content list', async ({ page, backendUrl }) => {
+  test('refresh action reloads the content list', async ({ page, backendUrl }) => {
     await gotoContent(page, backendUrl)
 
     const row = page.locator('tr', { hasText: contentTitleHolder.current })
     await expect(row).toBeVisible({ timeout: 10_000 })
 
-    await page.getByRole('button', { name: 'Refresh' }).click()
+    // Secondary page actions live in the "More actions" menu of the page header.
+    await page.getByRole('button', { name: 'More actions' }).click()
+    await page.getByRole('menuitem', { name: 'Refresh' }).click()
 
     // Row must still be visible after refresh
     await expect(row).toBeVisible({ timeout: 10_000 })

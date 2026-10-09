@@ -250,10 +250,27 @@ def test_an_admin_socket_connects_with_the_cookie_from_our_own_origin(flask_app,
         socket.disconnect()
 
 
-def test_the_cookie_is_not_accepted_for_a_socket_from_another_origin_or_without_one(flask_app, client, user):
+def test_the_cookie_is_not_accepted_for_a_socket_from_another_origin(flask_app, client, user):
     _login(client)
     assert not _socket(flask_app, client, headers={'Origin': 'https://evil.example'}).is_connected()
-    assert not _socket(flask_app, client).is_connected()
+
+
+def test_a_missing_origin_is_fine_for_a_same_origin_request(flask_app, client, user):
+    """Browsers leave Origin off a same-origin GET — Socket.IO's first polling request, also
+    when the dev server's proxy forwards it."""
+    _login(client)
+    for headers in ({}, {'Sec-Fetch-Site': 'same-origin'}):
+        socket = _socket(flask_app, client, headers=headers)
+        try:
+            assert socket.is_connected()
+        finally:
+            socket.disconnect()
+
+
+@pytest.mark.parametrize('site', ['cross-site', 'same-site'])
+def test_a_missing_origin_is_not_fine_when_the_browser_says_the_request_is_not_same_origin(flask_app, client, user, site):
+    _login(client)
+    assert not _socket(flask_app, client, headers={'Sec-Fetch-Site': site}).is_connected()
 
 
 def test_without_the_cookie_there_is_still_no_anonymous_access(flask_app, user):

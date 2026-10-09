@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
@@ -894,15 +895,11 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
     </Card>
   </div>
   <div v-else data-tour="designs-page" class="designs-view">
+    <PageActions
+      :primary="canCreate ? { label: 'New Design', icon: 'pi pi-plus', tour: 'designs-new', onClick: openNewDialog } : null"
+      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button v-if="canCreate" data-tour="designs-new" icon="pi pi-plus" label="New Design" @click="openNewDialog" size="small" />
-            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
-          </div>
-        </div>
-      </template>
       <template #content>
         <DataTable
           data-tour="designs-table"

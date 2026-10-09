@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from 'primevue/usetoast'
@@ -297,27 +298,12 @@ const copyUrl = (url: string) => {
     </Card>
   </div>
   <div v-else data-tour="media-page" class="media-view">
+    <PageActions
+      :primary="canUpload ? { label: 'Upload', icon: 'pi pi-upload', tour: 'media-upload', onClick: () => (showUploadDialog = true) } : null"
+      :secondary="[canUpload && { label: 'Sync Previews', icon: 'pi pi-sync', tour: 'media-sync-previews', title: 'Count images vs. previews and regenerate any missing ones', loading: syncingPreviews, onClick: syncPreviews }, { label: 'Refresh', icon: 'pi pi-refresh', onClick: () => mediaStore.fetch() }]"
+    />
     <div class="media-content">
       <Card>
-        <template #title>
-          <div class="card-header">
-            <div class="header-actions">
-              <Button v-if="canUpload" data-tour="media-upload" icon="pi pi-upload" label="Upload" @click="showUploadDialog = true" size="small" />
-              <Button
-                v-if="canUpload"
-                data-tour="media-sync-previews"
-                icon="pi pi-sync"
-                label="Sync Previews"
-                @click="syncPreviews"
-                :loading="syncingPreviews"
-                size="small"
-                outlined
-                title="Count images vs. previews and regenerate any missing ones"
-              />
-              <Button icon="pi pi-refresh" @click="mediaStore.fetch()" size="small" outlined />
-            </div>
-          </div>
-        </template>
         <template #content>
           <div class="tag-cloud" data-tour="media-tag-cloud">
             <div class="tag-cloud-list">

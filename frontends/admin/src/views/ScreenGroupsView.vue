@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
@@ -337,15 +338,11 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
     </Card>
   </div>
   <div v-else data-tour="screengroups-page" class="screengroups-view">
+    <PageActions
+      :primary="canCreate ? { label: 'New Screen Group', icon: 'pi pi-plus', tour: 'screengroups-new', onClick: openNewDialog } : null"
+      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button v-if="canCreate" data-tour="screengroups-new" icon="pi pi-plus" label="New Screen Group" @click="openNewDialog" size="small" />
-            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
-          </div>
-        </div>
-      </template>
       <template #content>
         <DataTable
           data-tour="screengroups-table"

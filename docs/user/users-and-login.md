@@ -32,7 +32,8 @@ pages (`SameSite=Strict`) and, over https, only over https (`Secure`, name
 and another website cannot use it. Requests that change something also have to
 come from DisplayHive's own page (the server checks the `Origin` and a header the
 page adds), and the admin WebSocket accepts the cookie only from DisplayHive's own
-origin.
+origin (a request that names another origin, or that the browser marks as not from
+the same origin, is refused).
 
 - **Logging out** removes the cookie from the browser. The signed session itself
   stays valid until it expires or is revoked: changing a password, deactivating

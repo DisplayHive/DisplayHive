@@ -472,6 +472,15 @@ const pageHelp = computed(() => {
   return helpStore.helpFor(`page.${route.name as string}`)?.body || ''
 })
 
+// The first sentence of the page's help text, as the one-line description under the title
+// (the whole text stays behind the question mark).
+const pageSummary = computed(() => {
+  const text = pageHelp.value.trim().replace(/\s+/g, ' ')
+  if (!text) return ''
+  const sentence = text.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? text
+  return sentence.length > 140 ? `${sentence.slice(0, 137).trimEnd()}…` : sentence
+})
+
 const helpPopover = ref<InstanceType<typeof Popover> | null>(null)
 const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
 </script>
@@ -635,19 +644,24 @@ const toggleHelp = (e: Event) => helpPopover.value?.toggle(e)
           <span v-if="pageIcon" class="page-title-icon-badge">
             <i :class="[pageIcon, 'page-title-icon']"></i>
           </span>
-          <h1>{{ pageTitle }}</h1>
-          <i
-            v-if="pageHelp"
-            class="pi pi-question-circle page-help-icon"
-            role="button"
-            tabindex="0"
-            :aria-label="`Help: ${pageTitle}`"
-            @click="toggleHelp"
-            @keydown.enter="toggleHelp"
-          ></i>
-          <Popover ref="helpPopover">
-            <p class="page-help-text">{{ pageHelp }}</p>
-          </Popover>
+          <div class="page-title-block">
+            <div class="page-title-row">
+              <h1>{{ pageTitle }}</h1>
+              <i
+                v-if="pageHelp"
+                class="pi pi-question-circle page-help-icon"
+                role="button"
+                tabindex="0"
+                :aria-label="`Help: ${pageTitle}`"
+                @click="toggleHelp"
+                @keydown.enter="toggleHelp"
+              ></i>
+              <Popover ref="helpPopover">
+                <p class="page-help-text">{{ pageHelp }}</p>
+              </Popover>
+            </div>
+            <p v-if="pageSummary" class="page-summary" data-testid="page-summary">{{ pageSummary }}</p>
+          </div>
           <div id="page-header-actions" class="page-header-actions"></div>
         </div>
         <RouterView />
@@ -1021,7 +1035,7 @@ body {
 .page-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
 
@@ -1031,13 +1045,33 @@ body {
   color: #333;
 }
 
-/* Teleport target so a routed view can put a page-level action (e.g. a
-   "Back to X" link) on the same row as the title instead of its own line. */
+/* Title and the one-line description under it. */
+.page-title-block {
+  min-width: 0;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The muted token follows the theme, so no .dark-mode override is needed. */
+.page-summary {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+/* Teleport target for PageActions (components/PageActions.vue): a list page's primary
+   action and its "More actions" menu, or a routed view's own page-level action (e.g. a
+   "Back to X" link), on the same row as the title instead of its own line. */
 .page-header-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .page-title-icon-badge {
@@ -1114,6 +1148,7 @@ body {
   }
 
   .page-header {
+    flex-wrap: wrap;
     margin-bottom: 1rem;
   }
 

@@ -84,9 +84,10 @@ export const screensTour: TourDefinition = {
       side: 'top',
     },
     {
-      selector: '[data-tour="screens-reload-all"]',
-      title: 'Reload All',
-      description: 'The same reload, sent to every registered screen at once.',
+      selector: '[data-tour="page-more-actions"]',
+      title: 'More actions',
+      description:
+        'Reload All sends the same reload to every registered screen at once, and Refresh re-reads the list. Like on every list page, the secondary actions live in this menu.',
       side: 'bottom',
     },
     {

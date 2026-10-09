@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
@@ -292,36 +293,11 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
     </Card>
   </div>
   <div v-else data-tour="screens-page" class="screens-view">
+    <PageActions
+      :primary="canCreate ? { label: 'Add Screen', icon: 'pi pi-plus', tour: 'screens-new', onClick: openCreateDialog } : null"
+      :secondary="[canReloadAll && { label: 'Reload All', icon: 'pi pi-refresh', tour: 'screens-reload-all', title: 'Reload every connected screen', onClick: reloadAllScreens }, { label: 'Refresh', icon: 'pi pi-sync', onClick: refreshScreens }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button
-              v-if="canCreate"
-              data-tour="screens-new"
-              icon="pi pi-plus"
-              label="Add Screen"
-              @click="openCreateDialog"
-              size="small"
-            />
-            <Button
-              v-if="canReloadAll"
-              data-tour="screens-reload-all"
-              icon="pi pi-refresh"
-              label="Reload All"
-              @click="reloadAllScreens"
-              size="small"
-              outlined
-            />
-            <Button
-              icon="pi pi-sync"
-              @click="refreshScreens"
-              size="small"
-              outlined
-            />
-          </div>
-        </div>
-      </template>
       <template #content>
         <DataTable
           data-tour="screens-table"

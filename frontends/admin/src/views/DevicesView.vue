@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
@@ -365,27 +366,11 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
     </Card>
   </div>
   <div v-else data-tour="devices-page" class="devices-view">
+    <PageActions
+      :primary="canAdopt ? { label: 'Adopt Device', icon: 'pi pi-plus', tour: 'devices-adopt', onClick: openAdoptDialog } : null"
+      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshDevices }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button
-              v-if="canAdopt"
-              data-tour="devices-adopt"
-              icon="pi pi-plus"
-              label="Adopt Device"
-              @click="openAdoptDialog"
-              size="small"
-            />
-            <Button
-              icon="pi pi-refresh"
-              @click="refreshDevices"
-              size="small"
-              outlined
-            />
-          </div>
-        </div>
-      </template>
       <template #content>
         <DataTable
           data-tour="devices-table"

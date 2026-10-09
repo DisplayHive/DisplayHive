@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
@@ -133,22 +134,11 @@ const refreshData = () => {
     </Card>
   </div>
   <div v-else data-tour="layouts-page" class="layouts-view">
+    <PageActions
+      :primary="canCreate ? { label: 'New Layout', icon: 'pi pi-plus', tour: 'layouts-new', onClick: openNewPage } : null"
+      :secondary="[{ label: 'Refresh', icon: 'pi pi-refresh', onClick: refreshData }]"
+    />
     <Card>
-      <template #title>
-        <div class="card-header">
-          <div class="header-actions">
-            <Button
-              v-if="canCreate"
-              data-tour="layouts-new"
-              icon="pi pi-plus"
-              label="New Layout"
-              @click="openNewPage"
-              size="small"
-            />
-            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
-          </div>
-        </div>
-      </template>
       <template #content>
         <DataTable
           data-tour="layouts-table"
