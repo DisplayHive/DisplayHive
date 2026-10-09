@@ -17,7 +17,7 @@ def register_admin_designs_handlers(socketio, app, db):
         emit_designs_update, upsert_container_styles,
         clean_indicator_color, clean_indicator_height, clean_indicator_direction,
     )
-    from application.socketio_handlers.actions import admin_action, Fail, ok
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
 
     def _ratios_json(raw):
@@ -92,7 +92,7 @@ def register_admin_designs_handlers(socketio, app, db):
     def handle_create_design(data=None):
         """Create a design from socket payload."""
         if not data or not isinstance(data, dict):
-            return
+            raise Fail('Invalid payload')
 
         design = Design(
             name=data.get('name', ''),
@@ -125,20 +125,15 @@ def register_admin_designs_handlers(socketio, app, db):
         db.session.add(DesignGlobalStyle(design_id=design.id, property='color', value='#ffff00'))
         db.session.commit()
         _emit_designs()
+        return ok(id=design.id)
 
     @socketio.on('displayhive:admin:cts:update_design')
     @admin_action('designs.edit')
     def handle_update_design(data=None):
         """Update a design from socket payload."""
         if not data or not isinstance(data, dict):
-            return
-        design_id = data.get('id')
-        if not design_id:
-            return
-
-        design = db.session.get(Design, int(design_id))
-        if not design:
-            return
+            raise Fail('Invalid payload')
+        design = get_or_fail(db, Design, data.get('id'), 'Design')
 
         design.name = data.get('name', design.name)
         design.description = data.get('description', design.description)
@@ -181,20 +176,15 @@ def register_admin_designs_handlers(socketio, app, db):
                 reload_devices_on_all_screens(socketio, db)
             except Exception:
                 logger.exception('update_design: failed to reload screens')
+        return ok()
 
     @socketio.on('displayhive:admin:cts:delete_design')
     @admin_action('designs.delete')
     def handle_delete_design(data=None):
         """Delete a design by id (socket)."""
         if not data or not isinstance(data, dict):
-            return
-        design_id = data.get('id') or data.get('design_id')
-        if not design_id:
-            return
-
-        design = db.session.get(Design, int(design_id))
-        if not design:
-            return
+            raise Fail('Invalid payload')
+        design = get_or_fail(db, Design, data.get('id') or data.get('design_id'), 'Design')
 
         was_default = bool(design.isDefault)
         db.session.execute(db.delete(DesignContainerStyle).where(DesignContainerStyle.design_id == design.id))
@@ -209,6 +199,7 @@ def register_admin_designs_handlers(socketio, app, db):
                 reload_devices_on_all_screens(socketio, db)
             except Exception:
                 logger.exception('delete_design: failed to reload screens')
+        return ok()
 
     # --- Per-container style overrides (scoped key/value store) ----------
 
@@ -220,7 +211,7 @@ def register_admin_designs_handlers(socketio, app, db):
         import json
         try:
             stops = json.loads(g.stops or '[]')
-        except Exception:
+        except (ValueError, TypeError):
             stops = []
         return {
             'id': g.id, 'name': g.name, 'type': g.type, 'repeating': bool(g.repeating),
@@ -271,7 +262,7 @@ def register_admin_designs_handlers(socketio, app, db):
         db.session.add(gradient)
         db.session.commit()
         _emit_gradients()
-        return {'success': True, 'id': gradient.id}
+        return ok(id=gradient.id)
 
     @socketio.on('displayhive:admin:cts:update_gradient')
     @admin_action('designs.edit')
@@ -298,7 +289,7 @@ def register_admin_designs_handlers(socketio, app, db):
         ).scalars().all()
         for design in db.session.execute(db.select(Design).where(Design.id.in_(design_ids))).scalars().all():
             _push_screens_if_active(design)
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:cts:delete_gradient')
     @admin_action('designs.delete')
@@ -323,7 +314,7 @@ def register_admin_designs_handlers(socketio, app, db):
         db.session.delete(gradient)
         db.session.commit()
         _emit_gradients()
-        return {'success': True}
+        return ok()
 
     @socketio.on('displayhive:admin:cts:get_design_gradients')
     @admin_action('designs.page')
@@ -378,7 +369,7 @@ def register_admin_designs_handlers(socketio, app, db):
 
         db.session.commit()
         _push_screens_if_active(design)
-        return {'success': True}
+        return ok()
 
     # --- Global style overrides (applies to every container) --------------
 
@@ -451,4 +442,4 @@ def register_admin_designs_handlers(socketio, app, db):
 
         db.session.commit()
         _push_screens_if_active(design)
-        return {'success': True}
+        return ok()

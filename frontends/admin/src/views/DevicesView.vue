@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -12,7 +14,6 @@ import { useDevicesStore } from '../stores/devices'
 import { useScreensStore } from '../stores/screens'
 import { useRightsStore } from '../stores/rights'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useAck } from '../composables/useAck'
 
 // PrimeVue components
@@ -29,7 +30,7 @@ import Popover from 'primevue/popover'
 
 const { request } = useAck()
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const devicesStore = useDevicesStore()
 const screensStore = useScreensStore()
 const rightsStore = useRightsStore()
@@ -338,11 +339,8 @@ const formatDate = (iso?: string | null) => {
 }
 
 const deleteDevice = (device: Device) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete device "${device.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       // The server pushes the new list to every admin once the device is gone; a fetch() right
       // behind the delete can be answered first and put the deleted row back.
@@ -557,10 +555,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
     <!-- Adopt Device Dialog -->
     <Dialog v-model:visible="showAdoptDialog" modal :style="{ width: '600px' }" @hide="closeAdoptDialog">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-qrcode dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Adopt Device</span>
-        </div>
+        <DialogTitle icon="pi-qrcode" title="Adopt Device" />
       </template>
       <div class="dialog-content">
         <div class="field" data-tour="devices-adopt-name-field">
@@ -612,10 +607,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
     <!-- Rename Device Dialog -->
     <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '420px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Rename Device</span>
-        </div>
+        <DialogTitle icon="pi-pencil" title="Rename Device" />
       </template>
       <div class="dialog-content">
         <div class="field">
@@ -633,10 +625,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
     <!-- Assign to Screen Dialog -->
     <Dialog v-model:visible="showAssignDialog" modal :style="{ width: '420px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Assign to Screen</span>
-        </div>
+        <DialogTitle icon="pi-desktop" title="Assign to Screen" />
       </template>
       <div class="dialog-content">
         <div class="field">

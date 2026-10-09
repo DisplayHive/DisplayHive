@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
 import { openDevicePreview } from '../composables/useDevicePreview'
 import { useMaximizedFilter, isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { useScreensStore } from '../stores/screens'
 import { useScreengroupsStore } from '../stores/screengroups'
 import { useDevicesStore } from '../stores/devices'
@@ -31,7 +34,9 @@ import { useAspectRatios } from '../composables/useAspectRatios'
 
 const toast = useToast()
 const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
+const { request } = useAck()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
 const devicesStore = useDevicesStore()
@@ -119,24 +124,14 @@ const handleScreengroupsData = (data: { all_screengroups: unknown[]; current_scr
   }
 }
 
-const handleScreenDeleted = (data: { success: boolean; error?: string }) => {
-  if (data.success) {
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen deleted', life: 3000 })
-  } else {
-    toast.add({ severity: 'error', summary: 'Error', detail: data.error || 'Failed to delete screen', life: 5000 })
-  }
-}
-
 onMounted(() => {
   on('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
-  on('displayhive:screens:stc:screen_deleted', handleScreenDeleted)
   screensStore.fetch()
   screengroupsStore.fetch()
 })
 
 onUnmounted(() => {
   off('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
-  off('displayhive:screens:stc:screen_deleted', handleScreenDeleted)
 })
 
 
@@ -152,9 +147,8 @@ const createScreen = async () => {
   }
   isCreating.value = true
   try {
-    screensStore.createScreen({ name: createForm.value.name })
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen created', life: 3000 })
-    showCreateDialog.value = false
+    const ack = await request('displayhive:screens:cts:create_screen', { name: createForm.value.name }, { success: 'Screen created', error: 'Failed to create screen' })
+    if (ack) showCreateDialog.value = false
   } finally {
     isCreating.value = false
   }
@@ -176,30 +170,33 @@ const saveRename = async (keepOpen = false) => {
   if (!renamingScreen.value) return
   isRenaming.value = true
   try {
-    screensStore.renameScreen({
+    const ack = await request('displayhive:screens:cts:rename_screen', {
       id: renamingScreen.value.id,
       old_name: renamingScreen.value.name,
       new_name: renameForm.value.name,
       screengroup_ids: renameForm.value.screengroup_ids,
       aspect_ratio: renameForm.value.aspect_ratio,
       rotation: renameForm.value.rotation,
-    })
-    toast.add({ severity: 'success', summary: 'Screen saved', detail: renameForm.value.name, life: 3000 })
-    if (!keepOpen) showRenameDialog.value = false
+    }, { success: `Screen "${renameForm.value.name}" saved`, error: 'Could not save the screen' })
+    if (ack && !keepOpen) showRenameDialog.value = false
   } finally {
     isRenaming.value = false
   }
 }
 
-const toggleDebug = (screen: Screen) => {
+const toggleDebug = async (screen: Screen) => {
   const next = !screen.debug
-  screensStore.toggleDebug(screen.id, next)
-  toast.add({ severity: 'info', summary: 'Debug Mode', detail: `Debug ${next ? 'enabled' : 'disabled'} for ${screen.name}`, life: 2000 })
+  const previous = screen.debug
+  screen.debug = next
+  const ack = await request('displayhive:screens:cts:toggle_debug', { screen_id: screen.id, debug: next }, {
+    success: `Debug ${next ? 'enabled' : 'disabled'} for ${screen.name}`,
+    error: 'Could not change debug mode',
+  })
+  if (!ack) screen.debug = previous
 }
 
-const reloadScreen = (screen: Screen) => {
-  screensStore.reloadScreen(screen.name)
-  toast.add({ severity: 'info', summary: 'Reloading', detail: `Reload command sent to ${screen.name}`, life: 2000 })
+const reloadScreen = async (screen: Screen) => {
+  await request('displayhive:screens:cts:reload_screen', { name: screen.name }, { success: `Reload command sent to ${screen.name}`, error: 'Could not reload the screen' })
 }
 
 // A screen previews via its attached device's live connection — content is
@@ -233,22 +230,17 @@ const reloadAllScreens = () => {
     message: 'Are you sure you want to reload all screens?',
     header: 'Confirm Reload All',
     icon: 'pi pi-exclamation-triangle',
-    accept: () => {
-      screensStore.reloadAll()
-      toast.add({ severity: 'info', summary: 'Reloading', detail: 'Reload command sent to all screens', life: 3000 })
+    accept: async () => {
+      await request('displayhive:screens:cts:reload_all_screens', {}, { success: 'Reload command sent to all screens', error: 'Could not reload the screens' })
     },
   })
 }
 
 const deleteScreen = (screen: Screen) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete screen "${screen.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      screensStore.deleteScreen(screen.id)
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Screen deleted', life: 3000 })
+    accept: async () => {
+      await request('displayhive:screens:cts:delete_screen', { screen_id: screen.id }, { success: 'Screen deleted', error: 'Failed to delete screen' })
     },
   })
 }
@@ -267,13 +259,12 @@ const toggleFind = (screen: Screen) => {
   devicesStore.findDevice(screen.attached_device.id)
 }
 
-const toggleMonitoring = (screen: Screen) => {
-  screensStore.toggleMonitoring(screen.id)
+const toggleMonitoring = async (screen: Screen) => {
+  await request('displayhive:screens:cts:toggle_monitoring', { screen_id: screen.id }, { error: 'Could not change monitoring' })
 }
 
-const resetScreenSize = (screen: Screen) => {
-  screensStore.resetScreenSize(screen.id)
-  toast.add({ severity: 'info', summary: 'Size reset', detail: `Screen size reset for ${screen.name}`, life: 2000 })
+const resetScreenSize = async (screen: Screen) => {
+  await request('displayhive:screens:cts:reset_screen_size', { screen_id: screen.id }, { success: `Screen size reset for ${screen.name}`, error: 'Could not reset the size' })
 }
 
 // Reached via a link like /screens?edit=<id>: open that screen's dialog.
@@ -471,10 +462,7 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
     <!-- Create Screen Dialog -->
     <Dialog v-model:visible="showCreateDialog" modal :style="{ width: '450px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Add Screen</span>
-        </div>
+        <DialogTitle icon="pi-desktop" title="Add Screen" />
       </template>
       <div class="dialog-content">
         <div class="field" data-tour="screen-name-field">
@@ -491,10 +479,7 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
     <!-- Rename Screen Dialog -->
     <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '600px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Rename Screen</span>
-        </div>
+        <DialogTitle icon="pi-pencil" title="Rename Screen" />
       </template>
       <div class="dialog-content">
         <div class="field">

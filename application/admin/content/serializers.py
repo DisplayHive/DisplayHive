@@ -15,7 +15,7 @@ def fmt_dt(dt) -> str | None:
         return None
     try:
         return dt.strftime('%Y-%m-%dT%H:%M')
-    except Exception:
+    except (ValueError, AttributeError):
         return str(dt)
 
 
@@ -62,7 +62,7 @@ def build_content_dict(content, design_payload=None, db=None):
         def _option_flags(tag):
             try:
                 return json.loads(tag.option_flags) if tag.option_flags else {}
-            except Exception:
+            except (ValueError, TypeError):
                 return {}
 
         data['_field_metadata'] = {

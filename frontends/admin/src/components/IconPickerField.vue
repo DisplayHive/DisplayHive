@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogTitle from './DialogTitle.vue'
 /**
  * Config editor for the `icon` field handler — shared by ContentEditView.vue
  * (a Contenttype field's live value) and LayoutCanvasEditor.vue (a
@@ -266,10 +267,7 @@ const showLicenseDialog = ref(false)
 
     <Dialog v-model:visible="showLicenseDialog" modal :style="{ width: '640px', maxWidth: '90vw' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-book dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Icon Libraries Licenses</span>
-        </div>
+        <DialogTitle icon="pi-book" title="Icon Libraries Licenses" />
       </template>
       <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-license-entry">
         <h4>

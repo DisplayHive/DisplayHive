@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
 import PreviewFrame from '../components/PreviewFrame.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -751,11 +752,8 @@ watch(() => route.fullPath, initFromRoute, { immediate: true })
     :style="{ width: '600px' }"
   >
     <template #header>
-      <div class="dialog-title">
-        <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
-        <span class="p-dialog-title">Select Content Type</span>
-      </div>
-    </template>
+        <DialogTitle icon="pi-list" title="Select Content Type" />
+      </template>
     <div class="contenttype-list">
       <Card
         v-for="ct in contentTypes"

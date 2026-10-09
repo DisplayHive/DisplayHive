@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
 import type { Design, Gradient, GradientStop, DefaultColor } from '../types/models'
 import ColorPalettePicker from '../components/ColorPalettePicker.vue'
@@ -127,7 +129,7 @@ const setGlobalValue = (prop: string, value: string | undefined) => {
   globalSaveDebounce = setTimeout(() => {
     const styles: Record<string, string> = {}
     for (const p of FONT_PROPERTIES) styles[p.key] = globalStyles.value[p.key] || ''
-    emit('displayhive:admin:cts:save_design_global_styles', { design_id: editForm.value.id, styles })
+    void request('displayhive:admin:cts:save_design_global_styles', { design_id: editForm.value.id, styles }, { error: 'Could not save the global styles' })
   }, 400)
 }
 
@@ -227,7 +229,7 @@ const combinedGradientCss = (list: Gradient[]): string =>
 const setDesignGradients = (gradientIds: number[] | undefined) => {
   editForm.value.gradient_ids = gradientIds || []
   if (!editForm.value.id) return
-  emit('displayhive:admin:cts:set_design_gradients', { design_id: editForm.value.id, gradient_ids: editForm.value.gradient_ids })
+  void request('displayhive:admin:cts:set_design_gradients', { design_id: editForm.value.id, gradient_ids: editForm.value.gradient_ids }, { error: 'Could not save the gradients' })
 }
 
 // Manage (list) dialog
@@ -310,26 +312,21 @@ const setStopColorRef = (stop: GradientStop, color: DefaultColor) => {
 
 const gradientEditPreview = computed(() => gradientCssValue(gradientEditForm.value))
 
-const saveGradientEdit = () => {
+const saveGradientEdit = async () => {
   const payload = {
     ...gradientEditForm.value,
     stops: gradientEditForm.value.stops.map((s) => ({ ...s, color: `#${s.color}` })),
   }
   const event = isNewGradient.value ? 'displayhive:admin:cts:create_gradient' : 'displayhive:admin:cts:update_gradient'
-  emit(event, payload)
-  toast.add({ severity: 'success', summary: 'Success', detail: isNewGradient.value ? 'Gradient created' : 'Gradient updated', life: 3000 })
-  showGradientEditDialog.value = false
+  const ack = await request(event, payload, { success: isNewGradient.value ? 'Gradient created' : 'Gradient updated', error: 'Could not save the gradient' })
+  if (ack) showGradientEditDialog.value = false
 }
 
 const deleteGradient = (g: Gradient) => {
-  confirm.require({
+  confirmDanger({
     message: `Delete gradient "${g.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_gradient', { id: g.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Gradient deleted', life: 3000 })
+    accept: async () => {
+      await request('displayhive:admin:cts:delete_gradient', { id: g.id }, { success: 'Gradient deleted', error: 'Could not delete the gradient' })
     },
   })
 }
@@ -347,11 +344,11 @@ const openCopyGradientDialog = (g: Gradient) => {
   showCopyGradientDialog.value = true
 }
 
-const executeCopyGradient = () => {
+const executeCopyGradient = async () => {
   const source = copyGradientSource.value
   const name = copyGradientNewName.value.trim()
   if (!source || !name) return
-  emit('displayhive:admin:cts:create_gradient', {
+  const ack = await request('displayhive:admin:cts:create_gradient', {
     name,
     type: source.type,
     repeating: source.repeating,
@@ -361,14 +358,14 @@ const executeCopyGradient = () => {
     position_x: source.position_x,
     position_y: source.position_y,
     stops: source.stops,
-  })
-  toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
-  showCopyGradientDialog.value = false
+  }, { success: `"${name}" created`, error: 'Could not copy the gradient' })
+  if (ack) showCopyGradientDialog.value = false
 }
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
+const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canCreate = computed(() => rightsStore.can('designs.create'))
@@ -660,7 +657,7 @@ const handleDesignsList = (data: { data?: Design[]; designs?: Design[] }) => {
   loading.value = false
 }
 
-const handleDesignDetail = (data: { design?: Design }) => {
+const handleDesignDetail = async (data: { design?: Design }) => {
   try {
     const design = data?.design || null
     if (!design) return
@@ -669,14 +666,12 @@ const handleDesignDetail = (data: { design?: Design }) => {
     if (pendingCopyName.value) {
       const name = pendingCopyName.value
       pendingCopyName.value = ''
-      emit('displayhive:admin:cts:create_design', {
+      await request('displayhive:admin:cts:create_design', {
         name,
         description: design.description || '',
         html: design.html || '',
         css: design.css || '',
-      })
-      toast.add({ severity: 'success', summary: 'Copied', detail: `"${name}" created`, life: 3000 })
-      refreshData()
+      }, { success: `"${name}" created`, error: 'Could not copy the design' })
       return
     }
 
@@ -826,7 +821,7 @@ const saveDesign = async (keepOpen = false) => {
     ? 'displayhive:admin:cts:create_design'
     : 'displayhive:admin:cts:update_design'
 
-  emit(event, {
+  const ack = await request(event, {
     id: editForm.value.id,
     name: editForm.value.name,
     description: editForm.value.description,
@@ -847,34 +842,20 @@ const saveDesign = async (keepOpen = false) => {
     indicator_color: editForm.value.indicator_color,
     indicator_height: editForm.value.indicator_height,
     indicator_direction: editForm.value.indicator_direction,
-  })
-
-  toast.add({
-    severity: 'success',
-    summary: 'Success',
-    detail: isNew.value ? 'Design created' : 'Design updated',
-    life: 3000,
-  })
-  if (!keepOpen) showEditDialog.value = false
-  refreshData()
+  }, { success: isNew.value ? 'Design created' : 'Design updated', error: 'Could not save the design' })
+  if (ack && !keepOpen) showEditDialog.value = false
 }
 
-const setDefault = (design: Design) => {
-  emit('displayhive:admin:cts:set_default_design', { id: design.id })
-  toast.add({ severity: 'success', summary: 'Success', detail: 'Active design updated', life: 3000 })
-  refreshData()
+const setDefault = async (design: Design) => {
+  const ack = await request('displayhive:admin:cts:set_default_design', { id: design.id }, { success: 'Active design updated', error: 'Could not change the active design' })
+  if (ack) refreshData()
 }
 
 const deleteDesign = (design: Design) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete "${design.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      emit('displayhive:admin:cts:delete_design', { id: design.id })
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Design deleted', life: 3000 })
-      refreshData()
+    accept: async () => {
+      await request('displayhive:admin:cts:delete_design', { id: design.id }, { success: 'Design deleted', error: 'Could not delete the design' })
     },
   })
 }
@@ -962,10 +943,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
     <!-- Copy Dialog -->
     <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Copy Design</span>
-        </div>
+        <DialogTitle icon="pi-copy" title="Copy Design" />
       </template>
       <div class="field">
         <label for="copy-design-name">New Name</label>
@@ -984,10 +962,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
       :style="{ width: '95vw', maxWidth: '1800px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-palette dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isNew ? 'New Design' : 'Edit Design' }}</span>
-        </div>
+        <DialogTitle icon="pi-palette" :title="isNew ? 'New Design' : 'Edit Design'" />
       </template>
       <div class="dialog-content">
         <div v-if="loadingDesign" class="tpl-loading">
@@ -1390,10 +1365,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
     <!-- Manage Gradients Dialog -->
     <Dialog v-model:visible="showGradientManageDialog" modal :style="{ width: '600px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-sliders-h dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Manage Gradients</span>
-        </div>
+        <DialogTitle icon="pi-sliders-h" title="Manage Gradients" />
       </template>
       <div class="gradient-manage-header">
         <Button v-if="canCreate" label="New Gradient" icon="pi pi-plus" size="small" @click="openNewGradientDialog" />
@@ -1418,10 +1390,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
     <!-- Copy Gradient Dialog -->
     <Dialog v-model:visible="showCopyGradientDialog" modal :style="{ width: '400px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Copy Gradient</span>
-        </div>
+        <DialogTitle icon="pi-copy" title="Copy Gradient" />
       </template>
       <div class="field">
         <label for="copy-gradient-name">New Name</label>
@@ -1446,10 +1415,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
       :style="{ width: '500px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-sliders-h dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isNewGradient ? 'New Gradient' : 'Edit Gradient' }}</span>
-        </div>
+        <DialogTitle icon="pi-sliders-h" :title="isNewGradient ? 'New Gradient' : 'Edit Gradient'" />
       </template>
       <div class="dialog-content">
         <div class="field">

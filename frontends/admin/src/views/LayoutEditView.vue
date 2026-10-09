@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useConfirmAction } from '../composables/useConfirmAction'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -6,7 +7,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
 import type { Layout, ContentContainer } from '../types/models'
 
@@ -20,7 +20,7 @@ const route = useRoute()
 const goBack = () => router.push({ name: 'layouts' })
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
 const { request } = useAck()
 const rightsStore = useRightsStore()
@@ -89,11 +89,8 @@ const deleteEditingLayout = () => {
     toast.add({ severity: 'warn', summary: 'Cannot delete', detail: 'This layout is used by a Contenttype — reassign it first.', life: 4000 })
     return
   }
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete layout "${l.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
       if (ack) goBack()

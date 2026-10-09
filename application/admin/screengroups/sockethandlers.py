@@ -150,20 +150,15 @@ def register_admin_screengroups_handlers(socketio, app, db):
         emit_screengroups_update(socketio, app, db, room=request.sid)
 
     @socketio.on('displayhive:admin:cts:create_screengroup')
-    @require_right('screengroups.create')
+    @admin_action('screengroups.create')
     def create_screengroup(message):
-        """Create a new screengroup"""
+        """Create a new screengroup. Answers {success, screengroup_id, name}."""
         (name,) = fields(message, 'name')
         name = (name or '').strip()
-        sid = request.sid
         if not name:
-            socketio.emit('displayhive:admin:stc:screengroup_created', {'success': False, 'error': 'Name is required'}, room=sid)
-            return
-
-        existing = db.session.execute(db.select(Screengroup).where(Screengroup.name == name)).scalar_one_or_none()
-        if existing:
-            socketio.emit('displayhive:admin:stc:screengroup_created', {'success': False, 'error': 'Screengroup mit diesem Namen existiert bereits'}, room=sid)
-            return
+            raise Fail('Name is required')
+        if db.session.execute(db.select(Screengroup).where(Screengroup.name == name)).scalar_one_or_none():
+            raise Fail('A screen group with this name already exists')
 
         screengroup = Screengroup(name=name)
         db.session.add(screengroup)
@@ -172,55 +167,48 @@ def register_admin_screengroups_handlers(socketio, app, db):
         emit_zuweisungen_matrix_update(socketio, db)
         emit_screengroups_update(socketio, app, db, room='admins')
         logger.info("Screengroup '%s' created with id %s", name, screengroup.id)
-
-        socketio.emit('displayhive:admin:stc:screengroup_created', {'success': True, 'screengroup_id': screengroup.id, 'name': screengroup.name}, room=sid)
+        return ok(screengroup_id=screengroup.id, name=screengroup.name)
 
     @socketio.on('displayhive:admin:cts:rename_screengroup')
-    @require_right('screengroups.rename')
+    @admin_action('screengroups.rename')
     def rename_screengroup(message):
-        """Rename a screengroup"""
+        """Rename a screengroup."""
         screengroup_id, new_name = fields(message, 'screengroup_id', 'new_name')
         new_name = (new_name or '').strip()
-        if not screengroup_id or not new_name:
-            return
-
-        screengroup = db.session.get(Screengroup, screengroup_id)
-        if not screengroup:
-            return
+        if not new_name:
+            raise Fail('Name is required')
+        screengroup = get_or_fail(db, Screengroup, screengroup_id, 'Screen group')
+        taken = db.session.execute(
+            db.select(Screengroup.id).where(Screengroup.name == new_name, Screengroup.id != screengroup.id)
+        ).first()
+        if taken:
+            raise Fail('A screen group with this name already exists')
         screengroup.name = new_name
         db.session.commit()
 
-        emit_screengroups_update(socketio, app, db)
+        emit_screengroups_update(socketio, app, db, room='admins')
+        return ok()
 
     @socketio.on('displayhive:admin:cts:delete_screengroup')
-    @require_right('screengroups.delete')
+    @admin_action('screengroups.delete')
     def delete_screengroup(message):
-        """Delete a screengroup (only if it has no screens and no content)"""
-        sid = request.sid
+        """Delete a screengroup (only if it has no screens and no content)."""
         (screengroup_id,) = fields(message, 'screengroup_id')
-        if not screengroup_id:
-            return
+        screengroup = get_or_fail(db, Screengroup, screengroup_id, 'Screen group')
 
-        screengroup = db.session.get(Screengroup, screengroup_id)
-        if not screengroup:
-            return
-
-        # Prevent deletion of auto-managed single-screen groups
+        # Single-screen groups are managed together with their screen.
         if getattr(screengroup, 'is_one_screen', False):
-            socketio.emit('displayhive:admin:stc:screengroup_deleted', {'success': False, 'error': 'Dieser Screengroup ist einem Screen zugeordnet und kann nicht manuell gelöscht werden'}, room=sid)
-            return
-
+            raise Fail('This group belongs to a screen and cannot be deleted manually')
         if len(screengroup.screens) > 0 or len(screengroup.content_elements) > 0:
-            socketio.emit('displayhive:admin:stc:screengroup_deleted', {'success': False, 'error': 'Screengroup kann nicht gelöscht werden, da sie noch Screens oder Content enthält'}, room=sid)
-            return
+            raise Fail('The group still has screens or content and cannot be deleted')
 
         db.session.delete(screengroup)
         db.session.commit()
 
         emit_zuweisungen_matrix_update(socketio, db)
+        emit_screengroups_update(socketio, app, db, room='admins')
         logger.info('Screengroup %s deleted', screengroup_id)
-
-        socketio.emit('displayhive:admin:stc:screengroup_deleted', {'success': True, 'screengroup_id': screengroup_id}, room=sid)
+        return ok(screengroup_id=screengroup_id)
 
     @socketio.on('displayhive:admin:cts:get_screengroup_content')
     @require_right('screengroups.page')

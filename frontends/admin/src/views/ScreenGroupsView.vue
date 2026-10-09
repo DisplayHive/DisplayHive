@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
+import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useScreengroupsStore } from '../stores/screengroups'
 import { useScreensStore } from '../stores/screens'
 import { useContentStore } from '../stores/content'
@@ -31,8 +33,9 @@ interface DialogScreen {
 }
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off } = useSocket()
+const { request } = useAck()
 const screengroupsStore = useScreengroupsStore()
 const screensStore = useScreensStore()
 const contentStore = useContentStore()
@@ -141,31 +144,9 @@ const handleScreenGroupContent = (data: { content?: Array<{ id: number; title: s
   contentLoading.value = false
 }
 
-interface ActionResult { success?: boolean; error?: string }
-
-const handleScreenGroupCreated = (data: ActionResult) => {
-  if (data.success) {
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group created', life: 3000 })
-    screengroupsStore.fetch()
-  } else {
-    toast.add({ severity: 'error', summary: 'Error', detail: data.error || 'Failed to create screen group', life: 5000 })
-  }
-}
-
-const handleScreenGroupDeleted = (data: ActionResult) => {
-  if (data.success) {
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group deleted', life: 3000 })
-    screengroupsStore.fetch()
-  } else {
-    toast.add({ severity: 'error', summary: 'Error', detail: data.error || 'Failed to delete screen group', life: 5000 })
-  }
-}
-
 onMounted(() => {
   on('displayhive:admin:stc:screengroup_screens_data', handleScreenGroupScreens)
   on('displayhive:admin:stc:screengroup_content_data', handleScreenGroupContent)
-  on('displayhive:admin:stc:screengroup_created', handleScreenGroupCreated)
-  on('displayhive:admin:stc:screengroup_deleted', handleScreenGroupDeleted)
   screengroupsStore.fetch()
   screensStore.fetch()
   contentStore.fetch()
@@ -174,8 +155,6 @@ onMounted(() => {
 onUnmounted(() => {
   off('displayhive:admin:stc:screengroup_screens_data', handleScreenGroupScreens)
   off('displayhive:admin:stc:screengroup_content_data', handleScreenGroupContent)
-  off('displayhive:admin:stc:screengroup_created', handleScreenGroupCreated)
-  off('displayhive:admin:stc:screengroup_deleted', handleScreenGroupDeleted)
 })
 
 
@@ -193,33 +172,28 @@ const openEditDialog = (sg: Screengroup) => {
 
 const closeDialog = () => { showEditDialog.value = false }
 
-const saveScreenGroup = (keepOpen = false) => {
+const saveScreenGroup = async (keepOpen = false) => {
   if (!editForm.value.name.trim()) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Name is required', life: 3000 })
     return
   }
   isSaving.value = true
   try {
-    if (isNew.value) {
-      screengroupsStore.createScreenGroup(editForm.value.name)
-    } else {
-      screengroupsStore.renameScreenGroup(editForm.value.id!, editForm.value.name)
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Screen group updated', life: 3000 })
-      screengroupsStore.fetch()
-    }
-    if (!keepOpen) showEditDialog.value = false
+    const ack = isNew.value
+      ? await request('displayhive:admin:cts:create_screengroup', { name: editForm.value.name }, { success: 'Screen group created', error: 'Failed to create screen group' })
+      : await request('displayhive:admin:cts:rename_screengroup', { screengroup_id: editForm.value.id, new_name: editForm.value.name }, { success: 'Screen group updated', error: 'Failed to rename screen group' })
+    if (ack && !keepOpen) showEditDialog.value = false
   } finally {
     isSaving.value = false
   }
 }
 
 const deleteScreenGroup = (sg: Screengroup) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete "${sg.name}"? This will only work if the group has no screens or content.`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => { screengroupsStore.deleteScreenGroup(sg.id) },
+    accept: async () => {
+      await request('displayhive:admin:cts:delete_screengroup', { screengroup_id: sg.id }, { success: 'Screen group deleted', error: 'Failed to delete screen group' })
+    },
   })
 }
 
@@ -240,30 +214,30 @@ const closeScreensDialog = () => {
   assignedScreens.value = []
 }
 
-const removeScreenFromGroup = (screen: DialogScreen) => {
+const removeScreenFromGroup = async (screen: DialogScreen) => {
   if (!selectedScreenGroup.value) return
-  screengroupsStore.removeScreenFromGroup(selectedScreenGroup.value.id, screen.id)
+  const ack = await request('displayhive:admin:cts:remove_screen_from_screengroup', { screengroup_id: selectedScreenGroup.value.id, screen_id: screen.id }, { error: 'Could not remove the screen' })
+  if (!ack) return
   assignedScreens.value = assignedScreens.value.filter((s) => s.id !== screen.id)
   availableScreens.value.push(screen)
 }
 
-const addScreenToGroup = (screen: DialogScreen) => {
+const addScreenToGroup = async (screen: DialogScreen) => {
   if (!selectedScreenGroup.value) return
-  screengroupsStore.addScreenToGroup(selectedScreenGroup.value.id, screen.id)
+  const ack = await request('displayhive:admin:cts:add_screen_to_screengroup', { screengroup_id: selectedScreenGroup.value.id, screen_id: screen.id }, { error: 'Could not add the screen' })
+  if (!ack) return
   availableScreens.value = availableScreens.value.filter((s) => s.id !== screen.id)
   assignedScreens.value.push(screen)
 }
 
 const removeAllScreensFromGroup = () => {
   if (!selectedScreenGroup.value) return
-  confirm.require({
+  confirmDanger({
     message: `Remove ALL screens from "${selectedScreenGroup.value.name}"?`,
     header: 'Confirm Remove All',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      screengroupsStore.removeAllScreensFromGroup(selectedScreenGroup.value!.id)
-      assignedScreens.value = []
+    accept: async () => {
+      const ack = await request('displayhive:admin:cts:remove_all_screens_from_screengroup', { screengroup_id: selectedScreenGroup.value!.id }, { error: 'Could not remove the screens' })
+      if (ack) assignedScreens.value = []
     },
   })
 }
@@ -286,29 +260,30 @@ const closeContentDialog = () => {
   availableContent.value = []
 }
 
-const removeContentFromGroup = (content: Content) => {
+const removeContentFromGroup = async (content: Content) => {
   if (!selectedScreenGroup.value) return
-  screengroupsStore.removeContentFromGroup(selectedScreenGroup.value.id, content.id)
+  const ack = await request('displayhive:admin:cts:remove_content_from_screengroup', { screengroup_id: selectedScreenGroup.value.id, content_id: content.id }, { error: 'Could not remove the content' })
+  if (!ack) return
   assignedContent.value = assignedContent.value.filter((c) => c.id !== content.id)
   availableContent.value.push(content)
 }
 
-const addContentToGroup = (content: Content) => {
+const addContentToGroup = async (content: Content) => {
   if (!selectedScreenGroup.value) return
-  screengroupsStore.addContentToGroup(selectedScreenGroup.value.id, content.id)
+  const ack = await request('displayhive:admin:cts:add_content_to_screengroup', { screengroup_id: selectedScreenGroup.value.id, content_id: content.id }, { error: 'Could not add the content' })
+  if (!ack) return
   availableContent.value = availableContent.value.filter((c) => c.id !== content.id)
   assignedContent.value.push(content)
 }
 
 const removeAllContentFromGroup = () => {
   if (!selectedScreenGroup.value) return
-  confirm.require({
+  confirmDanger({
     message: `Remove ALL content from "${selectedScreenGroup.value.name}"?`,
     header: 'Confirm Remove All',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      screengroupsStore.removeAllContentFromGroup(selectedScreenGroup.value!.id)
+    accept: async () => {
+      const ack = await request('displayhive:admin:cts:remove_all_content_from_screengroup', { screengroup_id: selectedScreenGroup.value!.id }, { error: 'Could not remove the content' })
+      if (!ack) return
       availableContent.value.push(...assignedContent.value)
       assignedContent.value = []
     },
@@ -412,10 +387,7 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
       :style="{ width: '500px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-th-large dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isNew ? 'New Screen Group' : 'Edit Screen Group' }}</span>
-        </div>
+        <DialogTitle icon="pi-th-large" :title="isNew ? 'New Screen Group' : 'Edit Screen Group'" />
       </template>
       <div class="dialog-content">
         <div class="field" data-tour="screengroup-name-field">
@@ -437,10 +409,7 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
       :style="{ width: '900px', maxHeight: '90vh' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-desktop dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Screens in {{ selectedScreenGroup?.name || '' }}</span>
-        </div>
+        <DialogTitle icon="pi-desktop" :title="`Screens in ${selectedScreenGroup?.name || ''}`" />
       </template>
       <div class="dialog-content">
         <div v-if="screensLoading" class="loading-state">
@@ -539,10 +508,7 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
       :style="{ width: '900px', maxHeight: '90vh' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-file dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Content in {{ selectedScreenGroup?.name || '' }}</span>
-        </div>
+        <DialogTitle icon="pi-file" :title="`Content in ${selectedScreenGroup?.name || ''}`" />
       </template>
       <div class="dialog-content">
         <div v-if="contentLoading" class="loading-state">

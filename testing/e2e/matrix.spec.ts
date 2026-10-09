@@ -70,12 +70,11 @@ async function seedScreenGroup(page: Page, name: string): Promise<number> {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { reject(new Error('Socket not available')); return }
         const t = setTimeout(() => reject(new Error('Timed out')), 10_000)
-        socket.once('displayhive:admin:stc:screengroup_created', (data: any) => {
+        socket.emit('displayhive:admin:cts:create_screengroup', { name }, (data: any) => {
           clearTimeout(t)
           if (data?.success) resolve(data.screengroup_id)
           else reject(new Error(JSON.stringify(data)))
         })
-        socket.emit('displayhive:admin:cts:create_screengroup', { name })
       }),
     { name },
   )
@@ -89,8 +88,7 @@ async function deleteScreenGroup(page: Page, id: number): Promise<void> {
         const socket = (window as any).__displayhive_socket__
         if (!socket) { resolve(); return }
         const t = setTimeout(() => resolve(), 5_000)
-        socket.once('displayhive:admin:stc:screengroup_deleted', () => { clearTimeout(t); resolve() })
-        socket.emit('displayhive:admin:cts:delete_screengroup', { screengroup_id: id })
+        socket.emit('displayhive:admin:cts:delete_screengroup', { screengroup_id: id }, () => { clearTimeout(t); resolve() })
       }),
     { id },
   )

@@ -101,12 +101,18 @@ async function seedScreen(page: Page, screenName: string): Promise<void> {
           () => reject(new Error('Timed out waiting for screen creation')),
           10_000,
         )
-        // create_screen does not ack; listen for the updated screens list
-        socket.once('displayhive:admin:stc:upd_admin_screen', () => {
+        socket.emit('displayhive:screens:cts:create_screen', { name: screenName }, (ack: any) => {
           clearTimeout(t)
-          resolve()
+          if (!ack?.success) {
+            reject(new Error(`create_screen failed: ${JSON.stringify(ack)}`))
+            return
+          }
+          // The page's own initial list request can be answered after the server's push for
+          // this new screen and overwrite it with the older state; ask once more so the newest
+          // answer wins.
+          socket.emit('displayhive:admin:cts:get_admin_screen')
+          setTimeout(resolve, 300)
         })
-        socket.emit('displayhive:screens:cts:create_screen', { name: screenName })
       }),
     { screenName },
   )

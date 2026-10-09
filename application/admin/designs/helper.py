@@ -20,7 +20,7 @@ def _design_default_colors(design) -> list:
     try:
         colors = json.loads(getattr(design, 'default_colors', '') or '[]')
         return colors if isinstance(colors, list) else []
-    except Exception:
+    except (ValueError, TypeError):
         return []
 
 
@@ -171,7 +171,7 @@ def gradient_css_value(gradient, design=None) -> str:
         return ''
     try:
         stops = json.loads(gradient.stops)
-    except Exception:
+    except (ValueError, TypeError):
         return ''
     if not isinstance(stops, list) or len(stops) < 2:
         return ''
@@ -359,7 +359,7 @@ def build_design_payload(db) -> dict:
         if raw_settings:
             try:
                 effect_settings = json.loads(raw_settings)
-            except Exception:
+            except (ValueError, TypeError):
                 effect_settings = {}
         if effect_settings:
             effect_settings = resolve_default_colors_deep(effect_settings, design)

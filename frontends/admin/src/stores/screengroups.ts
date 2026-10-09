@@ -57,42 +57,6 @@ export const useScreengroupsStore = defineStore('screengroups', () => {
     emit('displayhive:admin:cts:get_screengroups')
   }
 
-  const createScreenGroup = (name: string) => {
-    emit('displayhive:admin:cts:create_screengroup', { name })
-  }
-
-  const renameScreenGroup = (id: number, newName: string) => {
-    emit('displayhive:admin:cts:rename_screengroup', { screengroup_id: id, new_name: newName })
-  }
-
-  const deleteScreenGroup = (id: number) => {
-    emit('displayhive:admin:cts:delete_screengroup', { screengroup_id: id })
-  }
-
-  const addScreenToGroup = (groupId: number, screenId: number) => {
-    emit('displayhive:admin:cts:add_screen_to_screengroup', { screengroup_id: groupId, screen_id: screenId })
-  }
-
-  const removeScreenFromGroup = (groupId: number, screenId: number) => {
-    emit('displayhive:admin:cts:remove_screen_from_screengroup', { screengroup_id: groupId, screen_id: screenId })
-  }
-
-  const removeAllScreensFromGroup = (groupId: number) => {
-    emit('displayhive:admin:cts:remove_all_screens_from_screengroup', { screengroup_id: groupId })
-  }
-
-  const addContentToGroup = (groupId: number, contentId: number) => {
-    emit('displayhive:admin:cts:add_content_to_screengroup', { screengroup_id: groupId, content_id: contentId })
-  }
-
-  const removeContentFromGroup = (groupId: number, contentId: number) => {
-    emit('displayhive:admin:cts:remove_content_from_screengroup', { screengroup_id: groupId, content_id: contentId })
-  }
-
-  const removeAllContentFromGroup = (groupId: number) => {
-    emit('displayhive:admin:cts:remove_all_content_from_screengroup', { screengroup_id: groupId })
-  }
-
   const getScreenGroupScreens = (groupId: number) => {
     emit('displayhive:admin:cts:get_screengroup_screens', { screengroup_id: groupId })
   }
@@ -105,15 +69,6 @@ export const useScreengroupsStore = defineStore('screengroups', () => {
     screengroups,
     loading,
     fetch,
-    createScreenGroup,
-    renameScreenGroup,
-    deleteScreenGroup,
-    addScreenToGroup,
-    removeScreenFromGroup,
-    removeAllScreensFromGroup,
-    addContentToGroup,
-    removeContentFromGroup,
-    removeAllContentFromGroup,
     getScreenGroupScreens,
     getScreenGroupContent,
   }

@@ -231,3 +231,33 @@ def test_content_and_media_actions_report_unknown_rows(superadmin_client):
     assert _ack(superadmin_client, 'displayhive:admin:cts:create_content_element', {'id': 10_000_000, 'title': 't'})['error'] == 'Content not found'
     assert _ack(superadmin_client, 'displayhive:media:cts:update_media', {'id': 10_000_000})['error'] == 'Media not found'
     assert _ack(superadmin_client, 'displayhive:media:cts:delete_media', {})['error'] == 'Missing id'
+
+
+# --- screen group create / rename / delete answer with acks ---------------------------------
+
+def test_screengroup_create_rename_delete_roundtrip(superadmin_client):
+    create = 'displayhive:admin:cts:create_screengroup'
+    rename = 'displayhive:admin:cts:rename_screengroup'
+    delete = 'displayhive:admin:cts:delete_screengroup'
+    assert _ack(superadmin_client, create, {'name': ' '})['error'] == 'Name is required'
+    made = _ack(superadmin_client, create, {'name': 'actions-sg-roundtrip'})
+    assert made['success'] is True and made['screengroup_id'] and made['name'] == 'actions-sg-roundtrip'
+    assert _ack(superadmin_client, create, {'name': 'actions-sg-roundtrip'})['error'] == 'A screen group with this name already exists'
+    other = _ack(superadmin_client, create, {'name': 'actions-sg-other'})
+    assert _ack(superadmin_client, rename, {'screengroup_id': other['screengroup_id'], 'new_name': 'actions-sg-roundtrip'})['success'] is False
+    assert _ack(superadmin_client, rename, {'screengroup_id': made['screengroup_id'], 'new_name': 'actions-sg-renamed'}) == {'success': True}
+    assert _ack(superadmin_client, rename, {'screengroup_id': 10_000_000, 'new_name': 'x'})['error'] == 'Screen group not found'
+    assert _ack(superadmin_client, delete, {'screengroup_id': made['screengroup_id']})['success'] is True
+    assert _ack(superadmin_client, delete, {'screengroup_id': made['screengroup_id']})['error'] == 'Screen group not found'
+    assert _ack(superadmin_client, delete, {'screengroup_id': other['screengroup_id']})['success'] is True
+
+
+def test_a_screengroup_with_members_cannot_be_deleted(superadmin_client, db_session):
+    from application.models import Screen, Screengroup
+    group = Screengroup(name='actions-sg-busy')
+    screen = Screen(name='actions-busy-screen', active=True, lastseen=datetime.now(timezone.utc))
+    group.screens.append(screen)
+    db_session.add_all([group, screen])
+    db_session.commit()
+    result = _ack(superadmin_client, 'displayhive:admin:cts:delete_screengroup', {'screengroup_id': group.id})
+    assert result['success'] is False and 'still has' in result['error']

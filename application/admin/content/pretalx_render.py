@@ -18,7 +18,7 @@ def _parse_eod(eod_str: str):
     try:
         h, m = str(eod_str or '23:59').strip().split(':')
         return int(h), int(m)
-    except Exception:
+    except (ValueError, TypeError):
         return 23, 59
 
 
@@ -114,7 +114,7 @@ def _extract_talk_value(talk: dict, field_key: str, date_fmt: str = '%H:%M') -> 
         try:
             from datetime import datetime
             return datetime.fromisoformat(str(val)).strftime(date_fmt)
-        except Exception:
+        except (ValueError, TypeError):
             return str(val)
     if isinstance(val, dict):
         return str(val.get('name', '') or val.get('public_name', '') or '')
@@ -148,13 +148,13 @@ def _render_pretalx_eventday(data: dict, day_prefix: str = '', sim_datetime: str
         try:
             import zoneinfo
             tz = zoneinfo.ZoneInfo(tz_name) if tz_name else timezone.utc
-        except Exception:
+        except (ValueError, LookupError, OSError):
             tz = timezone.utc
         if sim_datetime:
             try:
                 sim_dt = datetime.fromisoformat(sim_datetime.strip())
                 today = sim_dt.astimezone(tz).date() if sim_dt.tzinfo else sim_dt.date()
-            except Exception:
+            except (ValueError, TypeError):
                 today = datetime.now(tz=tz).date()
         else:
             today = datetime.now(tz=tz).date()

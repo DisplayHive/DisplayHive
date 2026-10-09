@@ -48,7 +48,7 @@ def verify_password(password: str, password_hash: str) -> bool:
     """Return True if *password* matches *password_hash*."""
     try:
         return check_password_hash(password_hash, password)
-    except Exception:
+    except (ValueError, TypeError):
         return False
 
 

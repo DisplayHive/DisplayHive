@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
 import { onRightsReady } from '../composables/useRightsReady'
@@ -17,7 +17,7 @@ import Tag from 'primevue/tag'
 import type { TreeNode } from 'primevue/treenode'
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const authStore = useAuthStore()
 const rightsStore = useRightsStore()
 
@@ -285,14 +285,12 @@ const runImport = async () => {
 const triggerImport = () => {
   if (!canImport.value || !importToken.value) return
   if (importMode.value === 'reset') {
-    confirm.require({
+    confirmDanger({
       message:
         'This will permanently DELETE all existing data and media files, then replace them with the contents of the selected file. Media files are deleted immediately and cannot be recovered even if the import fails. This cannot be undone. Continue?',
       header: 'Confirm Import',
-      icon: 'pi pi-exclamation-triangle',
       rejectLabel: 'Cancel',
       acceptLabel: 'Import',
-      acceptClass: 'p-button-danger',
       accept: () => {
         runImport()
       },

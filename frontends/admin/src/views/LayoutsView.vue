@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -7,7 +9,6 @@ import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
 import type { Layout } from '../types/models'
 
@@ -20,7 +21,7 @@ import Column from 'primevue/column'
 
 const router = useRouter()
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
 const { request } = useAck()
 const rightsStore = useRightsStore()
@@ -51,11 +52,8 @@ const deleteLayout = (l: Layout, onDeleted?: () => void) => {
     toast.add({ severity: 'warn', summary: 'Cannot delete', detail: 'This layout is used by a Contenttype — reassign it first.', life: 4000 })
     return
   }
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete layout "${l.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
       if (ack) onDeleted?.()
@@ -205,10 +203,7 @@ const refreshData = () => {
     <!-- Clone Layout Dialog -->
     <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Clone Layout</span>
-        </div>
+        <DialogTitle icon="pi-copy" title="Clone Layout" />
       </template>
       <div class="field">
         <label for="copy-layout-name">New Name</label>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useAck, type Ack } from '../composables/useAck'
@@ -438,10 +439,7 @@ onUnmounted(() => {
     <!-- Add dialog -->
     <Dialog v-model:visible="addDialogVisible" modal :style="{ width: '480px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-link dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Add Pretalx API URL</span>
-        </div>
+        <DialogTitle icon="pi-link" title="Add Pretalx API URL" />
       </template>
       <div class="edit-form" data-tour="pretalx-add-fields">
         <div class="field">
@@ -474,10 +472,7 @@ onUnmounted(() => {
     <!-- Edit dialog -->
     <Dialog v-model:visible="editDialogVisible" modal :style="{ width: '480px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-link dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Edit Pretalx API URL</span>
-        </div>
+        <DialogTitle icon="pi-link" title="Edit Pretalx API URL" />
       </template>
       <div class="edit-form">
         <div class="field">
@@ -508,10 +503,7 @@ onUnmounted(() => {
       :style="{ width: '900px', maxWidth: '95vw' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-database dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Cached Response — {{ cacheTitle }}</span>
-        </div>
+        <DialogTitle icon="pi-database" :title="`Cached Response — ${cacheTitle}`" />
       </template>
       <div class="cache-meta">Fetched at: {{ cacheFetchedAt }}</div>
       <pre class="cache-json">{{ cacheContent }}</pre>

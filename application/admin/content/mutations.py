@@ -106,7 +106,7 @@ def register_content_mutation_handlers(socketio, app, db):
 
         try:
             duration = int(duration)
-        except Exception:
+        except (ValueError, TypeError):
             duration = 0
 
         # Parse optional ISO datetime strings for scheduling
@@ -143,7 +143,7 @@ def register_content_mutation_handlers(socketio, app, db):
 
         try:
             serialized = json.dumps(serialized_data, ensure_ascii=False)
-        except Exception:
+        except (ValueError, TypeError):
             serialized = '{}'
 
         # Each field (TagConfig) on the contenttype targets one container;

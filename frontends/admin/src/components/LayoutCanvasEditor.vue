@@ -6,6 +6,7 @@ import { useSocket } from '../composables/useSocket'
 import { useAck, type Ack } from '../composables/useAck'
 import { useAspectRatios, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
 import { useConfirm } from 'primevue/useconfirm'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { useToast } from 'primevue/usetoast'
 import type { Layout, ContentContainer } from '../types/models'
 
@@ -99,6 +100,7 @@ const props = defineProps<{
 const { emit: socketEmit, on, off } = useSocket()
 const { request } = useAck()
 const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const toast = useToast()
 
 const canvasEl = ref<HTMLElement | null>(null)
@@ -921,11 +923,8 @@ const confirmDeleteContainer = (containerId: number | null) => {
     })
     return
   }
-  confirm.require({
+  confirmDanger({
     message: `Delete container "${c.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: () => {
       socketEmit('displayhive:admin:cts:delete_container', { id: containerId })
       if (selectedId.value === containerId) selectedId.value = null
@@ -1108,11 +1107,9 @@ const addVariation = async () => {
 }
 
 const confirmDeleteVariation = (ratio: string) => {
-  confirm.require({
+  confirmDanger({
     message: `Remove the ${ratio} variation of this layout? Its container selection is dropped; container positions at ${ratio} are kept.`,
     header: 'Remove variation',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       await request('displayhive:admin:cts:delete_layout_variation', {
         layout_id: props.layout.id, aspect_ratio: ratio,

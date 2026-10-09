@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -8,7 +10,6 @@ import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useAck } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useRightsStore } from '../stores/rights'
 import type { Layout, ContentContainer, DefaultColor } from '../types/models'
 
@@ -54,7 +55,7 @@ const router = useRouter()
 const layoutHelpPopover = ref<InstanceType<typeof Popover> | null>(null)
 const toggleLayoutHelp = (e: Event) => layoutHelpPopover.value?.toggle(e)
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
 const { request } = useAck()
 const rightsStore = useRightsStore()
@@ -423,11 +424,8 @@ const saveContentType = async (keepOpen = false) => {
 }
 
 const deleteContentType = (ct: ContentType) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete "${ct.name}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:cts:delete_contenttype', { id: ct.id }, {
         success: 'Content type deleted',
@@ -521,10 +519,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
     <!-- Copy Dialog -->
     <Dialog v-model:visible="showCopyDialog" modal :style="{ width: '400px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-copy dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Copy Content Type</span>
-        </div>
+        <DialogTitle icon="pi-copy" title="Copy Content Type" />
       </template>
       <div class="field">
         <label for="copy-ct-name">New Name</label>
@@ -543,10 +538,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
       :style="{ width: '90vw', maxWidth: '1200px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-list dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isNew ? 'New Content Type' : 'Edit Content Type' }}</span>
-        </div>
+        <DialogTitle icon="pi-list" :title="isNew ? 'New Content Type' : 'Edit Content Type'" />
       </template>
       <div class="dialog-content">
         <div v-if="loadingContentType" class="tpl-loading">

@@ -278,7 +278,7 @@ def register_admin_layouts_handlers(socketio, app, db):
             return []
         try:
             data = json.loads(row.value)
-        except Exception:
+        except (ValueError, TypeError):
             return []
         return data if isinstance(data, list) else []
 

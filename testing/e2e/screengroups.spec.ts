@@ -57,7 +57,7 @@ function getSocket(page: Page) {
 
 /**
  * Create a screengroup via socket and return its id.
- * Waits for `displayhive:admin:stc:screengroup_created`.
+ * Waits for the server's answer.
  */
 async function seedScreenGroup(page: Page, name: string): Promise<number> {
   return page.evaluate(
@@ -72,12 +72,11 @@ async function seedScreenGroup(page: Page, name: string): Promise<number> {
           () => reject(new Error('Timed out waiting for screengroup_created')),
           10_000,
         )
-        socket.once('displayhive:admin:stc:screengroup_created', (data: any) => {
+        socket.emit('displayhive:admin:cts:create_screengroup', { name }, (data: any) => {
           clearTimeout(t)
           if (data?.success) resolve(data.screengroup_id)
           else reject(new Error(`screengroup_created failed: ${JSON.stringify(data)}`))
         })
-        socket.emit('displayhive:admin:cts:create_screengroup', { name })
       }),
     { name },
   )
@@ -85,7 +84,7 @@ async function seedScreenGroup(page: Page, name: string): Promise<number> {
 
 /**
  * Delete a screengroup by id via socket.
- * Waits for `displayhive:admin:stc:screengroup_deleted`.
+ * Waits for the server's answer.
  */
 async function deleteScreenGroupById(page: Page, id: number): Promise<void> {
   await page.evaluate(
@@ -100,12 +99,11 @@ async function deleteScreenGroupById(page: Page, id: number): Promise<void> {
           () => reject(new Error('Timed out waiting for screengroup_deleted')),
           10_000,
         )
-        socket.once('displayhive:admin:stc:screengroup_deleted', (data: any) => {
+        socket.emit('displayhive:admin:cts:delete_screengroup', { screengroup_id: id }, (data: any) => {
           clearTimeout(t)
           if (data?.success) resolve()
           else reject(new Error(`screengroup_deleted failed: ${JSON.stringify(data)}`))
         })
-        socket.emit('displayhive:admin:cts:delete_screengroup', { screengroup_id: id })
       }),
     { id },
   )

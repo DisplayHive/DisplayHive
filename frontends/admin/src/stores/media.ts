@@ -56,7 +56,7 @@ function normalizeMediaItem(item: RawMediaItem, idx = 0, currentFolder = ''): Me
 }
 
 export const useMediaStore = defineStore('media', () => {
-  const { on, emit, emitWithAck } = useSocket()
+  const { on, emit } = useSocket()
 
   const mediaItems = ref<MediaItem[]>([])
   const loading = ref(false)
@@ -81,14 +81,6 @@ export const useMediaStore = defineStore('media', () => {
     emit('displayhive:media:cts:get_media')
   }
 
-  const updateMedia = (id: number, title: string, tags: string[]) => {
-    return emitWithAck<{ success: boolean; error?: string }>('displayhive:media:cts:update_media', { id, title, tags })
-  }
-
-  const deleteMedia = (id: number) => {
-    emit('displayhive:media:cts:delete_media', { id })
-  }
-
   const allTags = computed(() => {
     const map = new Map<string, number>()
     mediaItems.value.forEach((m) => {
@@ -103,5 +95,5 @@ export const useMediaStore = defineStore('media', () => {
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
   })
 
-  return { mediaItems, loading, fetch, updateMedia, deleteMedia, allTags }
+  return { mediaItems, loading, fetch, allTags }
 })

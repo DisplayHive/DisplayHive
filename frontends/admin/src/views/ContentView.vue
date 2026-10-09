@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
 import { useAck } from '../composables/useAck'
-import { useConfirm } from 'primevue/useconfirm'
 
 import Card from 'primevue/card'
 import Select from 'primevue/select'
@@ -66,7 +66,7 @@ const getContentFields = (content: ContentElement | null | undefined): ContentFi
 }
 
 const router = useRouter()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { on, off, emit } = useSocket()
 const { request } = useAck()
 const rightsStore = useRightsStore()
@@ -254,11 +254,8 @@ const setDuration = (content: ContentElement, val: number) => {
 }
 
 const deleteContent = (content: ContentElement) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete "${content.title}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:cts:delete_content_element', { content_element_id: content.id }, { success: 'Content deleted', error: 'Could not delete' })
       if (!ack) return

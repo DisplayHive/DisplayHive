@@ -103,7 +103,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     try:
         if serialized_input:
             ctx = json.loads(serialized_input)
-    except Exception:
+    except (ValueError, TypeError):
         ctx = {}
 
     field_handlers = {tc.field_name: tc.field_handler for tc in (tagconfigs or []) if tc.field_name}
@@ -122,13 +122,13 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             continue
         try:
             flags = json.loads(tc.option_flags) if tc.option_flags else {}
-        except Exception:
+        except (ValueError, TypeError):
             flags = {}
         if not isinstance(flags, dict) or not flags:
             continue
         try:
             preset = json.loads(tc.default_value) if tc.default_value else {}
-        except Exception:
+        except (ValueError, TypeError):
             preset = {}
         if not isinstance(preset, dict):
             continue
@@ -218,7 +218,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             size = ctx.get(size_key, 5)
             try:
                 size = float(size)
-            except Exception:
+            except (ValueError, TypeError):
                 size = 5
             if char:
                 ctx[field_name] = Markup(f'<span style="font-size:{size}vh;line-height:1;">{char}</span>')
@@ -376,7 +376,7 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
         # stored value actually parses as one.
         try:
             parsed = json.loads(content)
-        except Exception:
+        except (ValueError, TypeError):
             parsed = None
         if isinstance(parsed, dict) and 'url' in parsed:
             ctx = {
@@ -387,7 +387,7 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
     elif field_handler == 'icon':
         try:
             parsed = json.loads(content)
-        except Exception:
+        except (ValueError, TypeError):
             parsed = None
         if isinstance(parsed, dict) and 'icon' in parsed:
             ctx = {
@@ -399,13 +399,13 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
         try:
             parsed = json.loads(content)
             ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 5)}
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             ctx = {'default': content}
     elif field_handler == 'marquee':
         try:
             parsed = json.loads(content)
             ctx = {'default': parsed.get('text', ''), 'default__speed': parsed.get('speed', 20)}
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             ctx = {'default': content, 'default__speed': 20}
     elif field_handler == 'countdown':
         try:
@@ -415,12 +415,12 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
                 'default__format': parsed.get('format', 'DD:HH:mm:ss'),
                 'default__finished_text': parsed.get('finished_text', ''),
             }
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             ctx = {'default': content, 'default__format': 'DD:HH:mm:ss', 'default__finished_text': ''}
     elif field_handler == 'pretalx_table':
         try:
             parsed = json.loads(content)
-        except Exception:
+        except (ValueError, TypeError):
             parsed = {}
         ctx = {
             'default': parsed.get('url', ''),

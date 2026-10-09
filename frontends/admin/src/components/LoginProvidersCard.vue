@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import DialogTitle from './DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { ref, computed, onMounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import type { AuthProvider } from '../types/models'
 
 import Card from 'primevue/card'
@@ -24,7 +25,7 @@ import Message from 'primevue/message'
 const { emitWithAck } = useSocket()
 const { request } = useAck()
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 
 type Result = { success: boolean; error?: string; providers?: AuthProvider[]; public_url?: string | null }
 
@@ -159,11 +160,8 @@ const save = async () => {
 }
 
 const remove = (p: AuthProvider) => {
-  confirm.require({
+  confirmDanger({
     message: `Delete login provider "${p.name}"? Its button disappears from the login page. Accounts and their SSO links stay — adding a provider for the same issuer again restores those logins.`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const result = await request<Result>('displayhive:admin:authproviders:cts:delete_provider', { id: p.id }, { success: 'Login provider deleted', error: 'Delete failed' })
       if (result) providers.value = result.providers || []
@@ -208,10 +206,7 @@ const remove = (p: AuthProvider) => {
 
   <Dialog v-model:visible="showDialog" modal :style="{ width: '520px' }">
     <template #header>
-      <div class="dialog-title">
-        <span class="dialog-title-icon-badge"><i class="pi pi-id-card dialog-title-icon"></i></span>
-        <span class="p-dialog-title">{{ isNew ? 'Add login provider' : 'Edit login provider' }}</span>
-      </div>
+      <DialogTitle icon="pi-id-card" :title="isNew ? 'Add login provider' : 'Edit login provider'" />
     </template>
 
     <div class="lp-form">

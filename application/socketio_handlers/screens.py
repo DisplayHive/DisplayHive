@@ -12,7 +12,8 @@ def register_screen_handlers(socketio, app, db):
 
     from application.models import Screen, Screengroup, Device
     from application.utils import emit_zuweisungen_matrix_update, reload_devices_on_screen
-    from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user
+    from application.socketio_handlers.auth import admin_handler, current_admin_user, fields
+    from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.permissions import has_right
     from flask import request
 
@@ -20,26 +21,30 @@ def register_screen_handlers(socketio, app, db):
         reload_devices_on_screen(socketio, db, screen)
 
     @socketio.on('displayhive:screens:cts:reload_screen')
-    @require_right('screens.reload')
+    @admin_action('screens.reload')
     def reload_screen(message):
         """Send a RELOAD command to all devices attached to the named screen."""
-        screen_name = message.get('name', '').replace('?', '')
+        (screen_name,) = fields(message, 'name')
+        screen_name = (screen_name or '').replace('?', '')
         if not screen_name:
-            return
+            raise Fail('Missing screen name')
         screen_obj = db.session.execute(
             db.select(Screen).where(Screen.name == screen_name).order_by(Screen.lastseen.desc())
         ).scalars().first()
-        if screen_obj:
-            _reload_devices_on_screen(screen_obj)
+        if not screen_obj:
+            raise Fail('Screen not found')
+        _reload_devices_on_screen(screen_obj)
+        return ok()
 
     @socketio.on('displayhive:screens:cts:reload_all_screens')
-    @require_right('screens.reload_all')
+    @admin_action('screens.reload_all')
     def reload_all_screens(message):
         """Send a RELOAD command to devices on every screen."""
         screens = db.session.execute(db.select(Screen)).scalars().all()
         for screen in screens:
             _reload_devices_on_screen(screen)
         logger.info('Reload command sent to all %s screens', len(screens))
+        return ok(count=len(screens))
 
     @socketio.on('displayhive:screens:cts:get_screen_screengroups')
     @admin_handler
@@ -71,25 +76,27 @@ def register_screen_handlers(socketio, app, db):
         }, room=request.sid)
 
     @socketio.on('displayhive:screens:cts:rename_screen')
-    @require_right('screens.edit')
+    @admin_action('screens.edit')
     def rename_screen(message):
         """Rename a screen and update its screengroups"""
-        screen_id = message.get('id')
-        old_name = message.get('old_name', '')
-        new_name = message.get('new_name', '').strip()
-        screengroup_ids = message.get('screengroup_ids', [])
+        message = message if isinstance(message, dict) else {}
+        screen_id, old_name, new_name, screengroup_ids = fields(message, 'id', 'old_name', 'new_name', 'screengroup_ids')
+        old_name = old_name or ''
+        new_name = (new_name or '').strip()
+        screengroup_ids = screengroup_ids or []
 
         if old_name.startswith('preview_'):
             logger.warning('Blocked attempt to rename preview screen: %s', old_name)
-            return
+            raise Fail('Preview screens cannot be renamed')
 
         if not new_name:
-            return
+            raise Fail('Name is required')
 
-        screen = db.session.get(Screen, screen_id)
-        if not screen:
-            logger.warning('rename_screen: screen %s not found', screen_id)
-            return
+        screen = get_or_fail(db, Screen, screen_id, 'Screen')
+        if db.session.execute(
+            db.select(Screen.id).where(Screen.name == new_name, Screen.id != screen.id)
+        ).first():
+            raise Fail(f'Screen "{new_name}" already exists')
 
         screen.name = new_name
 
@@ -168,3 +175,4 @@ def register_screen_handlers(socketio, app, db):
                 logger.exception('rename_screen: failed to reload devices after aspect ratio/rotation change')
 
         logger.info("Screen renamed from '%s' to '%s' with %s screengroups", old_name, new_name, len(screengroup_ids))
+        return ok()

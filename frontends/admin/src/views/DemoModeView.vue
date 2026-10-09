@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { onMounted, ref, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
 
@@ -19,7 +19,7 @@ interface DemoPackage {
 }
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const authStore = useAuthStore()
 const rightsStore = useRightsStore()
 const canImport = computed(() => rightsStore.can('importexport.import'))
@@ -72,14 +72,12 @@ const runImport = async (pkg: DemoPackage) => {
 }
 
 const confirmImport = (pkg: DemoPackage) => {
-  confirm.require({
+  confirmDanger({
     message:
       'WARNING, this will overwrite ALL the content in your Database except of the Useraccounts. Continue?',
     header: 'Confirm Demo Import',
-    icon: 'pi pi-exclamation-triangle',
     rejectLabel: 'Cancel',
     acceptLabel: 'Import',
-    acceptClass: 'p-button-danger',
     accept: () => runImport(pkg),
   })
 }

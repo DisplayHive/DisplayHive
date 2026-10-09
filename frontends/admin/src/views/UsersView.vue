@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useSocket } from '../composables/useSocket'
 import { useAck, type Ack } from '../composables/useAck'
 import { onRightsReady } from '../composables/useRightsReady'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
 import type { AdminUser, AdminUserIdentity, RightDefinition, RightsGroup, UserRightsRow, RightOverrideValue } from '../types/models'
@@ -30,7 +31,7 @@ import Tag from 'primevue/tag'
 import Popover from 'primevue/popover'
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const authStore = useAuthStore()
 const rightsStore = useRightsStore()
 const { on, off, emit, emitWithAck, isConnected } = useSocket()
@@ -304,11 +305,9 @@ const openEditAccountDialog = (user: AdminUser) => {
 const isSsoAccount = (user: AdminUser) => (user.identities?.length ?? 0) > 0
 
 const unlinkIdentity = (identity: AdminUserIdentity) => {
-  confirm.require({
+  confirmDanger({
     message: `Unlink the SSO login "${identity.display_name || identity.subject}"? Its next SSO login creates a new, separate account.`,
     header: 'Unlink SSO login',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:users:cts:unlink_identity', { id: identity.id }, { success: 'SSO login unlinked', error: 'Unlink failed' })
       if (ack) loadUsers()
@@ -421,11 +420,8 @@ const toggleActiveUser = async (user: AdminUser, val: boolean) => {
 }
 
 const deleteAccount = (user: AdminUser) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete user "${user.username}"? This cannot be undone.`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:users:cts:delete_user', { id: user.id }, { success: 'User deleted', error: 'Delete failed' })
       if (ack) {
@@ -530,11 +526,8 @@ const saveGroup = async () => {
 }
 
 const deleteGroup = (group: RightsGroup) => {
-  confirm.require({
+  confirmDanger({
     message: `Delete group "${group.name}"? This cannot be undone.`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
     accept: async () => {
       const ack = await request('displayhive:admin:rights:cts:delete_group', { id: group.id }, { success: 'Group deleted', error: 'Delete failed' })
       if (ack) await loadRights()
@@ -970,10 +963,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
       :style="{ width: '420px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-user dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isNewAccount ? 'Add User' : 'Edit User' }}</span>
-        </div>
+        <DialogTitle icon="pi-user" :title="isNewAccount ? 'Add User' : 'Edit User'" />
       </template>
       <div class="dialog-form" data-tour="users-account-fields">
         <label for="user-username">Username</label>
@@ -1040,10 +1030,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <!-- Merge an SSO-created account into an existing one -->
     <Dialog v-model:visible="showMergeDialog" modal :style="{ width: '440px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-arrow-right-arrow-left dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Merge into existing user</span>
-        </div>
+        <DialogTitle icon="pi-arrow-right-arrow-left" title="Merge into existing user" />
       </template>
       <div class="dialog-form">
         <p class="merge-explanation">
@@ -1078,10 +1065,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
     <!-- Create/Rename group dialog -->
     <Dialog v-model:visible="showGroupDialog" modal :style="{ width: '420px' }">
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-users dialog-title-icon"></i></span>
-          <span class="p-dialog-title">{{ isGroupNew ? 'Add Group' : 'Edit Group' }}</span>
-        </div>
+        <DialogTitle icon="pi-users" :title="isGroupNew ? 'Add Group' : 'Edit Group'" />
       </template>
       <div class="dialog-form" data-tour="users-group-fields">
         <label for="group-name">Name</label>
@@ -1108,10 +1092,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
       :style="{ width: '512px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-shield dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Rights — {{ editingGroup?.name ?? '' }}</span>
-        </div>
+        <DialogTitle icon="pi-shield" :title="`Rights — ${editingGroup?.name ?? ''}`" />
       </template>
       <p class="muted">
         Grants are additive: subgroups also hold everything granted here — rights inherited
@@ -1165,10 +1146,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
       :style="{ width: '576px' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-shield dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Rights — {{ editingUser?.username ?? '' }}</span>
-        </div>
+        <DialogTitle icon="pi-shield" :title="`Rights — ${editingUser?.username ?? ''}`" />
       </template>
       <template v-if="editingUser">
         <div class="dialog-form" data-tour="users-rights-group-membership">

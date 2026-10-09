@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DialogTitle from './DialogTitle.vue'
 /**
  * Renders the editor widget for one Contenttype field (TagConfig), keyed off
  * its field_handler — text/number/link/wysiwyg/image/icon/arrows/checkbox/
@@ -1106,10 +1107,7 @@ watch(hasVisibleControl, (v) => emit('update:hasVisibleControl', v), { immediate
       :style="{ width: '860px', maxWidth: '95vw' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-image dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Select Image</span>
-        </div>
+        <DialogTitle icon="pi-image" title="Select Image" />
       </template>
       <div class="picker-toolbar">
         <InputText v-model="pickerSearchText" placeholder="Search images…" class="picker-search" />

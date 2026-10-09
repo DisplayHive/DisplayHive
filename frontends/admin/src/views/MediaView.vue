@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import DialogTitle from '../components/DialogTitle.vue'
+import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import { useConfirm } from 'primevue/useconfirm'
 import { useMediaStore } from '../stores/media'
 import { useRightsStore } from '../stores/rights'
 import { useAuthStore } from '../stores/auth'
@@ -19,7 +20,7 @@ import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 
 const toast = useToast()
-const confirm = useConfirm()
+const { confirmDanger } = useConfirmAction()
 const { request } = useAck()
 const mediaStore = useMediaStore()
 const rightsStore = useRightsStore()
@@ -216,31 +217,22 @@ const openEditDialog = (item: MediaItem) => {
 const saveMedia = async (keepOpen = false) => {
   isSavingMedia.value = true
   try {
-    const result = await mediaStore.updateMedia(editForm.value.id!, editForm.value.title, editTags.value)
-    if (result?.success === false) {
-      toast.add({ severity: 'error', summary: 'Error', detail: result.error || 'Save failed', life: 4000 })
-      return
-    }
-    toast.add({ severity: 'success', summary: 'Saved', detail: 'Media updated', life: 3000 })
-    if (!keepOpen) showEditDialog.value = false
-    mediaStore.fetch()
-  } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: (e as Error)?.message || 'Save failed', life: 4000 })
+    // The server pushes the refreshed media list itself.
+    const ack = await request('displayhive:media:cts:update_media', {
+      id: editForm.value.id, title: editForm.value.title, tags: editTags.value,
+    }, { success: 'Media updated', error: 'Save failed' })
+    if (ack && !keepOpen) showEditDialog.value = false
   } finally {
     isSavingMedia.value = false
   }
 }
 
 const deleteMedia = (item: MediaItem) => {
-  confirm.require({
+  confirmDanger({
     message: `Are you sure you want to delete "${item.title || item.filename}"?`,
-    header: 'Confirm Delete',
-    icon: 'pi pi-exclamation-triangle',
-    acceptClass: 'p-button-danger',
-    accept: () => {
-      mediaStore.deleteMedia(item.id)
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Media deleted', life: 3000 })
-      mediaStore.fetch()
+    // The server pushes the new list itself (no fetch() behind the delete).
+    accept: async () => {
+      await request('displayhive:media:cts:delete_media', { id: item.id }, { success: 'Media deleted', error: 'Could not delete the media' })
     },
   })
 }
@@ -376,10 +368,7 @@ const copyUrl = (url: string) => {
       :style="{ width: '820px', maxWidth: '95vw' }"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-pencil dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Edit Media</span>
-        </div>
+        <DialogTitle icon="pi-pencil" title="Edit Media" />
       </template>
       <div class="edit-dialog-content">
         <!-- Media preview -->
@@ -496,10 +485,7 @@ const copyUrl = (url: string) => {
       @hide="closeUploadDialog"
     >
       <template #header>
-        <div class="dialog-title">
-          <span class="dialog-title-icon-badge"><i class="pi pi-upload dialog-title-icon"></i></span>
-          <span class="p-dialog-title">Upload Media</span>
-        </div>
+        <DialogTitle icon="pi-upload" title="Upload Media" />
       </template>
       <!-- Drop zone -->
       <div
