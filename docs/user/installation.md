@@ -168,7 +168,8 @@ docker compose down                   # stop (add -v to also delete volumes/data
 
 By default `compose.yml` pulls the pre-built
 `ghcr.io/displayhive/displayhive:latest` image, published automatically on
-every push to `main` and on version tags. To build locally from source
+every push to `main` and on version tags, for `linux/amd64` and `linux/arm64`
+(a Raspberry Pi 4/5 with a 64-bit OS, an ARM server): Docker picks the right one. To build locally from source
 instead, comment out the `image:` line and uncomment `build: .`, then run
 `docker compose up -d --build`.
 

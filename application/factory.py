@@ -118,10 +118,6 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
         engineio_logger=False,
         ping_interval=25,
         ping_timeout=60,
-        reconnection=True,
-        reconnection_attempts=10,
-        reconnection_delay=1,
-        reconnection_delay_max=5,
         cors_allowed_origins=cors_origins,
         # Largest single Socket.IO message, accepted from any connection before
         # it has authenticated. Media uploads go over HTTP (application/admin/

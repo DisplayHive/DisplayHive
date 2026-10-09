@@ -8,7 +8,11 @@
 # kept equal to .python-version by tests/test_python_version.py.
 ARG PYTHON_VERSION=3.13
 
-FROM node:22-bookworm-slim AS frontend
+# --platform=$BUILDPLATFORM: the frontends' output is the same JavaScript for every
+# CPU, so they are built once, natively, however many architectures the image is
+# built for (docker-image.yml builds amd64 and arm64; only the runtime stage below
+# is built once per architecture, under emulation for the foreign one).
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend
 WORKDIR /build
 
 # Both frontends: install dependencies first for better layer caching. scripts/

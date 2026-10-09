@@ -77,3 +77,11 @@ def test_sqlite_foreign_keys_are_enforced_on_factory_apps(fresh_app):
     app, _ = fresh_app
     with app.app_context():
         assert db.session.execute(db.text('PRAGMA foreign_keys')).scalar() == 1
+
+
+def test_the_socketio_server_gets_no_client_reconnection_options(fresh_app):
+    """reconnection / reconnection_attempts / reconnection_delay* are options of the
+    Socket.IO *client* (frontends/*/ useSocket.ts, socket-connection.ts); on the
+    server they do nothing but suggest a retry policy that does not exist."""
+    _app, socketio = fresh_app
+    assert not [key for key in socketio.server_options if key.startswith('reconnection')]
