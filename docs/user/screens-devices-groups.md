@@ -78,3 +78,42 @@ in bulk: rows are your active/online screens, columns are your screen
 groups, and each cell is a checkbox — check it to add that screen to that
 group, uncheck to remove it. This avoids opening each group individually
 when you're managing many screens at once.
+
+## What a screen does on its own
+
+A screen page keeps running when things go wrong, and tells you about it.
+
+**Status dot.** A small dot with codes appears in the top-left corner of the screen **only when something
+is wrong** — nothing is shown while all is well:
+
+| Colour | Code | Meaning |
+|---|---|---|
+| red | `con` | The connection to the server is down. It goes away when the screen is back. |
+| yellow | `mim` | Content is missing: there is nothing to show, or a picture or video did not load. |
+| yellow | `js` | A script error on the page (clears itself after five minutes without a new one). |
+
+Red wins over yellow. Hover the dot for the reason. You can switch the dot off under
+[Settings](settings.md) → **Screens**; the codes are still written to the screen log.
+
+**Screen log.** The **Logger** page shows what screens report about themselves, live, and also what
+they reported earlier: the log is stored on the server. Filter by screen, severity and text, and load
+older lines on demand. Screens always report warnings and errors; debug and info lines are sent while
+someone has the Logger page open. How long lines are kept is set under Settings → **Screens** (72 hours
+and 250,000 lines by default).
+
+**Reconnecting and offline.** After losing the server a screen retries by itself, quickly at first and
+then every 30 seconds at most, and every screen picks a slightly different moment so that a restarting
+server is not hit by all of them at once. A screen that was loaded once also keeps its page, its files and
+its last content in the browser: if it is restarted while the server is unreachable (a power cut, the
+network is down), it starts again and shows the last content until the server answers. This offline start
+needs the screen to be opened over **https** (or on `localhost`); on plain `http` from another machine the
+browser offers no such storage, and the screen simply needs the server to start.
+
+**Daily reload.** Under Settings → **Screens** you can have screens reload themselves once a day at a
+given time (in the instance's time zone). A reload picks up a new release of the screen page and clears
+whatever a browser that has been running for weeks has collected. A screen without a connection waits
+until it is back. A screen also reloads a few seconds after a new release of the page was installed.
+
+**Pointer and sleep.** The mouse pointer disappears after a few idle seconds and returns when the mouse
+moves. Where the browser allows it (https or `localhost`), the screen also asks the system not to switch
+the display off.

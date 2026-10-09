@@ -166,6 +166,42 @@
   #       '';
   #     };
   #
+  #     # Static files straight from disk (see "Serving media and the screen bundle from
+  #     # nginx" in docs/user/installation.md). A missing file falls through to the app.
+  #     # Needs: users.users.nginx.extraGroups = [ "displayhive-staging" ];
+  #     locations."/static/media/" = {
+  #       alias       = "/var/lib/displayhive/staging/media/";
+  #       tryFiles    = "$uri @displayhive";
+  #       extraConfig = ''
+  #         add_header Cache-Control "public, max-age=2592000, immutable";
+  #       '';
+  #     };
+  #     locations."/static/media_previews/" = {
+  #       alias       = "/var/lib/displayhive/staging/media_previews/";
+  #       tryFiles    = "$uri @displayhive";
+  #       extraConfig = ''
+  #         add_header Cache-Control "public, max-age=2592000, immutable";
+  #       '';
+  #     };
+  #     locations."/static/media_renditions/" = {
+  #       alias       = "/var/lib/displayhive/staging/media_renditions/";
+  #       tryFiles    = "$uri @displayhive";
+  #       extraConfig = ''
+  #         add_header Cache-Control "public, max-age=2592000, immutable";
+  #       '';
+  #     };
+  #     locations."/dist/screen/" = {
+  #       alias       = "/opt/displayhive/staging/dist/screen/";
+  #       tryFiles    = "$uri @displayhive";
+  #       extraConfig = ''
+  #         add_header Cache-Control "public, max-age=2592000, immutable";
+  #       '';
+  #     };
+  #     locations."@displayhive" = {
+  #       proxyPass       = "http://127.0.0.1:5001";
+  #       proxyWebsockets = true;
+  #     };
+  #
   #     # Route Gogs webhook to the listener (keeps port 9001 off the internet).
   #     locations."/hooks/displayhive-staging/" = {
   #       proxyPass = "http://127.0.0.1:9001/";

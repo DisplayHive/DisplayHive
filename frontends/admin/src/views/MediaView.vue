@@ -269,8 +269,8 @@ const syncPreviews = async () => {
     } else {
       const parts = [`${ack.regenerated} of ${ack.missing} missing preview(s) regenerated`]
       if (ack.skipped_no_source) parts.push(`${ack.skipped_no_source} skipped (original file missing)`)
+      // (The server pushes the refreshed list itself when it regenerated something.)
       toast.add({ severity: 'success', summary: 'Previews synced', detail: parts.join(' — '), life: 5000 })
-      mediaStore.fetch()
     }
   } finally {
     syncingPreviews.value = false

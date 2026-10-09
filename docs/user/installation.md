@@ -259,6 +259,86 @@ Media URLs stay `/static/media/…`, and the app serves them from `DATA_DIR`.
 If your reverse proxy serves `/static/media` straight from disk, point it at
 `DATA_DIR/media`.
 
+### Serving media and the screen bundle from nginx
+
+Behind a reverse proxy, the app answers every request for a picture, a video or the screen's
+JavaScript itself. With many screens (they all load the same files after a restart or a release)
+that is work nginx does better, from disk and without Python. Static files can be served directly;
+everything else, including Socket.IO, still goes to the app.
+
+| URL | Directory | Caching |
+|---|---|---|
+| `/static/media/`, `/static/media_previews/`, `/static/media_renditions/` | `DATA_DIR/media`, `DATA_DIR/media_previews`, `DATA_DIR/media_renditions` | a file's URL never changes its content: cache for a long time |
+| `/dist/screen/` | `<app>/dist/screen/` (the built screen bundle, hashed file names) | long; `screen.js` is asked for with `?v=<release>` |
+| `/screen/assets/` | `<app>/frontends/screen/assets/` (`screen.css`, fonts) | long; asked for with `?v=<release>` |
+
+Keep **`/screen-sw.js`** and **`/`** on the app: the service worker script must never be cached by
+the browser (a new release is noticed through it), and the screen page is generated per request.
+
+```nginx
+server {
+    # … listen, server_name, TLS …
+
+    client_max_body_size 200m;                  # media uploads
+
+    # Uploaded media — straight from disk; if a file is missing, the app decides.
+    location /static/media/ {
+        alias /var/lib/displayhive/main/media/;     # DATA_DIR/media
+        try_files $uri @displayhive;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+        autoindex off;
+    }
+    location /static/media_previews/ {
+        alias /var/lib/displayhive/main/media_previews/;
+        try_files $uri @displayhive;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+    location /static/media_renditions/ {
+        alias /var/lib/displayhive/main/media_renditions/;
+        try_files $uri @displayhive;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    # The screen bundle and its assets (file names carry a hash or `?v=<release>`).
+    location /dist/screen/ {
+        alias /opt/displayhive/main/dist/screen/;
+        try_files $uri @displayhive;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+    location /screen/assets/ {
+        alias /opt/displayhive/main/frontends/screen/assets/;
+        try_files $uri @displayhive;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location @displayhive {
+        proxy_pass http://127.0.0.1:5000;
+        include proxy_params;                       # or the proxy_set_header lines you already use
+    }
+
+    location / {                                    # the app: pages, API, Socket.IO
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+}
+```
+
+Things to watch:
+
+- **Permissions.** nginx's user needs read access to those directories. `DATA_DIR` is `0750` for the
+  app's user, so add nginx to that group (NixOS: `users.users.nginx.extraGroups = [ "displayhive-<name>" ];`,
+  see [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)).
+- **Docker.** The media volumes can be mounted into an nginx container (`media:/data/media:ro`, …).
+  The screen bundle lives inside the image (`/app/dist/screen`); leave `/dist/screen/` and
+  `/screen/assets/` to the app unless you copy them out (`docker cp`) on every upgrade.
+- **Deleted or replaced files.** Media keep their file names for good, so long caching is safe; a
+  deleted file stays in browsers' caches until they drop it.
+- **The screens' service worker** keeps the page and the bundle per release and recently used media in
+  the browser, so a restarted screen asks nginx for little in any case.
+
 ### Moving data to `DATA_DIR`
 
 Older versions kept media in `static/media*` and the SQLite database in

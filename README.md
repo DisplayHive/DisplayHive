@@ -17,6 +17,8 @@ into groups so you can target one display or a hundred at once.
 - **Live preview** — watch exactly what a screen renders from the admin panel without a physical device.
 - **Demo mode** — import ready-made example content packages to explore the admin panel with data already in place.
 - **Pretalx integration** — pull conference schedules from a Pretalx instance and render them as content.
+- **Screens that look after themselves** — a status dot appears only when something is wrong, screens report to a stored log you can filter in the admin, reconnect with backoff, restart offline from the browser's cache, hide the pointer, keep the display awake and reload daily.
+- **Dashboard & search** — see what is on air or about to end at a glance, and jump anywhere with Ctrl+K.
 - **Alerting** — Telegram notifications when screens/devices go online, offline, or hit an error state.
 - **Import/export** — back up or migrate any part of an instance (or all of it), by type or individual item, with dependencies auto-included; import can reset the instance or merge into existing data.
 - **Rights & groups** — granular per-feature permissions, nested groups, and per-user allow/deny overrides on top of JWT-authenticated, rate-limited login.

@@ -198,6 +198,25 @@ export function useEditorCore(props: EditorProps) {
     }
   }, { deep: true })
 
+  // A drag, a resize or "Reset to Default Position" changes the staged position behind the form's
+  // back: show it in the position fields too (or typing there would put the old numbers back).
+  // Writing the same numbers into the form is a no-op for the watcher above.
+  watch(
+    () => (selectedId.value != null ? draft[selectedId.value] : undefined),
+    (staged) => {
+      const id = selectedId.value
+      if (id == null || containerEditForm.id !== id) return
+      const c = props.containers.find((x) => x.id === id)
+      const pos = staged ?? (c ? geometryOf(c) : null)
+      if (!pos) return
+      if (containerEditForm.top !== pos.top) containerEditForm.top = pos.top
+      if (containerEditForm.left !== pos.left) containerEditForm.left = pos.left
+      if (containerEditForm.width !== pos.width) containerEditForm.width = pos.width
+      if (containerEditForm.height !== pos.height) containerEditForm.height = pos.height
+    },
+    { deep: true },
+  )
+
   // Switching the handler in the dropdown re-seeds default_content with a sensible starting
   // shape for that type (only on an actual user change — selecting a container sets
   // containerEditForm directly, bypassing this).

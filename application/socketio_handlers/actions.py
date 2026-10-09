@@ -17,6 +17,8 @@ A handler that changes something used to repeat the same few lines: load the row
 
 * ``raise Fail('message')`` — the caller gets ``{'success': False, 'error': 'message'}`` and the
   session is rolled back, so nothing written before the check survives.
+* Two admins changing the same rows at once (``StaleDataError``) get a plain "changed by someone
+  else, reload" answer instead of "Internal error".
 * An unexpected exception is logged with its traceback, the session is rolled back and the caller
   gets ``{'success': False, 'error': 'Internal error'}`` (``require_right`` answered ``None``, which
   a page cannot tell from "no answer yet").
@@ -30,12 +32,15 @@ Whatever the handler returns is passed on unchanged, so handlers that answer by 
 import logging
 from functools import wraps
 
+from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
+
 from application.socketio_handlers.auth import current_admin_user, require_admin
 
 logger = logging.getLogger(__name__)
 
 PERMISSION_DENIED = 'Permission denied'
 INTERNAL_ERROR = 'Internal error'
+CONCURRENT_CHANGE = 'This was changed or deleted by someone else at the same moment — reload and try again'
 
 
 class Fail(Exception):
@@ -117,6 +122,12 @@ def admin_action(*rights: str):
             except Fail as problem:
                 _rollback()
                 return failure(problem.message)
+            except (StaleDataError, ObjectDeletedError):
+                # Two admins (or tabs) changing the same rows at the same moment: the second one
+                # finds its rows gone. Not a bug to log with a traceback — tell the person.
+                logger.warning('Concurrent change in admin handler %s', fn.__name__)
+                _rollback()
+                return failure(CONCURRENT_CHANGE)
             except Exception:
                 logger.exception('Unhandled error in admin handler %s', fn.__name__)
                 _rollback()

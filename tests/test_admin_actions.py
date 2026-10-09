@@ -261,3 +261,17 @@ def test_a_screengroup_with_members_cannot_be_deleted(superadmin_client, db_sess
     db_session.commit()
     result = _ack(superadmin_client, 'displayhive:admin:cts:delete_screengroup', {'screengroup_id': group.id})
     assert result['success'] is False and 'still has' in result['error']
+
+
+def test_a_concurrent_change_gets_a_plain_answer_not_internal_error(flask_app, db_session):
+    from sqlalchemy.orm.exc import StaleDataError
+    from application.socketio_handlers import actions
+
+    @actions.admin_action()
+    def handler():
+        raise StaleDataError('DELETE statement on table x expected to delete 1 row(s); 0 were matched')
+
+    with flask_app.app.test_request_context():
+        from unittest import mock
+        with mock.patch.object(actions, 'require_admin', return_value=True):
+            assert handler() == {'success': False, 'error': actions.CONCURRENT_CHANGE}

@@ -293,6 +293,32 @@ framework:
 - `clock.ts`, `storage.ts`, `debug-panel.ts`, `viewport-tracker.ts`,
   `preload-iframes.ts` — supporting concerns.
 
+## Process model, and why there is no Redis
+
+DisplayHive runs as **one process with one gunicorn worker** (`--worker-class gthread --workers 1`,
+`GUNICORN_THREADS` threads, default 500). That is a decision, not an oversight:
+
+- **State lives in the process.** Which devices and screens are connected (`connected_devices`,
+  `connected_screens`), who is watching the Logger page, the login rate limiter, the pending SSO
+  sign-ins, the admin sockets' tokens and the Socket.IO sessions themselves are in memory. A second
+  worker would see only part of it: a push would reach only the screens connected to the same worker.
+- **The limit is the thread count.** Every connected screen and every open admin tab keeps one thread
+  busy for its WebSocket, so `GUNICORN_THREADS` must stay above the number of simultaneous connections
+  (with headroom for plain requests). Idle threads cost almost nothing. When a restart happens, all
+  screens reconnect with a small random delay (`frontends/screen/ts/screen/reconnect.ts`).
+- **Restarts are short interruptions.** Screens keep their page, files and last content in the browser
+  (service worker, `content-snapshot.ts`) and reconnect on their own, so a deploy is a blink, not an
+  outage.
+- **No Redis for now.** A message queue would make several workers (or hosts) possible, but would need
+  the registry, the rate limiter, the pending-SSO store, the log watcher state and sticky sessions for
+  Socket.IO's polling transport to move out of process. That is a large change for a limit nobody has
+  reached.
+
+Revisit this when the number of screens approaches `GUNICORN_THREADS`, or when deploys must happen
+without any interruption. Deployment is Docker or the NixOS module (both run exactly this), and the
+production database is PostgreSQL; SQLite is for development only and is refused by the Docker image
+and the NixOS module.
+
 ## Migrations
 
 Schema changes are managed with Alembic. Version files live in

@@ -222,6 +222,14 @@ never with their own buttons in the card header:
 - Pages whose actions belong to a tab or card (Users, Pretalx, Alerting) keep them there; a single
   header button would be ambiguous.
 
+### Header bar: the search field
+
+The search field in the header (`.palette-trigger` in `assets/shell/header.css`, opens the command
+palette with Ctrl+K) sits on the header bar, which is `#0b0b0b` in **both** themes — so its colours
+are fixed light-on-dark values (translucent white fill and border, `#cbd5e1` text, `#94a3b8` icon
+like the other header icons) and need no `.dark-mode` override. Below 1400px wide it shrinks to the
+magnifier only (label and key hint hidden); the button keeps `data-testid="palette-button"`.
+
 ## Tables
 
 ### Filter placement

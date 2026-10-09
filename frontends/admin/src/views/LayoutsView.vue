@@ -47,7 +47,7 @@ const filteredLayouts = computed(() => {
 const openNewPage = () => router.push({ name: 'layout-new' })
 const openEditPage = (l: Layout) => router.push({ name: 'layout-edit', params: { id: l.id } })
 
-const deleteLayout = (l: Layout, onDeleted?: () => void) => {
+const deleteLayout = (l: Layout) => {
   if (l.in_use) {
     toast.add({ severity: 'warn', summary: 'Cannot delete', detail: 'This layout is used by a Contenttype — reassign it first.', life: 4000 })
     return
@@ -55,8 +55,8 @@ const deleteLayout = (l: Layout, onDeleted?: () => void) => {
   confirmDanger({
     message: `Are you sure you want to delete layout "${l.name}"?`,
     accept: async () => {
-      const ack = await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
-      if (ack) onDeleted?.()
+      // The server pushes the new list itself.
+      await request('displayhive:admin:cts:delete_layout', { id: l.id }, { success: 'Layout deleted', error: 'Delete failed' })
     },
   })
 }
@@ -87,10 +87,8 @@ const executeCopyLayout = async () => {
     },
     { success: `"${name}" created`, error: 'Copy failed' },
   )
-  if (ack) {
-    showCopyDialog.value = false
-    refreshData()
-  }
+  // The server pushes the new list to every admin (no fetch() behind the copy).
+  if (ack) showCopyDialog.value = false
 }
 
 // --- Data loading ---------------------------------------------------------
@@ -186,7 +184,7 @@ const refreshData = () => {
                 <Button
                   v-if="canDelete"
                   icon="pi pi-trash"
-                  @click="deleteLayout(data, refreshData)"
+                  @click="deleteLayout(data)"
                   size="small"
                   severity="danger"
                   outlined

@@ -84,11 +84,16 @@ RUN pip install --no-cache-dir -r requirements.txt \
 ARG GIT_COMMIT=
 ENV DISPLAYHIVE_REVISION=${GIT_COMMIT}
 
+# Run as an unprivileged user. Created before the source is copied, so that COPY --chown can give
+# the files to it directly: a `chown -R` over /app afterwards would store the whole source tree a
+# second time as another image layer.
+RUN useradd --system --create-home --uid 10001 displayhive
+
 # Application source.
-COPY . .
+COPY --chown=displayhive:displayhive . .
 
 # Built frontends from stage 1 (app.py serves dist/admin and dist/screen).
-COPY --from=frontend /build/dist ./dist
+COPY --from=frontend --chown=displayhive:displayhive /build/dist ./dist
 
 # Everything the app writes goes to DATA_DIR (see application/paths.py);
 # DISPLAYHIVE_DEPLOYMENT tells the admin UI to show Docker-specific steps
@@ -99,16 +104,15 @@ ENV DATA_DIR=/data \
 # FLASK_APP: maintenance commands work as
 #   docker compose exec displayhive flask dh check-config   (see application/cli.py)
 
-# Run as an unprivileged user; give it ownership of the writable data dirs.
-# The old /app/static/media* dirs are still created so a pre-DATA_DIR
-# compose.yml that mounts fresh volumes there keeps working (with the
+# Give the unprivileged user the writable data dirs. The old /app/static/media* dirs are still
+# created so a pre-DATA_DIR compose.yml that mounts fresh volumes there keeps working (with the
 # migration notice) instead of failing on root-owned mount points.
-RUN useradd --system --create-home --uid 10001 displayhive \
-    && mkdir -p /data/media /data/media_previews /data/media_renditions /data/import-staging /data/db /data/backups \
+RUN mkdir -p /data/media /data/media_previews /data/media_renditions /data/import-staging /data/db /data/backups \
     && mkdir -p /app/static/media /app/static/media_previews /app/static/media_renditions \
     && chmod 750 /data /data/media /data/media_previews /data/media_renditions \
     && chmod 700 /data/import-staging /data/db /data/backups \
-    && chown -R displayhive:displayhive /app /data
+    && chown displayhive:displayhive /app \
+    && chown -R displayhive:displayhive /data /app/static
 USER displayhive
 
 # Liveness only (/healthz: the process answers) — a database outage must not

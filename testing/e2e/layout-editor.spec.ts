@@ -174,6 +174,42 @@ test.describe('Layout editor', () => {
     expect(after.left).toBeCloseTo(before.left, 0)
   })
 
+  test('the settings card follows a drag and a resize, and typing keeps the dragged size', async ({ page, backendUrl }) => {
+    await gotoEditor(page, backendUrl)
+    const canvasBox = await page.locator('.editor-canvas').boundingBox()
+    const start = await rectBox(page, nameB)
+    // resize it first (this also selects it), then move it
+    const h = await rect(page, nameB).locator('.resize-handle--br').boundingBox()
+    await page.mouse.move(h!.x + h!.width / 2, h!.y + h!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(h!.x - canvasBox!.width * 0.1, h!.y - canvasBox!.height * 0.1, { steps: 6 })
+    await page.mouse.up()
+    const r = await rect(page, nameB).boundingBox()
+    await page.mouse.move(r!.x + r!.width / 2, r!.y + r!.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(r!.x + r!.width / 2 - canvasBox!.width * 0.1, r!.y + r!.height / 2, { steps: 6 })
+    await page.mouse.up()
+    const moved = await rectBox(page, nameB)
+    expect(moved.width).toBeLessThan(start.width - 3)
+
+    // The card shows what is on the canvas now
+    const value = async (label: string) => Number(await settingsInput(page, label).inputValue())
+    await expect.poll(() => value('Left (vw)')).toBeCloseTo(moved.left, 0)
+    await expect.poll(() => value('Width (vw)')).toBeCloseTo(moved.width, 0)
+
+    // Typing one number does not put the old size back
+    const left = settingsInput(page, 'Left (vw)')
+    await left.fill('30')
+    await left.blur()
+    await expect.poll(async () => (await rectBox(page, nameB)).left, { timeout: 5_000 }).toBeCloseTo(30, 0)
+    expect((await rectBox(page, nameB)).width).toBeCloseTo(moved.width, 0)
+
+    // "Reset to Default Position" shows the saved numbers again
+    await page.getByRole('button', { name: 'Reset to Default Position' }).click()
+    await expect.poll(() => value('Width (vw)')).toBeCloseTo(start.width, 0)
+    await expect.poll(() => value('Left (vw)')).toBeCloseTo(start.left, 0)
+  })
+
   test('typing a position in the settings card moves the rectangle live', async ({ page, backendUrl }) => {
     await gotoEditor(page, backendUrl)
     await selectContainer(page, nameB)

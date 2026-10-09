@@ -138,6 +138,62 @@
   color: #94a3b8;
 }
 
+/* The search field (opens the command palette, Ctrl+K): a field-looking button in the header bar.
+   Below 1400px wide only the magnifier stays. */
+.palette-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 13rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.palette-trigger:hover,
+.palette-trigger:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.palette-trigger i {
+  color: #94a3b8;
+}
+
+.palette-trigger-label {
+  flex: 1;
+  text-align: left;
+}
+
+.palette-trigger-key {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  color: #94a3b8;
+}
+
+@media (max-width: 1400px) {
+  .palette-trigger {
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .palette-trigger-label,
+  .palette-trigger-key {
+    display: none;
+  }
+}
+
 .theme-menu {
   display: flex;
   flex-direction: column;

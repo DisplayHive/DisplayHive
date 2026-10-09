@@ -26,6 +26,7 @@ const rightsStore = useRightsStore()
 const { preference: themePreference, isDark, setTheme } = useTheme()
 const { menuItems } = useAdminNavigation()
 const palette = useCommandPalette()
+const shortcutLabel = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'
 
 const themePopover = ref()
 const toggleThemePopover = (event: Event) => themePopover.value?.toggle(event)
@@ -85,15 +86,18 @@ const selectTheme = async (value: 'light' | 'dark' | 'system') => {
         <i class="pi pi-user"></i>
         {{ authStore.username }}
       </span>
-      <Button
-        icon="pi pi-search"
-        text
-        size="small"
+      <button
+        type="button"
+        class="palette-trigger"
         data-testid="palette-button"
         aria-label="Search (Ctrl+K)"
         v-tooltip.bottom="'Search (Ctrl+K)'"
         @click="palette.open()"
-      />
+      >
+        <i class="pi pi-search"></i>
+        <span class="palette-trigger-label">Search …</span>
+        <kbd class="palette-trigger-key">{{ shortcutLabel }}</kbd>
+      </button>
       <Button
         :icon="isDark ? 'pi pi-moon' : 'pi pi-sun'"
         text

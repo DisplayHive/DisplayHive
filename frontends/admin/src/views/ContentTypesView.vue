@@ -294,13 +294,13 @@ const handleContentTypeDetail = async (data: { contenttype?: RawContentTypeDetai
       contentcontainer_id: t.contentcontainer_id, order: t.order,
       default_value: t.default_value, option_flags: t.option_flags,
     }))
-    const ack = await request('displayhive:admin:cts:create_contenttype', {
+    // The server pushes the new list to every admin.
+    await request('displayhive:admin:cts:create_contenttype', {
       name,
       description: ct.description || '',
       layout_id: ct.layout_id,
       tagconfigs,
     }, { success: `"${name}" created`, error: 'Copy failed' })
-    if (ack) refreshData()
     return
   }
 
@@ -359,11 +359,6 @@ onUnmounted(() => {
   off('displayhive:admin:stc:active_design_colors', handleActiveDesignColors)
 })
 
-const refreshData = () => {
-  loading.value = true
-  emit('displayhive:admin:cts:get_contenttypes')
-}
-
 const openNewDialog = () => {
   isNew.value = true
   editForm.value = { id: null, name: '', description: '', layout_id: null, tagconfigs: [] }
@@ -417,21 +412,18 @@ const saveContentType = async (keepOpen = false) => {
     success: isNew.value ? 'Content type created' : 'Content type updated',
     error: 'The server could not save the content type.',
   })
-  if (ack) {
-    if (!keepOpen) showEditDialog.value = false
-    refreshData()
-  }
+  // The server pushes the new list to every admin (no fetch() behind the save).
+  if (ack && !keepOpen) showEditDialog.value = false
 }
 
 const deleteContentType = (ct: ContentType) => {
   confirmDanger({
     message: `Are you sure you want to delete "${ct.name}"?`,
     accept: async () => {
-      const ack = await request('displayhive:admin:cts:delete_contenttype', { id: ct.id }, {
+      await request('displayhive:admin:cts:delete_contenttype', { id: ct.id }, {
         success: 'Content type deleted',
         error: 'Failed to delete content type',
       })
-      if (ack) refreshData()
     },
   })
 }

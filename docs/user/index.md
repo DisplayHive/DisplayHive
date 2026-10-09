@@ -34,6 +34,20 @@ physical/browser player that connects to a screen. See
 [Screens, devices & groups](screens-devices-groups.md) for the details
 behind each box.
 
+## Finding your way around
+
+- **Dashboard** (`/`) — the status of screens, devices, content and media at a glance, plus what is
+  on air now, what ends or starts in the next seven days, what was changed last, and quick actions
+  (new content, upload media, add a screen). Tiles with a warning take you to the page that needs
+  attention.
+- **Search** — press **Ctrl+K** (⌘K on a Mac), or click the search field in the header, and type a few
+  letters: pages, actions, content, screens, screen groups and media are found by name; Enter or a click
+  jumps there. Only what your rights allow is offered.
+- **Media** (`/media`) — each file shows whether anything uses it. Filter by **Unused** to find files you
+  can clean up; the edit dialog lists where a file is used (content, content type presets, layouts'
+  container defaults, designs, settings) with links, and deleting a file that is still in use asks first and
+  names the places. Images that a field picks at random by tag count as used by that field.
+
 ## Where to start
 
 If you're setting up DisplayHive for the first time, work through these pages
