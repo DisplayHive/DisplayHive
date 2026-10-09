@@ -264,15 +264,25 @@ def migrate_command(no_backup):
     start on a database in an unknown state, and retrying will not help. The
     message names the backup; `flask dh restore` puts it back.
     """
-    from application import migration
+    import logging
+    from application import logfmt, migration
     engine, directory, settings = _backup_context()
+    if logfmt.wanted(os.environ) == 'json':
+        # Machine-readable logs: these lines are log records like the rest, not plain output.
+        log = logging.getLogger('application.migration')
+        log.setLevel(logging.INFO)
+        say, fail, hint = log.info, log.error, log.error
+    else:
+        say = click.echo
+        fail = lambda m: click.secho(f'\nMIGRATION FAILED: {m}', fg='red', bold=True, err=True)  # noqa: E731
+        hint = lambda m: click.secho(m, fg='yellow', err=True)  # noqa: E731
     try:
-        migration.migrate(engine, directory, settings, echo=click.echo, do_backup=not no_backup)
+        migration.migrate(engine, directory, settings, echo=say, do_backup=not no_backup)
     except migration.MigrationFailed as exc:
-        click.secho(f'\nMIGRATION FAILED: {exc}', fg='red', bold=True, err=True)
+        fail(f'Migration failed: {exc}' if say is not click.echo else str(exc))
         if exc.backup_path:
-            click.secho(f'The database was backed up first: {exc.backup_path}\n'
-                        f'Put it back with: flask dh restore {exc.backup_path.name}', fg='yellow', err=True)
+            hint(f'The database was backed up first: {exc.backup_path}. '
+                 f'Put it back with: flask dh restore {exc.backup_path.name}')
         sys.exit(migration.EXIT_FAILED)
 
 

@@ -188,6 +188,20 @@ def test_migrate_command_exits_78_and_names_the_backup_when_it_fails(cli, monkey
     assert 'MIGRATION FAILED' in result.output and 'dh restore premigrate-' in result.output
 
 
+def test_migrate_command_logs_instead_of_printing_in_json_mode(cli, monkeypatch, caplog):
+    import logging
+    app, runner, database = cli
+    monkeypatch.setenv('LOG_FORMAT', 'json')
+    monkeypatch.setattr(migration, 'upgrade_to_head', _failing_upgrade)
+    with caplog.at_level(logging.INFO, logger='application.migration'):
+        result = runner.invoke(args=['dh', 'migrate'])
+    assert result.exit_code == 78 and result.output == ''                      # nothing printed outside the log
+    messages = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == 'application.migration']
+    assert ('INFO', 'Backing up the database before migrating...') in messages
+    assert any(level == 'ERROR' and 'Migration failed' in m for level, m in messages)
+    assert any(level == 'ERROR' and 'flask dh restore premigrate-' in m for level, m in messages)
+
+
 def test_backup_backups_and_restore_commands(cli):
     app, runner, database = cli
     made = runner.invoke(args=['dh', 'backup'])
@@ -219,7 +233,7 @@ def _entrypoint(tmp_path, flask_exit, env=None):
     log = tmp_path / 'calls.log'
     log.write_text('')
     (bin_dir / 'flask').write_text(f'#!/bin/sh\necho "flask $@" >> {log}\nexit {flask_exit}\n')
-    (bin_dir / 'gunicorn').write_text(f'#!/bin/sh\necho "gunicorn" >> {log}\n')
+    (bin_dir / 'gunicorn').write_text(f'#!/bin/sh\necho "gunicorn $@" >> {log}\n')
     for tool in bin_dir.iterdir():
         tool.chmod(0o755)
     result = subprocess.run(['sh', str(ROOT / 'docker-entrypoint.sh'), *(env or {}).pop('args', [])],
@@ -229,7 +243,8 @@ def _entrypoint(tmp_path, flask_exit, env=None):
 
 def test_entrypoint_starts_the_app_after_a_successful_migration(tmp_path):
     result, calls = _entrypoint(tmp_path, 0)
-    assert result.returncode == 0 and calls == ['flask dh migrate', 'gunicorn']
+    assert result.returncode == 0 and calls[0] == 'flask dh migrate' and calls[1].startswith('gunicorn ')
+    assert '--log-config-json' not in calls[1]
 
 
 def test_entrypoint_does_not_start_the_app_when_the_migration_fails(tmp_path):
@@ -240,9 +255,24 @@ def test_entrypoint_does_not_start_the_app_when_the_migration_fails(tmp_path):
 
 def test_entrypoint_can_skip_the_migration_for_a_separate_migrate_service(tmp_path):
     result, calls = _entrypoint(tmp_path, 78, {'MIGRATE_ON_START': '0'})
-    assert result.returncode == 0 and calls == ['gunicorn']
+    assert result.returncode == 0 and len(calls) == 1 and calls[0].startswith('gunicorn ')
 
 
 def test_entrypoint_migrate_mode_only_migrates(tmp_path):
     result, calls = _entrypoint(tmp_path, 0, {'args': ['migrate']})
     assert result.returncode == 0 and calls == ['flask dh migrate']
+
+
+def test_entrypoint_json_logging_covers_gunicorn_and_its_own_lines(tmp_path):
+    import json
+    result, calls = _entrypoint(tmp_path, 0, {'LOG_FORMAT': 'json'})
+    assert '--log-config-json /app/gunicorn-logging.json' in calls[1]
+    lines = [json.loads(line) for line in result.stdout.strip().splitlines()]
+    assert [l['logger'] for l in lines] == ['entrypoint', 'entrypoint'] and lines[0]['level'] == 'INFO'
+
+
+def test_entrypoint_failure_line_is_json_too(tmp_path):
+    import json
+    result, _calls = _entrypoint(tmp_path, 78, {'LOG_FORMAT': 'json'})
+    error = json.loads(result.stderr.strip().splitlines()[-1])
+    assert error['level'] == 'ERROR' and 'Not starting' in error['message'] and '78' in error['message']

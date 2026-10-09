@@ -573,6 +573,16 @@ let
         '';
       };
 
+      logFormat = mkOption {
+        type    = types.enum [ "text" "json" ];
+        default = "text";
+        description = ''
+          "json" writes the logs (the app's and gunicorn's) as one JSON object per
+          line, for log collectors; the journal keeps them as the message. Same as
+          LOG_FORMAT.
+        '';
+      };
+
       logLevel = mkOption {
         type    = types.str;
         default = "INFO";
@@ -727,6 +737,7 @@ let
                                  else if icfg.publicUrl != null then icfg.publicUrl
                                  else "*";
       LOG_LEVEL                = icfg.logLevel;
+      LOG_FORMAT               = icfg.logFormat;
       TRUSTED_PROXY_COUNT      = toString icfg.trustedProxyCount;
       DATA_DIR                 = icfg.dataDirectory;
       LD_LIBRARY_PATH          = wheelLibs;
@@ -799,6 +810,7 @@ let
         + " -w 1"
         + " --threads ${toString icfg.threads}"
         + " --bind 0.0.0.0:${toString icfg.port}"
+        + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${icfg.sourceDirectory}/gunicorn-logging.json"
         + " app:app";
       Restart    = "on-failure";
       RestartSec = "5s";

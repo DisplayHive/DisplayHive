@@ -43,7 +43,9 @@ if _given_connection is None:
         data_paths.ensure_dirs(_paths)
 
 # Interpret the config file for Python logging.
-if config.config_file_name is not None:
+# (Not when the app runs the migration in-process with a connection of its own:
+# its logging configuration, LOG_FORMAT=json included, stays.)
+if config.config_file_name is not None and _given_connection is None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Import models so that target_metadata is populated.

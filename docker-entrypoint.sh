@@ -1,6 +1,17 @@
 #!/bin/sh
 set -e
 
+# The entrypoint's own messages, in the app's log format (LOG_FORMAT=json: one
+# JSON object per line). Messages must not contain quotes or backslashes.
+log() {
+    if [ "${LOG_FORMAT:-text}" = "json" ]; then
+        printf '{"time":"%s","level":"%s","logger":"entrypoint","message":"%s"}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2"
+    else
+        echo "[entrypoint] $2"
+    fi
+}
+
 # `docker-entrypoint.sh migrate`: only migrate the database, then exit. The
 # compose file runs this as a separate one-shot service ("migrate") that the app
 # service waits for.
@@ -14,16 +25,22 @@ fi
 # message names the backup. Set MIGRATE_ON_START=0 when a separate migrate
 # service does this.
 if [ "${MIGRATE_ON_START:-1}" != "0" ]; then
-    echo "[entrypoint] Migrating the database (flask dh migrate)..."
+    log INFO "Migrating the database (flask dh migrate)..."
     status=0
     flask dh migrate || status=$?
     if [ "$status" -ne 0 ]; then
-        echo "[entrypoint] Not starting: the database migration failed (exit $status)." >&2
+        log ERROR "Not starting: the database migration failed (exit $status)." >&2
         exit "$status"
     fi
 fi
 
-echo "[entrypoint] Starting DisplayHive on port 5000..."
+# LOG_FORMAT=json: gunicorn's own lines in the same JSON format as the app's.
+log_args=""
+if [ "${LOG_FORMAT:-text}" = "json" ]; then
+    log_args="--log-config-json /app/gunicorn-logging.json"
+fi
+
+log INFO "Starting DisplayHive on port 5000..."
 # One worker is mandatory: Socket.IO connection state lives in-process (see
 # nix/module.nix). Threads: every connected screen and open admin tab keeps
 # one busy for its WebSocket, so GUNICORN_THREADS must exceed the number of
@@ -33,4 +50,5 @@ exec gunicorn \
     --workers 1 \
     --threads "${GUNICORN_THREADS:-500}" \
     --bind "0.0.0.0:5000" \
+    $log_args \
     app:app

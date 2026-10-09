@@ -12,7 +12,7 @@ from typing import Mapping, Optional, Union
 from urllib.parse import urlsplit
 
 from application import paths as data_paths
-from application import backup, version
+from application import backup, logfmt, version
 from application.db_url import is_sqlite_url, resolve_database_url
 
 logger = logging.getLogger(__name__)
@@ -37,14 +37,20 @@ def configure_logging(cli_mode: bool = False) -> None:
     """Configure logging once for the whole application.
 
     Individual modules use ``logging.getLogger(__name__)``; INFO-level
-    operational messages (startup, content pushes, …) go to stdout, and the
+    operational messages (startup, content pushes, …) go to stderr, and the
     level can be tuned via LOG_LEVEL. A `flask dh` command defaults to WARNING
-    so its own output isn't buried.
+    so its own output isn't buried. LOG_FORMAT=json writes one JSON object per
+    line instead of the readable text (application/logfmt.py).
     """
-    logging.basicConfig(
-        level=getattr(logging, os.environ.get('LOG_LEVEL', 'WARNING' if cli_mode else 'INFO').upper(), logging.INFO),
-        format='%(asctime)s %(levelname)s %(name)s: %(message)s',
-    )
+    level = getattr(logging, os.environ.get('LOG_LEVEL', 'WARNING' if cli_mode else 'INFO').upper(), logging.INFO)
+    logging.basicConfig(level=level, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    root = logging.getLogger()
+    # basicConfig does nothing when something configured logging first (gunicorn's
+    # --log-config-json, a test runner): the level and the format are still ours.
+    root.setLevel(level)
+    if logfmt.wanted(os.environ) == 'json':
+        for handler in root.handlers:
+            handler.setFormatter(logfmt.JsonFormatter())
 
 
 def env_int(name: str, default: int, environ: Optional[Mapping[str, str]] = None) -> int:

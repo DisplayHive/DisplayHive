@@ -68,9 +68,15 @@ def upgrade_to_head(engine: Engine) -> None:
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / 'alembic.ini'))
     config.set_main_option('script_location', str(root / 'migrations'))
-    with engine.begin() as connection:
-        config.attributes['connection'] = connection
-        command.upgrade(config, 'head')
+    alembic_log = logging.getLogger('alembic.runtime.migration')
+    previous = alembic_log.level
+    alembic_log.setLevel(logging.INFO)   # "Running upgrade a -> b" lines, whatever LOG_LEVEL says
+    try:
+        with engine.begin() as connection:
+            config.attributes['connection'] = connection
+            command.upgrade(config, 'head')
+    finally:
+        alembic_log.setLevel(previous)
 
 
 def migrate(engine: Engine, backups_dir, settings: backup.Settings, echo: Callable[[str], None] = print,

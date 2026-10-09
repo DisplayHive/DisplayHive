@@ -196,6 +196,7 @@ variables are worth knowing about:
 | `LOGIN_RATE_LIMIT_PER_IP` | Failed logins allowed from one IP address, across all usernames, within 15 minutes before that IP is locked out (default `20`). Separate from the stricter 5-failure limit per IP + username. |
 | `FLASK_DEBUG` | Enables the Werkzeug debugger. Local development only — never set this on a network-reachable host, since it allows arbitrary code execution from the browser. |
 | `LOG_LEVEL` | Python logging level (default `INFO`). |
+| `LOG_FORMAT` | `text` (default) or `json`: with `json` every log line is one JSON object on stderr — `time` (UTC), `level`, `logger`, `message`, plus `exception` for errors — from the app, gunicorn and the Docker entrypoint, for log collectors like Loki or Elasticsearch. NixOS: `logFormat`. See [Where the logs go](#where-the-logs-go). |
 | `ADMIN_CSP` | Content-Security-Policy for the admin panel: `enforce` (default — only the bundled scripts may run), `report` (log violations only) or `off`. Violations are logged as `CSP violation …` warnings. Previews always run in a separate, sandboxed page with their own policy. |
 | `SCREEN_CSP` | Content-Security-Policy for the screen page: `report` (default — log only, since designs and raw-HTML content may contain anything), `enforce` or `off`. |
 | `GUNICORN_THREADS` | Docker only (NixOS: the instance's `threads` option): gunicorn worker threads, default `500`. Every connected screen and open admin tab keeps one busy, so set it above the number of simultaneous connections, with headroom for normal requests. Idle threads cost almost nothing: they're only created when needed. |
@@ -349,6 +350,31 @@ The admin panel's footer shows the running version and commit (for example
 don't reveal them). The screen client's JS and CSS are requested with the
 version and commit in the URL (`?v=0.1.0-2be5109`), so browsers load the new
 files after every update.
+
+## Where the logs go
+
+DisplayHive writes its logs to **stderr** and keeps no log files of its own; rotation and
+retention are up to whatever collects them:
+
+| Setup | Read them with |
+|---|---|
+| Docker Compose | `docker compose logs -f displayhive` (the app), `docker compose logs migrate` (the backup and migration before each start) |
+| NixOS | `journalctl -u displayhive-<name>` (the migration runs as part of the same unit) |
+| Local | the terminal |
+
+`LOG_LEVEL` sets the level (default `INFO`). With `LOG_FORMAT=json` each line is
+one JSON object, from the app, gunicorn and the Docker entrypoint alike:
+
+```json
+{"time": "2026-10-09T08:15:02.123Z", "level": "WARNING", "logger": "application.backup", "message": "Scheduled backup failed: …"}
+```
+
+`exception` holds the traceback of an error. The log of the **screens** (the
+logger view in the admin panel) is separate and not written to this stream.
+
+On first start without admin users, the generated password of the bootstrap
+account is logged once at `WARNING` level (look for "created a bootstrap
+account"). Set `ADMIN_BOOTSTRAP_PASSWORD` to choose it yourself.
 
 ## Health checks
 

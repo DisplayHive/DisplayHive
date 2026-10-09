@@ -6,6 +6,7 @@ Socket.IO connect handler (application/admin/devices/connection.py) so admin
 sessions are backed by a single shared token format.
 """
 
+import logging
 import os
 import secrets
 import threading
@@ -15,6 +16,8 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
+
+logger = logging.getLogger(__name__)
 
 TOKEN_ALGORITHM = 'HS256'
 TOKEN_TTL = timedelta(hours=12)
@@ -154,15 +157,13 @@ def ensure_bootstrap_admin(app, db):
     db.session.commit()
 
     if generated:
-        banner = '*' * 70
-        print(banner)
-        print('[auth] No admin users found — created a bootstrap account:')
-        print(f'[auth]   username: {username}')
-        print(f'[auth]   password: {password}')
-        print('[auth] Log in and change this password from the Users page.')
-        print(banner)
+        # The one place the password appears: whoever starts DisplayHive reads it
+        # here. WARNING so that it shows at any LOG_LEVEL up to WARNING.
+        logger.warning(
+            'No admin users found — created a bootstrap account. username: %s  password: %s  '
+            '— log in and change this password from the Users page.', username, password)
     else:
-        print(f"[auth] Created bootstrap admin user '{username}' from ADMIN_BOOTSTRAP_PASSWORD")
+        logger.info("Created bootstrap admin user '%s' from ADMIN_BOOTSTRAP_PASSWORD", username)
 
 
 # --- Login rate limiting ------------------------------------------------------
