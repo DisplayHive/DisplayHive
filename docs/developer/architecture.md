@@ -237,6 +237,12 @@ def handle_delete_user(data):
   parts the components in `components/layout/`, which get the editor by injection. The pure parts
   (snapping, the preview document, default-content shapes) are in `utils/layoutGeometry.ts`,
   `layoutPreviewDoc.ts` and `containerDefaultContent.ts`, with unit tests.
+- Field editors: `components/FieldValueEditor.vue` picks the editor of a field's handler from
+  `components/fields/registry.ts`; each handler is a component in `components/fields/` that gets its field
+  (name, value bag, mode, lock/hide flags) through `useFieldContext()` and lays out its options with
+  `FieldSlot`. A new handler is one component plus one line in the registry. The generic `fve-*` layout
+  classes are `assets/field-editors.css`; the live previews of the date format and countdown are
+  `utils/fieldPreviews.ts`.
 - Users & Rights: `views/UsersView.vue` is only the tabs; what the tabs and dialogs share (gates, account
   list, rights data) is `composables/users/useUsersPage.ts`, the tabs and dialogs are `components/users/`.
 - The content edit page: `views/ContentEditView.vue` composes `components/contentEdit/`; the form, saving,

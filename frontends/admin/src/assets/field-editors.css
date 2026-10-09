@@ -1,0 +1,30 @@
+/* Layout shared by every field editor (components/fields/): the editor itself and one row per option. */
+.field-value-editor {
+  width: 100%;
+}
+
+.fve-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  user-select: none;
+}
+
+/* One row per individual option/sub-control: the control itself (grows to
+   fill available width) plus, in preset-authoring mode, its lock/hide
+   toggle pair anchored to the right. */
+.fve-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.fve-slot:last-child {
+  margin-bottom: 0;
+}
+
+.fve-slot > *:first-child,
+.fve-slot-control {
+  flex: 1;
+  min-width: 0;
+}
