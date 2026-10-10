@@ -1,6 +1,20 @@
-# DisplayHive
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <img src="docs/assets/logo.png" alt="DisplayHive" width="260">
+  </picture>
+</p>
 
-Self-hosted digital signage for managing screens, content, and schedules in real time.
+<p align="center"><b>Self-hosted digital signage</b> for managing screens, content, and schedules in real time.</p>
+
+<p align="center">
+  <a href="https://docs.displayhive.org/">Documentation</a> ·
+  <a href="https://docs.displayhive.org/user/installation/">Installation</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="https://displayhive.org">Website</a>
+</p>
+
+---
 
 DisplayHive drives networks of displays (kiosks, TVs, info screens) from a single admin
 panel. Content is composed on drag-and-drop layouts with named containers, styled
@@ -30,54 +44,26 @@ DisplayHive is mostly stable. Things will keep changing, but we don't expect upd
 ## Architecture
 
 Flask + Flask-SocketIO backend (REST/API + realtime hub), a Vue 3 admin panel, and a
-framework-free TypeScript screen client, all served by the same process. See
-[Architecture](https://docs.displayhive.org/developer/architecture/) in the docs for the
-full breakdown.
-
-## Getting started
-
-```bash
-git clone https://github.com/DisplayHive/DisplayHive.git
-cd DisplayHive
-nix develop   # or: nix-shell — provisions everything and runs first-time setup
-npm run dev   # backend + admin panel (:5173) + screen client (:5174)
-```
-
-See [Installation](https://docs.displayhive.org/user/installation/) in the docs for
-requirements without Nix and production deployment (Docker, NixOS), and
-[CONTRIBUTING.md](CONTRIBUTING.md) for running tests and other dev workflows.
-
-## Configuration
-
-Copy `.env.example` to `.env` (or export the variables in your shell). At minimum, set a
-real `SECRET_KEY` before deploying. See
-[Installation → Configuration](https://docs.displayhive.org/user/installation/#configuration)
-in the docs for the full list of environment variables.
+framework-free TypeScript screen client, all served by the same process. Deployment is Docker
+or a NixOS module; PostgreSQL is the production database.
 
 ## Documentation
 
-The full docs are published at **[docs.displayhive.org](https://docs.displayhive.org/)**
-(rebuilt automatically on every push to `main` that touches `docs/`).
+Everything else — installation, configuration, using the admin panel, and the internals — is in
+the docs at **[docs.displayhive.org](https://docs.displayhive.org/)**.
 
-The source lives in [`docs/`](docs/) and is built with
-[MkDocs](https://www.mkdocs.org/) + Material. To browse it locally instead:
+**Getting started**
 
-```bash
-npm run docs:serve   # http://localhost:8000
-```
-
-- **User guide** ([`docs/user/`](docs/user/)) — using the admin panel:
-  layouts, designs, content, screens/devices/groups, rights &
-  groups, integrations, import/export, and settings.
-- **Developer guide** ([`docs/developer/`](docs/developer/)) — architecture,
-  the real-time content push pipeline, and how to contribute.
+- [Installation](https://docs.displayhive.org/user/installation/) — Docker, NixOS, and a development setup
+- [Getting started](https://docs.displayhive.org/user/getting-started/) — a hands-on walkthrough
+- [User guide overview](https://docs.displayhive.org/user/) — how the pieces fit together
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up, PR conventions,
 and our AI-assisted contributions policy. Please report security
 vulnerabilities privately per [SECURITY.md](SECURITY.md) rather than as a
-public issue. 
+public issue.
 
 ## License
 
