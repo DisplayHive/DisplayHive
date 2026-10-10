@@ -26,6 +26,11 @@
     justify-content: flex-start;
   }
 
+  .palette-trigger {
+    margin: 0;
+    align-self: flex-start;
+  }
+
   .app-menubar {
     width: 100%;
   }

@@ -74,6 +74,18 @@ const selectTheme = async (value: 'light' | 'dark' | 'system') => {
         Tour
       </span>
     </div>
+    <button
+      type="button"
+      class="palette-trigger"
+      data-testid="palette-button"
+      aria-label="Search (Ctrl+K)"
+      v-tooltip.bottom="'Search (Ctrl+K)'"
+      @click="palette.open()"
+    >
+      <i class="pi pi-search"></i>
+      <span class="palette-trigger-label">Search …</span>
+      <kbd class="palette-trigger-key">{{ shortcutLabel }}</kbd>
+    </button>
     <div class="header-controls">
       <Menubar
         :model="menuItems"
@@ -86,18 +98,6 @@ const selectTheme = async (value: 'light' | 'dark' | 'system') => {
         <i class="pi pi-user"></i>
         {{ authStore.username }}
       </span>
-      <button
-        type="button"
-        class="palette-trigger"
-        data-testid="palette-button"
-        aria-label="Search (Ctrl+K)"
-        v-tooltip.bottom="'Search (Ctrl+K)'"
-        @click="palette.open()"
-      >
-        <i class="pi pi-search"></i>
-        <span class="palette-trigger-label">Search …</span>
-        <kbd class="palette-trigger-key">{{ shortcutLabel }}</kbd>
-      </button>
       <Button
         :icon="isDark ? 'pi pi-moon' : 'pi pi-sun'"
         text

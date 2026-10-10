@@ -16,7 +16,7 @@
   align-items: center;
   gap: 0.5rem;
   /* allow the brand to shrink on small widths to avoid pushing controls */
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -138,13 +138,16 @@
   color: #94a3b8;
 }
 
-/* The search field (opens the command palette, Ctrl+K): a field-looking button in the header bar.
-   Below 1400px wide only the magnifier stays. */
+/* The search field (opens the command palette, Ctrl+K): a field-looking button in the middle of the
+   header bar — the auto margins centre it in the space between the brand and the menu.
+   Below 1550px wide only the magnifier stays. */
 .palette-trigger {
+  margin: 0 auto;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 13rem;
+  min-width: 26rem;
   padding: 0.4rem 0.6rem;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
@@ -180,7 +183,7 @@
   color: #94a3b8;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1550px) {
   .palette-trigger {
     min-width: 0;
     padding: 0.5rem 0.75rem;
