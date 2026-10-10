@@ -30,6 +30,26 @@ These are stored in the database, belong to the instance, and are part of an [ex
 - **Screen log**: how long lines are kept (hours, 1 to 8760) and the most lines kept (1,000 to 5 million);
   whichever limit is reached first deletes the oldest lines.
 
+**Icon libraries**
+
+DisplayHive ships no icons; the icon field offers the libraries you install here (needs the right
+*Install and remove icon libraries*).
+
+- **Known libraries** — Lucide, Heroicons, Phosphor, Tabler, Feather, Material Symbols, Bootstrap Icons,
+  Iconoir and Remix Icon. **Install** downloads one from the npm registry (a few megabytes; Material Symbols
+  and Tabler are the largest) and checks it against the checksum DisplayHive expects; **Install all** does
+  the whole list; **Reinstall** replaces a library, **Remove** deletes it.
+- **Your own library** — a ZIP (or `.tar.gz`) file of SVG icons, uploaded or downloaded from a link, with an
+  id, a name and a license. The id becomes part of the icon value (`my-icons/home`). Only plain drawings are
+  kept; scripts, event handlers and references to other files are removed. A download link into a private
+  network needs the setting under *Security*.
+- **No internet on the server?** Upload a ZIP instead; the download buttons need access to
+  `registry.npmjs.org`.
+- Icons are stored in the data directory (`DATA_DIR/icons`), not in the database: they are not part of an
+  [export](import-export.md) or of the backups. Content stores only `<library>/<icon>`, so after a restore or
+  on a new instance, install the libraries again and the icons are back. Content that uses an icon of a
+  library that is not installed shows no icon.
+
 **Security and sign-in** (cards further down)
 
 - **Login providers** — single sign-on, see [Single sign-on](sso.md).

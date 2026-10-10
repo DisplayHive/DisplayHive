@@ -11,7 +11,6 @@ bp = Blueprint('static_files', __name__)
 _DIST_ADMIN = PROJECT_ROOT / 'dist' / 'admin'
 _DIST_SCREEN = PROJECT_ROOT / 'dist' / 'screen'
 _SCREEN_ASSETS = PROJECT_ROOT / 'frontends' / 'screen' / 'assets'
-_SCREEN_PUBLIC_ICONS = PROJECT_ROOT / 'frontends' / 'screen' / 'public' / 'icons'
 
 
 # Media live in DATA_DIR (see application/paths.py), not in the static folder,
@@ -32,17 +31,22 @@ def static_media_renditions(filename):
     return send_from_directory(current_app.config['MEDIA_RENDITIONS_FOLDER'], filename)
 
 
+@bp.route('/static/icons/<path:filename>')
+def static_icons(filename):
+    """Installed icon libraries (application/icon_libraries.py). The two index files change when a
+    library is installed or removed, so the browser asks again each time; the SVG files do not."""
+    response = send_from_directory(current_app.config['ICON_LIBRARIES_FOLDER'], filename)
+    if filename in ('manifest.json', 'libraries.json'):
+        response.headers['Cache-Control'] = 'no-cache'
+    elif filename.endswith('.svg'):
+        # The files are sanitised on installation; this keeps one opened as a page from running anything.
+        response.headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    return response
+
+
 @bp.route('/dist/screen/<path:filename>')
 def screen_dist(filename):
-    """Serve the compiled screen TypeScript bundle from dist/screen/.
-
-    Icons are the one part of this path fetched at runtime (see
-    icon-libraries.ts) rather than bundled into screen.js, so under
-    SCREEN_DEV_SERVER they'd otherwise 404 against a dist/ that was never
-    built — fall back to the source copy Vite itself serves in dev mode.
-    """
-    if current_app.config['SCREEN_DEV_SERVER'] and filename.startswith('icons/'):
-        return send_from_directory(_SCREEN_PUBLIC_ICONS, filename[len('icons/'):])
+    """Serve the compiled screen TypeScript bundle from dist/screen/."""
     return send_from_directory(_DIST_SCREEN, filename)
 
 

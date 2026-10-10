@@ -114,6 +114,8 @@ test.describe('Field editors', () => {
     await expect(block(page, 'Image').getByText('Click to select an image')).toBeVisible()
     await expect(block(page, 'Rich text').locator('.ql-editor')).toBeVisible({ timeout: 10_000 })
     await expect(block(page, 'Icon').locator('.icon-picker')).toBeVisible()
+    // nothing is installed by default: the picker says so, and where to install
+    await expect(block(page, 'Icon').getByTestId('icon-picker-empty')).toContainText('No icon library is installed')
     await expect(block(page, 'Pretalx').locator('.pretalx-table-editor')).toBeVisible()
   })
 

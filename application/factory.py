@@ -142,6 +142,8 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
     register_auth_routes(app, db)             # /admin/api/auth/*
     app.request_class = DataDirRequest        # media upload streams to disk
     register_media_routes(app, db)            # /admin/api/media/upload
+    from application.admin.icons.routes import register_icon_routes
+    register_icon_routes(app, db, on_change=lambda: app.extensions['icon_libraries_push']())   # /admin/api/icons/upload
     register_cli(app)                         # `flask dh …` maintenance commands
     register_web_routes(app, db, socketio)    # static files, screen page, admin SPA, import/export
 

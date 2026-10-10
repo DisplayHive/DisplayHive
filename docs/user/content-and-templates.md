@@ -173,7 +173,7 @@ To create an item:
 2. Fill in a **title** and a **duration** (minutes + seconds).
 3. Fill in the **content fields** — each rendered with a widget appropriate
    to its handler (a rich-text editor for WYSIWYG, an image picker with
-   single-image or random-from-tag modes, an icon/size picker, a table
+   single-image or random-from-tag modes, an icon/size picker (the icons come from the libraries installed under [Settings](settings.md)), a table
    editor, the full set of Pretalx table options, etc.), with any
    locked/hidden sub-options from the content type respected.
 4. Optionally expand **Scheduling** to set a start/end date-time — an

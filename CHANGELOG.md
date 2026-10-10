@@ -24,6 +24,12 @@ they are called out under **Breaking changes**.
   - The old source directory (for example `/opt/displayhive/<name>`) and the Python cache
     (`/var/cache/displayhive/<name>`) are no longer used and can be deleted.
 
+- **Icon libraries are no longer shipped; install them in the admin.** The icon field's nine libraries (Lucide,
+  Heroicons, Phosphor, Tabler, Feather, Material Symbols, Bootstrap Icons, Iconoir, Remix Icon) were part of the
+  build; now **Settings → Icon libraries** installs them (see *Added*). **After updating, install the libraries
+  your content uses** (or all of them); until then icon fields show no icon. The icon values stay the same
+  (`<library>/<name>`), so nothing in your content needs to change.
+
 ### Added
 
 - **Dashboard:** what is on air right now, what ends or starts in the next seven days, what was changed last,
@@ -50,6 +56,10 @@ they are called out under **Breaking changes**.
   pointer that hides itself when idle, and a wake lock that keeps the display awake.
 - **Binary cache (optional):** CI pushes the built Nix package to a Cachix cache signed with the project's own
   key, so a server can download it instead of building (see the installation guide for the trust it implies).
+- **Installable icon libraries:** Settings → Icon libraries installs the known libraries with one click
+  (downloaded from the npm registry and checked against a pinned checksum), or your own — a ZIP/TAR file or a
+  download link. SVGs are sanitised on installation. The icons live in the data directory, the Docker image and
+  the Nix package no longer contain them, and neither frontend needs the icon packages to build.
 - **Nix package and tooling:** `nix build .#default`, a NixOS VM test of the module
   (`nix build .#checks.x86_64-linux.module`), `nix run .#update-hashes` for the pinned hashes, and a CI job that
   builds the package. `nix/example.nix` documents every module option.

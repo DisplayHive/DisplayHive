@@ -12,6 +12,7 @@ import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import LoginProvidersCard from '../components/LoginProvidersCard.vue'
+import IconLibrariesCard from '../components/settings/IconLibrariesCard.vue'
 import OutboundPolicyCard from '../components/OutboundPolicyCard.vue'
 
 const { on, off, emit } = useSocket()
@@ -474,6 +475,8 @@ const saveTimeSettings = async () => {
           </div>
         </template>
       </Card>
+
+      <IconLibrariesCard v-if="rightsStore.can('icons.manage') || rightsStore.can('settings.page')" />
 
       <LoginProvidersCard v-if="rightsStore.can('authproviders.manage')" />
 

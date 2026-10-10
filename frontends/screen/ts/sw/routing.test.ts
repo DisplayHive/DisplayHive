@@ -26,11 +26,14 @@ describe("strategyFor", () => {
     expect(get("/static/media/a/b.png")).toBe("media");
     expect(get("/static/media_previews/b_preview.jpg")).toBe("media");
     expect(get("/static/media_renditions/fhd/b.png")).toBe("media");
+    expect(get("/static/icons/lucide/home.svg")).toBe("media");
   });
 
   it("leaves everything else alone", () => {
     expect(get("/socket.io/?EIO=4&transport=polling")).toBe("bypass");
     expect(get("/screen-sw.js?v=1")).toBe("bypass");
+    expect(get("/static/icons/manifest.json")).toBe("bypass");
+    expect(get("/static/icons/libraries.json")).toBe("bypass");
     expect(get("/admin/api/auth/me")).toBe("bypass");
     expect(get("/dist/admin/index.js")).toBe("bypass");
   });

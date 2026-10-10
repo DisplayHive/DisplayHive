@@ -6,7 +6,7 @@
  *  - `dh-screen-static-<ASSET_VERSION>`: the page (`/`) and what it is made of — the bundle, its
  *    chunks and assets, logos, icons. A new release has a new version, so its worker starts a fresh
  *    cache and deletes the old ones.
- *  - `dh-screen-media`: uploaded media and their previews/renditions. A file's URL never changes
+ *  - `dh-screen-media`: uploaded media and their previews/renditions, and the installed icons. A file's URL never changes
  *    its content, so this cache has no version; it is kept to MEDIA_MAX_ENTRIES (oldest out first).
  */
 
@@ -20,7 +20,9 @@ export const PAGE_NETWORK_TIMEOUT_MS = 4_000;
 
 const STATIC_PREFIXES = ["/dist/screen/", "/screen/assets/"];
 const STATIC_FILES = ["/logo_bl.png", "/logo_wh.png", "/favicon.ico", "/favicon-32x32.png", "/favicon-16x16.png", "/apple-touch-icon.png"];
-const MEDIA_PREFIXES = ["/static/media/", "/static/media_previews/", "/static/media_renditions/"];
+const MEDIA_PREFIXES = ["/static/media/", "/static/media_previews/", "/static/media_renditions/", "/static/icons/"];
+/** The icon libraries' index files change when one is installed or removed: always from the network. */
+const ICON_INDEXES = ["/static/icons/manifest.json", "/static/icons/libraries.json"];
 /** The worker script itself and Socket.IO must never be served from a cache. */
 const NEVER = ["/screen-sw.js", "/socket.io/"];
 
@@ -47,7 +49,7 @@ export function strategyFor(request: RequestInfo, origin: string): Strategy {
   }
   if (url.origin !== origin) return "bypass";
   const path = url.pathname;
-  if (NEVER.some((p) => path === p || path.startsWith(p))) return "bypass";
+  if (NEVER.some((p) => path === p || path.startsWith(p)) || ICON_INDEXES.includes(path)) return "bypass";
   if (request.mode === "navigate") {
     return path === "/" && !isSpecialPage(url.search) ? "page" : "bypass";
   }

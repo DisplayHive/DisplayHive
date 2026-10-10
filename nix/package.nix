@@ -33,7 +33,6 @@ let
       base = baseNameOf rel;
     in
       !(builtins.elem base [ "node_modules" "__pycache__" ".venv" "dist" ".git" ])
-      && !(lib.hasInfix "/public/icons" ("/" + rel))
       && (builtins.elem top [
         "app.py" "application" "migrations" "alembic.ini" "VERSION" "gunicorn-logging.json"
         "examplecontent" "static" "requirements.txt" ".python-version" "frontends"
@@ -55,15 +54,10 @@ let
     sourceRoot = "displayhive-source/frontends/${name}";
     npmDepsHash = lockHashes.npm.${name};
     npmDepsFetcherVersion = 2;
-    # postinstall (scripts/copy-icons.mjs) copies the icon libraries out of node_modules.
-    npmFlags = [ "--ignore-scripts" ];
     nodejs = pkgs.nodejs;
     # The build writes to ../../dist: the unpacked source (read-only, as in the store) must allow it.
     postPatch = ''
       chmod -R u+w ../..
-    '';
-    preBuild = ''
-      node scripts/copy-icons.mjs
     '';
     DISPLAYHIVE_REVISION = revision;
     npmBuildScript = script;

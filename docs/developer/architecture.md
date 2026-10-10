@@ -255,6 +255,12 @@ def handle_delete_user(data):
 - Ctrl+K: `components/CommandPalette.vue` (opened by `composables/useCommandPalette.ts`) lists pages, actions
   and the items of the stores; the matching is `utils/commandSearch.ts`. A new page shows up through
   `useAdminNavigation`; a new kind of item is one block in the palette's `entries`.
+- Icon libraries: DisplayHive ships no icons. `application/icon_libraries.py` installs libraries into
+  `DATA_DIR/icons` (from the catalog — npm tarballs with a pinned version and checksum — or from an uploaded ZIP/TAR
+  or a link), sanitising every SVG (an allow-list of elements and attributes: the screen puts the markup into the
+  page) and unpacking archives by hand with limits. They are served at `/static/icons/<library>/<name>.svg`
+  (plus `manifest.json` and `libraries.json`); the handlers are `application/admin/icons/`, the Settings card is
+  `components/settings/IconLibrariesCard.vue`. An icon value stays `<library>/<name>`.
 - Media in use: `application/admin/media/usage.py` scans content, presets, container defaults, designs and
   settings for a file's URL (and random-by-tag image fields); the media list carries it as `used_by`.
 - Put anything a page shows in the header's action area into `components/PageHeaderSlot.vue` (or use

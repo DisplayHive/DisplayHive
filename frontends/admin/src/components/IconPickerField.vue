@@ -13,7 +13,9 @@ import DialogTitle from './DialogTitle.vue'
  * selected "<library>/<name>" value and its height.
  */
 import { ref, computed, onMounted, watch } from 'vue'
-import { ICON_LIBRARIES, getIconManifest, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
+import { getIconManifest, getInstalledLibraries, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
+import RouteLink from './RouteLink.vue'
+import { links } from '../utils/links'
 import type { OptionFlags } from '../utils/optionFlags'
 import type { DefaultColor } from '../types/models'
 
@@ -59,8 +61,11 @@ const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
   emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
 }
 
-const activeLibraries = ref<Set<string>>(new Set(ICON_LIBRARIES.map((l) => l.id)))
-const allActive = computed(() => activeLibraries.value.size === ICON_LIBRARIES.length)
+// The installed libraries (Settings → Icon libraries); empty until they are loaded or when none is installed.
+const libraries = ref<IconLibraryMeta[]>([])
+const librariesLoaded = ref(false)
+const activeLibraries = ref<Set<string>>(new Set())
+const allActive = computed(() => libraries.value.length > 0 && activeLibraries.value.size === libraries.value.length)
 const toggleLibrary = (id: string, checked: boolean) => {
   const next = new Set(activeLibraries.value)
   if (checked) next.add(id)
@@ -68,7 +73,7 @@ const toggleLibrary = (id: string, checked: boolean) => {
   activeLibraries.value = next
 }
 const toggleAll = () => {
-  activeLibraries.value = allActive.value ? new Set() : new Set(ICON_LIBRARIES.map((l) => l.id))
+  activeLibraries.value = allActive.value ? new Set() : new Set(libraries.value.map((l) => l.id))
 }
 
 const searchText = ref('')
@@ -84,7 +89,7 @@ interface IconMatch {
 const filteredIcons = computed<IconMatch[]>(() => {
   const query = searchText.value.trim().toLowerCase()
   const results: IconMatch[] = []
-  for (const library of ICON_LIBRARIES) {
+  for (const library of libraries.value) {
     if (!activeLibraries.value.has(library.id)) continue
     for (const name of manifest.value[library.id] || []) {
       if (query && !name.includes(query)) continue
@@ -120,10 +125,14 @@ watch(
 
 const selectedLibraryId = computed(() => props.modelValue.icon.split('/', 1)[0] || '')
 const selectedName = computed(() => props.modelValue.icon.slice(selectedLibraryId.value.length + 1))
-const selectedLibrary = computed(() => ICON_LIBRARIES.find((l) => l.id === selectedLibraryId.value))
+const selectedLibrary = computed(() => libraries.value.find((l) => l.id === selectedLibraryId.value))
 
-onMounted(() => {
-  getIconManifest().then((m) => { manifest.value = m })
+onMounted(async () => {
+  const [m, installed] = await Promise.all([getIconManifest(), getInstalledLibraries()])
+  manifest.value = m
+  libraries.value = installed.filter((l) => l.id in m)
+  activeLibraries.value = new Set(libraries.value.map((l) => l.id))
+  librariesLoaded.value = true
   if (props.modelValue.icon) void ensurePreview(selectedLibraryId.value, selectedName.value)
 })
 
@@ -180,10 +189,18 @@ const showLicenseDialog = ref(false)
             </span>
             <Button icon="pi pi-times" text size="small" @click="clearIcon" aria-label="Clear selected icon" />
           </div>
+          <span v-else-if="modelValue.icon && librariesLoaded" class="icon-picker-none">
+            {{ modelValue.icon }} — the library “{{ selectedLibraryId }}” is not installed.
+          </span>
           <span v-else class="icon-picker-none">No icon selected</span>
         </div>
 
-        <div class="icon-picker-libraries">
+        <p v-if="librariesLoaded && !libraries.length" class="icon-picker-none" data-testid="icon-picker-empty">
+          No icon library is installed.
+          <RouteLink :to="links.settings()">Install one in Settings → Icon libraries.</RouteLink>
+        </p>
+
+        <div v-if="libraries.length" class="icon-picker-libraries">
           <label class="icon-picker-label">Libraries</label>
           <div class="icon-picker-library-list">
             <Button
@@ -192,7 +209,7 @@ const showLicenseDialog = ref(false)
               text
               @click="toggleAll"
             />
-            <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-library-item">
+            <div v-for="library in libraries" :key="library.id" class="icon-picker-library-item">
               <Checkbox
                 :inputId="'icon-lib-' + library.id"
                 :binary="true"
@@ -204,11 +221,11 @@ const showLicenseDialog = ref(false)
           </div>
         </div>
 
-        <div class="icon-picker-search">
+        <div v-if="libraries.length" class="icon-picker-search">
           <InputText v-model="searchText" placeholder="Search icons…" class="w-full" />
         </div>
 
-        <div class="icon-picker-results">
+        <div v-if="libraries.length" class="icon-picker-results">
           <button
             v-for="match in filteredIcons"
             :key="match.library.id + '/' + match.name"
@@ -269,13 +286,13 @@ const showLicenseDialog = ref(false)
       <template #header>
         <DialogTitle icon="pi-book" title="Icon Libraries Licenses" />
       </template>
-      <div v-for="library in ICON_LIBRARIES" :key="library.id" class="icon-picker-license-entry">
+      <div v-for="library in libraries" :key="library.id" class="icon-picker-license-entry">
         <h4>
           {{ library.label }}
           <Tag :value="library.license" severity="info" />
         </h4>
         <p><a :href="library.homepage" target="_blank" rel="noopener">{{ library.homepage }}</a></p>
-        <pre class="icon-picker-license-text">{{ library.licenseText }}</pre>
+        <pre v-if="library.licenseText" class="icon-picker-license-text">{{ library.licenseText }}</pre>
       </div>
     </Dialog>
   </div>

@@ -15,18 +15,12 @@ ARG PYTHON_VERSION=3.13
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend
 WORKDIR /build
 
-# Both frontends: install dependencies first for better layer caching. scripts/
-# is also copied (not just package.json/-lock.json): `npm ci` runs the
-# "postinstall" script (scripts/copy-icons.mjs, populates the icon field
-# handler's assets from the icon-library packages), which needs to exist before
-# install runs, not just once the rest of the source lands.
+# Both frontends: install dependencies first for better layer caching.
 # Admin SPA: Vue 3 + PrimeVue.
 COPY frontends/admin/package.json frontends/admin/package-lock.json frontends/admin/
-COPY frontends/admin/scripts/ frontends/admin/scripts/
 RUN npm --prefix frontends/admin ci
 # Screen client: TypeScript, no framework.
 COPY frontends/screen/package.json frontends/screen/package-lock.json frontends/screen/
-COPY frontends/screen/scripts/ frontends/screen/scripts/
 RUN npm --prefix frontends/screen ci
 COPY frontends/admin/ frontends/admin/
 COPY frontends/screen/ frontends/screen/

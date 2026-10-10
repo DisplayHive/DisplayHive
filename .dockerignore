@@ -13,10 +13,6 @@ shell.nix
 # Node modules (reinstalled inside the build stage)
 **/node_modules
 
-# Icon libraries copied out of node_modules by `npm ci`'s postinstall (large, regenerated in the
-# frontend stage)
-frontends/*/public/icons
-
 # Pre-built frontend output (rebuilt fresh in the frontend stage)
 dist
 site

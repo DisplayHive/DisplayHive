@@ -189,6 +189,7 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     cfg['MEDIA_FOLDER'] = paths.media
     cfg['PREVIEW_FOLDER'] = paths.media_previews
     cfg['MEDIA_RENDITIONS_FOLDER'] = paths.media_renditions
+    cfg['ICON_LIBRARIES_FOLDER'] = paths.icons
     cfg['LEGACY_DATA_PATHS'] = paths.legacy
     # Uploaded files (media, imports) are streamed here, not into memory or
     # /tmp — see DataDirRequest in application/admin/media/routes.py.

@@ -1,19 +1,15 @@
 /**
- * Registry of the icon libraries selectable by the 'icon' field handler.
+ * The icon libraries selectable by the 'icon' field handler.
  *
- * Icon SVGs are served as plain static files under /icons/ (populated by
- * scripts/copy-icons.mjs into public/icons/, which Vite copies byte-for-
- * byte with no per-file processing) and resolved at runtime via fetch() —
- * NOT via `import.meta.glob`. An earlier version globbed all ~18,000 SVGs
- * across these 9 libraries directly, which made Rollup statically analyze
- * every single one at build time and reliably OOM-crashed the Vite build in
- * memory-constrained deploy environments. Enumerating names for search
- * comes from public/icons/manifest.json (also written by copy-icons.mjs),
- * fetched once and cached. Mirrors frontends/screen/ts/screen/
- * icon-libraries.ts's resolution approach for the final screen render (that
- * copy doesn't need a manifest, since it only ever resolves one already-
- * known library+name, never enumerates) — kept as two separate copies since
- * the two frontends share no code today.
+ * DisplayHive ships no icons: an administrator installs libraries in Settings → Icon libraries
+ * (application/icon_libraries.py), and they are served as plain SVG files at
+ * /static/icons/<library>/<name>.svg, resolved at runtime with fetch(). `manifest.json` there lists the
+ * installed libraries' icon names ({library id: names[]}), `libraries.json` their labels and licenses.
+ * `ICON_LIBRARIES` below is what is known about the libraries on the install list (license texts for the
+ * picker's license dialog); libraries an administrator added themselves only have what they entered.
+ * Mirrors frontends/screen/ts/screen/icon-libraries.ts's resolution for the final screen render (that
+ * copy needs no index, it only ever resolves one already-known library and name) — kept as two copies
+ * since the two frontends share no code.
  */
 
 export interface IconPickerValue {
@@ -116,33 +112,38 @@ export function getIconLibraryMeta(id: string): IconLibraryMeta | undefined {
 
 type Manifest = Record<string, string[]>
 
-let manifestPromise: Promise<Manifest> | null = null
+/** Where the installed libraries are served (the backend, not this app's own base path). */
+const iconsBaseUrl = '/static/icons/'
 
-// Vite's `base` config (this app is served at /admin/, not site root — see
-// vite.config.ts's `base: '/admin/'`) is exposed as import.meta.env.BASE_URL
-// (always trailing-slash-terminated) — icon files land under it too, since
-// they're copied into the same build output root as everything else in
-// public/, so a hardcoded leading "/icons/..." would 404 in production.
-const iconsBaseUrl = `${import.meta.env.BASE_URL}icons/`
-
-/** Fetches (and caches) icons/manifest.json — {library id: sorted icon names[]}. */
-function loadManifest(): Promise<Manifest> {
-  if (!manifestPromise) {
-    manifestPromise = fetch(`${iconsBaseUrl}manifest.json`)
-      .then((res) => (res.ok ? res.json() : {}))
-      .catch(() => ({}))
+/** {library id: icon names[]} of the installed libraries — read afresh each time, an install changes it. */
+export async function getIconManifest(): Promise<Manifest> {
+  try {
+    const res = await fetch(`${iconsBaseUrl}manifest.json`, { cache: 'no-cache' })
+    return res.ok ? await res.json() : {}
+  } catch {
+    return {}
   }
-  return manifestPromise
 }
 
-/** All libraries' icon names, keyed by library id. Fetched once, cached thereafter. */
-export async function getIconManifest(): Promise<Manifest> {
-  return loadManifest()
+/** The installed libraries, with what is known about them (license text for the listed ones). */
+export async function getInstalledLibraries(): Promise<IconLibraryMeta[]> {
+  let info: Record<string, { label?: string; license?: string; homepage?: string }> = {}
+  try {
+    const res = await fetch(`${iconsBaseUrl}libraries.json`, { cache: 'no-cache' })
+    if (res.ok) info = await res.json()
+  } catch {
+    /* none installed, or the server is not reachable */
+  }
+  return Object.keys(info).sort().map((id) => {
+    const known = getIconLibraryMeta(id)
+    const own = info[id] ?? {}
+    return known ?? { id, label: own.label || id, license: own.license || '', homepage: own.homepage || '', licenseText: '' }
+  })
 }
 
 export async function loadIcon(libraryId: string, name: string): Promise<string | null> {
   try {
-    const res = await fetch(`${iconsBaseUrl}${libraryId}/${name}.svg`)
+    const res = await fetch(`${iconsBaseUrl}${encodeURIComponent(libraryId)}/${encodeURIComponent(name)}.svg`)
     if (!res.ok) return null
     return await res.text()
   } catch {

@@ -93,6 +93,7 @@ RIGHTS = [
     ('settings.page', 'settings', 'View Settings page'),
     ('settings.edit', 'settings', 'Edit system settings / active design'),
     ('authproviders.manage', 'settings', 'Manage SSO login providers (OpenID Connect)'),
+    ('icons.manage', 'settings', 'Install and remove icon libraries'),
 
     ('alerting.page', 'alerting', 'View Alerting page'),
     ('alerting.manage', 'alerting', 'Manage alert recipients / subscriptions / test messages'),

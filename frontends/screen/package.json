@@ -17,7 +17,6 @@
     "vitest": "^4.0.18"
   },
   "scripts": {
-    "postinstall": "node scripts/copy-icons.mjs",
     "dev": "vite",
     "build": "vite build",
     "type-check": "tsc --noEmit",
@@ -26,15 +25,6 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@material-symbols/svg-400": "^0.35.1",
-    "@phosphor-icons/core": "^2.1.1",
-    "@tabler/icons": "^3.34.1",
-    "beautiful-backgrounds": "^1.0.0",
-    "bootstrap-icons": "^1.13.1",
-    "feather-icons": "^4.29.2",
-    "heroicons": "^2.2.0",
-    "iconoir": "^7.11.0",
-    "lucide-static": "^0.545.0",
-    "remixicon": "^4.6.0"
+    "beautiful-backgrounds": "^1.0.0"
   }
 }

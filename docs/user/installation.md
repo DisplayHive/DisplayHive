@@ -288,6 +288,7 @@ itself can stay read-only and a single path covers backups:
 | `media/` | Uploaded files, served at `/static/media/…` | `0750` |
 | `media_previews/` | Thumbnails | `0750` |
 | `media_renditions/` | Scaled copies for screens (can be regenerated) | `0750` |
+| `icons/` | Installed icon libraries, served at `/static/icons/…` (reinstallable from Settings, not part of the backups) | `0750` |
 | `import-staging/` | Uploaded import files between preview and confirm | `0700` |
 | `db/project.db` | A SQLite *development* database, only if `DATABASE_URL` points into it. Never used implicitly. | `0700` (directory) |
 
@@ -315,6 +316,7 @@ everything else, including Socket.IO, still goes to the app.
 | `/static/media/`, `/static/media_previews/`, `/static/media_renditions/` | `DATA_DIR/media`, `DATA_DIR/media_previews`, `DATA_DIR/media_renditions` | a file's URL never changes its content: cache for a long time |
 | `/dist/screen/` | `<app>/dist/screen/` (the built screen bundle, hashed file names) | long; `screen.js` is asked for with `?v=<release>` |
 | `/screen/assets/` | `<app>/frontends/screen/assets/` (`screen.css`, fonts) | long; asked for with `?v=<release>` |
+| `/static/icons/` | `DATA_DIR/icons` (the installed icon libraries; keep `manifest.json` and `libraries.json` on the app, they change when a library is installed) | long for the `.svg` files |
 
 Keep **`/screen-sw.js`** and **`/`** on the app: the service worker script must never be cached by
 the browser (a new release is noticed through it), and the screen page is generated per request.
