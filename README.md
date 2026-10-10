@@ -8,6 +8,15 @@
 <p align="center"><b>Self-hosted digital signage</b> for managing screens, content, and schedules in real time.</p>
 
 <p align="center">
+  <a href="https://github.com/DisplayHive/DisplayHive/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/DisplayHive/DisplayHive/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/DisplayHive/DisplayHive/actions/workflows/e2e.yml"><img alt="End-to-end tests" src="https://github.com/DisplayHive/DisplayHive/actions/workflows/e2e.yml/badge.svg"></a>
+  <a href="https://github.com/DisplayHive/DisplayHive/actions/workflows/security.yml"><img alt="Security" src="https://github.com/DisplayHive/DisplayHive/actions/workflows/security.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/DisplayHive/DisplayHive"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/github/v/release/DisplayHive/DisplayHive?include_prereleases&sort=semver&display_name=tag&label=version"></a>
+  <a href="https://github.com/DisplayHive/DisplayHive/pkgs/container/displayhive"><img alt="Docker image" src="https://img.shields.io/badge/docker-ghcr.io%2Fdisplayhive%2Fdisplayhive-2496ED?logo=docker&logoColor=white"></a>
+</p>
+
+<p align="center">
   <a href="https://docs.displayhive.org/">Documentation</a> ·
   <a href="https://docs.displayhive.org/user/installation/">Installation</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
@@ -20,6 +29,8 @@ DisplayHive drives networks of displays (kiosks, TVs, info screens) from a singl
 panel. Content is composed on drag-and-drop layouts with named containers, styled
 instance-wide with a design, pushed to screens instantly over Socket.IO, and organized
 into groups so you can target one display or a hundred at once.
+ 
+The current Version is 1.0.0-rc1  
 
 ## Features
 
@@ -37,9 +48,6 @@ into groups so you can target one display or a hundred at once.
 - **Import/export** — back up or migrate any part of an instance (or all of it), by type or individual item, with dependencies auto-included; import can reset the instance or merge into existing data.
 - **Rights & groups** — granular per-feature permissions, nested groups, and per-user allow/deny overrides on top of JWT-authenticated, rate-limited login.
 
-## A few clarifying words on the current state
-
-DisplayHive is mostly stable. Things will keep changing, but we don't expect updates to break your running system. See [Contributing](#contributing) for how to reach out or report a bug.
 
 ## Architecture
 
