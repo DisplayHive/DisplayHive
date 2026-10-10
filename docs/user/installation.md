@@ -112,6 +112,28 @@ result. Without flakes, build the package from `nix/package.nix` yourself and se
 `services.displayhive.package` (see
 [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)).
 
+#### Binary cache (optional)
+
+Without a cache your machine builds the package on the first update (a minute or two on a normal
+computer, longer on small hardware such as a Raspberry Pi; the build needs internet access for the npm
+and PyPI packages, which are checked against fixed hashes). The project's cache on
+[Cachix](https://www.cachix.org/) holds the finished package, so `nixos-rebuild` downloads it instead.
+It is optional: if it is unreachable, Nix builds locally.
+
+```nix
+nix.settings = {
+  extra-substituters = [ "https://displayhive.cachix.org" ];
+  extra-trusted-public-keys = [ "displayhive.cachix.org-1:n9MRvSguIRDM6S92vvWGOjkJKKnw+mFc4ugFS+gy2Y8=" ];
+  fallback = true;   # build locally if a download from any cache fails half-way
+};
+```
+
+Adding the cache means trusting the key above: whoever holds the private key can sign packages that
+run as a service on your server. The project signs with its own key (the cache is set up with
+self-managed signing), not with Cachix's. If you prefer not to trust a binary cache, leave this out:
+every package is then built on your machine from the sources and the pinned hashes. You can also build
+on another machine: `nixos-rebuild switch --build-host builder --target-host server`.
+
 !!! note "Coming from the old module"
     Earlier versions cloned the repository and built it on the server
     (`sourceDirectory`, `gitRepository`, `gitBranch`, `gitSshKeyFile`,

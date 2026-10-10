@@ -48,6 +48,8 @@ they are called out under **Breaking changes**.
   spread, so a restarting server is not hit by all screens at once.
 - **Daily reload** of screens at a time set in Settings → Screens, a reload after a new release was installed, a
   pointer that hides itself when idle, and a wake lock that keeps the display awake.
+- **Binary cache (optional):** CI pushes the built Nix package to a Cachix cache signed with the project's own
+  key, so a server can download it instead of building (see the installation guide for the trust it implies).
 - **Nix package and tooling:** `nix build .#default`, a NixOS VM test of the module
   (`nix build .#checks.x86_64-linux.module`), `nix run .#update-hashes` for the pinned hashes, and a CI job that
   builds the package. `nix/example.nix` documents every module option.

@@ -106,6 +106,14 @@
 
   };
 
+  # Optional: download the finished package from the project's binary cache instead of building it here
+  # (docs/user/installation.md → "Binary cache"). Trust the key only if you want to.
+  # nix.settings = {
+  #   extra-substituters = [ "https://displayhive.cachix.org" ];
+  #   extra-trusted-public-keys = [ "displayhive.cachix.org-1:n9MRvSguIRDM6S92vvWGOjkJKKnw+mFc4ugFS+gy2Y8=" ];
+  #   fallback = true;     # build locally if a download fails half-way
+  # };
+
   # Pin the PostgreSQL major version to prevent unexpected upgrades.
   services.postgresql.package = pkgs.postgresql_16;
 

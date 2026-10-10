@@ -78,6 +78,19 @@ run `nix run .#update-hashes`** (`scripts/update-nix-hashes.sh`) and commit `nix
 `scripts/fill-npm-lock-integrity.py` adds them. `nix build .#checks.x86_64-linux.module` runs the NixOS
 module in a VM (needs KVM).
 
+#### The binary cache (maintainers)
+
+CI pushes the built package to the Cachix cache `displayhive` (only from `main`), so servers download it
+instead of building. One-time setup:
+
+1. Create the cache `displayhive` on cachix.org with **self-managed signing**, so only DisplayHive's key
+   can sign it, not Cachix: `cachix generate-keypair displayhive` prints a secret and a public key.
+2. GitHub → Settings → Secrets → Actions: `CACHIX_SIGNING_KEY` = the secret key, `CACHIX_AUTH_TOKEN` = a
+   **per-cache** token with write access to `displayhive` only.
+3. Put the public key in "Binary cache" in `docs/user/installation.md` and `nix/example.nix`.
+
+Rotating the key means a new key pair, the new public key in those two places, and a note in the changelog.
+
 ## Running things
 
 ```bash

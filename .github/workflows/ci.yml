@@ -167,6 +167,17 @@ jobs:
 
       - uses: cachix/install-nix-action@v31
 
+      # Pushes what is built to the project's binary cache (https://displayhive.cachix.org), so servers
+      # can download the package instead of building it — only from main. The cache signs with the
+      # project's own key (CACHIX_SIGNING_KEY), not Cachix's. Without the secrets (forks, pull requests)
+      # nothing is pushed and the job runs as before. Setup: docs/developer/contributing.md.
+      - uses: cachix/cachix-action@v16
+        with:
+          name: displayhive
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          signingKey: ${{ secrets.CACHIX_SIGNING_KEY }}
+          skipPush: ${{ github.ref != 'refs/heads/main' }}
+
       - name: Evaluate the flake
         run: nix flake check --no-build
 
