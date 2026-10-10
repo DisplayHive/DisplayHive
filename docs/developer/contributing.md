@@ -60,11 +60,23 @@ together — CI's `python-locks` job fails otherwise.
 Every environment installs from the locks, so there's nothing else to keep
 in sync: `nix develop` takes only the interpreter from Nix and syncs
 `./.venv` from `requirements-dev.txt` on every shell entry (instant when
-nothing changed; recreated when the Nix interpreter changes), and the NixOS
-module does the same with `requirements.txt` before every service start.
+nothing changed; recreated when the Nix interpreter changes), and the Nix
+package (`nix/package.nix`, which the NixOS module runs) builds its Python
+environment from the hash-checked wheels named in `requirements.txt`.
 Native libraries some wheels need (e.g. `libz` for psycopg2) come from Nix
 via `LD_LIBRARY_PATH`. `tests/test_dependency_sync.py` fails if a Nix file
 starts listing Python packages of its own again.
+
+### The Nix package and its hashes
+
+`nix build .#default` builds the whole application (both frontends, the Python packages, the app).
+Its fixed-output inputs are pinned in `nix/hashes.nix`: the npm dependencies of each frontend and the
+Python wheels (per CPU architecture). **After changing a `package-lock.json` or `requirements.txt`,
+run `nix run .#update-hashes`** (`scripts/update-nix-hashes.sh`) and commit `nix/hashes.nix`; CI's
+`nix-package` job fails with the same hint otherwise. Every `package-lock.json` entry must carry
+`resolved` and `integrity` (Nix fetches the packages itself); if npm leaves them out,
+`scripts/fill-npm-lock-integrity.py` adds them. `nix build .#checks.x86_64-linux.module` runs the NixOS
+module in a VM (needs KVM).
 
 ## Running things
 

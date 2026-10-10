@@ -1,152 +1,113 @@
 # nix/example.nix — Example NixOS configuration using the displayhive module
 #
 # ────────────────────────────────────────────────────────────────────────────
-# SSH deploy key setup
+# How the server gets DisplayHive
 # ────────────────────────────────────────────────────────────────────────────
 #
-#     ssh-keygen -t ed25519 -C "displayhive-staging@server" \
-#       -f /etc/displayhive/staging-deploy-key -N ""
-#     chmod 400 /etc/displayhive/staging-deploy-key
+# The module runs a Nix package (nix/package.nix): the admin and screen frontends, the locked Python
+# packages and the application, all built by Nix — nothing is cloned, installed or built on the
+# server. With flakes (flake.nix of your system):
 #
-# Add the public key (.pub) as a read-only deploy key in Gogs:
-#   Repo → Settings → Deploy Keys → Add Deploy Key
-#
-# Recommended: manage the key with agenix or sops-nix:
-#
-#   age.secrets."displayhive-staging-deploy-key" = {
-#     file  = ./secrets/displayhive-staging-deploy-key.age;
-#     owner = "root";
-#     mode  = "0400";
+#   inputs.displayhive.url = "github:DisplayHive/DisplayHive";   # add /v1.0.0 or ?ref=… to pin
+#   outputs = { nixpkgs, displayhive, ... }: {
+#     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+#       modules = [ displayhive.nixosModules.default ./configuration.nix ];
+#     };
 #   };
-#   services.displayhive.instances.staging.gitSshKeyFile =
-#     config.age.secrets."displayhive-staging-deploy-key".path;
 #
-# ────────────────────────────────────────────────────────────────────────────
-# Gogs / GitHub webhook setup
-# ────────────────────────────────────────────────────────────────────────────
+# Update:    nix flake update displayhive && sudo nixos-rebuild switch
+# Roll back: sudo nixos-rebuild switch --rollback        (the previous package is still there)
 #
-# The listener accepts a push webhook from either host — it checks whichever
-# signature header the request actually carries (Gogs' X-Gogs-Signature, raw
-# hex HMAC-SHA256; GitHub's X-Hub-Signature-256, "sha256=" + hex) against the
-# same shared secret, so no extra config is needed to support one vs. the
-# other.
+# The first build compiles the frontends on the machine that runs `nixos-rebuild` (a minute or two);
+# build the configuration on a build machine or in CI with a binary cache (cachix, attic, …) and the
+# server only downloads the result.
 #
-# 1. Generate a webhook secret on the server:
-#      python3 -c "import secrets; print(secrets.token_hex(32))"
-#    Store it in a file (e.g. via agenix):
-#      /run/secrets/displayhive-staging-webhook-secret   (mode 0400, owner root)
+# Without flakes, build the package yourself and hand it over:
+#   services.displayhive.package = pkgs.callPackage /path/to/DisplayHive/nix/package.nix {
+#     src = /path/to/DisplayHive;       # a checkout, or fetchFromGitHub { … }
+#     revision = "abc1234";
+#   };
 #
-# 2. Enable the webhook listener in your NixOS config (see below).
-#    After nixos-rebuild switch, the listener is on:
-#      http://<server-ip>:<webhook.port>/
-#
-# 3. If nginx terminates TLS, add a proxy location:
-#      location /hooks/displayhive-staging/ {
-#          proxy_pass http://127.0.0.1:9001/;
-#      }
-#    Then the webhook URL becomes https://yourserver.com/hooks/displayhive-staging/
-#    and you can set listenAddress = "127.0.0.1" so the port is not exposed.
-#
-# 4a. In Gogs:    Repo → Settings → Webhooks → Add Webhook → Gogs
-#       Payload URL : http(s)://<server>:<port>/   (or via nginx proxy)
-#       Content type: application/json
-#       Secret      : the value from step 1
-#       Trigger     : Push events (or "Send me everything")
-#       Active      : ✓
-#
-# 4b. In GitHub:  Repo → Settings → Webhooks → Add webhook
-#       Payload URL : same as above
-#       Content type: application/json  — MUST be this, not the form-encoded
-#                      option. The listener also accepts
-#                      application/x-www-form-urlencoded (GitHub's other
-#                      choice, which wraps the JSON payload inside a
-#                      `payload=` form field), but there's no reason to use
-#                      it here.
-#       Secret      : the value from step 1
-#       Events      : "Just the push event"
-#       Active      : ✓
-#     GitHub's "Recent Deliveries" tab on the webhook page shows each
-#     delivery's response:
-#       - 403 "invalid signature" almost always means the secret configured
-#         in GitHub doesn't match webhook.secret/secretFile on the server.
-#       - 400 with an "invalid JSON body" server log line almost always
-#         means Content type was left on the form-encoded option above.
-#
-
-# ────────────────────────────────────────────────────────────────────────────
-# Deploy speed
-# ────────────────────────────────────────────────────────────────────────────
-#
-# The webhook-triggered deploy skips npm ci / npm run build when the
-# respective frontend source trees haven't changed since the last push:
-#
-#   • Python-only push  → git pull only           ≈  5 s
-#   • Frontend CSS/TS   → git pull + npm run build ≈ 30 s
-#   • Dependency change → git pull + npm ci + build ≈ same as before
-#
-# The boot-time deploy service always does a full npm ci + build to guarantee
-# a clean state after a nixos-rebuild switch.
+# After changing a lock file in a checkout of DisplayHive, `nix run .#update-hashes` recomputes
+# nix/hashes.nix.
 
 { config, pkgs, lib, ... }:
 
 {
-  imports = [
-    ./module.nix   # or the absolute path / flake reference
-  ];
+  # imports = [ inputs.displayhive.nixosModules.default ];   # flakes: see above
+
+  # The package every instance runs. With the flake's nixosModules.default this is already set to the
+  # flake's own package; set it only to run something else (a pinned release, a fork).
+  # services.displayhive.package = inputs.displayhive.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   services.displayhive.instances = {
 
     staging = {
-      port            = 5001;
-      sourceDirectory = "/opt/displayhive/staging";
+      # ── Required ────────────────────────────────────────────────────────
+      port = 5001;     # TCP port the app listens on
 
-      gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
-      gitBranch       = "testing";
+      # One secret key is required (signs sessions). Exactly one of the three ways:
+      secretKeyFile = "/run/secrets/displayhive-staging-secret-key";   # recommended: root-only file (agenix / sops-nix),
+                                                                       # handed to the service as a systemd credential
+      # secretKey   = "change-me";                                     # a plain string: ends up in the world-readable Nix store
+      # environmentFile = "/run/secrets/displayhive-staging.env";      # or a SECRET_KEY=… line in this file (see below)
 
-      # gitSshKeyFile for private repos (see SSH deploy key setup above).
-      # gitSshKeyFile = config.age.secrets."displayhive-staging-deploy-key".path;
+      # ── Where it is reachable ───────────────────────────────────────────
+      publicUrl = "https://staging.example.com";   # CORS and the SSO redirect URI derive from it. Set in production.
+      # bindAddress        = "127.0.0.1";          # default: loopback, for a reverse proxy on this host.
+      #                                            # "0.0.0.0" (or an interface address) only if the proxy is elsewhere:
+      #                                            # then restrict the port with the firewall.
+      # corsAllowedOrigins = "https://a.example.com,https://b.example.com";  # default: publicUrl, else "*" (any origin)
+      # trustedProxyCount  = 1;                    # reverse proxy hops in front (default 0): the real client IP is used
+      #                                            # for the login rate limit — set it behind the nginx below
 
-      secretKeyFile      = "/run/secrets/displayhive-staging-secret-key";   # agenix / sops-nix; or secretKey = "…" for a test
-      publicUrl          = "https://staging.example.com";  # CORS + SSO redirect URI derive from it
+      # ── What it runs ────────────────────────────────────────────────────
+      # package = inputs.displayhive-stable.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      #                                            # a different build for this instance (default: services.displayhive.package)
+      # threads = 500;                             # gunicorn threads; every screen and open admin tab keeps one busy,
+      #                                            # so keep it above the number of simultaneous connections
 
-      # ── Extra app env vars (all optional — see module.nix for defaults) ──
-      # logLevel               = "INFO";
-      # trustedProxyCount      = 1;  # set when behind the nginx proxy below
+      # ── Data ────────────────────────────────────────────────────────────
+      # dataDirectory = "/var/lib/displayhive/staging";   # media, previews, renditions, import staging, backups (DATA_DIR)
+
+      # ── Backups (database; the media are yours to copy from dataDirectory) ──
+      # backup.intervalHours   = 24;     # a backup every N hours into <dataDirectory>/backups; 0 = scheduled backups off
+      # backup.keep            = 7;      # how many scheduled backups to keep
+      # backup.beforeMigration = true;   # back up before applying migrations (if that fails, nothing is migrated)
+
+      # ── First start ─────────────────────────────────────────────────────
       # adminBootstrapUsername = "admin";
-      # adminBootstrapPassword = "replace-with-a-real-password";  # WARNING: ends up in Nix store
+      # adminBootstrapPassword = "replace-with-a-real-password";   # WARNING: ends up in the Nix store. Empty (default): a
+      #                                                            # random password is generated and printed to the service log.
+      #                                                            # Better: ADMIN_BOOTSTRAP_PASSWORD in environmentFile.
 
-      # ── Gogs webhook (see webhook setup above) ─────────────────────────
-      webhook.enable     = true;
-      webhook.port       = 9001;
+      # ── Logging ─────────────────────────────────────────────────────────
+      # logLevel  = "INFO";    # DEBUG, INFO, WARNING, ERROR
+      # logFormat = "text";    # "json": one JSON object per line (app and gunicorn), for log collectors
 
-      # Recommended: keep the secret out of the Nix store.
-      webhook.secretFile = "/run/secrets/displayhive-staging-webhook-secret";
-      # For a quick test without secrets management you can use inline secret:
-      # webhook.secret = "my-shared-secret";  # WARNING: ends up in Nix store
-
-      # Listen only on loopback when nginx proxies (set webhook.port open
-      # in the firewall otherwise).
-      # webhook.listenAddress = "127.0.0.1";
+      # ── Anything else ───────────────────────────────────────────────────
+      # environmentFile = "/run/secrets/displayhive-staging.env";   # NAME=value lines (no `export`), read by systemd and by the
+      #                                                             # displayhive-staging command: SECRET_KEY, passwords, DB credentials …
+      # extraEnv = {                                                # more environment variables for the process; names and defaults in
+      #   OUTBOUND_ALLOW_PRIVATE = "0";                             # docs/user/installation.md → Configuration
+      #   LOGIN_RATE_LIMIT_PER_IP = "20";
+      #   SCREEN_CSP = "report";
+      # };
     };
 
     # Second instance example
     production = {
-      port            = 5002;
-      sourceDirectory = "/opt/displayhive/production";
-      gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
-      gitBranch       = "main";
-      secretKeyFile   = "/run/secrets/displayhive-production-secret-key";
-      publicUrl          = "https://example.com";
-      # No webhook for production — deploy manually via nixos-rebuild switch.
+      port          = 5002;
+      secretKeyFile = "/run/secrets/displayhive-production-secret-key";
+      publicUrl     = "https://example.com";
+      # A different package for this instance, e.g. a pinned release next to a newer staging:
+      # package = inputs.displayhive-stable.packages.${pkgs.stdenv.hostPlatform.system}.default;
     };
 
   };
 
   # Pin the PostgreSQL major version to prevent unexpected upgrades.
   services.postgresql.package = pkgs.postgresql_16;
-
-  # ── Firewall: open the webhook port if not proxied via nginx ───────────
-  # networking.firewall.allowedTCPPorts = [ 9001 ];
 
   # ── Nginx reverse proxy (optional) ─────────────────────────────────────
   # services.nginx = {
@@ -191,7 +152,14 @@
   #       '';
   #     };
   #     locations."/dist/screen/" = {
-  #       alias       = "/opt/displayhive/staging/dist/screen/";
+  #       alias       = "${config.services.displayhive.instances.staging.package}/share/displayhive/dist/screen/";
+  #       tryFiles    = "$uri @displayhive";
+  #       extraConfig = ''
+  #         add_header Cache-Control "public, max-age=2592000, immutable";
+  #       '';
+  #     };
+  #     locations."/screen/assets/" = {
+  #       alias       = "${config.services.displayhive.instances.staging.package}/share/displayhive/frontends/screen/assets/";
   #       tryFiles    = "$uri @displayhive";
   #       extraConfig = ''
   #         add_header Cache-Control "public, max-age=2592000, immutable";
@@ -202,10 +170,6 @@
   #       proxyWebsockets = true;
   #     };
   #
-  #     # Route Gogs webhook to the listener (keeps port 9001 off the internet).
-  #     locations."/hooks/displayhive-staging/" = {
-  #       proxyPass = "http://127.0.0.1:9001/";
-  #     };
   #   };
   # };
 }

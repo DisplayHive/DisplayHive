@@ -157,3 +157,27 @@ jobs:
 
       - name: Compare with the committed ones
         run: git diff --exit-code -- requirements.txt requirements-dev.txt
+
+  nix-package:
+    # The NixOS module runs the Nix package: it must build, and its pinned hashes (nix/hashes.nix) must
+    # match the lock files. Fails with a hint when a lock file changed without `nix run .#update-hashes`.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Evaluate the flake
+        run: nix flake check --no-build
+
+      - name: Build the package
+        run: |
+          nix build .#default -L || {
+            echo "::error::The Nix package did not build. If a package-lock.json or requirements.txt changed, run 'nix run .#update-hashes' and commit nix/hashes.nix."
+            exit 1
+          }
+
+      - name: Smoke test the built package
+        run: |
+          DATABASE_URL=sqlite:///$RUNNER_TEMP/nix-smoke.db DATA_DIR=$RUNNER_TEMP/nix-smoke \
+            SECRET_KEY=smoke-test result/bin/displayhive-python -m flask dh migrate

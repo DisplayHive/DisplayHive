@@ -20,7 +20,7 @@ def _read(rel):
 
 
 def test_nix_defines_no_python_package_list():
-    for rel in ('shell.nix', 'nix/module.nix'):
+    for rel in ('shell.nix', 'nix/module.nix', 'nix/package.nix'):
         assert 'withPackages' not in _read(rel), \
             f'{rel} builds its own Python package set — packages come from the lock files'
 
@@ -29,11 +29,30 @@ def test_dev_shell_syncs_the_dev_lock():
     assert re.search(r'uv pip sync .*requirements-dev\.txt', _read('shell.nix'))
 
 
-def test_module_syncs_the_runtime_lock():
-    module = _read('nix/module.nix')
-    assert re.search(r'uv\S* pip sync', module)
-    assert '/requirements.txt' in module
-    assert 'requirements-dev' not in module, 'production must not install test/docs tools'
+def test_nix_package_is_built_from_the_runtime_lock():
+    package = _read('nix/package.nix')
+    assert 'pip download' in package and '../requirements.txt' in package
+    assert 'requirements-dev' not in package, 'production must not install test/docs tools'
+
+
+def test_nix_package_hashes_are_complete():
+    hashes = _read('nix/hashes.nix')
+    for key in ('admin', 'screen', 'x86_64-linux', 'aarch64-linux'):
+        assert re.search(rf'{re.escape(key)}\s*=\s*"sha256-[A-Za-z0-9+/]{{43}}=";', hashes), f'nix/hashes.nix: no hash for {key}'
+    assert 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' not in hashes, 'a placeholder hash is left: run nix run .#update-hashes'
+
+
+def test_npm_locks_name_where_every_package_comes_from():
+    """Nix fetches the npm packages itself: every entry needs `resolved` and `integrity`
+    (scripts/fill-npm-lock-integrity.py adds them where npm left them out)."""
+    import json
+    for app in ('admin', 'screen'):
+        lock = json.loads(_read(f'frontends/{app}/package-lock.json'))
+        incomplete = [
+            key for key, entry in lock['packages'].items()
+            if key and 'node_modules/' in key and not entry.get('link') and not (entry.get('resolved') and entry.get('integrity'))
+        ]
+        assert not incomplete, f'frontends/{app}/package-lock.json: {len(incomplete)} entries without resolved/integrity, e.g. {incomplete[:3]}'
 
 
 def test_runtime_lock_has_no_dev_tools():

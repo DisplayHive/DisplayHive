@@ -6,8 +6,21 @@
 #   • its own system user / group (displayhive-<name>)
 #   • its own PostgreSQL database and role (displayhive-<name>)
 #   • its own TCP port
-#   • optionally: a Gogs/GitHub push webhook listener (displayhive-<name>-webhook.service)
 #   • a `displayhive-<name>` command for maintenance (`flask dh …`, application/cli.py)
+#
+# The server runs a Nix PACKAGE (nix/package.nix: the frontends, the locked Python packages and the
+# application, all built by Nix) — nothing is cloned, installed or built on the host. Use it through
+# the flake:
+#
+#   inputs.displayhive.url = "github:DisplayHive/DisplayHive";          # or a tag / branch
+#   …
+#   imports = [ inputs.displayhive.nixosModules.default ];
+#   services.displayhive.instances.main = { port = 5000; secretKeyFile = "/run/secrets/…"; … };
+#
+# Updating is a flake update and `nixos-rebuild switch`: the new package is built (or fetched from
+# a binary cache) first, then the service restarts on it, and the previous generation is one
+# rollback away. Without flakes, set `services.displayhive.package` to a package you built from
+# nix/package.nix.
 #
 # Instance names must be valid in Linux usernames and PostgreSQL role names
 # (letters, digits, dashes — no spaces or underscores at the start).
@@ -16,26 +29,6 @@
 # after a database backup, and if one fails the app does not start — see
 # application/migration.py. The backups (and scheduled ones) are written to
 # <dataDirectory>/backups; see the `backup` options below.
-#
-# ── Webhook-triggered deployment ─────────────────────────────────────────────
-#
-# Enable per-instance with:
-#   services.displayhive.instances.myinstance.webhook.enable = true;
-#   services.displayhive.instances.myinstance.webhook.port   = 9001;
-#   services.displayhive.instances.myinstance.webhook.secretFile =
-#     config.age.secrets."displayhive-myinstance-webhook-secret".path;
-#
-# On receiving a valid push POST from Gogs or GitHub (the listener accepts
-# either's signature header — X-Gogs-Signature or X-Hub-Signature-256, both
-# HMAC-SHA256 over the raw body with the same shared secret) it runs a fast
-# redeploy:
-#   1. git fetch + reset --hard (no re-clone)
-#   2. npm ci  — only if package-lock.json changed since last deploy
-#   3. npm run build — only if the frontend source tree changed
-#   4. systemctl restart displayhive-<name>.service
-#
-# This means a Python-only push deploys in ~5 s; a full JS rebuild takes the
-# same time as before but is only triggered when actually needed.
 #
 # ── Socket.IO / WebSocket forwarding hint (nginx, out of scope) ──────────────
 #
@@ -70,423 +63,50 @@ with lib;
 let
   cfg = config.services.displayhive;
 
-  # ── Boot-time deploy script (initial clone + full build) ─────────────────
-  # Runs once at boot via a one-shot systemd service. Always does a full
-  # npm ci + npm run build to guarantee a clean initial state.
-  deployScript = pkgs.writeShellApplication {
-    name           = "displayhive-deploy";
-    runtimeInputs  = with pkgs; [ git nodejs openssh ];
-    text = ''
-      instance="$1"
-      source_dir="$2"
-      git_url="$3"
-      git_branch="$4"
-      ssh_key_file="$5"   # empty string → HTTPS or public repo
-      service_user="displayhive-$instance"
-
-      export HOME=/root
-      export npm_config_cache=/root/.npm
-
-      # Always run non-interactively over SSH (accept new host keys, never
-      # prompt) so anonymous/keyless ssh:// checkouts don't hang waiting for
-      # a TTY that a systemd service doesn't have. Only add -i when a key
-      # was actually configured. Harmless (unused) for HTTPS repos.
-      ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-      if [ -n "$ssh_key_file" ]; then
-        if [ ! -r "$ssh_key_file" ]; then
-          echo "[displayhive-deploy/$instance] ERROR: SSH key '$ssh_key_file' not readable" >&2
-          exit 1
-        fi
-        ssh_opts="-i $ssh_key_file $ssh_opts"
-      fi
-      export GIT_SSH_COMMAND="ssh $ssh_opts"
-
-      export GIT_CONFIG_COUNT=1
-      export GIT_CONFIG_KEY_0="safe.directory"
-      export GIT_CONFIG_VALUE_0="$source_dir"
-
-      if [ -d "$source_dir/.git" ]; then
-        echo "[displayhive-deploy/$instance] Pulling $git_branch from origin"
-        # gitRepository may have changed since the initial clone (repo moved,
-        # renamed, migrated hosts) — keep origin pointed at the configured URL.
-        git -C "$source_dir" remote set-url origin "$git_url"
-        # The initial clone below is single-branch, so origin's fetch refspec
-        # only tracks the branch it was cloned with. If gitBranch was since
-        # changed, that branch isn't fetchable yet — add it explicitly so a
-        # branch switch on redeploy doesn't fail with a pathspec error.
-        git -C "$source_dir" remote set-branches --add origin "$git_branch"
-        git -C "$source_dir" fetch --prune --depth 1 origin "$git_branch"
-        git -C "$source_dir" checkout "$git_branch"
-        git -C "$source_dir" reset --hard "origin/$git_branch"
-      else
-        echo "[displayhive-deploy/$instance] Cloning $git_url ($git_branch)"
-        mkdir -p "$(dirname "$source_dir")"
-        git clone --branch "$git_branch" --depth 1 "$git_url" "$source_dir"
-      fi
-
-      # Extend PATH so npm postinstall scripts can find sh, python3, etc.
-      export PATH="$PATH:/run/current-system/sw/bin"
-
-      cd "$source_dir/frontends/screen"
-      npm ci --prefer-offline
-      npm run build
-
-      cd "$source_dir/frontends/admin"
-      npm ci --prefer-offline
-      npm run build
-
-      chown -R "$service_user:$service_user" "$source_dir"
-      echo "[displayhive-deploy/$instance] Done."
-    '';
+  removedOption = mkOption {
+    type    = types.nullOr types.anything;
+    default = null;
+    visible = false;
+    description = "Removed: the module no longer builds on the host.";
   };
-
-  # ── Webhook-triggered fast redeploy script ────────────────────────────────
-  # Called by the webhook listener on each Gogs push. Uses git tree-object
-  # hashes to skip npm ci/build steps when the frontend sources haven't
-  # changed — a Python-only push typically completes in ~5 s.
-  webhookDeployScript = pkgs.writeShellApplication {
-    name          = "displayhive-webhook-deploy";
-    runtimeInputs = with pkgs; [ git nodejs openssh systemd ];
-    text = ''
-      instance="$1"
-      source_dir="$2"
-      git_url="$3"
-      git_branch="$4"
-      ssh_key_file="$5"
-      service_user="displayhive-$instance"
-
-      export HOME=/root
-      export npm_config_cache=/root/.npm
-
-      # See the boot-time deploy script for why this is unconditional: it
-      # keeps anonymous/keyless ssh:// checkouts from hanging on a host-key
-      # prompt with no TTY to answer it.
-      ssh_opts="-o StrictHostKeyChecking=accept-new -o BatchMode=yes"
-      if [ -n "$ssh_key_file" ]; then
-        ssh_opts="-i $ssh_key_file $ssh_opts"
-      fi
-      export GIT_SSH_COMMAND="ssh $ssh_opts"
-
-      export GIT_CONFIG_COUNT=1
-      export GIT_CONFIG_KEY_0="safe.directory"
-      export GIT_CONFIG_VALUE_0="$source_dir"
-
-      if [ ! -d "$source_dir/.git" ]; then
-        echo "[displayhive-webhook/$instance] ERROR: $source_dir is not a git repo — run the boot deploy first" >&2
-        exit 1
-      fi
-
-      # gitRepository may have changed since the initial clone — keep origin
-      # pointed at the configured URL.
-      git -C "$source_dir" remote set-url origin "$git_url"
-
-      # Snapshot frontend tree hashes before pulling so we can skip
-      # expensive npm steps when nothing relevant changed.
-      prev_screen_lock=$(git -C "$source_dir" rev-parse "HEAD:frontends/screen/package-lock.json" 2>/dev/null || echo "none")
-      prev_admin_lock=$(git -C "$source_dir"  rev-parse "HEAD:frontends/admin/package-lock.json" 2>/dev/null || echo "none")
-      prev_screen_tree=$(git -C "$source_dir" rev-parse "HEAD:frontends/screen" 2>/dev/null || echo "none")
-      prev_admin_tree=$(git -C "$source_dir"  rev-parse "HEAD:frontends/admin" 2>/dev/null || echo "none")
-
-      echo "[displayhive-webhook/$instance] Fetching $git_branch"
-      # See the boot-time deploy script for why this is needed: the initial
-      # clone is single-branch, so a branch not present at clone time won't
-      # be fetchable until explicitly added here.
-      git -C "$source_dir" remote set-branches --add origin "$git_branch"
-      git -C "$source_dir" fetch --prune --depth 1 origin "$git_branch"
-      git -C "$source_dir" checkout "$git_branch"
-      git -C "$source_dir" reset --hard "origin/$git_branch"
-
-      new_screen_lock=$(git -C "$source_dir" rev-parse "HEAD:frontends/screen/package-lock.json" 2>/dev/null || echo "none")
-      new_admin_lock=$(git -C "$source_dir"  rev-parse "HEAD:frontends/admin/package-lock.json" 2>/dev/null || echo "none")
-      new_screen_tree=$(git -C "$source_dir" rev-parse "HEAD:frontends/screen" 2>/dev/null || echo "none")
-      new_admin_tree=$(git -C "$source_dir"  rev-parse "HEAD:frontends/admin" 2>/dev/null || echo "none")
-
-      export PATH="$PATH:/run/current-system/sw/bin"
-
-      # ── screen-client ──────────────────────────────────────────────────────
-      if [ "$prev_screen_lock" != "$new_screen_lock" ]; then
-        echo "[displayhive-webhook/$instance] screen deps changed — npm ci"
-        cd "$source_dir/frontends/screen" && npm ci --prefer-offline
-      fi
-      if [ "$prev_screen_tree" != "$new_screen_tree" ]; then
-        echo "[displayhive-webhook/$instance] screen source changed — npm run build"
-        cd "$source_dir/frontends/screen" && npm run build
-      else
-        echo "[displayhive-webhook/$instance] screen: no changes, skipping build"
-      fi
-
-      # ── admin ──────────────────────────────────────────────────────────
-      if [ "$prev_admin_lock" != "$new_admin_lock" ]; then
-        echo "[displayhive-webhook/$instance] admin deps changed — npm ci"
-        cd "$source_dir/frontends/admin" && npm ci --prefer-offline
-      fi
-      if [ "$prev_admin_tree" != "$new_admin_tree" ]; then
-        echo "[displayhive-webhook/$instance] admin source changed — npm run build"
-        cd "$source_dir/frontends/admin" && npm run build
-      else
-        echo "[displayhive-webhook/$instance] admin: no changes, skipping build"
-      fi
-
-      chown -R "$service_user:$service_user" "$source_dir"
-
-      echo "[displayhive-webhook/$instance] Restarting app service"
-      systemctl restart "displayhive-$instance.service"
-      echo "[displayhive-webhook/$instance] Deploy complete."
-    '';
-  };
-
-  # ── Webhook HTTP listener (Python stdlib — no extra dependencies) ─────────
-  # Validates the HMAC-SHA256 signature (Gogs' X-Gogs-Signature — raw hex —
-  # or GitHub's X-Hub-Signature-256 — "sha256=" + hex; whichever header the
-  # request actually carries), checks the pushed branch, then spawns
-  # webhookDeployScript in a background thread.  A deploy-lock prevents
-  # concurrent deploys when pushes arrive faster than the build completes.
-  #
-  # Secret resolution order (evaluated at runtime, not at Nix evaluation time):
-  #   1. DISPLAYHIVE_WEBHOOK_SECRET_FILE env var — path to a plain-text file
-  #      containing just the secret (recommended; use with agenix / sops-nix).
-  #   2. DISPLAYHIVE_WEBHOOK_SECRET env var — inline secret (stored in the
-  #      Nix store; acceptable for staging, not recommended for production).
-  #   3. Neither set — requests are accepted without signature validation
-  #      (only appropriate for purely internal/firewalled staging networks).
-  webhookServerPy = pkgs.writeText "displayhive-webhook-server.py" ''
-    #!/usr/bin/env python3
-    import hashlib, hmac, http.server, json, os, subprocess, sys, threading, urllib.parse
-
-    INSTANCE    = sys.argv[1]
-    PORT        = int(sys.argv[2])
-    LISTEN      = sys.argv[3]          # e.g. "0.0.0.0" or "127.0.0.1"
-    BRANCH      = sys.argv[4]          # branch to watch; "" = any branch
-    DEPLOY_BIN  = sys.argv[5]
-    SOURCE_DIR  = sys.argv[6]
-    GIT_URL     = sys.argv[7]
-    GIT_BRANCH  = sys.argv[8]
-    SSH_KEY     = sys.argv[9] if len(sys.argv) > 9 else ""
-
-    # Resolve webhook secret at runtime so secretFile works with agenix/sops-nix.
-    _secret_file = os.environ.get("DISPLAYHIVE_WEBHOOK_SECRET_FILE", "")
-    if _secret_file:
-        with open(_secret_file) as _f:
-            SECRET = _f.read().strip().encode()
-    else:
-        SECRET = os.environ.get("DISPLAYHIVE_WEBHOOK_SECRET", "").encode()
-
-    if not SECRET:
-        print(f"[webhook/{INSTANCE}] WARNING: no secret configured — requests accepted without validation", flush=True)
-
-    _lock = threading.Lock()
-
-    def _run_deploy():
-        if not _lock.acquire(blocking=False):
-            print(f"[webhook/{INSTANCE}] deploy already in progress, skipping", flush=True)
-            return
-        try:
-            subprocess.run(
-                [DEPLOY_BIN, INSTANCE, SOURCE_DIR, GIT_URL, GIT_BRANCH, SSH_KEY],
-                check=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            print(f"[webhook/{INSTANCE}] deploy failed: {exc}", flush=True)
-        finally:
-            _lock.release()
-
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):
-            print(f"[webhook/{INSTANCE}] " + fmt % args, flush=True)
-
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"displayhive webhook ready\n")
-
-        def _read_body(self):
-            # http.server never decodes Transfer-Encoding: chunked on its
-            # own — only Content-Length. A reverse proxy in front of this
-            # listener (nginx with proxy_request_buffering off, for example)
-            # can relay the request chunked instead, which would otherwise
-            # silently read 0 bytes here and fail JSON parsing below with no
-            # clue why. Decode it ourselves when present.
-            if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
-                chunks = []
-                while True:
-                    size_line = self.rfile.readline().strip()
-                    if not size_line:
-                        continue
-                    size = int(size_line.split(b";")[0], 16)
-                    if size == 0:
-                        self.rfile.readline()  # final CRLF after the 0-size chunk
-                        break
-                    chunks.append(self.rfile.read(size))
-                    self.rfile.read(2)  # CRLF trailing each chunk's data
-                return b"".join(chunks)
-            length = int(self.headers.get("Content-Length", 0))
-            return self.rfile.read(length)
-
-        def do_POST(self):
-            body = self._read_body()
-
-            if SECRET:
-                # Gogs sends a raw hex HMAC-SHA256 in X-Gogs-Signature; GitHub
-                # sends the same digest in X-Hub-Signature-256, prefixed with
-                # "sha256=". Accept whichever header is actually present so
-                # this one listener works unmodified against either host.
-                expect = hmac.new(SECRET, body, hashlib.sha256).hexdigest()
-                gogs_sig   = self.headers.get("X-Gogs-Signature", "")
-                github_sig = self.headers.get("X-Hub-Signature-256", "")
-                if github_sig.startswith("sha256="):
-                    github_sig = github_sig[len("sha256="):]
-                sig = gogs_sig or github_sig
-                if not sig or not hmac.compare_digest(sig, expect):
-                    self.send_response(403)
-                    self.end_headers()
-                    self.wfile.write(b"invalid signature\n")
-                    print(f"[webhook/{INSTANCE}] rejected: bad signature", flush=True)
-                    return
-
-            try:
-                content_type = self.headers.get("Content-Type", "")
-                if content_type.startswith("application/x-www-form-urlencoded"):
-                    # GitHub's webhook config offers a content-type choice —
-                    # "application/x-www-form-urlencoded" sends the JSON
-                    # payload URL-encoded inside a `payload=` form field
-                    # instead of as the raw body (Gogs always sends raw
-                    # JSON, so this branch is GitHub-only). The signature
-                    # above is still computed over the raw body either way,
-                    # since that's what the sender actually signed.
-                    form = urllib.parse.parse_qs(body.decode("utf-8"))
-                    raw_payload = form.get("payload", [""])[0]
-                    payload = json.loads(raw_payload)
-                else:
-                    payload = json.loads(body)
-            except (ValueError, UnicodeDecodeError) as exc:
-                self.send_response(400)
-                self.end_headers()
-                print(
-                    f"[webhook/{INSTANCE}] rejected: invalid JSON body "
-                    f"(content-type={content_type!r}, {len(body)} bytes): {exc}",
-                    flush=True,
-                )
-                return
-
-            ref = payload.get("ref", "")
-            watch = BRANCH or GIT_BRANCH
-            print(f"[webhook/{INSTANCE}] ref={ref!r} watch={watch!r}", flush=True)
-            if ref != f"refs/heads/{watch}":
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"ignored: wrong branch\n")
-                return
-
-            self.send_response(202)
-            self.end_headers()
-            self.wfile.write(b"deploy triggered\n")
-            threading.Thread(target=_run_deploy, daemon=True).start()
-
-    http.server.HTTPServer((LISTEN, PORT), _Handler).serve_forever()
+  removedOptionNames = [ "sourceDirectory" "gitRepository" "gitBranch" "gitSshKeyFile" "pythonEnvDirectory" "webhook" ];
+  removedBuildOnHost = ''
+    The module no longer clones, installs or builds anything on the server: it runs the Nix package
+    of nix/package.nix. Use the flake (`inputs.displayhive.nixosModules.default`) or set
+    `services.displayhive.package`; updates are a flake update and `nixos-rebuild switch`. Remove
+    sourceDirectory, gitRepository, gitBranch, gitSshKeyFile, pythonEnvDirectory and webhook.*
+    from the instance. See the header of nix/module.nix.
   '';
 
-  # ── Deploy service builder (boot-time, one-shot) ──────────────────────────
-  mkDeployService = name: icfg: {
-    description = "Checkout and build displayhive source for instance '${name}'";
-    after       = [ "network-online.target" ];
-    wants       = [ "network-online.target" ];
-    environment = {
-      HOME             = "/root";
-      npm_config_cache = "/root/.npm";
-    };
-    serviceConfig = {
-      Type            = "oneshot";
-      RemainAfterExit = true;
-      ExecStart =
-        "${deployScript}/bin/displayhive-deploy"
-        + " ${name}"
-        + " ${icfg.sourceDirectory}"
-        + " ${icfg.gitRepository}"
-        + " ${icfg.gitBranch}"
-        + (if icfg.gitSshKeyFile == "" then " \"\"" else " ${icfg.gitSshKeyFile}");
-    };
-  };
-
-  # ── Webhook service builder ───────────────────────────────────────────────
-  mkWebhookService = name: icfg:
-    let wcfg = icfg.webhook; in {
-      description = "Gogs webhook listener for displayhive instance '${name}'";
-      after    = [ "network-online.target" "displayhive-${name}.service" ];
-      wants    = [ "network-online.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      # Secret injected via environment — either inline (Nix store) or from a
-      # runtime file (agenix / sops-nix).  The Python server reads both.
-      environment = optionalAttrs (wcfg.secret != "") {
-        DISPLAYHIVE_WEBHOOK_SECRET = wcfg.secret;
-      } // optionalAttrs (wcfg.secretFile != "") {
-        DISPLAYHIVE_WEBHOOK_SECRET_FILE = wcfg.secretFile;
-      };
-
-      serviceConfig = {
-        Type      = "simple";
-        # Runs as root: needs to read the SSH deploy key and call systemctl.
-        ExecStart = "${python}/bin/python3 ${webhookServerPy}"  # stdlib only
-          + " ${name}"
-          + " ${toString wcfg.port}"
-          + " ${wcfg.listenAddress}"
-          + (if wcfg.branch == "" then " \"\"" else " ${wcfg.branch}")
-          + " ${webhookDeployScript}/bin/displayhive-webhook-deploy"
-          + " ${icfg.sourceDirectory}"
-          + (if icfg.gitRepository == "" then " \"\"" else " ${icfg.gitRepository}")
-          + " ${icfg.gitBranch}"
-          + (if icfg.gitSshKeyFile == "" then " \"\"" else " ${icfg.gitSshKeyFile}");
-        Restart    = "on-failure";
-        RestartSec = "5s";
-        NoNewPrivileges = false;  # root needs to call systemctl
-      };
-    };
-
-  # ── Python ────────────────────────────────────────────────────────────────
-  # Only the interpreter comes from Nix: the version from .python-version (via
-  # nix/python.nix), same as the dev shell, CI and Docker image. The Python
-  # packages come from the lock file requirements.txt into a per-instance venv
-  # (see mkPythonSync) — the exact versions CI tests and the image ships.
-  python = import ./python.nix { inherit pkgs; };
-  # Native libraries some PyPI wheels expect on a regular Linux (e.g.
-  # psycopg2-binary needs libz); NixOS has no global /usr/lib.
-  wheelLibs = lib.makeLibraryPath [ pkgs.zlib pkgs.stdenv.cc.cc.lib ];
-  venvOf = icfg: "${icfg.pythonEnvDirectory}/venv";
-
-  # ExecStartPre: bring the instance's venv in line with requirements.txt.
-  # A no-op (no network) when neither the lock file nor the interpreter
-  # changed since the last successful sync — so a reboot without internet
-  # still starts. Rebuilds the venv when the Nix interpreter changed.
-  mkPythonSync = name: icfg: pkgs.writeShellScript "displayhive-${name}-python-sync" ''
-    set -eu
-    venv=${escapeShellArg (venvOf icfg)}
-    lock=${escapeShellArg "${icfg.sourceDirectory}/requirements.txt"}
-    want="${python} $(${pkgs.coreutils}/bin/sha256sum "$lock" | ${pkgs.coreutils}/bin/cut -d' ' -f1)"
-    if [ "$(cat "$venv/.synced" 2>/dev/null)" = "$want" ] && [ -x "$venv/bin/gunicorn" ]; then
-      exit 0
-    fi
-    if [ "$(cat "$venv/.interpreter" 2>/dev/null)" != "${python}" ]; then
-      rm -rf "$venv"
-      ${pkgs.uv}/bin/uv venv --quiet --python ${python}/bin/python3 "$venv"
-      echo "${python}" > "$venv/.interpreter"
-    fi
-    echo "Syncing Python packages from $lock..."
-    ${pkgs.uv}/bin/uv pip sync --python "$venv/bin/python" "$lock"
-    echo "$want" > "$venv/.synced"
-  '';
+  # Native libraries are part of the package wrapper (nix/package.nix); nothing to set up here.
+  appOf = icfg: "${icfg.package}/${icfg.package.passthru.appDir}";
+  pythonOf = icfg: "${icfg.package}/bin/displayhive-python";
 
   # ── Per-instance option schema ────────────────────────────────────────────
   instanceOpts = { name, ... }: {
     options = {
+      # Options of the build-on-the-host module, kept only to say so when one is still set
+      # (mkRemovedOptionModule does not work inside a submodule). See the assertions below.
+      sourceDirectory    = removedOption;
+      gitRepository      = removedOption;
+      gitBranch          = removedOption;
+      gitSshKeyFile      = removedOption;
+      pythonEnvDirectory = removedOption;
+      webhook            = removedOption;
+
       port = mkOption {
         type        = types.port;
         description = "TCP port this displayhive instance listens on.";
       };
 
-      sourceDirectory = mkOption {
-        type        = types.path;
+      package = mkOption {
+        type        = types.package;
+        default     = cfg.package;
+        defaultText = literalExpression "config.services.displayhive.package";
         description = ''
-          Absolute path to the displayhive source tree on the target host.
+          The DisplayHive package this instance runs (see nix/package.nix). Defaults to the
+          module-wide {option}`services.displayhive.package`; set it per instance to run, say, a
+          staging build next to the production one.
         '';
       };
 
@@ -494,52 +114,10 @@ let
         type        = types.path;
         default     = "/var/lib/displayhive/${name}";
         description = ''
-          Where this instance keeps uploaded media, previews, renditions and
-          import staging (DATA_DIR, see application/paths.py) — outside the
-          source tree, so a redeploy or re-clone never touches it. Created
-          with mode 0750 for the instance's user. Instances set up before
-          this option kept their media in <sourceDirectory>/static/media*;
-          the admin UI shows how to move it.
-        '';
-      };
-
-      pythonEnvDirectory = mkOption {
-        type        = types.path;
-        default     = "/var/cache/displayhive/${name}";
-        description = ''
-          Where this instance's Python packages live: a venv synced from the
-          source tree's requirements.txt (the lock file) before every start,
-          plus uv's download cache. Regenerable — not part of a backup. The
-          first start needs internet access to download the packages; later
-          starts only when requirements.txt changed.
-        '';
-      };
-
-      gitRepository = mkOption {
-        type    = types.str;
-        default = "";
-        description = ''
-          Git repository URL to clone/pull on boot.  Leave empty to manage
-          the source tree yourself (e.g. via rsync).
-        '';
-      };
-
-      gitBranch = mkOption {
-        type    = types.str;
-        default = "main";
-        description = "Branch to check out.  Only used when gitRepository is set.";
-      };
-
-      gitSshKeyFile = mkOption {
-        type    = types.str;
-        default = "";
-        description = ''
-          Absolute path to an SSH private key for private repositories.
-          Leave empty for public HTTPS repositories, or for an ssh:// repository
-          the server exposes for anonymous/keyless read access — the deploy
-          scripts always pass BatchMode + accept-new host-key options, so a
-          keyless ssh:// checkout won't hang waiting for a host-key prompt.
-          Manage with agenix or sops-nix (owner: root, mode: 0400).
+          Where this instance keeps uploaded media, previews, renditions, import staging and
+          backups (DATA_DIR, see application/paths.py). Created with mode 0750 for the instance's
+          user. Updates never touch it. Back it up (the media; the database has its own
+          backups, see {option}`backup`).
         '';
       };
 
@@ -701,71 +279,6 @@ let
         default = {};
         description = "Additional environment variables passed to the displayhive process.";
       };
-
-      # ── Webhook sub-options ──────────────────────────────────────────────
-      webhook = {
-        enable = mkOption {
-          type    = types.bool;
-          default = false;
-          description = ''
-            Enable a Gogs webhook listener for this instance.
-            Creates systemd service displayhive-<name>-webhook.service.
-          '';
-        };
-
-        port = mkOption {
-          type    = types.port;
-          default = 9000;
-          description = "TCP port the webhook listener binds to.";
-        };
-
-        listenAddress = mkOption {
-          type    = types.str;
-          default = "0.0.0.0";
-          description = ''
-            Address the webhook listener binds to.
-            Use "127.0.0.1" if nginx terminates TLS and proxies locally.
-          '';
-        };
-
-        branch = mkOption {
-          type    = types.str;
-          default = "";
-          description = ''
-            Only trigger deploys for pushes to this branch.
-            Defaults to the instance's gitBranch when left empty.
-          '';
-        };
-
-        secret = mkOption {
-          type    = types.str;
-          default = "";
-          description = ''
-            HMAC-SHA256 secret shared with Gogs (Gogs → repo → Settings →
-            Webhooks → Secret).
-            WARNING: this value ends up in the Nix store (world-readable).
-            Use secretFile for production deployments.
-          '';
-        };
-
-        secretFile = mkOption {
-          type    = types.str;
-          default = "";
-          description = ''
-            Path to a plain-text file containing just the HMAC secret.
-            Takes precedence over the inline secret option.
-            Recommended approach: manage with agenix or sops-nix.
-
-              age.secrets."displayhive-staging-webhook-secret" = {
-                file  = ./secrets/displayhive-staging-webhook-secret.age;
-                owner = "root";
-                mode  = "0400";
-              };
-              services.displayhive.instances.staging.webhook.secretFile =
-                config.age.secrets."displayhive-staging-webhook-secret".path;
-          '';
-        };
-      };
     };
   };
 
@@ -782,13 +295,7 @@ let
       LOG_FORMAT               = icfg.logFormat;
       TRUSTED_PROXY_COUNT      = toString icfg.trustedProxyCount;
       DATA_DIR                 = icfg.dataDirectory;
-      LD_LIBRARY_PATH          = wheelLibs;
-      UV_CACHE_DIR             = "${icfg.pythonEnvDirectory}/uv-cache";
-      UV_PYTHON_DOWNLOADS      = "never";
       DISPLAYHIVE_DEPLOYMENT   = "nixos";
-      FLASK_APP                = "app";
-      # The source tree is read-only for the service; Python would try to write .pyc files there.
-      PYTHONDONTWRITEBYTECODE  = "1";
       BACKUP_INTERVAL_HOURS    = toString icfg.backup.intervalHours;
       BACKUP_KEEP              = toString icfg.backup.keep;
       MIGRATION_BACKUP         = if icfg.backup.beforeMigration then "on" else "off";
@@ -802,7 +309,7 @@ let
     } // icfg.extraEnv;
 
   # `displayhive-<name> <command>` = `flask dh <command>` as the instance's
-  # user, in its source tree, with its environment. Run it as root, e.g.
+  # user, in the package's application directory, with its environment. Run it as root, e.g.
   #   displayhive-main check-config
   #   displayhive-main reset-password admin --activate
   mkCli = name: icfg: pkgs.writeShellScriptBin "displayhive-${name}" ''
@@ -811,7 +318,7 @@ let
       echo "displayhive-${name}: run as root — it switches to the user displayhive-${name}" >&2
       exit 1
     fi
-    cd ${escapeShellArg icfg.sourceDirectory}
+    cd ${escapeShellArg (appOf icfg)}
     ${optionalString (icfg.environmentFile != null) ''
     # The service's EnvironmentFile (NAME=value lines), for the command as well.
     set -a
@@ -826,19 +333,13 @@ let
       ${concatStringsSep " " (mapAttrsToList (k: v: escapeShellArg "${k}=${v}")
           # LOG_LEVEL: the CLI's own quieter default (WARNING) reads better.
           (removeAttrs (mkServiceEnv name icfg) [ "LOG_LEVEL" "FLASK_PORT" ]))} \
-      FLASK_APP=app ${venvOf icfg}/bin/flask dh "$@"
+      ${pythonOf icfg} -m flask dh "$@"
   '';
 
-  mkService = name: icfg:
-    let hasGit = icfg.gitRepository != ""; in {
+  mkService = name: icfg: {
     description = "DisplayHive instance '${name}'";
-    # network-online: the first start (and one after a lock file change)
-    # downloads Python packages, see mkPythonSync.
-    after    = [ "network-online.target" "postgresql.service" ]
-               ++ optional hasGit "displayhive-${name}-deploy.service";
-    wants    = [ "network-online.target" ];
-    requires = [ "postgresql.service" ]
-               ++ optional hasGit "displayhive-${name}-deploy.service";
+    after    = [ "network.target" "postgresql.service" ];
+    requires = [ "postgresql.service" ];
     wantedBy = [ "multi-user.target" ];
 
     environment = mkServiceEnv name icfg;
@@ -856,11 +357,11 @@ let
       Type             = "simple";
       User             = "displayhive-${name}";
       Group            = "displayhive-${name}";
-      WorkingDirectory = icfg.sourceDirectory;
+      WorkingDirectory = appOf icfg;
       # The migration backs up first and exits 78 if anything fails; the unit then
       # fails and (StartLimit* below) is not retried for ever.
-      ExecStartPre     = [ "${mkPythonSync name icfg}" "${venvOf icfg}/bin/flask dh migrate" ];
-      ExecStart = "${venvOf icfg}/bin/gunicorn"
+      ExecStartPre     = [ "${pythonOf icfg} -m flask dh migrate" ];
+      ExecStart = "${pythonOf icfg} -m gunicorn"
         + " --worker-class gthread"
         + " -w 1"
         + " --threads ${toString icfg.threads}"
@@ -868,7 +369,7 @@ let
         # gunicorn's control socket (gunicornc) is unused, and it wants to create a file
         # in a directory the sandbox keeps read-only.
         + " --no-control-socket"
-        + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${icfg.sourceDirectory}/gunicorn-logging.json"
+        + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${appOf icfg}/gunicorn-logging.json"
         + " app:app";
       Restart    = "on-failure";
       RestartSec = "5s";
@@ -883,18 +384,17 @@ let
     // optionalAttrs (icfg.environmentFile != null) {
       EnvironmentFile = icfg.environmentFile;
     }
-    # Sandbox: the service reads the source tree and writes only its data and its
-    # Python environment (which includes uv's cache). It needs no capabilities and
-    # talks over unix sockets (PostgreSQL) and IP (clients, Pretalx, SSO) only.
+    # Sandbox: the application is read-only (it is in the Nix store); the service writes only its
+    # data directory. It needs no capabilities and talks over unix sockets (PostgreSQL) and IP
+    # (clients, Pretalx, SSO) only.
     // {
       NoNewPrivileges        = true;
       PrivateTmp             = true;
       PrivateDevices         = true;
       ProtectSystem          = "strict";
-      ReadWritePaths         = [ icfg.dataDirectory icfg.pythonEnvDirectory ];
-      # /home stays out of reach, unless the instance itself lives there.
-      ProtectHome            = if any (p: hasPrefix "/home" p || hasPrefix "/root" p)
-                                      [ icfg.sourceDirectory icfg.dataDirectory icfg.pythonEnvDirectory ]
+      ReadWritePaths         = [ icfg.dataDirectory ];
+      # /home stays out of reach, unless the data directory itself lives there.
+      ProtectHome            = if hasPrefix "/home" icfg.dataDirectory || hasPrefix "/root" icfg.dataDirectory
                                then "read-only" else true;
       ProtectKernelTunables  = true;
       ProtectKernelModules   = true;
@@ -916,15 +416,24 @@ let
 in {
   imports = [
     (mkRemovedOptionModule [ "services" "displayhive" "pythonEnv" ] ''
-      Python packages now come from the lock file requirements.txt into a
-      per-instance venv (services.displayhive.instances.<name>.pythonEnvDirectory),
-      so the server runs exactly the versions CI tests and the Docker image
-      ships. Add a dependency to requirements.in and run `npm run deps:lock`.
+      Python packages come from the lock file requirements.txt, built into the Nix package
+      (nix/package.nix), so the server runs exactly the versions CI tests and the Docker image
+      ships. Add a dependency to requirements.in, run `npm run deps:lock`, then
+      `nix run .#update-hashes`.
     '')
   ];
 
   # ── Module options ─────────────────────────────────────────────────────────
   options.services.displayhive = {
+
+    package = mkOption {
+      type        = types.package;
+      description = ''
+        The DisplayHive package (nix/package.nix) the instances run. The flake's
+        {file}`nixosModules.default` sets it to the flake's own package; without flakes, build one with
+        `pkgs.callPackage ./nix/package.nix { src = ./.; }`.
+      '';
+    };
 
     instances = mkOption {
       type        = types.attrsOf (types.submodule instanceOpts);
@@ -937,15 +446,9 @@ in {
       example = literalExpression ''
         {
           staging = {
-            port            = 5001;
-            sourceDirectory = "/opt/displayhive/staging";
-            gitRepository   = "https://gogs.example.com/yourorg/displayhive.git";
-            gitBranch       = "testing";
-            secretKey       = "change-me";
-            publicUrl = "https://staging.example.com";
-            webhook.enable     = true;
-            webhook.port       = 9001;
-            webhook.secretFile = "/run/secrets/displayhive-staging-webhook-secret";
+            port          = 5001;
+            secretKeyFile = "/run/secrets/displayhive-staging-secret-key";
+            publicUrl     = "https://staging.example.com";
           };
         }
       '';
@@ -956,6 +459,10 @@ in {
   config = mkIf (cfg.instances != {}) {
 
     assertions = concatLists (mapAttrsToList (name: icfg: [
+      {
+        assertion = all (o: icfg.${o} == null) removedOptionNames;
+        message   = "services.displayhive.instances.${name}: ${removedBuildOnHost}";
+      }
       {
         assertion = icfg.secretKey != null || icfg.secretKeyFile != null || icfg.environmentFile != null;
         message   = "services.displayhive.instances.${name}: set secretKeyFile (recommended), secretKey, "
@@ -985,26 +492,15 @@ in {
       }) cfg.instances;
 
     systemd.services =
-      # App services
       mapAttrs' (name: icfg:
         nameValuePair "displayhive-${name}" (mkService name icfg)
-      ) cfg.instances
-      //
-      # Boot-time deploy services (only when gitRepository is set)
-      mapAttrs' (name: icfg:
-        nameValuePair "displayhive-${name}-deploy" (mkDeployService name icfg)
-      ) (filterAttrs (_: icfg: icfg.gitRepository != "") cfg.instances)
-      //
-      # Webhook listener services (only when webhook.enable is true)
-      mapAttrs' (name: icfg:
-        nameValuePair "displayhive-${name}-webhook" (mkWebhookService name icfg)
-      ) (filterAttrs (_: icfg: icfg.webhook.enable) cfg.instances);
+      ) cfg.instances;
 
     users.users =
       mapAttrs' (name: icfg: nameValuePair "displayhive-${name}" {
         isSystemUser = true;
         group        = "displayhive-${name}";
-        home         = icfg.sourceDirectory;
+        home         = icfg.dataDirectory;
         createHome   = false;
         description  = "System user for displayhive instance '${name}'";
       }) cfg.instances;
@@ -1013,10 +509,6 @@ in {
     systemd.tmpfiles.rules =
       mapAttrsToList (name: icfg:
         "d ${icfg.dataDirectory} 0750 displayhive-${name} displayhive-${name} -"
-      ) cfg.instances
-      # Per-instance venv + uv cache (see pythonEnvDirectory).
-      ++ mapAttrsToList (name: icfg:
-        "d ${icfg.pythonEnvDirectory} 0750 displayhive-${name} displayhive-${name} -"
       ) cfg.instances;
 
     users.groups =

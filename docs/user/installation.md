@@ -46,27 +46,36 @@ npm run dev
 
 ### Production deployment: the DisplayHive NixOS module
 
-For a real deployment, import the module into your NixOS configuration and
-declare one or more instances. Each instance gets its own systemd service, its
-own system user/group, and its own PostgreSQL database and role — so a single
-host can run multiple independent DisplayHive instances (e.g. `staging` and
-`production`) side by side.
+For a real deployment, use the flake's NixOS module and declare one or more
+instances. Each instance gets its own systemd service, its own system
+user/group, and its own PostgreSQL database and role — so a single host can run
+multiple independent DisplayHive instances (e.g. `staging` and `production`)
+side by side.
+
+The module runs a **Nix package** that contains everything — both frontends, the
+locked Python packages and the application — built by Nix. Nothing is cloned,
+downloaded or built on the server when the service starts.
 
 ```nix
+# flake.nix of your system
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.displayhive.url = "github:DisplayHive/DisplayHive";    # pin with /v1.0.0 or ?ref=…
+
+  outputs = { nixpkgs, displayhive, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      modules = [ displayhive.nixosModules.default ./configuration.nix ];
+    };
+  };
+}
+```
+
+```nix
+# configuration.nix
 { config, pkgs, ... }:
 {
-  imports = [
-    /path/to/DisplayHive/nix/module.nix
-  ];
-
   services.displayhive.instances.production = {
-    port            = 5002;
-    sourceDirectory = "/opt/displayhive/production";
-
-    # Optional: let the module clone/pull and build the source tree for you.
-    # Omit gitRepository if you manage the source tree yourself (e.g. rsync).
-    gitRepository = "https://gogs.example.com/yourorg/displayhive.git";
-    gitBranch     = "main";
+    port = 5002;
 
     # The secret key stays out of the (world-readable) Nix store: a root-only file,
     # e.g. from agenix or sops-nix. (`secretKey = "…"` works for a quick test.)
@@ -86,6 +95,31 @@ Then apply it:
 sudo nixos-rebuild switch
 ```
 
+**Updating** is a flake update and a rebuild:
+
+```bash
+nix flake update displayhive
+sudo nixos-rebuild switch
+```
+
+The new package is built (or fetched from a binary cache) *before* anything is
+restarted; the service then restarts on it, runs the database migration (after a
+backup, see [Backup & restore](backup.md)) and the previous generation is one
+`sudo nixos-rebuild switch --rollback` away. The first build compiles the
+frontends on the machine that runs `nixos-rebuild`; build on a build host or in
+CI with a binary cache (cachix, attic, …) and the server only downloads the
+result. Without flakes, build the package from `nix/package.nix` yourself and set
+`services.displayhive.package` (see
+[`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)).
+
+!!! note "Coming from the old module"
+    Earlier versions cloned the repository and built it on the server
+    (`sourceDirectory`, `gitRepository`, `gitBranch`, `gitSshKeyFile`,
+    `pythonEnvDirectory`, and the Gogs/GitHub `webhook.*` auto-deploy). Those options
+    are gone; setting one stops the build with a message. Your data
+    (`dataDirectory`, the database) is untouched. To keep deploying on every push, let a CI job
+    run `nix flake update displayhive && nixos-rebuild switch` (or a timer on the server).
+
 What the module handles automatically for each declared instance:
 
 - A `displayhive-<name>.service` running the app under `gunicorn` (one
@@ -95,13 +129,9 @@ What the module handles automatically for each declared instance:
   database backup, and if it fails the app does not start (see
   [Backup & restore](backup.md)). `backup.intervalHours`, `backup.keep` and
   `backup.beforeMigration` configure the backups.
-- The Python packages: Nix provides the interpreter (the version in
-  `.python-version`), the packages come from the lock file `requirements.txt`
-  into a venv in `pythonEnvDirectory` (default
-  `/var/cache/displayhive/<name>`), synced before every start — the same
-  versions the Docker image ships. **The first start, and the first one
-  after `requirements.txt` changed, needs internet access** to download
-  them; other restarts don't. (The former `pythonEnv` option is gone.)
+- The Python packages: exactly the versions of the lock file `requirements.txt`
+  (the same ones CI tests and the Docker image ships), built into the package
+  from the hash-checked wheels. The server needs no internet access to start.
 - **Secrets outside the Nix store:** `secretKeyFile` (a root-only file, handed
   to the service as a systemd credential, so the service user needs no access
   to it) and `environmentFile` (further `NAME=value` lines, e.g. a bootstrap
@@ -111,40 +141,32 @@ What the module handles automatically for each declared instance:
 - **Listening on loopback only:** `bindAddress` defaults to `127.0.0.1`, which
   is what a reverse proxy on the same host needs. Set it to `"0.0.0.0"` (or an
   interface address) only if the proxy is on another machine — and then
-  restrict the port with the firewall. *(Earlier versions always listened on
-  `0.0.0.0`; if your proxy is not on the host, set `bindAddress` when you
-  update.)*
-- **A sandboxed service:** the unit gets a read-only file system except the
-  instance's `dataDirectory` and `pythonEnvDirectory`, no access to `/home`
-  (read-only if the instance lives there), no capabilities, only
-  `AF_UNIX`/`AF_INET`/`AF_INET6` sockets, a private `/tmp` and `/dev`, and
-  the kernel, control groups, clock and hostname are protected. `systemd-analyze
-  security displayhive-<name>` rates it 3.0 "OK" (an unsandboxed unit: 9.0
-  "UNSAFE"). The deploy and webhook units are not sandboxed — they have to run
-  git and npm and write the source tree.
+  restrict the port with the firewall.
+- **A sandboxed service:** the application is read-only (it is in the Nix
+  store) and the unit gets a read-only file system except the instance's
+  `dataDirectory`, no access to `/home` (read-only if the data directory lives
+  there), no capabilities, only `AF_UNIX`/`AF_INET`/`AF_INET6` sockets, a private
+  `/tmp` and `/dev`, and the kernel, control groups, clock and hostname are
+  protected. `systemd-analyze security displayhive-<name>` rates it 3.0 "OK"
+  (an unsandboxed unit: 9.0 "UNSAFE").
 - A dedicated system user/group and a PostgreSQL database + role, both named
   `displayhive-<name>`.
-- Optionally, a `displayhive-<name>-deploy` one-shot service that clones/pulls
-  the git repository and builds both frontends on boot, when `gitRepository`
-  is set.
-- Optionally, a `displayhive-<name>-webhook` listener
-  (`webhook.enable = true`) that redeploys automatically on a push from
-  either Gogs or GitHub — Python-only changes redeploy in seconds since it
-  skips `npm ci`/`npm run build` when the frontend source trees haven't
-  changed.
+- A `displayhive-<name>` command for maintenance (see [Command line](cli.md)).
+- **Several instances, several versions:** `services.displayhive.package` is the
+  default for all instances; set `instances.<name>.package` to run a different
+  build for one of them.
 
 You'll need a reverse proxy (e.g. nginx) in front of the instance to terminate
 TLS and forward WebSocket upgrades for Socket.IO. See the commented example in
 [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)
-for a full walkthrough covering SSH deploy keys for private repos, Gogs/GitHub
-webhook configuration, and an nginx `virtualHosts` block — including the
+for a full walkthrough of the flake setup and an nginx `virtualHosts` block — including the
 `client_max_body_size` setting required for media uploads. Once a reverse
 proxy is in front of the instance, also set `TRUSTED_PROXY_COUNT` (see
 [Configuration](#configuration) below) so rate-limiting sees the real client
 IP instead of the proxy's.
 
 Uploaded media live in the instance's `dataDirectory` (default
-`/var/lib/displayhive/<name>`), outside the source tree, so redeploys never
+`/var/lib/displayhive/<name>`), outside the Nix store, so updates never
 touch them. See [Data directory](#data-directory-data_dir).
 
 ## Docker
@@ -301,12 +323,12 @@ server {
 
     # The screen bundle and its assets (file names carry a hash or `?v=<release>`).
     location /dist/screen/ {
-        alias /opt/displayhive/main/dist/screen/;
+        alias /opt/displayhive/main/dist/screen/;       # NixOS: <package>/share/displayhive/dist/screen/
         try_files $uri @displayhive;
         add_header Cache-Control "public, max-age=2592000, immutable";
     }
     location /screen/assets/ {
-        alias /opt/displayhive/main/frontends/screen/assets/;
+        alias /opt/displayhive/main/frontends/screen/assets/;   # NixOS: <package>/share/displayhive/frontends/screen/assets/
         try_files $uri @displayhive;
         add_header Cache-Control "public, max-age=2592000, immutable";
     }
@@ -330,7 +352,8 @@ Things to watch:
 
 - **Permissions.** nginx's user needs read access to those directories. `DATA_DIR` is `0750` for the
   app's user, so add nginx to that group (NixOS: `users.users.nginx.extraGroups = [ "displayhive-<name>" ];`,
-  see [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix)).
+  see [`nix/example.nix`](https://github.com/DisplayHive/DisplayHive/blob/main/nix/example.nix), which also shows the
+  `/dist/screen/` and `/screen/assets/` locations pointing into the Nix package).
 - **Docker.** The media volumes can be mounted into an nginx container (`media:/data/media:ro`, …).
   The screen bundle lives inside the image (`/app/dist/screen`); leave `/dist/screen/` and
   `/screen/assets/` to the app unless you copy them out (`docker cp`) on every upgrade.
@@ -360,14 +383,15 @@ needs copying:
 
 Then run `docker compose up -d`.
 
-**NixOS.** The module now sets `dataDirectory` (default
-`/var/lib/displayhive/<name>`). Stop the service, move the files, fix the
+**NixOS.** The module sets `dataDirectory` (default
+`/var/lib/displayhive/<name>`). Stop the service, move the files from the
+old source tree (the directory the old `sourceDirectory` pointed to), fix the
 owner, then rebuild:
 
 ```bash
 systemctl stop displayhive-<name>
-mv <sourceDirectory>/static/media <sourceDirectory>/static/media_previews \
-   <sourceDirectory>/static/media_renditions /var/lib/displayhive/<name>/
+mv /old/source/dir/static/media /old/source/dir/static/media_previews \
+   /old/source/dir/static/media_renditions /var/lib/displayhive/<name>/
 chown -R displayhive-<name>: /var/lib/displayhive/<name>
 nixos-rebuild switch
 ```

@@ -1,5 +1,5 @@
 """One Python version everywhere: .python-version is the source of truth for
-the dev shell (nix/python.nix), the NixOS module, CI (setup-python's
+the dev shell and the Nix package behind the NixOS module (nix/python.nix), CI (setup-python's
 python-version-file) and the Docker image (PYTHON_VERSION build arg).
 
 These checks fail when a copy drifts — e.g. someone hardcodes a version in
@@ -46,7 +46,7 @@ def test_workflows_read_the_version_file():
 
 
 def test_nix_uses_the_shared_interpreter():
-    for rel in ('shell.nix', 'nix/module.nix'):
+    for rel in ('shell.nix', 'nix/package.nix'):
         text = _read(rel)
         assert 'python.nix' in text, f'{rel} should take its interpreter from nix/python.nix'
         assert not re.search(r'pkgs\.python3\d*\.withPackages', text), \
