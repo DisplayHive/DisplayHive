@@ -37,10 +37,10 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version-file: main/.python-version
+          python-version-file: development/.python-version
 
       - name: Install MkDocs
-        run: pip install -r main/requirements-dev.txt
+        run: pip install -r development/requirements-dev.txt
 
       - name: Build main docs
         working-directory: main
