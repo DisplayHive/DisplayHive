@@ -22,7 +22,7 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import Popover from 'primevue/popover'
 import FieldValueEditor from '../components/FieldValueEditor.vue'
 import type { OptionFlags } from '../utils/optionFlags'
@@ -564,7 +564,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
               sync with it.
             </p>
           </Popover>
-          <Dropdown
+          <Select
             id="ct-layout"
             v-model="editForm.layout_id"
             :options="layoutOptions"
@@ -620,7 +620,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
                   <InputText v-model="t.title" placeholder="Title shown as header" class="w-full" size="small" />
                 </div>
                 <div class="tagconfig-col-type">
-                  <Dropdown
+                  <Select
                     v-model="t.field_handler"
                     :options="fieldHandlerOptions"
                     optionLabel="label"

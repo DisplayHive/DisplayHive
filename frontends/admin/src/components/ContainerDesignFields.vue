@@ -3,7 +3,7 @@
 // self-contained, controlled form: the parent owns the values and persists
 // each change. Used by the Layout editor's "Container Design" card; mirrors the
 // Designs page's Per-Container Styles panel via the shared property list.
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 import ColorPicker from './ColorPicker.vue'
 import Button from 'primevue/button'
@@ -127,7 +127,7 @@ const colorLabel = (prop: string): string => {
           @click="emit('change', p.key, '')"
         />
       </div>
-      <Dropdown
+      <Select
         v-else
         :model-value="getValue(p)"
         :options="optionsFor(p)"

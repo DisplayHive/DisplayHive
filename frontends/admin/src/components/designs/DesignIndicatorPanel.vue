@@ -6,7 +6,7 @@ import ColorPicker from '../ColorPicker.vue'
 import ColorPalettePicker from '../ColorPalettePicker.vue'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 
 // The thin progress bar along the bottom of the screen. Its colour uses the same
@@ -57,7 +57,7 @@ const setColorHex = (hex: string | undefined) => {
       </div>
       <div class="field">
         <label for="indicator-direction">Direction</label>
-        <Dropdown
+        <Select
           v-model="form.indicator_direction" inputId="indicator-direction"
           :options="INDICATOR_DIRECTIONS" optionLabel="label" optionValue="value" size="small" class="w-full"
         />

@@ -3,7 +3,7 @@ import { useLayoutEditor } from '../../composables/layoutEditor/useLayoutEditor'
 import CollapsibleCard from './CollapsibleCard.vue'
 import ContainerDefaultContentEditor from './ContainerDefaultContentEditor.vue'
 import Button from 'primevue/button'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -52,7 +52,7 @@ const ed = useLayoutEditor()
 
     <div class="field">
       <label>Default Field Handler</label>
-      <Dropdown
+      <Select
         :model-value="ed.containerEditForm.default_field_handler"
         :options="ed.DEFAULT_FIELD_HANDLER_OPTIONS"
         optionLabel="label"

@@ -10,8 +10,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^24.10.9",
-    "typescript": "~5.9.3"
+    "@tsconfig/node24": "^24.0.5",
+    "@types/node": "^24.19.2",
+    "typescript": "~6.0.3"
   }
 }

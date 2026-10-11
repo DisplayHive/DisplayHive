@@ -2,6 +2,8 @@
 // The footer every form dialog uses: Cancel, an optional "Update" (save and keep the dialog
 // open) and the primary action. Use it in a Dialog's `#footer` slot. It has several root
 // nodes on purpose — PrimeVue's `.p-dialog-footer` flex layout applies to its direct children.
+import Button from 'primevue/button'
+
 withDefaults(defineProps<{
   /** Label of the primary action. */
   confirmLabel?: string

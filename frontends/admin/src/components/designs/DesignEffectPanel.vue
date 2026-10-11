@@ -12,7 +12,7 @@ import {
 import type { DefaultColor } from '../../types/models'
 import DesignPanel from './DesignPanel.vue'
 import ColorPalettePicker from '../ColorPalettePicker.vue'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 
@@ -143,7 +143,7 @@ watch(
   >
     <div class="field">
       <label>Effect</label>
-      <Dropdown
+      <Select
         :model-value="form.background_effect"
         :options="EFFECT_OPTIONS"
         optionLabel="label"
@@ -155,7 +155,7 @@ watch(
     </div>
     <div class="field" v-if="selectedEffectDef?.presets?.length">
       <label>Preset</label>
-      <Dropdown
+      <Select
         :model-value="selectedPresetLabel"
         :options="selectedEffectDef.presets.map((p) => p.label)"
         placeholder="Custom"

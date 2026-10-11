@@ -9,7 +9,7 @@ import ColorPicker from '../ColorPicker.vue'
 import ColorPalettePicker from '../ColorPalettePicker.vue'
 import MediaPickerDialog from '../MediaPickerDialog.vue'
 import Button from 'primevue/button'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 import MultiSelect from 'primevue/multiselect'
 
@@ -102,7 +102,7 @@ const setImage = (url: string) => {
       <div v-if="form.background_image_url" class="font-properties-grid">
         <div class="field">
           <label>Repeat</label>
-          <Dropdown
+          <Select
             v-model="form.background_repeat"
             :options="BACKGROUND_REPEAT_OPTIONS"
             optionLabel="label"
@@ -114,7 +114,7 @@ const setImage = (url: string) => {
         </div>
         <div class="field">
           <label>Size</label>
-          <Dropdown
+          <Select
             v-model="form.background_size"
             :options="BACKGROUND_SIZE_OPTIONS"
             optionLabel="label"

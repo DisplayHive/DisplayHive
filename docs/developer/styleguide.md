@@ -597,6 +597,11 @@ component's real root class is more reliable):
 }
 ```
 
+Use `primevue/select` (`<Select>`) for dropdowns, never `primevue/dropdown`:
+`Dropdown` is only a deprecated alias that PrimeVue 5 dropped, and it renders
+the same `.p-select` root anyway, so the selectors above (and any `.p-dropdown`
+selector, which never matches) apply to `Select` alone.
+
 Note `Password`/`DatePicker`/`InputNumber` don't have their own bordered
 input class — they wrap an inner `InputText`, exposed as
 `p-password-input`/`p-datepicker-input`/`p-inputnumber-input`

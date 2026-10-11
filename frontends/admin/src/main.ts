@@ -47,7 +47,7 @@ async function bootstrap() {
 
   // register commonly used components globally so single-file components
   // can use them without local registration
-  // eslint-disable-next-line vue/multi-word-component-names, vue/no-reserved-component-names -- PrimeVue's own component names, used as such in every template that references them
+  // eslint-disable-next-line vue/multi-word-component-names -- PrimeVue's own component names, used as such in every template that references them
   app.component('Select', Select)
   // eslint-disable-next-line vue/multi-word-component-names
   app.component('Menubar', Menubar)

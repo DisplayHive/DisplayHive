@@ -10,7 +10,7 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import Checkbox from 'primevue/checkbox'
 
 // The three Gradient dialogs of the Designs page: the library (manage), create/edit, and copy.
@@ -85,7 +85,7 @@ const canDelete = computed(() => rightsStore.can('designs.delete'))
     <div class="position-grid">
       <div class="field">
         <label>Type</label>
-        <Dropdown
+        <Select
           v-model="grad.editForm.type"
           :options="[{ label: 'Linear', value: 'linear' }, { label: 'Radial', value: 'radial' }, { label: 'Conic', value: 'conic' }]"
           optionLabel="label"
@@ -111,11 +111,11 @@ const canDelete = computed(() => rightsStore.can('designs.delete'))
     <div v-if="grad.editForm.type === 'radial'" class="position-grid">
       <div class="field">
         <label>Shape</label>
-        <Dropdown v-model="grad.editForm.shape" :options="GRADIENT_SHAPE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
+        <Select v-model="grad.editForm.shape" :options="GRADIENT_SHAPE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
       </div>
       <div class="field">
         <label>Size</label>
-        <Dropdown v-model="grad.editForm.size" :options="GRADIENT_SIZE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
+        <Select v-model="grad.editForm.size" :options="GRADIENT_SIZE_OPTIONS" optionLabel="label" optionValue="value" size="small" class="w-full" />
       </div>
     </div>
 

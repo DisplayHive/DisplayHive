@@ -9,7 +9,7 @@ import DesignPanel from './DesignPanel.vue'
 import ColorPicker from '../ColorPicker.vue'
 import ColorPalettePicker from '../ColorPalettePicker.vue'
 import Button from 'primevue/button'
-import Dropdown from 'primevue/dropdown'
+import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 
 // Font styles applied to every container via `.dh-container`. A (property, value) pair per
@@ -119,7 +119,7 @@ const setColorHex = (prop: string, hex: string | undefined) => {
             @click="setColorHex(p.key, '')"
           />
         </div>
-        <Dropdown
+        <Select
           v-else
           :model-value="getValue(p.key)"
           :options="p.options"
