@@ -138,7 +138,9 @@ let
         example     = "/run/secrets/displayhive-main-secret-key";
         description = ''
           Absolute path of a file holding the secret key (agenix, sops-nix, or
-          any root-only file). systemd loads it as a credential, so only the
+          any root-only file). Note that `/run/secrets` is a tmpfs: a file put
+          there by hand is gone after a reboot, so let agenix or sops-nix
+          create it (or use a root-only file on a persistent path). systemd loads it as a credential, so only the
           service sees it and the service user needs no access to the file
           itself; it never enters the Nix store or the environment listing.
           Set exactly one of {option}`secretKey`, {option}`secretKeyFile` or a

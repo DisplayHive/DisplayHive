@@ -89,6 +89,14 @@ downloaded or built on the server when the service starts.
 }
 ```
 
+!!! warning "`/run/secrets` is not persistent"
+    `/run` is a tmpfs: it is emptied on every reboot. Nothing creates the secret file for
+    you, so a file you placed there by hand is gone after the next restart and the service
+    fails to start. Use a module that recreates it on every boot, such as
+    [agenix](https://github.com/ryantm/agenix) (or sops-nix), which decrypts the secret into
+    `/run/secrets` (agenix: `age.secrets.<name>.path`) during activation. Alternatively point
+    `secretKeyFile` at a root-only file on a persistent path, e.g. under `/var/lib`.
+
 Then apply it:
 
 ```bash
