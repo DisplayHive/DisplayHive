@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
@@ -599,8 +600,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
         </div>
       </div>
       <template #footer>
-        <Button data-tour="devices-adopt-cancel" label="Cancel" @click="closeAdoptDialog" text :disabled="isAdopting" />
-        <Button label="Adopt" @click="adoptDevice" :loading="isAdopting" :disabled="isAdopting" />
+        <DialogFooter cancel-tour="devices-adopt-cancel" confirm-label="Adopt" :loading="isAdopting" :cancel-disabled="isAdopting" @cancel="closeAdoptDialog" @confirm="adoptDevice" />
       </template>
     </Dialog>
 
@@ -616,9 +616,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showRenameDialog = false" text :disabled="isSavingRename" />
-        <Button label="Update" severity="secondary" outlined @click="saveRename(true)" :loading="isSavingRename" :disabled="isSavingRename" />
-        <Button label="Save" @click="saveRename()" :loading="isSavingRename" :disabled="isSavingRename" />
+        <DialogFooter show-update :loading="isSavingRename" :cancel-disabled="isSavingRename" @cancel="showRenameDialog = false" @update="saveRename(true)" @confirm="saveRename()" />
       </template>
     </Dialog>
 
@@ -641,8 +639,7 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
         </div>
       </div>
       <template #footer>
-        <Button data-tour="devices-assign-cancel" label="Cancel" @click="showAssignDialog = false" text :disabled="isSavingAssign" />
-        <Button label="Save" @click="saveAssign()" :loading="isSavingAssign" :disabled="isSavingAssign" />
+        <DialogFooter cancel-tour="devices-assign-cancel" :loading="isSavingAssign" :cancel-disabled="isSavingAssign" @cancel="showAssignDialog = false" @confirm="saveAssign()" />
       </template>
     </Dialog>
   </div>

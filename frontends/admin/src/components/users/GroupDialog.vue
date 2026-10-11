@@ -5,7 +5,7 @@ import { useAck } from '../../composables/useAck'
 import { useUsersPage } from '../../composables/users/useUsersPage'
 import type { RightsGroup } from '../../types/models'
 import DialogTitle from '../DialogTitle.vue'
-import Button from 'primevue/button'
+import DialogFooter from '../DialogFooter.vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -78,8 +78,7 @@ const saveGroup = async () => {
     />
   </div>
   <template #footer>
-    <Button data-tour="users-group-cancel" label="Cancel" text @click="visible = false" />
-    <Button label="Save" icon="pi pi-check" :loading="isSavingGroup" @click="saveGroup" />
+    <DialogFooter cancel-tour="users-group-cancel" confirm-icon="pi pi-check" :loading="isSavingGroup" @cancel="visible = false" @confirm="saveGroup" />
   </template>
 </Dialog>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
@@ -396,9 +397,7 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
         </div>
       </div>
       <template #footer>
-        <Button data-tour="screengroups-create-cancel" label="Cancel" @click="closeDialog" text :disabled="isSaving" />
-        <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveScreenGroup(true)" :loading="isSaving" :disabled="isSaving" />
-        <Button label="Save" @click="saveScreenGroup()" :loading="isSaving" :disabled="isSaving" />
+        <DialogFooter cancel-tour="screengroups-create-cancel" :show-update="!isNew" :loading="isSaving" :cancel-disabled="isSaving" @cancel="closeDialog" @update="saveScreenGroup(true)" @confirm="saveScreenGroup()" />
       </template>
     </Dialog>
 

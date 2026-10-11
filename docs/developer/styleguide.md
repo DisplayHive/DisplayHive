@@ -369,6 +369,14 @@ never the plain `header="..."` string prop. Width is the object-binding
   **~600px+** only for something genuinely wide (gradient management, icon
   license list, rights matrices).
 
+- **Form dialogs use `<DialogFooter>`** in the `#footer` slot (Cancel, an
+  optional `show-update` "Update" that saves without closing, and the primary
+  action via `confirm-label`/`confirm-icon`). It renders its buttons as
+  several root nodes on purpose: PrimeVue's `.p-dialog-footer` flex layout
+  applies to direct children. Tours target the Cancel button through its
+  `cancel-tour` prop. Footers that don't fit (a lone Close, "Remove All"
+  next to Close) stay plain `<Button>`s.
+
 ### Close button
 
 PrimeVue's Dialog close button is an unstyled default `<Button>` — no

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
@@ -471,8 +472,7 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
         </div>
       </div>
       <template #footer>
-        <Button data-tour="screens-create-cancel" label="Cancel" @click="showCreateDialog = false" text :disabled="isCreating" />
-        <Button label="Create" @click="createScreen" :loading="isCreating" :disabled="isCreating" />
+        <DialogFooter cancel-tour="screens-create-cancel" confirm-label="Create" :loading="isCreating" :cancel-disabled="isCreating" @cancel="showCreateDialog = false" @confirm="createScreen" />
       </template>
     </Dialog>
 
@@ -523,9 +523,7 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showRenameDialog = false" text :disabled="isRenaming" />
-        <Button label="Update" severity="secondary" outlined @click="saveRename(true)" :loading="isRenaming" :disabled="isRenaming" />
-        <Button label="Save" @click="saveRename()" :loading="isRenaming" :disabled="isRenaming" />
+        <DialogFooter show-update :loading="isRenaming" :cancel-disabled="isRenaming" @cancel="showRenameDialog = false" @update="saveRename(true)" @confirm="saveRename()" />
       </template>
     </Dialog>
   </div>

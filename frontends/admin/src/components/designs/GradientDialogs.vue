@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRightsStore } from '../../stores/rights'
 import { useGradients, GRADIENT_SHAPE_OPTIONS, GRADIENT_SIZE_OPTIONS } from '../../composables/designs/useGradients'
 import DialogTitle from '../DialogTitle.vue'
+import DialogFooter from '../DialogFooter.vue'
 import ColorPicker from '../ColorPicker.vue'
 import ColorPalettePicker from '../ColorPalettePicker.vue'
 import Dialog from 'primevue/dialog'
@@ -63,8 +64,7 @@ const canDelete = computed(() => rightsStore.can('designs.delete'))
     />
   </div>
   <template #footer>
-    <Button label="Cancel" @click="grad.showCopyDialog = false" text />
-    <Button label="Copy" icon="pi pi-copy" @click="grad.executeCopy" :disabled="!grad.copyName.trim()" />
+    <DialogFooter confirm-label="Copy" confirm-icon="pi pi-copy" :disabled="!grad.copyName.trim()" @cancel="grad.showCopyDialog = false" @confirm="grad.executeCopy" />
   </template>
 </Dialog>
 
@@ -155,8 +155,7 @@ const canDelete = computed(() => rightsStore.can('designs.delete'))
     </div>
   </div>
   <template #footer>
-    <Button label="Cancel" @click="grad.showEditDialog = false" text />
-    <Button label="Save" @click="grad.saveEdit" />
+    <DialogFooter @cancel="grad.showEditDialog = false" @confirm="grad.saveEdit" />
   </template>
 </Dialog>
 </template>

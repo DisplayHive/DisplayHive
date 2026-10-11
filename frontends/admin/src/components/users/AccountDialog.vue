@@ -6,6 +6,7 @@ import { useAck } from '../../composables/useAck'
 import { useUsersPage, formatDate } from '../../composables/users/useUsersPage'
 import type { AdminUser, AdminUserIdentity } from '../../types/models'
 import DialogTitle from '../DialogTitle.vue'
+import DialogFooter from '../DialogFooter.vue'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
@@ -175,8 +176,7 @@ const saveAccount = async () => {
   </div>
 
   <template #footer>
-    <Button data-tour="users-account-cancel" label="Cancel" text @click="visible = false" />
-    <Button label="Save" icon="pi pi-check" :loading="isSavingAccount" @click="saveAccount" />
+    <DialogFooter cancel-tour="users-account-cancel" confirm-icon="pi pi-check" :loading="isSavingAccount" @cancel="visible = false" @confirm="saveAccount" />
   </template>
 </Dialog>
 </template>

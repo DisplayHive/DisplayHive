@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
@@ -518,8 +519,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
         <InputText id="copy-ct-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyContentType" />
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showCopyDialog = false" text />
-        <Button label="Copy" icon="pi pi-copy" @click="executeCopyContentType" :disabled="!copyNewName.trim()" />
+        <DialogFooter confirm-label="Copy" confirm-icon="pi pi-copy" :disabled="!copyNewName.trim()" @cancel="showCopyDialog = false" @confirm="executeCopyContentType" />
       </template>
     </Dialog>
 
@@ -657,9 +657,7 @@ useOpenFromQuery(() => contentTypes.value, openEditDialog, () => canEdit.value)
       </div>
       <template #footer>
         <div class="dialog-footer-actions" data-tour="contenttype-dialog-footer">
-          <Button label="Cancel" @click="closeDialog" text />
-          <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveContentType(true)" :disabled="loadingContentType" />
-          <Button label="Save" @click="saveContentType()" :disabled="loadingContentType" />
+          <DialogFooter :show-update="!isNew" :disabled="loadingContentType" @cancel="closeDialog" @update="saveContentType(true)" @confirm="saveContentType()" />
         </div>
       </template>
     </Dialog>

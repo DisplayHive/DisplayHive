@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import PageActions from '../components/PageActions.vue'
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import DesignDefaultColorsPanel from '../components/designs/DesignDefaultColorsPanel.vue'
 import DesignAspectRatiosPanel from '../components/designs/DesignAspectRatiosPanel.vue'
 import DesignBackdropPanel from '../components/designs/DesignBackdropPanel.vue'
@@ -359,8 +360,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
         <InputText id="copy-design-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyDesign" />
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showCopyDialog = false" text />
-        <Button label="Copy" icon="pi pi-copy" @click="executeCopyDesign" :disabled="!copyNewName.trim()" />
+        <DialogFooter confirm-label="Copy" confirm-icon="pi pi-copy" :disabled="!copyNewName.trim()" @cancel="showCopyDialog = false" @confirm="executeCopyDesign" />
       </template>
     </Dialog>
 
@@ -398,9 +398,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
         <DesignCodePanel v-model:form="editForm" />
       </div>
       <template #footer>
-        <Button data-tour="designs-dialog-cancel" label="Cancel" @click="closeDialog" text />
-        <Button v-if="!isNew" label="Update" severity="secondary" outlined @click="saveDesign(true)" :disabled="loadingDesign" />
-        <Button label="Save" @click="saveDesign()" :disabled="loadingDesign" />
+        <DialogFooter cancel-tour="designs-dialog-cancel" :show-update="!isNew" :disabled="loadingDesign" @cancel="closeDialog" @update="saveDesign(true)" @confirm="saveDesign()" />
       </template>
     </Dialog>
 

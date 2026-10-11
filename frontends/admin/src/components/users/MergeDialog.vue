@@ -4,7 +4,7 @@ import { useAck } from '../../composables/useAck'
 import { useUsersPage } from '../../composables/users/useUsersPage'
 import type { AdminUser } from '../../types/models'
 import DialogTitle from '../DialogTitle.vue'
-import Button from 'primevue/button'
+import DialogFooter from '../DialogFooter.vue'
 import Dialog from 'primevue/dialog'
 import Select from 'primevue/select'
 
@@ -70,14 +70,14 @@ const mergeAccount = async () => {
     />
   </div>
   <template #footer>
-    <Button label="Cancel" text @click="visible = false" />
-    <Button
-      label="Merge"
-      icon="pi pi-check"
-      severity="danger"
+    <DialogFooter
+      confirm-label="Merge"
+      confirm-icon="pi pi-check"
+      confirm-severity="danger"
       :disabled="!mergeTargetId"
       :loading="isMerging"
-      @click="mergeAccount"
+      @cancel="visible = false"
+      @confirm="mergeAccount"
     />
   </template>
 </Dialog>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from './DialogTitle.vue'
+import DialogFooter from './DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import { ref, computed, onMounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
@@ -264,8 +265,7 @@ const remove = (p: AuthProvider) => {
     </div>
 
     <template #footer>
-      <Button label="Cancel" text @click="showDialog = false" />
-      <Button label="Save" icon="pi pi-check" :loading="saving" @click="save" />
+      <DialogFooter confirm-icon="pi pi-check" :loading="saving" @cancel="showDialog = false" @confirm="save" />
     </template>
   </Dialog>
 </template>

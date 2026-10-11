@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
@@ -208,8 +209,7 @@ const refreshData = () => {
         <InputText id="copy-layout-name" v-model="copyNewName" class="w-full" autofocus @keyup.enter="executeCopyLayout" />
       </div>
       <template #footer>
-        <Button label="Cancel" @click="showCopyDialog = false" text />
-        <Button label="Clone" icon="pi pi-copy" @click="executeCopyLayout" :disabled="!copyNewName.trim()" />
+        <DialogFooter confirm-label="Clone" confirm-icon="pi pi-copy" :disabled="!copyNewName.trim()" @cancel="showCopyDialog = false" @confirm="executeCopyLayout" />
       </template>
     </Dialog>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DialogTitle from '../components/DialogTitle.vue'
+import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
@@ -515,9 +516,7 @@ const copyUrl = (url: string) => {
         </div>
       </div>
       <template #footer>
-        <Button data-tour="media-edit-cancel" label="Cancel" @click="showEditDialog = false" text :disabled="isSavingMedia" />
-        <Button label="Update" severity="secondary" outlined @click="saveMedia(true)" :loading="isSavingMedia" :disabled="isSavingMedia" />
-        <Button label="Save" @click="saveMedia()" :loading="isSavingMedia" :disabled="isSavingMedia" />
+        <DialogFooter cancel-tour="media-edit-cancel" show-update :loading="isSavingMedia" :cancel-disabled="isSavingMedia" @cancel="showEditDialog = false" @update="saveMedia(true)" @confirm="saveMedia()" />
       </template>
     </Dialog>
 
@@ -587,13 +586,15 @@ const copyUrl = (url: string) => {
       <ProgressBar v-if="isUploading" :value="uploadPercent" :show-value="false" class="mt-4 thin-progress" />
 
       <template #footer>
-        <Button data-tour="media-upload-cancel" label="Cancel" text :disabled="isUploading" @click="closeUploadDialog" />
-        <Button
-          label="Upload"
-          icon="pi pi-upload"
-          :disabled="!uploadFiles.length || isUploading"
+        <DialogFooter
+          cancel-tour="media-upload-cancel"
+          confirm-label="Upload"
+          confirm-icon="pi pi-upload"
+          :disabled="!uploadFiles.length"
           :loading="isUploading"
-          @click="startUpload"
+          :cancel-disabled="isUploading"
+          @cancel="closeUploadDialog"
+          @confirm="startUpload"
         />
       </template>
     </Dialog>
