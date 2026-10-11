@@ -43,6 +43,10 @@ behind each box.
 - **Search** — press **Ctrl+K** (⌘K on a Mac), or click the search field in the header, and type a few
   letters: pages, actions, content, screens, screen groups and media are found by name; Enter or a click
   jumps there. Only what your rights allow is offered.
+- **Tour** (`/tour`) — guided mini-tours that walk through the real pages with arrows and popovers, in two
+  groups: **User** (everyday content and screen work) and **Admin Path** (layouts, content types, designs,
+  setup). Each can be left early with the × icon; the last step's **Exit Tour** button returns to the list.
+  Needs the right *View Guided Tour page*; an administrator can hide either group under Settings → Dashboard.
 - **Media** (`/media`) — each file shows whether anything uses it. Filter by **Unused** to find files you
   can clean up; the edit dialog lists where a file is used (content, content type presets, layouts'
   container defaults, designs, settings) with links, and deleting a file that is still in use asks first and
