@@ -2,7 +2,7 @@ name: docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
@@ -23,17 +23,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # The public site is always main; the development docs are built next to it under
+      # /devbranch/. Nothing links there, and robots.txt keeps it out of search engines.
       - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main
+
+      - uses: actions/checkout@v7
+        with:
+          ref: development
+          path: development
 
       - uses: actions/setup-python@v7
         with:
-          python-version-file: '.python-version'
+          python-version-file: main/.python-version
 
       - name: Install MkDocs
-        run: pip install -r requirements-dev.txt
+        run: pip install -r main/requirements-dev.txt
 
-      - name: Build site
-        run: mkdocs build --strict
+      - name: Build main docs
+        working-directory: main
+        run: mkdocs build --strict --site-dir ../site
+
+      - name: Build development docs
+        working-directory: development
+        run: mkdocs build --strict --site-dir ../site/devbranch
+
+      - name: Keep the development docs out of search engines
+        run: |
+          printf 'User-agent: *\nDisallow: /devbranch/\n' > site/robots.txt
 
       - uses: actions/configure-pages@v6
 
