@@ -5,7 +5,7 @@
 # =====================================================================
 # Python version: from .python-version — CI passes it in (docker-image.yml);
 # this default is for plain `docker build` / `docker compose build` and is
-# kept equal to .python-version by tests/test_python_version.py.
+# kept equal to .python-version by tests/core/test_python_version.py.
 ARG PYTHON_VERSION=3.13
 
 # --platform=$BUILDPLATFORM: the frontends' output is the same JavaScript for every

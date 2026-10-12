@@ -2,7 +2,7 @@
 # .python-version (e.g. "3.13" → pkgs.python313) — the one place that sets
 # the Python version for the dev shell, the NixOS module, CI
 # (actions/setup-python's python-version-file) and the Docker image
-# (PYTHON_VERSION build arg). tests/test_python_version.py keeps them in sync.
+# (PYTHON_VERSION build arg). tests/core/test_python_version.py keeps them in sync.
 { pkgs }:
 let
   raw = builtins.readFile ../.python-version;

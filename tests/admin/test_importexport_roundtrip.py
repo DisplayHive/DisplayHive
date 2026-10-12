@@ -20,7 +20,7 @@ from application.admin.importexport.helper import export_database, import_databa
 from application.factory import create_app
 from application.models import db
 
-EXAMPLE_ZIP = Path(__file__).resolve().parent.parent / 'examplecontent' / 'event.zip'
+EXAMPLE_ZIP = Path(__file__).resolve().parents[2] / 'examplecontent' / 'event.zip'
 ENTITY_KEYS = [
     'screens', 'screengroups', 'designs', 'gradients', 'layouts', 'contentcontainers',
     'contenttypes', 'tagconfigs', 'content_elements', 'media',

@@ -25,7 +25,7 @@ and exposes the result as `app` / `socketio` — what `gunicorn app:app`,
 `flask dh …` maintenance command gets when it is loaded next to a live
 instance (`app.py` detects the CLI), and what tests use to build their own
 apps. Tests may call `create_app({...overrides}, startup=False)` for an
-isolated app (`tests/test_factory.py`); `tests/conftest.py` still shares one
+isolated app (`tests/core/test_factory.py`); `tests/conftest.py` still shares one
 default app for the bulk of the suite.
 
 The backend in detail:
@@ -62,7 +62,7 @@ The backend in detail:
   `application/admin/importexport/service.py`. Static files, the screen page
   and the admin SPA are Blueprints in `application/web/`. Everything else
   under `application/admin/*` is Socket.IO handlers, not HTTP.
-  `tests/test_route_map.py` pins the whole HTTP route table, so moving
+  `tests/core/test_route_map.py` pins the whole HTTP route table, so moving
   routes between modules can't silently drop or rename one.
 - On startup (`application/startup.py`, inside `app.app_context()`), the app resets stale
   `Device.is_online` flags, enforces exactly one default design, prunes old

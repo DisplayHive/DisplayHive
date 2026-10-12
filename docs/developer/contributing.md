@@ -38,7 +38,7 @@ move to a new version:
 
 1. Change `.python-version`.
 2. Change the `ARG PYTHON_VERSION=` default in the `Dockerfile` to match.
-   `tests/test_python_version.py` fails until both agree, and also when a
+   `tests/core/test_python_version.py` fails until both agree, and also when a
    workflow or Nix file picks a version of its own.
 3. If `nix develop` can't find `pythonXY`, update the flake's nixpkgs
    (`nix flake update`).
@@ -64,7 +64,7 @@ nothing changed; recreated when the Nix interpreter changes), and the Nix
 package (`nix/package.nix`, which the NixOS module runs) builds its Python
 environment from the hash-checked wheels named in `requirements.txt`.
 Native libraries some wheels need (e.g. `libz` for psycopg2) come from Nix
-via `LD_LIBRARY_PATH`. `tests/test_dependency_sync.py` fails if a Nix file
+via `LD_LIBRARY_PATH`. `tests/core/test_dependency_sync.py` fails if a Nix file
 starts listing Python packages of its own again.
 
 ### The Nix package and its hashes

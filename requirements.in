@@ -6,7 +6,7 @@
 #
 # Every environment installs from the locks: Docker and CI with pip, the Nix
 # dev shell (shell.nix) and NixOS module (nix/module.nix) by syncing a venv
-# with uv — Nix provides only the interpreter. tests/test_dependency_sync.py
+# with uv — Nix provides only the interpreter. tests/core/test_dependency_sync.py
 # keeps it that way.
 
 flask

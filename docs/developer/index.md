@@ -12,6 +12,8 @@ organized.
 
 - **[Architecture](architecture.md)** — components, models, blueprints, and
   frontend structure.
+- **[Project structure](project-structure.md)** — where things live in the repo
+  and where a new file belongs.
 - **[Real-time content push](realtime-push.md)** — how an edit in the admin
   panel ends up rendered on a screen.
 - **[Admin panel styleguide](styleguide.md)** — colors, type scale, spacing,

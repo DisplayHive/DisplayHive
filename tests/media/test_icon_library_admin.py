@@ -9,8 +9,8 @@ import pytest
 
 from application import icon_libraries as icons
 from application.auth import create_token
-from tests.test_admin_actions import plain_client, superadmin_client  # noqa: F401  (fixtures)
-from tests.test_icon_libraries import SVG, _zip
+from tests.admin.test_admin_actions import plain_client, superadmin_client  # noqa: F401  (fixtures)
+from tests.media.test_icon_libraries import SVG, _zip
 
 GET = 'displayhive:admin:cts:get_icon_libraries'
 INSTALL = 'displayhive:admin:cts:install_icon_library'

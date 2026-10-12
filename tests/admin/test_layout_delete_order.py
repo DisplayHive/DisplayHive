@@ -3,7 +3,7 @@
 
 import pytest
 
-from tests.test_admin_actions import superadmin_client  # noqa: F401  (fixture)
+from tests.admin.test_admin_actions import superadmin_client  # noqa: F401  (fixture)
 
 CREATE_CONTAINER = 'displayhive:admin:cts:create_container'
 CREATE_LAYOUT = 'displayhive:admin:cts:create_layout'

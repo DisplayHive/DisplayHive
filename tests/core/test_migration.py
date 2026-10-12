@@ -18,7 +18,7 @@ from application.backup import Settings
 from application.factory import create_app
 from application.migration import MigrationFailed
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OLD_REVISION = '9c5e1f3a7b42'
 
 

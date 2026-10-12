@@ -14,7 +14,7 @@ import pytest
 from application import logfmt
 from application.config import configure_logging
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _format(message='hello', level=logging.INFO, args=(), exc_info=None, **extra):

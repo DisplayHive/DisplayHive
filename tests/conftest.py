@@ -18,7 +18,7 @@ per-connection unless the engine is explicitly configured with StaticPool,
 which the app doesn't do (it's built for a real file or Postgres).
 
 Tests that need a genuinely separate app (own database, no startup work) build
-one with `create_app({...}, startup=False)` — see `tests/test_factory.py`.
+one with `create_app({...}, startup=False)` — see `tests/core/test_factory.py`.
 """
 
 import atexit

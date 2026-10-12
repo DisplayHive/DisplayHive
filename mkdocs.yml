@@ -76,6 +76,7 @@ nav:
   - Developer Guide:
       - Overview: developer/index.md
       - Architecture: developer/architecture.md
+      - Project structure: developer/project-structure.md
       - Real-time content push: developer/realtime-push.md
       - Admin panel styleguide: developer/styleguide.md
       - Guided tour design ruleset: developer/tour-design-ruleset.md

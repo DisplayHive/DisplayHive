@@ -10,7 +10,7 @@ from application.admin.importexport.helper import import_database
 from application.dbcopy import CopyError, copy_database
 from application.factory import create_app
 from application.models import db
-from tests.test_importexport_roundtrip import _example_payload
+from tests.admin.test_importexport_roundtrip import _example_payload
 
 
 def _engine(tmp_path, name):
