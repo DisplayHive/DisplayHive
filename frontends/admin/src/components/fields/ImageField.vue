@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useFieldContext } from '../../composables/fields/useFieldContext'
 import { useSocket } from '../../composables/useSocket'
-import DialogTitle from '../DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 import FieldSlot from './FieldSlot.vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'

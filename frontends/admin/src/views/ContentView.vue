@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useConfirmAction } from '../composables/useConfirmAction'
-import PageActions from '../components/PageActions.vue'
+import PageActions from '../components/ui/PageActions.vue'
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSocket } from '../composables/useSocket'
@@ -11,7 +11,7 @@ import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Popover from 'primevue/popover'
-import ContentTable from '../components/ContentTable.vue'
+import ContentTable from '../components/content/ContentTable.vue'
 import { useRightsStore } from '../stores/rights'
 import { useScreensStore } from '../stores/screens'
 

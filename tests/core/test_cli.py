@@ -1,4 +1,4 @@
-"""Tests for the `flask dh …` maintenance commands (application/cli.py) and
+"""Tests for the `flask dh …` maintenance commands (application/cli/) and
 for how app.py recognises being loaded for one of them."""
 
 import os

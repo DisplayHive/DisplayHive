@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import PageActions from '../components/PageActions.vue'
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
+import PageActions from '../components/ui/PageActions.vue'
+import DialogTitle from '../components/ui/DialogTitle.vue'
+import DialogFooter from '../components/ui/DialogFooter.vue'
 import DesignDefaultColorsPanel from '../components/designs/DesignDefaultColorsPanel.vue'
 import DesignAspectRatiosPanel from '../components/designs/DesignAspectRatiosPanel.vue'
 import DesignBackdropPanel from '../components/designs/DesignBackdropPanel.vue'

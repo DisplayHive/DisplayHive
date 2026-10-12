@@ -10,8 +10,8 @@
  * them here that CSS silently matches nothing.
  */
 import { getEffectDefinition } from './backgroundEffects'
-import { loadIcon } from './iconLibraries'
-import type { DefaultColor } from '../types/models'
+import { loadIcon } from '../media/iconLibraries'
+import type { DefaultColor } from '../../types/models'
 // `?raw` inlines the pre-built bundle's source as a string at build time —
 // see LayoutCanvasEditor.vue for why this has to be literal <script> content
 // rather than a normal import/evaluation inside a sandboxed srcdoc iframe.

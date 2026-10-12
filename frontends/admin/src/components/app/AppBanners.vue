@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useAuthStore } from '../stores/auth'
-import type { SecurityIssue, SecurityStatus } from '../composables/useSecurityStatus'
+import { useAuthStore } from '../../stores/auth'
+import type { SecurityIssue, SecurityStatus } from '../../composables/useSecurityStatus'
 import LegacyDataBanner from './LegacyDataBanner.vue'
 import Button from 'primevue/button'
 

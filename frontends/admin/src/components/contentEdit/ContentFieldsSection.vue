@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useContentEditor } from '../../composables/contentEdit/useContentEditor'
-import FieldValueEditor from '../FieldValueEditor.vue'
+import FieldValueEditor from '../fields/FieldValueEditor.vue'
 import InputText from 'primevue/inputtext'
 import Popover from 'primevue/popover'
 

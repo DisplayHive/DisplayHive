@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import DialogTitle from './DialogTitle.vue'
-import DialogFooter from './DialogFooter.vue'
-import { useConfirmAction } from '../composables/useConfirmAction'
+import DialogTitle from '../ui/DialogTitle.vue'
+import DialogFooter from '../ui/DialogFooter.vue'
+import { useConfirmAction } from '../../composables/useConfirmAction'
 import { ref, computed, onMounted } from 'vue'
-import { useSocket } from '../composables/useSocket'
-import { useAck, type Ack } from '../composables/useAck'
+import { useSocket } from '../../composables/useSocket'
+import { useAck, type Ack } from '../../composables/useAck'
 import { useToast } from 'primevue/usetoast'
-import type { AuthProvider } from '../types/models'
+import type { AuthProvider } from '../../types/models'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'

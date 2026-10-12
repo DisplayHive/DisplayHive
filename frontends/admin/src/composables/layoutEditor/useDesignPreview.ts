@@ -2,11 +2,11 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useSocket } from '../useSocket'
 import { BASE_ASPECT_RATIO } from '../useAspectRatios'
 import { useRightsStore } from '../../stores/rights'
-import { ALL_CONTAINER_STYLE_PROPERTIES } from '../../utils/containerFontProperties'
-import { resolveIconPlaceholders, type PreviewContainer } from '../../utils/designPreview'
+import { ALL_CONTAINER_STYLE_PROPERTIES } from '../../utils/design/containerFontProperties'
+import { resolveIconPlaceholders, type PreviewContainer } from '../../utils/design/designPreview'
 import {
   BACKDROP_OVERRIDE_CSS, buildPreviewSrcdoc, effectFragment, previewContainerHtml, type DesignPreview,
-} from '../../utils/layoutPreviewDoc'
+} from '../../utils/layout/layoutPreviewDoc'
 import type { EditorCore } from './useEditorCore'
 
 /**
@@ -109,7 +109,7 @@ export function useDesignPreview(core: EditorCore) {
   const effectHtml = computed(() => effectFragment(designPreview.value, disableAnimationsInPreview.value))
 
   // Async because container HTML may contain 'icon' field placeholders that need resolving to
-  // real inline SVG first (resolveIconPlaceholders — see utils/designPreview.ts for why that has
+  // real inline SVG first (resolveIconPlaceholders — see utils/design/designPreview.ts for why that has
   // to happen out here rather than inside the sandboxed iframe itself).
   const designPreviewSrcdoc = ref('')
 

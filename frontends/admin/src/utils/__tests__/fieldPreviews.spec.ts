@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatCountdownPreview, formatCountdownString, formatCountdownTarget, formatDateString, parseCountdownTarget } from '../fieldPreviews'
+import { formatCountdownPreview, formatCountdownString, formatCountdownTarget, formatDateString, parseCountdownTarget } from '../content/fieldPreviews'
 
 describe('date format preview', () => {
   const d = new Date('2024-06-07T14:05:09Z')

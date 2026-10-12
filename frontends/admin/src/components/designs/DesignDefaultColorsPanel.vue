@@ -2,7 +2,7 @@
 import type { DesignForm } from '../../types/designForm'
 import { newColorId } from '../../composables/designs/useDefaultColors'
 import DesignPanel from './DesignPanel.vue'
-import ColorPicker from '../ColorPicker.vue'
+import ColorPicker from '../ui/ColorPicker.vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 

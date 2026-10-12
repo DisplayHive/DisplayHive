@@ -1,7 +1,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import {
   clamp, edgeTargets as collectEdgeTargets, resizeFromCorner, snapMove, type Corner, type Pos, type Snapline,
-} from '../../utils/layoutGeometry'
+} from '../../utils/layout/layoutGeometry'
 import type { ContentContainer } from '../../types/models'
 import type { EditorCore } from './useEditorCore'
 

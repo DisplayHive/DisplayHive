@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useConfirmAction } from '../composables/useConfirmAction'
-import PageActions from '../components/PageActions.vue'
-import RouteLink from '../components/RouteLink.vue'
+import PageActions from '../components/ui/PageActions.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted } from 'vue'

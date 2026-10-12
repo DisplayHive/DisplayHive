@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useSocket } from '../useSocket'
 import { useAspectRatios, BASE_ASPECT_RATIO } from '../useAspectRatios'
-import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../../utils/designPreview'
+import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../../utils/design/designPreview'
 import type { DefaultColor } from '../../types/models'
 
 interface PreviewData { design: DesignPreviewPayload; containers: Record<string, PreviewContainer>; aspect_ratio?: string }
@@ -9,7 +9,7 @@ interface PreviewData { design: DesignPreviewPayload; containers: Record<string,
 /**
  * Live preview: renders the in-progress (possibly unsaved) form fields through the Contenttype's
  * actual Layout + the active Design, debounced so it doesn't fire a server round trip on every
- * keystroke. srcdoc assembly itself lives in utils/designPreview.ts, shared with
+ * keystroke. srcdoc assembly itself lives in utils/design/designPreview.ts, shared with
  * ContentTable.vue's row-expansion preview for already-saved content.
  */
 export function useContentPreview(form: Ref<{ contenttype_id: number | null; fields: Record<string, unknown> }>) {

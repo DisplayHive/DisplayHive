@@ -2,8 +2,8 @@
 import { ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import DialogTitle from '../DialogTitle.vue'
-import DialogFooter from '../DialogFooter.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
+import DialogFooter from '../ui/DialogFooter.vue'
 import { useAck } from '../../composables/useAck'
 import type { Device } from '../../types/models'
 

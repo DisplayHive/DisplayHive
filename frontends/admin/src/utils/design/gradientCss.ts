@@ -1,4 +1,4 @@
-import type { GradientStop } from '../types/models'
+import type { GradientStop } from '../../types/models'
 
 export type GradientLike = {
   type: string

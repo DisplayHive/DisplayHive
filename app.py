@@ -3,7 +3,7 @@ import sys
 
 def _loaded_for_flask_cli_command() -> bool:
     """True when the `flask` CLI imports this module to run a command other
-    than `flask run` — e.g. `flask dh check-config` (application/cli.py).
+    than `flask run` — e.g. `flask dh check-config` (application/cli/).
 
     Importing this module builds the default app (`app`, `socketio`) — that is
     what `gunicorn app:app`, `flask --app app` and `python app.py` expect.

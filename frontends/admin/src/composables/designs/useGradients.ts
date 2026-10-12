@@ -4,7 +4,7 @@ import { useAck } from '../useAck'
 import { useConfirmAction } from '../useConfirmAction'
 import type { DefaultColor, Gradient, GradientStop } from '../../types/models'
 import type { DesignForm } from '../../types/designForm'
-import { combinedGradientCss, gradientCssValue } from '../../utils/gradientCss'
+import { combinedGradientCss, gradientCssValue } from '../../utils/design/gradientCss'
 
 // Gradients: a reusable library. A Design can apply several, stacked as layered
 // `background-image` values (rendered ahead of the Design's own hand-written CSS — see

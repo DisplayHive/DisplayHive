@@ -5,16 +5,16 @@
 // Designs page's Per-Container Styles panel via the shared property list.
 import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
-import ColorPicker from './ColorPicker.vue'
+import ColorPicker from '../ui/ColorPicker.vue'
 import Button from 'primevue/button'
-import ColorPalettePicker from './ColorPalettePicker.vue'
+import ColorPalettePicker from '../ui/ColorPalettePicker.vue'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
-import { CONTAINER_STYLE_GROUPS, type FontProperty, type FontOption } from '../utils/containerFontProperties'
-import type { DefaultColor } from '../types/models'
+import { CONTAINER_STYLE_GROUPS, type FontProperty, type FontOption } from '../../utils/design/containerFontProperties'
+import type { DefaultColor } from '../../types/models'
 
 const props = defineProps<{
   /** property -> CSS value for the selected container */

@@ -5,7 +5,7 @@ import Card from 'primevue/card'
 import DatePicker from 'primevue/datepicker'
 import InputText from 'primevue/inputtext'
 import { useAck } from '../../composables/useAck'
-import { FORMAT_TOKENS, formatDateStr } from '../../utils/pretalxDateFormat'
+import { FORMAT_TOKENS, formatDateStr } from '../../utils/content/pretalxDateFormat'
 import type { PretalxSettings } from './types'
 
 // "Date / Time Settings" card of the Pretalx page: display format (with a live

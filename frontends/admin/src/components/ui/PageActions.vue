@@ -4,7 +4,7 @@ import Button from 'primevue/button'
 import PageHeaderSlot from './PageHeaderSlot.vue'
 import Menu from 'primevue/menu'
 
-// The page-level actions of a list page, in the app's page header (components/PageHeader.vue,
+// The page-level actions of a list page, in the app's page header (components/ui/PageHeader.vue,
 // #page-header-actions) at the right of the title: ONE primary action as a button, and
 // everything else (refresh, reload all, sync …) in a "More actions" menu. Every list page
 // uses this, so the primary action is always in the same place.

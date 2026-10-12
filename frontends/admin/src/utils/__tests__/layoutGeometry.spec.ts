@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clamp, closestWithinThreshold, edgeTargets, resizeFromCorner, round1, sameShape, snapAxis, snapMove } from '../layoutGeometry'
+import { clamp, closestWithinThreshold, edgeTargets, resizeFromCorner, round1, sameShape, snapAxis, snapMove } from '../layout/layoutGeometry'
 
 const noTargets = { hTargets: [], vTargets: [] }
 

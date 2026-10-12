@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DialogTitle from './DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 /**
  * Config editor for the `icon` field handler — shared by ContentEditView.vue
  * (a Contenttype field's live value) and LayoutCanvasEditor.vue (a
@@ -13,11 +13,11 @@ import DialogTitle from './DialogTitle.vue'
  * selected "<library>/<name>" value and its height.
  */
 import { ref, computed, onMounted, watch } from 'vue'
-import { getIconManifest, getInstalledLibraries, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../utils/iconLibraries'
-import RouteLink from './RouteLink.vue'
-import { links } from '../utils/links'
-import type { OptionFlags } from '../utils/optionFlags'
-import type { DefaultColor } from '../types/models'
+import { getIconManifest, getInstalledLibraries, loadIcon, type IconLibraryMeta, type IconPickerValue } from '../../utils/media/iconLibraries'
+import RouteLink from '../ui/RouteLink.vue'
+import { links } from '../../utils/links'
+import type { OptionFlags } from '../../utils/content/optionFlags'
+import type { DefaultColor } from '../../types/models'
 
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
@@ -25,9 +25,9 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
-import ColorPicker from './ColorPicker.vue'
-import OptionFlagToggle from './OptionFlagToggle.vue'
-import ColorPalettePicker from './ColorPalettePicker.vue'
+import ColorPicker from '../ui/ColorPicker.vue'
+import OptionFlagToggle from '../ui/OptionFlagToggle.vue'
+import ColorPalettePicker from '../ui/ColorPalettePicker.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: IconPickerValue

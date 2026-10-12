@@ -4,11 +4,11 @@ import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import ProgressBar from 'primevue/progressbar'
-import DialogTitle from '../DialogTitle.vue'
-import DialogFooter from '../DialogFooter.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
+import DialogFooter from '../ui/DialogFooter.vue'
 import { useMediaStore } from '../../stores/media'
 import { useAuthStore } from '../../stores/auth'
-import { uploadMedia, MAX_MEDIA_UPLOAD_BYTES } from '../../utils/uploadMedia'
+import { uploadMedia, MAX_MEDIA_UPLOAD_BYTES } from '../../utils/media/uploadMedia'
 
 // The "Upload Media" dialog of the Media page: drop zone, file list and a
 // sequential per-file upload with progress.

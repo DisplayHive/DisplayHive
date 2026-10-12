@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
+import DialogTitle from '../components/ui/DialogTitle.vue'
+import DialogFooter from '../components/ui/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
-import PageActions from '../components/PageActions.vue'
-import RouteLink from '../components/RouteLink.vue'
+import PageActions from '../components/ui/PageActions.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { provideFieldContext, type FieldEditorProps } from '../composables/fields/useFieldContext'
-import { fieldEditorFor } from './fields/registry'
-import type { OptionFlags } from '../utils/optionFlags'
+import { provideFieldContext, type FieldEditorProps } from '../../composables/fields/useFieldContext'
+import { fieldEditorFor } from './registry'
+import type { OptionFlags } from '../../utils/content/optionFlags'
 
 /**
  * The editor of one Contenttype field (TagConfig), chosen by its field handler — the editors are

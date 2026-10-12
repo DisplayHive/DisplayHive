@@ -1,4 +1,4 @@
-import type { Content } from '../types/models'
+import type { Content } from '../../types/models'
 
 /** What a content element is doing right now, judged by its switch, schedule and assignment. */
 export type ScheduleState = 'live' | 'scheduled' | 'expired' | 'inactive' | 'unassigned'

@@ -3,11 +3,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
-import RouteLink from '../RouteLink.vue'
+import RouteLink from '../ui/RouteLink.vue'
 import { useContentStore } from '../../stores/content'
 import { useRightsStore } from '../../stores/rights'
 import { links } from '../../utils/links'
-import { expiringSoon, recentlyChanged, relativeTime, scheduleState, startingSoon } from '../../utils/contentSchedule'
+import { expiringSoon, recentlyChanged, relativeTime, scheduleState, startingSoon } from '../../utils/content/contentSchedule'
 
 // The Dashboard's working part: quick actions, what is on air / about to expire or start,
 // and what was changed last. The stat tiles above it stay in DashboardView.vue; the content

@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAck } from '../useAck'
 import { useConfirmAction } from '../useConfirmAction'
 import { BASE_ASPECT_RATIO, cssAspectRatio } from '../useAspectRatios'
-import { sameShape } from '../../utils/layoutGeometry'
+import { sameShape } from '../../utils/layout/layoutGeometry'
 import type { EditorCore } from './useEditorCore'
 
 /**

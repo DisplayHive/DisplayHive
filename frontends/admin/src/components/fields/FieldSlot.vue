@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useFieldContext } from '../../composables/fields/useFieldContext'
-import OptionFlagToggle from '../OptionFlagToggle.vue'
+import OptionFlagToggle from '../ui/OptionFlagToggle.vue'
 
 // One row per individual option/sub-control of a field: the control itself (grows to fill the
 // width) plus, in preset-authoring mode, its lock/hide toggle pair anchored to the right. In a

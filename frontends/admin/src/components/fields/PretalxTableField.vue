@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useFieldContext } from '../../composables/fields/useFieldContext'
-import { blankPretalxTableValue, type PretalxTableValue } from '../../utils/pretalxTable'
-import type { OptionFlags } from '../../utils/optionFlags'
-import PretalxTableFieldEditor from '../PretalxTableFieldEditor.vue'
+import { blankPretalxTableValue, type PretalxTableValue } from '../../utils/content/pretalxTable'
+import type { OptionFlags } from '../../utils/content/optionFlags'
+import PretalxTableFieldEditor from './PretalxTableFieldEditor.vue'
 
 // A Pretalx schedule table. Its settings are `<name>` (the URL) and `<name>__<setting>` for the
 // rest; the editor works with its own PretalxTableValue and local setting names, so this

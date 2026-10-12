@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('beautiful-backgrounds?raw', () => ({ default: 'console.log("</script>")' }))
 
-import { BACKDROP_OVERRIDE_CSS, buildPreviewSrcdoc, effectFragment, previewContainerHtml } from '../layoutPreviewDoc'
+import { BACKDROP_OVERRIDE_CSS, buildPreviewSrcdoc, effectFragment, previewContainerHtml } from '../layout/layoutPreviewDoc'
 
 const preview = { name: 'D', html: '<p>hi</p>', css: 'p{color:red}', background_effect: null }
 

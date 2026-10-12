@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
-import PageActions from '../components/PageActions.vue'
-import RouteLink from '../components/RouteLink.vue'
+import ScreenCreateDialog from '../components/screens/ScreenCreateDialog.vue'
+import ScreenEditDialog from '../components/screens/ScreenEditDialog.vue'
+import PageActions from '../components/ui/PageActions.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useSocket } from '../composables/useSocket'
+import { ref, computed, onMounted } from 'vue'
 import { useAck } from '../composables/useAck'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
 import { openDevicePreview } from '../composables/useDevicePreview'
@@ -25,18 +24,13 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
-import Checkbox from 'primevue/checkbox'
-import Select from 'primevue/select'
 import { useRoute, useRouter } from 'vue-router'
-import { useAspectRatios } from '../composables/useAspectRatios'
 
 const toast = useToast()
 const confirm = useConfirm()
 const { confirmDanger } = useConfirmAction()
-const { on, off, emit } = useSocket()
 const { request } = useAck()
 const screensStore = useScreensStore()
 const screengroupsStore = useScreengroupsStore()
@@ -75,30 +69,9 @@ const { showWindowed, showFullscreen, toggleShowWindowed, toggleShowFullscreen, 
 const onlineCount = computed(() => screensStore.onlineCount)
 const offlineCount = computed(() => screensStore.offlineCount)
 
-// Create screen dialog
-const isCreating = ref(false)
 const showCreateDialog = ref(false)
-const createForm = ref({
-  name: '',
-})
-
-// Rename screen dialog
-const isRenaming = ref(false)
 const showRenameDialog = ref(false)
 const renamingScreen = ref<Screen | null>(null)
-const renameForm = ref({
-  name: '',
-  screengroup_ids: [] as number[],
-  aspect_ratio: '16:9',
-  rotation: 0,
-})
-const { ratios: aspectRatios } = useAspectRatios()
-const ROTATION_OPTIONS = [
-  { label: 'None (0°)', value: 0 },
-  { label: '+90° (clockwise)', value: 90 },
-  { label: '-90° (counter-clockwise)', value: 270 },
-  { label: '180°', value: 180 },
-]
 
 const windowedCount = computed(() => screensStore.screens.filter(isWindowed).length)
 const fullscreenCount = computed(() => screensStore.screens.filter(isFullscreen).length)
@@ -118,71 +91,19 @@ const filteredScreens = computed(() => {
   return applyMaximizedFilter(list)
 })
 
-// Dialog-specific: receives current screengroup membership for the screen being renamed
-const handleScreengroupsData = (data: { all_screengroups: unknown[]; current_screengroups: number[] }) => {
-  if (renamingScreen.value && data.current_screengroups) {
-    renameForm.value.screengroup_ids = data.current_screengroups
-  }
-}
-
 onMounted(() => {
-  on('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
   screensStore.fetch()
   screengroupsStore.fetch()
 })
 
-onUnmounted(() => {
-  off('displayhive:screens:stc:screen_screengroups', handleScreengroupsData)
-})
-
 
 const openCreateDialog = () => {
-  createForm.value = { name: '' }
   showCreateDialog.value = true
-}
-
-const createScreen = async () => {
-  if (!createForm.value.name) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Name is required', life: 3000 })
-    return
-  }
-  isCreating.value = true
-  try {
-    const ack = await request('displayhive:screens:cts:create_screen', { name: createForm.value.name }, { success: 'Screen created', error: 'Failed to create screen' })
-    if (ack) showCreateDialog.value = false
-  } finally {
-    isCreating.value = false
-  }
 }
 
 const openRenameDialog = (screen: Screen) => {
   renamingScreen.value = screen
-  renameForm.value = {
-    name: screen.name,
-    screengroup_ids: [],
-    aspect_ratio: screen.aspect_ratio || '16:9',
-    rotation: screen.rotation || 0,
-  }
-  emit('displayhive:screens:cts:get_screen_screengroups', { screen_id: screen.id })
   showRenameDialog.value = true
-}
-
-const saveRename = async (keepOpen = false) => {
-  if (!renamingScreen.value) return
-  isRenaming.value = true
-  try {
-    const ack = await request('displayhive:screens:cts:rename_screen', {
-      id: renamingScreen.value.id,
-      old_name: renamingScreen.value.name,
-      new_name: renameForm.value.name,
-      screengroup_ids: renameForm.value.screengroup_ids,
-      aspect_ratio: renameForm.value.aspect_ratio,
-      rotation: renameForm.value.rotation,
-    }, { success: `Screen "${renameForm.value.name}" saved`, error: 'Could not save the screen' })
-    if (ack && !keepOpen) showRenameDialog.value = false
-  } finally {
-    isRenaming.value = false
-  }
 }
 
 const toggleDebug = async (screen: Screen) => {
@@ -460,72 +381,8 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
       </template>
     </Card>
 
-    <!-- Create Screen Dialog -->
-    <Dialog v-model:visible="showCreateDialog" modal :style="{ width: '450px' }">
-      <template #header>
-        <DialogTitle icon="pi-desktop" title="Add Screen" />
-      </template>
-      <div class="dialog-content">
-        <div class="field" data-tour="screen-name-field">
-          <label for="create-name">Screen Name</label>
-          <InputText id="create-name" v-model="createForm.name" class="w-full" placeholder="e.g. Lobby-Display" />
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter cancel-tour="screens-create-cancel" confirm-label="Create" :loading="isCreating" :cancel-disabled="isCreating" @cancel="showCreateDialog = false" @confirm="createScreen" />
-      </template>
-    </Dialog>
-
-    <!-- Rename Screen Dialog -->
-    <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '600px' }">
-      <template #header>
-        <DialogTitle icon="pi-pencil" title="Rename Screen" />
-      </template>
-      <div class="dialog-content">
-        <div class="field">
-          <label for="rename-name">Screen Name</label>
-          <InputText id="rename-name" v-model="renameForm.name" class="w-full" />
-        </div>
-        <div class="field">
-          <label for="rename-aspect-ratio">Aspect Ratio</label>
-          <Select
-            id="rename-aspect-ratio"
-            v-model="renameForm.aspect_ratio"
-            :options="aspectRatios.includes(renameForm.aspect_ratio) ? aspectRatios : [...aspectRatios, renameForm.aspect_ratio]"
-            class="w-full"
-          />
-          <small class="hint">The Layout variation closest to this ratio is sent to the screen. Ratios are added on the Designs page.</small>
-        </div>
-        <div class="field">
-          <label for="rename-rotation">Rotation</label>
-          <Select
-            id="rename-rotation"
-            v-model="renameForm.rotation"
-            :options="ROTATION_OPTIONS"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
-          <small class="hint">Turns everything the screen shows, as one piece, for displays mounted sideways or upside-down. The layout is laid out at the aspect ratio above first, then rotated. The screen reloads when this changes.</small>
-        </div>
-        <div class="field" data-tour="rename-screengroups-field">
-          <label>Screengroups</label>
-          <div class="screengroup-checkboxes">
-            <div v-for="sg in screengroupsStore.screengroups.filter(sg => !sg.is_one_screen)" :key="sg.id" class="checkbox-item">
-              <Checkbox
-                :inputId="`sg-${sg.id}`"
-                v-model="renameForm.screengroup_ids"
-                :value="sg.id"
-              />
-              <label :for="`sg-${sg.id}`">{{ sg.name }}</label>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter show-update :loading="isRenaming" :cancel-disabled="isRenaming" @cancel="showRenameDialog = false" @update="saveRename(true)" @confirm="saveRename()" />
-      </template>
-    </Dialog>
+    <ScreenCreateDialog v-model:visible="showCreateDialog" />
+    <ScreenEditDialog v-model:visible="showRenameDialog" :screen="renamingScreen" />
   </div>
 </template>
 
@@ -566,28 +423,6 @@ useOpenFromQuery(() => screensStore.screens, openRenameDialog, () => canEdit.val
 .filter-row {
   display: flex;
   gap: 0.5rem;
-}
-
-.screengroup-checkboxes {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 0.5rem;
-  border: 1px solid var(--p-content-border-color, #dee2e6);
-  border-radius: 4px;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.checkbox-item label {
-  margin: 0;
-  cursor: pointer;
 }
 
 .name-cell {

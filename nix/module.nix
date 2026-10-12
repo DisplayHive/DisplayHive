@@ -6,7 +6,7 @@
 #   • its own system user / group (displayhive-<name>)
 #   • its own PostgreSQL database and role (displayhive-<name>)
 #   • its own TCP port
-#   • a `displayhive-<name>` command for maintenance (`flask dh …`, application/cli.py)
+#   • a `displayhive-<name>` command for maintenance (`flask dh …`, application/cli/)
 #
 # The server runs a Nix PACKAGE (nix/package.nix: the frontends, the locked Python packages and the
 # application, all built by Nix) — nothing is cloned, installed or built on the host. Use it through

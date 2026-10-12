@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getIconManifest, getInstalledLibraries, loadIcon } from '../iconLibraries'
+import { getIconManifest, getInstalledLibraries, loadIcon } from '../media/iconLibraries'
 
 const answer = (body: unknown, ok = true) => Promise.resolve({ ok, json: () => Promise.resolve(body), text: () => Promise.resolve(String(body)) } as Response)
 

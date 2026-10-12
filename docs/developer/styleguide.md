@@ -182,7 +182,7 @@ classes from `assets/views.css`:
 
 ### Page header and page actions
 
-Every page has one header, built by `components/PageHeader.vue` from the route: icon badge, the page
+Every page has one header, built by `components/ui/PageHeader.vue` from the route: icon badge, the page
 title (`<h1>`) with the help question mark next to it, and under the title a **one-line
 description** — the first sentence of the page's help text (`page.<route>` in the help
 topics), at most 140 characters; the whole text stays behind the question mark. The
@@ -191,7 +191,7 @@ description's colour is `--p-text-muted-color`, which follows the theme, so it n
 title.
 
 The page's **actions** sit at the right of that row, in the element `#page-header-actions`.
-Views put theirs there with the `PageActions` component (`components/PageActions.vue`) —
+Views put theirs there with the `PageActions` component (`components/ui/PageActions.vue`) —
 never with their own buttons in the card header:
 
 ```html
@@ -531,7 +531,7 @@ Use `repeat(n, minmax(0, 1fr))` and give the grid items and the
 
 ### Links inside coloured elements (`RouteLink`)
 
-`components/RouteLink.vue` is the cross-page link. Its default
+`components/ui/RouteLink.vue` is the cross-page link. Its default
 `color: inherit` / no underline is written unscoped inside `:where()` (zero
 specificity) on purpose: a class on the link — such as ContentTable's coloured
 `.membership-chip--*` pills — then always wins. A scoped `.route-link { color:
@@ -542,7 +542,7 @@ order decided the winner and could leave light inherited text on a light pill
 ### Empty color fields (checkerboard)
 
 PrimeVue's `ColorPicker` paints an unset value as red, which reads as a real
-choice. Always import `components/ColorPicker.vue` (a thin wrapper) instead of
+choice. Always import `components/ui/ColorPicker.vue` (a thin wrapper) instead of
 `primevue/colorpicker`: an empty value shows a checkerboard built from
 `--p-surface-300` / `--p-content-background`, so it works in light and dark
 mode without a `.dark-mode` override. It needs `!important` only because

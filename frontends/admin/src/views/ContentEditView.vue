@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import PageHeaderSlot from '../components/PageHeaderSlot.vue'
-import RouteLink from '../components/RouteLink.vue'
+import PageHeaderSlot from '../components/ui/PageHeaderSlot.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import ContentTypePickerDialog from '../components/contentEdit/ContentTypePickerDialog.vue'
 import ContentFieldsSection from '../components/contentEdit/ContentFieldsSection.vue'
 import DeliverySettings from '../components/contentEdit/DeliverySettings.vue'

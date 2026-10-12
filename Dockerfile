@@ -96,7 +96,7 @@ ENV DATA_DIR=/data \
     DISPLAYHIVE_DEPLOYMENT=docker \
     FLASK_APP=app
 # FLASK_APP: maintenance commands work as
-#   docker compose exec displayhive flask dh check-config   (see application/cli.py)
+#   docker compose exec displayhive flask dh check-config   (see application/cli/)
 
 # Give the unprivileged user the writable data dirs. The old /app/static/media* dirs are still
 # created so a pre-DATA_DIR compose.yml that mounts fresh volumes there keeps working (with the

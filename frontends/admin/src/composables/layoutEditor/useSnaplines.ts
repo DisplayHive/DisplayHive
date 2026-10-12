@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useSocket } from '../useSocket'
 import { useAck } from '../useAck'
-import { clamp, type Snapline } from '../../utils/layoutGeometry'
+import { clamp, type Snapline } from '../../utils/layout/layoutGeometry'
 
 /**
  * Snaplines are global (shared across every Layout, not scoped to this one) — loaded once

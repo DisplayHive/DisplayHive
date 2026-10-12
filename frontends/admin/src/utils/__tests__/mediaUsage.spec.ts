@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deleteWarning, isUnused, usageLabel, usageLink } from '../mediaUsage'
+import { deleteWarning, isUnused, usageLabel, usageLink } from '../media/mediaUsage'
 import type { MediaItem } from '../../types/models'
 
 const item = (used_by: MediaItem['used_by']): MediaItem => ({ id: 1, title: 't', filename: 'f.png', mimetype: 'image/png', used_by })

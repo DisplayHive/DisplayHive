@@ -11,16 +11,16 @@
  * store it in — each caller adapts its own storage to/from this shape.
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useSocket } from '../composables/useSocket'
-import type { PretalxTableValue } from '../utils/pretalxTable'
-import type { OptionFlags } from '../utils/optionFlags'
+import { useSocket } from '../../composables/useSocket'
+import type { PretalxTableValue } from '../../utils/content/pretalxTable'
+import type { OptionFlags } from '../../utils/content/optionFlags'
 
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
 import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
-import OptionFlagToggle from './OptionFlagToggle.vue'
+import OptionFlagToggle from '../ui/OptionFlagToggle.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: PretalxTableValue

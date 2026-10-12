@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import RouteLink from '../components/RouteLink.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import { links } from '../utils/links'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useSocket } from '../composables/useSocket'

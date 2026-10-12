@@ -1,4 +1,4 @@
-import type { OptionFlags } from '../../utils/optionFlags'
+import type { OptionFlags } from '../../utils/content/optionFlags'
 
 export interface TagConfig {
   id?: number | null

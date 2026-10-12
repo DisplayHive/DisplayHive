@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { combinedGradientCss, gradientCssValue, stopColorWithAlpha } from '../gradientCss'
+import { combinedGradientCss, gradientCssValue, stopColorWithAlpha } from '../design/gradientCss'
 
 const plain = (s: { color: string }) => s.color
 const base = { repeating: false, angle: 90, shape: '', size: '', position_x: 50, position_y: 50 }

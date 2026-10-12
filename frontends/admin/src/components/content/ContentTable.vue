@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import PreviewFrame from './PreviewFrame.vue'
+import PreviewFrame from '../ui/PreviewFrame.vue'
 import { ref, computed, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -9,12 +9,12 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { useAspectRatios, bestAspectRatio, BASE_ASPECT_RATIO, cssAspectRatio } from '../composables/useAspectRatios'
-import { useRightsStore } from '../stores/rights'
-import RouteLink from './RouteLink.vue'
-import { links } from '../utils/links'
-import { useSettingsStore } from '../stores/settings'
-import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../utils/designPreview'
+import { useAspectRatios, bestAspectRatio, BASE_ASPECT_RATIO, cssAspectRatio } from '../../composables/useAspectRatios'
+import { useRightsStore } from '../../stores/rights'
+import RouteLink from '../ui/RouteLink.vue'
+import { links } from '../../utils/links'
+import { useSettingsStore } from '../../stores/settings'
+import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../../utils/design/designPreview'
 
 const rightsStore = useRightsStore()
 const settingsStore = useSettingsStore()

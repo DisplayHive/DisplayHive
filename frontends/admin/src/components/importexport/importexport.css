@@ -1,0 +1,24 @@
+/* Rules shared by the export and the import card. */
+.section-card {
+  width: 100%;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+}
+
+.description {
+  margin-bottom: 1rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.importexport-tree {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--p-content-border-color, #ddd);
+  border-radius: 6px;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FORMAT_TOKENS, formatDateStr } from '../pretalxDateFormat'
+import { FORMAT_TOKENS, formatDateStr } from '../content/pretalxDateFormat'
 
 const d = new Date('2024-06-07T14:05:09Z')
 

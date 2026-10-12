@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Dialog from 'primevue/dialog'
-import DialogTitle from '../DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 
 // Read-only viewer for the cached response of a Pretalx API URL.
 defineProps<{ cacheTitle: string; cacheFetchedAt: string; cacheContent: string }>()

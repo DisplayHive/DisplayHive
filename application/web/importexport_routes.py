@@ -58,7 +58,8 @@ def register_importexport_routes(app, db, socketio):
     def admin_import_preview():
         """Parse an uploaded ZIP/JSON export and stage it server-side under a
         short-lived token, returning a manifest for the selection tree."""
-        from application.admin.importexport.importer import import_manifest, prepare_import_payload
+        from application.admin.importexport.importer import import_manifest
+        from application.admin.importexport.payload import prepare_import_payload
 
         service.cleanup_stale_stages(stage_dir())
 

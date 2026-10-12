@@ -223,36 +223,36 @@ def handle_delete_user(data):
 - `App.vue` is only the page frame. Its parts: `composables/useSessionLifecycle.ts` (session,
   connect, reload after an outage), `composables/useSecurityStatus.ts` (server version and
   configuration warnings), `composables/useAdminNavigation.ts` (the menu and the page titles — a
-  new page is one line in each table there), `components/AppBanners.vue`, `AppHeader.vue`,
+  new page is one line in each table there), `components/app/AppBanners.vue`, `AppHeader.vue`,
   `PageHeader.vue`, and the global CSS in `assets/shell/` (loaded in the order of `index.css`).
 - Calling the server: `composables/useAck.ts` (see "Writing an admin handler") and
   `composables/useConfirmAction.ts` (the red delete confirmation); dialog headers are
-  `components/DialogTitle.vue`.
+  `components/ui/DialogTitle.vue`.
 - The Designs page: `views/DesignsView.vue` is the list and the dialog shell; the dialog's sections are
   `components/designs/Design*Panel.vue` (each in a collapsible `DesignPanel`, loading and saving its own
   data), the Gradient library is `composables/designs/useGradients.ts` + `GradientDialogs.vue`.
-- The Layout editor: `components/LayoutCanvasEditor.vue` only composes; its state and behaviour are the
+- The Layout editor: `components/layout/LayoutCanvasEditor.vue` only composes; its state and behaviour are the
   composables in `composables/layoutEditor/` (core, snaplines, design preview, persistence, container
   actions, canvas pointer handling, ratio variations — assembled by `useLayoutEditor.ts`) and its screen
   parts the components in `components/layout/`, which get the editor by injection. The pure parts
-  (snapping, the preview document, default-content shapes) are in `utils/layoutGeometry.ts`,
+  (snapping, the preview document, default-content shapes) are in `utils/layout/layoutGeometry.ts`,
   `layoutPreviewDoc.ts` and `containerDefaultContent.ts`, with unit tests.
-- Field editors: `components/FieldValueEditor.vue` picks the editor of a field's handler from
+- Field editors: `components/fields/FieldValueEditor.vue` picks the editor of a field's handler from
   `components/fields/registry.ts`; each handler is a component in `components/fields/` that gets its field
   (name, value bag, mode, lock/hide flags) through `useFieldContext()` and lays out its options with
   `FieldSlot`. A new handler is one component plus one line in the registry. The generic `fve-*` layout
   classes are `assets/field-editors.css`; the live previews of the date format and countdown are
-  `utils/fieldPreviews.ts`.
+  `utils/content/fieldPreviews.ts`.
 - Users & Rights: `views/UsersView.vue` is only the tabs; what the tabs and dialogs share (gates, account
   list, rights data) is `composables/users/useUsersPage.ts`, the tabs and dialogs are `components/users/`.
 - The content edit page: `views/ContentEditView.vue` composes `components/contentEdit/`; the form, saving,
   screen assignment and preview are `composables/contentEdit/` (`useContentEditor.ts` assembles them).
-  Starting values per field handler: `utils/contentFieldDefaults.ts`.
+  Starting values per field handler: `utils/content/contentFieldDefaults.ts`.
 - The Dashboard: `views/DashboardView.vue` holds the stat tiles; quick actions and the schedule panels
   (on air, ending/starting soon, recently changed) are `components/dashboard/DashboardOverview.vue`, judged
-  in the browser by `utils/contentSchedule.ts` (the schedule is wall-clock text, read in the viewer's time
+  in the browser by `utils/content/contentSchedule.ts` (the schedule is wall-clock text, read in the viewer's time
   zone like a screen does). `ContentElement.updated_at` feeds "recently changed".
-- Ctrl+K: `components/CommandPalette.vue` (opened by `composables/useCommandPalette.ts`) lists pages, actions
+- Ctrl+K: `components/app/CommandPalette.vue` (opened by `composables/useCommandPalette.ts`) lists pages, actions
   and the items of the stores; the matching is `utils/commandSearch.ts`. A new page shows up through
   `useAdminNavigation`; a new kind of item is one block in the palette's `entries`.
 - Icon libraries: DisplayHive ships no icons. `application/admin/icons/libraries.py` installs libraries into
@@ -263,7 +263,7 @@ def handle_delete_user(data):
   `components/settings/IconLibrariesCard.vue`. An icon value stays `<library>/<name>`.
 - Media in use: `application/admin/media/usage.py` scans content, presets, container defaults, designs and
   settings for a file's URL (and random-by-tag image fields); the media list carries it as `used_by`.
-- Put anything a page shows in the header's action area into `components/PageHeaderSlot.vue` (or use
+- Put anything a page shows in the header's action area into `components/ui/PageHeaderSlot.vue` (or use
   `PageActions`); a plain `<Teleport to="#page-header-actions">` crashes the page on a reload.
 - `views/`, `components/`, `router/`, `types/`, `utils/`.
 

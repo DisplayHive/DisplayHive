@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useFieldContext } from '../../composables/fields/useFieldContext'
-import type { IconPickerValue } from '../../utils/iconLibraries'
-import type { OptionFlags } from '../../utils/optionFlags'
-import IconPickerField from '../IconPickerField.vue'
+import type { IconPickerValue } from '../../utils/media/iconLibraries'
+import type { OptionFlags } from '../../utils/content/optionFlags'
+import IconPickerField from './IconPickerField.vue'
 
 // An icon from the installed icon libraries, with size and colour. The picker manages its own
 // hidden/locked state per sub-option, so this only translates between its local keys ('icon',

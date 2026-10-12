@@ -7,11 +7,11 @@ import { useContainerActions } from './useContainerActions'
 import { useCanvasInteraction } from './useCanvasInteraction'
 import { useRatioVariations } from './useRatioVariations'
 import { BASE_ASPECT_RATIO } from '../useAspectRatios'
-import { DEFAULT_FIELD_HANDLER_OPTIONS } from '../../utils/containerDefaultContent'
+import { DEFAULT_FIELD_HANDLER_OPTIONS } from '../../utils/content/containerDefaultContent'
 import type { ContentContainer } from '../../types/models'
 
 /**
- * Everything the Layout editor (components/LayoutCanvasEditor.vue and the components in
+ * Everything the Layout editor (components/layout/LayoutCanvasEditor.vue and the components in
  * components/layout/) shares, built from the parts in this folder:
  *
  * - useEditorCore        selection, shown ratio, the staged edits, the settings form

@@ -94,7 +94,7 @@ def test_layout_variant_helpers():
 
 
 def test_combine_layout_containers_uses_ratio_geometry():
-    from application.admin.content.helper import combine_layout_containers
+    from application.admin.content.scene import combine_layout_containers
     c = _container(1, [('4:3', 10, 20, 30, 40)])
     c.show_when_empty = True
     c.default_field_handler = None

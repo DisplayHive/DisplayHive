@@ -67,7 +67,7 @@
   color: var(--p-text-muted-color, #6b7280);
 }
 
-/* Teleport target for PageActions (components/PageActions.vue): a list page's primary
+/* Teleport target for PageActions (components/ui/PageActions.vue): a list page's primary
    action and its "More actions" menu, or a routed view's own page-level action (e.g. a
    "Back to X" link), on the same row as the title instead of its own line. */
 .page-header-actions {

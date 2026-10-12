@@ -1,6 +1,6 @@
 import { computed, inject, provide, reactive, watch, type InjectionKey } from 'vue'
 import type { DefaultColor } from '../../types/models'
-import type { OptionFlags } from '../../utils/optionFlags'
+import type { OptionFlags } from '../../utils/content/optionFlags'
 
 export interface FieldEditorProps {
   tag: { name: string; fieldHandler: string; max_length?: number }
@@ -33,7 +33,7 @@ export interface FieldEditorEmit {
 
 /**
  * What every field editor of one field (components/fields/*) needs: the field's name and values,
- * the mode, and the per-option lock/hide flags (see utils/optionFlags.ts for the shared shape).
+ * the mode, and the per-option lock/hide flags (see utils/content/optionFlags.ts for the shared shape).
  * Provided by FieldValueEditor, injected by the editor of the field's handler.
  */
 function createFieldContext(props: FieldEditorProps, emit: FieldEditorEmit) {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useLayoutEditor } from '../../composables/layoutEditor/useLayoutEditor'
-import PreviewFrame from '../PreviewFrame.vue'
+import PreviewFrame from '../ui/PreviewFrame.vue'
 
 // The canvas: the Design preview behind, the snaplines and one rectangle per placed container.
 const ed = useLayoutEditor()

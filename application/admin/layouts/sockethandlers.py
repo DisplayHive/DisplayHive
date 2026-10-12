@@ -251,7 +251,7 @@ def register_admin_layouts_handlers(socketio, app, db):
         if not layout:
             return
 
-        from application.admin.content.helper import combine_layout_containers
+        from application.admin.content.scene import combine_layout_containers
         ratio = normalize_ratio((message or {}).get('aspect_ratio')) or BASE_RATIO
         containers = combine_layout_containers(containers_for_ratio(layout, ratio), {}, db=db, ratio=ratio)
         socketio.emit('displayhive:admin:stc:layout_default_content_preview', {

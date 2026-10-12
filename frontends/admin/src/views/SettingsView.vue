@@ -1,230 +1,48 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSocket } from '../composables/useSocket'
-import { useAck } from '../composables/useAck'
 import { useRightsStore } from '../stores/rights'
 
 import Card from 'primevue/card'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
-import Select from 'primevue/select'
-import ToggleSwitch from 'primevue/toggleswitch'
-import InputNumber from 'primevue/inputnumber'
-import LoginProvidersCard from '../components/LoginProvidersCard.vue'
+import SettingsDashboardCard from '../components/settings/SettingsDashboardCard.vue'
+import SettingsContentEditorCard from '../components/settings/SettingsContentEditorCard.vue'
+import SettingsTimeCard from '../components/settings/SettingsTimeCard.vue'
+import SettingsScreensCard from '../components/settings/SettingsScreensCard.vue'
+import LoginProvidersCard from '../components/settings/LoginProvidersCard.vue'
 import IconLibrariesCard from '../components/settings/IconLibrariesCard.vue'
-import OutboundPolicyCard from '../components/OutboundPolicyCard.vue'
+import OutboundPolicyCard from '../components/settings/OutboundPolicyCard.vue'
+import type { SystemSettings } from '../components/settings/types'
 
 const { on, off, emit } = useSocket()
-const { request } = useAck()
 const rightsStore = useRightsStore()
 
 const canEdit = computed(() => rightsStore.can('settings.edit'))
 
 const loading = ref(true)
-const saving = ref(false)
-const timeSaving = ref(false)
-
-const welcomeHeadline = ref('')
-const welcomeText = ref('')
-const hideCommunityLinks = ref(false)
-const hideHelpingHand = ref(false)
-const hidePoweredBy = ref(false)
-const hideDemoMode = ref(false)
-const hideUserTours = ref(false)
-const hideAdminTours = ref(false)
-const contentEditPreviewSize = ref(35)
-const contentListPreviewSize = ref(20)
-const contentSaving = ref(false)
-const screenLogMaxAgeHours = ref(72)
-const screenLogMaxRows = ref(250000)
-const logSaving = ref(false)
-const statusIndicator = ref(true)
-const reloadEnabled = ref(false)
-const reloadAt = ref('04:00')
-
-// Time section
-const serverTimeBase = ref<Date | null>(null)
+const settings = ref<SystemSettings>({})
+const serverTime = ref<string | null>(null)
 const serverTimeReceivedAt = ref(0)
-const displayedServerTime = ref('')
+// The timezone being edited in the Time card (the Screens card shows it too).
 const selectedTimezone = ref('UTC')
-const correctedTime = ref('')
-
-const timezoneOptions = Intl.supportedValuesOf('timeZone').map((tz: string) => ({
-  label: tz,
-  value: tz,
-}))
-
-let timeTicker: ReturnType<typeof setInterval> | null = null
-
-const updateDisplayedTimes = () => {
-  if (!serverTimeBase.value) return
-  const elapsed = Date.now() - serverTimeReceivedAt.value
-  const current = new Date(serverTimeBase.value.getTime() + elapsed)
-
-  const fmtOpts: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }
-
-  displayedServerTime.value =
-    new Intl.DateTimeFormat('en-GB', { ...fmtOpts, timeZone: 'UTC' }).format(current) + ' UTC'
-
-  try {
-    correctedTime.value =
-      new Intl.DateTimeFormat('en-GB', { ...fmtOpts, timeZone: selectedTimezone.value }).format(current) +
-      ` (${selectedTimezone.value})`
-  } catch {
-    correctedTime.value = '—'
-  }
-}
-
-watch(selectedTimezone, updateDisplayedTimes)
-
-interface SystemSettings {
-  welcome_headline?: string
-  welcome_text?: string
-  hide_community_links?: boolean | string
-  hide_helping_hand?: boolean | string
-  hide_powered_by?: boolean | string
-  hide_demo_mode?: boolean | string
-  hide_user_tours?: boolean | string
-  hide_admin_tours?: boolean | string
-  content_edit_preview_size?: number | string
-  content_list_preview_size?: number | string
-  screen_status_indicator?: boolean | string
-  screen_reload_at?: string
-  screen_log_max_age_hours?: number | string
-  screen_log_max_rows?: number | string
-  timezone?: string
-}
 
 const handleSettings = (data: { system_settings?: SystemSettings; server_time?: string }) => {
   loading.value = false
-  const sys = data?.system_settings || {}
-  welcomeHeadline.value = sys.welcome_headline ?? 'Welcome to DisplayHive Admin'
-  welcomeText.value = sys.welcome_text ?? 'Use the navigation menu to manage your digital signage system.'
-  hideCommunityLinks.value = sys.hide_community_links === true || sys.hide_community_links === 'true'
-  hideHelpingHand.value = sys.hide_helping_hand === true || sys.hide_helping_hand === 'true'
-  hidePoweredBy.value = sys.hide_powered_by === true || sys.hide_powered_by === 'true'
-  hideDemoMode.value = sys.hide_demo_mode === true || sys.hide_demo_mode === 'true'
-  hideUserTours.value = sys.hide_user_tours === true || sys.hide_user_tours === 'true'
-  hideAdminTours.value = sys.hide_admin_tours === true || sys.hide_admin_tours === 'true'
-  const previewSize = Number(sys.content_edit_preview_size)
-  contentEditPreviewSize.value = Number.isFinite(previewSize) && previewSize > 0 ? previewSize : 35
-  const listPreviewSize = Number(sys.content_list_preview_size)
-  contentListPreviewSize.value = Number.isFinite(listPreviewSize) && listPreviewSize > 0 ? listPreviewSize : 20
-  statusIndicator.value = !(sys.screen_status_indicator === false || sys.screen_status_indicator === 'false')
-  reloadEnabled.value = !!sys.screen_reload_at
-  if (sys.screen_reload_at) reloadAt.value = sys.screen_reload_at
-  const logHours = Number(sys.screen_log_max_age_hours)
-  screenLogMaxAgeHours.value = Number.isFinite(logHours) && logHours > 0 ? logHours : 72
-  const logRows = Number(sys.screen_log_max_rows)
-  screenLogMaxRows.value = Number.isFinite(logRows) && logRows > 0 ? logRows : 250000
-
+  settings.value = data?.system_settings || {}
   if (data?.server_time) {
-    serverTimeBase.value = new Date(data.server_time)
+    serverTime.value = data.server_time
     serverTimeReceivedAt.value = Date.now()
   }
-  selectedTimezone.value = sys.timezone ?? 'UTC'
-  updateDisplayedTimes()
+  selectedTimezone.value = settings.value.timezone ?? 'UTC'
 }
 
 onMounted(() => {
   on('displayhive:admin:stc:admin_settings', handleSettings)
   emit('displayhive:admin:cts:get_admin_settings')
-  timeTicker = setInterval(updateDisplayedTimes, 1000)
 })
 
 onUnmounted(() => {
   off('displayhive:admin:stc:admin_settings', handleSettings)
-  if (timeTicker) clearInterval(timeTicker)
 })
-
-const saveDashboardSettings = async () => {
-  if (!canEdit.value) return
-  saving.value = true
-  try {
-    await request(
-      'displayhive:admin:cts:set_system_settings',
-      {
-        settings: {
-          welcome_headline: welcomeHeadline.value,
-          welcome_text: welcomeText.value,
-          hide_community_links: hideCommunityLinks.value ? 'true' : 'false',
-          hide_helping_hand: hideHelpingHand.value ? 'true' : 'false',
-          hide_powered_by: hidePoweredBy.value ? 'true' : 'false',
-          hide_demo_mode: hideDemoMode.value ? 'true' : 'false',
-          hide_user_tours: hideUserTours.value ? 'true' : 'false',
-          hide_admin_tours: hideAdminTours.value ? 'true' : 'false',
-        },
-      },
-      { success: 'Dashboard settings updated', error: 'Save failed' },
-    )
-  } finally {
-    saving.value = false
-  }
-}
-
-const saveContentSettings = async () => {
-  if (!canEdit.value) return
-  contentSaving.value = true
-  try {
-    await request(
-      'displayhive:admin:cts:set_system_settings',
-      {
-        settings: {
-          content_edit_preview_size: String(contentEditPreviewSize.value),
-          content_list_preview_size: String(contentListPreviewSize.value),
-        },
-      },
-      { success: 'Content editor settings updated', error: 'Save failed' },
-    )
-  } finally {
-    contentSaving.value = false
-  }
-}
-
-const saveLogSettings = async () => {
-  if (!canEdit.value) return
-  logSaving.value = true
-  try {
-    await request(
-      'displayhive:admin:cts:set_system_settings',
-      {
-        settings: {
-          screen_log_max_age_hours: String(screenLogMaxAgeHours.value),
-          screen_log_max_rows: String(screenLogMaxRows.value),
-          screen_status_indicator: statusIndicator.value ? 'true' : 'false',
-          screen_reload_at: reloadEnabled.value ? reloadAt.value : '',
-        },
-      },
-      { success: 'Screen settings updated', error: 'Save failed' },
-    )
-  } finally {
-    logSaving.value = false
-  }
-}
-
-const saveTimeSettings = async () => {
-  if (!canEdit.value) return
-  timeSaving.value = true
-  try {
-    await request(
-      'displayhive:admin:cts:set_system_settings',
-      { settings: { timezone: selectedTimezone.value } },
-      { success: 'Timezone updated', error: 'Save failed' },
-    )
-  } finally {
-    timeSaving.value = false
-  }
-}
-
 </script>
 
 <template>
@@ -246,235 +64,18 @@ const saveTimeSettings = async () => {
     </div>
 
     <template v-else>
-      <Card>
-        <template #title>
-          <div class="card-header-title">
-            <i class="pi pi-home card-header-icon" />
-            <span>Dashboard</span>
-          </div>
-        </template>
-        <template #content>
-          <div class="settings-form">
-            <div class="field-group" data-tour="settings-welcome-fields">
-            <div class="field">
-              <label for="welcome-headline">Welcome headline</label>
-              <InputText
-                id="welcome-headline"
-                v-model="welcomeHeadline"
-                class="w-full"
-                placeholder="Welcome to DisplayHive Admin"
-                :disabled="!canEdit"
-              />
-            </div>
-            <div class="field">
-              <label for="welcome-text">Welcome text</label>
-              <Textarea
-                id="welcome-text"
-                v-model="welcomeText"
-                class="w-full"
-                rows="3"
-                autoResize
-                placeholder="Use the navigation menu to manage your digital signage system."
-                :disabled="!canEdit"
-              />
-            </div>
-            </div>
-            <div class="toggle-group" data-tour="settings-visibility-toggles">
-            <div class="field toggle-field">
-              <label for="hide-community-links">Hide community links</label>
-              <ToggleSwitch id="hide-community-links" v-model="hideCommunityLinks" :disabled="!canEdit" />
-            </div>
-            <div class="field toggle-field">
-              <label for="hide-helping-hand">Hide "Where a helping hand goes a long way" section</label>
-              <ToggleSwitch id="hide-helping-hand" v-model="hideHelpingHand" :disabled="!canEdit" />
-            </div>
-            <div class="field toggle-field">
-              <label for="hide-powered-by">Hide "powered by DisplayHive" badge on screens</label>
-              <ToggleSwitch id="hide-powered-by" v-model="hidePoweredBy" :disabled="!canEdit" />
-            </div>
-            <div class="field toggle-field">
-              <label for="hide-demo-mode">Hide Demo Mode (removes it from the top bar and blocks the API)</label>
-              <ToggleSwitch id="hide-demo-mode" v-model="hideDemoMode" :disabled="!canEdit" />
-            </div>
-            <div class="field toggle-field">
-              <label for="hide-user-tours">Hide User tours (removes the "User" section from the Guided Tour page)</label>
-              <ToggleSwitch id="hide-user-tours" v-model="hideUserTours" :disabled="!canEdit" />
-            </div>
-            <div class="field toggle-field">
-              <label for="hide-admin-tours">Hide Admin Path tours (removes the "Admin Path" section from the Guided Tour page)</label>
-              <ToggleSwitch id="hide-admin-tours" v-model="hideAdminTours" :disabled="!canEdit" />
-            </div>
-            </div>
-            <div class="field-actions" data-tour="settings-dashboard-save">
-              <Button
-                v-if="canEdit"
-                label="Save"
-                icon="pi pi-check"
-                :loading="saving"
-                @click="saveDashboardSettings"
-              />
-            </div>
-          </div>
-        </template>
-      </Card>
+      <SettingsDashboardCard :settings="settings" :can-edit="canEdit" />
 
-      <Card>
-        <template #title>
-          <div class="card-header-title">
-            <i class="pi pi-file-edit card-header-icon" />
-            <span>Content Editor</span>
-          </div>
-        </template>
-        <template #content>
-          <div class="settings-form">
-            <div class="field-group" data-tour="settings-content-preview-fields">
-            <div class="field">
-              <label for="content-edit-preview-size">Preview size on the Content edit page</label>
-              <div class="flex align-items-center gap-2">
-                <InputNumber
-                  id="content-edit-preview-size"
-                  v-model="contentEditPreviewSize"
-                  :min="10"
-                  :max="90"
-                  suffix="%"
-                  :disabled="!canEdit"
-                />
-              </div>
-            </div>
-            <div class="field">
-              <label for="content-list-preview-size">Preview size in the Content list's expanded rows</label>
-              <div class="flex align-items-center gap-2">
-                <InputNumber
-                  id="content-list-preview-size"
-                  v-model="contentListPreviewSize"
-                  :min="10"
-                  :max="80"
-                  suffix="vh"
-                  :disabled="!canEdit"
-                />
-              </div>
-            </div>
-            </div>
-            <div class="field-actions" data-tour="settings-content-save">
-              <Button
-                v-if="canEdit"
-                label="Save"
-                icon="pi pi-check"
-                :loading="contentSaving"
-                @click="saveContentSettings"
-              />
-            </div>
-          </div>
-        </template>
-      </Card>
+      <SettingsContentEditorCard :settings="settings" :can-edit="canEdit" />
 
-      <Card>
-        <template #title>
-          <div class="card-header-title">
-            <i class="pi pi-clock card-header-icon" />
-            <span>Time</span>
-          </div>
-        </template>
-        <template #content>
-          <div class="settings-form">
-            <div class="field">
-              <label>Server time</label>
-              <InputText
-                :value="displayedServerTime || '—'"
-                class="w-full"
-                readonly
-                tabindex="-1"
-              />
-            </div>
-            <div class="field" data-tour="settings-timezone-field">
-              <label for="timezone">Timezone</label>
-              <Select
-                id="timezone"
-                v-model="selectedTimezone"
-                :options="timezoneOptions"
-                optionLabel="label"
-                optionValue="value"
-                filter
-                class="w-full"
-                placeholder="Select timezone"
-                :disabled="!canEdit"
-              />
-            </div>
-            <div class="field">
-              <label>Displayhive Time</label>
-              <InputText
-                :value="correctedTime || '—'"
-                class="w-full"
-                readonly
-                tabindex="-1"
-              />
-            </div>
-            <div class="field-actions" data-tour="settings-time-save">
-              <Button
-                v-if="canEdit"
-                label="Save"
-                icon="pi pi-check"
-                :loading="timeSaving"
-                @click="saveTimeSettings"
-              />
-            </div>
-          </div>
-        </template>
-      </Card>
+      <SettingsTimeCard
+        v-model:timezone="selectedTimezone"
+        :can-edit="canEdit"
+        :server-time="serverTime"
+        :server-time-received-at="serverTimeReceivedAt"
+      />
 
-      <Card>
-        <template #title>
-          <div class="card-header-title">
-            <i class="pi pi-list card-header-icon" />
-            <span>Screens</span>
-          </div>
-        </template>
-        <template #content>
-          <div class="settings-form">
-            <div class="toggle-group" data-tour="settings-status-indicator">
-              <div class="field toggle-field">
-                <label for="status-indicator-switch">Show a status dot on screens when something is wrong</label>
-                <ToggleSwitch id="status-indicator-switch" v-model="statusIndicator" :disabled="!canEdit" />
-              </div>
-            </div>
-            <div class="toggle-group" data-tour="settings-screen-reload">
-              <div class="field toggle-field">
-                <label for="screen-reload-switch">Reload screens once a day</label>
-                <ToggleSwitch id="screen-reload-switch" v-model="reloadEnabled" :disabled="!canEdit" />
-              </div>
-              <div v-if="reloadEnabled" class="field">
-                <label for="screen-reload-at">at (time zone: {{ selectedTimezone }})</label>
-                <InputText id="screen-reload-at" v-model="reloadAt" type="time" :disabled="!canEdit" data-testid="screen-reload-at" />
-              </div>
-            </div>
-            <p class="hint">
-              A daily reload picks up a new release of the screen page. A screen without a connection tries again until it is back.
-            </p>
-            <p class="hint">
-              The dot is hidden while all is well. Red <code>con</code>: no connection to the server.
-              Yellow <code>mim</code>: content is missing or a picture/video did not load; yellow <code>js</code>: a script error.
-              The codes are also written to the screen log.
-            </p>
-            <p class="hint">
-              Screens report warnings and errors to the server, and everything while the Logger page is open.
-              Lines are deleted when they are older than the first limit or when the table grows past the second.
-            </p>
-            <div class="field-group" data-tour="settings-screenlog-fields">
-              <div class="field">
-                <label for="screen-log-max-age">Keep lines for</label>
-                <InputNumber id="screen-log-max-age" v-model="screenLogMaxAgeHours" :min="1" :max="8760" suffix=" hours" :disabled="!canEdit" />
-              </div>
-              <div class="field">
-                <label for="screen-log-max-rows">Keep at most</label>
-                <InputNumber id="screen-log-max-rows" v-model="screenLogMaxRows" :min="1000" :max="5000000" suffix=" lines" :disabled="!canEdit" />
-              </div>
-            </div>
-            <div class="field-actions" data-tour="settings-screenlog-save">
-              <Button v-if="canEdit" label="Save" icon="pi pi-check" :loading="logSaving" @click="saveLogSettings" />
-            </div>
-          </div>
-        </template>
-      </Card>
+      <SettingsScreensCard :settings="settings" :can-edit="canEdit" :timezone="selectedTimezone" />
 
       <IconLibrariesCard v-if="rightsStore.can('icons.manage') || rightsStore.can('settings.page')" />
 
@@ -502,49 +103,5 @@ const saveTimeSettings = async () => {
   gap: 0.75rem;
   padding: 3rem;
   color: var(--p-text-muted-color, #9ca3af);
-}
-
-.settings-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.field-group,
-.toggle-group {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.field label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--p-text-muted-color, #6b7280);
-}
-
-.field-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.toggle-field {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-
-.hint {
-  margin: 0 0 0.75rem;
-  color: var(--p-text-muted-color);
-  font-size: 0.85rem;
 }
 </style>

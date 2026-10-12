@@ -3,7 +3,7 @@ import { useFieldContext } from '../../composables/fields/useFieldContext'
 import { usePreviewClock } from '../../composables/fields/usePreviewClock'
 import {
   COUNTDOWN_TOKENS, formatCountdownPreview, formatCountdownTarget, parseCountdownTarget,
-} from '../../utils/fieldPreviews'
+} from '../../utils/content/fieldPreviews'
 import FieldSlot from './FieldSlot.vue'
 import DatePicker from 'primevue/datepicker'
 import InputText from 'primevue/inputtext'

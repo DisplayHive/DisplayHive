@@ -220,7 +220,8 @@ def register_content_query_handlers(socketio, app, db):
         live preview pane. *data* = {contenttype_id, <field_name>: value, ...},
         the same shape create_content_element accepts.
         """
-        from application.admin.content.helper import render_content_fields, combine_layout_containers
+        from application.admin.content.helper import render_content_fields
+        from application.admin.content.scene import combine_layout_containers
         from application.admin.designs.helper import build_design_payload
 
         sid = request.sid

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import PageHeaderSlot from '../components/PageHeaderSlot.vue'
+import PageHeaderSlot from '../components/ui/PageHeaderSlot.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
-import RouteLink from '../components/RouteLink.vue'
+import RouteLink from '../components/ui/RouteLink.vue'
 import { links } from '../utils/links'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -14,7 +14,7 @@ import type { Layout, ContentContainer } from '../types/models'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
-import LayoutCanvasEditor from '../components/LayoutCanvasEditor.vue'
+import LayoutCanvasEditor from '../components/layout/LayoutCanvasEditor.vue'
 
 const router = useRouter()
 const route = useRoute()

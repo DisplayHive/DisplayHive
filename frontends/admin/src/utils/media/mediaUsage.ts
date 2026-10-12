@@ -1,6 +1,6 @@
 import type { RouteLocationRaw } from 'vue-router'
-import type { MediaItem, MediaUsage } from '../types/models'
-import { links } from './links'
+import type { MediaItem, MediaUsage } from '../../types/models'
+import { links } from '../links'
 
 const KIND_LABEL: Record<MediaUsage['kind'], string> = {
   content: 'Content',

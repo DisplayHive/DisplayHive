@@ -1,5 +1,5 @@
-import type { DefaultColor } from '../types/models'
-import { getEffectDefinition } from './backgroundEffects'
+import type { DefaultColor } from '../../types/models'
+import { getEffectDefinition } from '../design/backgroundEffects'
 // `?raw` inlines the pre-built bundle's source as a string at build time.
 // It has to run *inside* the preview iframe's own document (own
 // customElements registry), so it can't just be imported/evaluated in this

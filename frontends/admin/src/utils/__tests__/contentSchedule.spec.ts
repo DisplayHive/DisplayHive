@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expiringSoon, recentlyChanged, relativeTime, scheduleState, startingSoon } from '../contentSchedule'
+import { expiringSoon, recentlyChanged, relativeTime, scheduleState, startingSoon } from '../content/contentSchedule'
 import type { Content } from '../../types/models'
 
 const NOW = new Date('2026-10-09T12:00').getTime()

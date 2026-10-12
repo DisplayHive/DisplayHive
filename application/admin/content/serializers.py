@@ -30,7 +30,7 @@ def build_content_dict(content, design_payload=None, db=None):
     Content list's row-expansion preview can render an accurate as-on-screen
     iframe instead of an unpositioned concatenation of fragments.
     """
-    from application.admin.content.helper import build_scene_containers, build_scene_containers_by_ratio
+    from application.admin.content.scene import build_scene_containers, build_scene_containers_by_ratio
 
     data = {
         'id': content.id,

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSocket } from '../composables/useSocket'
-import { useAck } from '../composables/useAck'
-import { useRightsStore } from '../stores/rights'
+import { useSocket } from '../../composables/useSocket'
+import { useAck } from '../../composables/useAck'
+import { useRightsStore } from '../../stores/rights'
 
 import Card from 'primevue/card'
 import ToggleSwitch from 'primevue/toggleswitch'

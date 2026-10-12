@@ -4,7 +4,7 @@ import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
-import DialogTitle from '../DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 import { useAck, type Ack } from '../../composables/useAck'
 
 // "Add Pretalx API URL" dialog. The server pushes the refreshed URL list itself.

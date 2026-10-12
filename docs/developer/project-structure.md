@@ -30,7 +30,9 @@ A map of the repository: where things live and where a new file belongs.
   `sockethandlers.py` (the Socket.IO actions), `helper.py` (domain logic),
   plus `queries.py` / `serializers.py` where a domain grows large. A large
   `helper.py` is split by job, as in `importexport/` (`exporter.py`,
-  `importer.py`, `common.py`, `service.py`, `registry.py`). Handlers
+  `importer.py` with `payload.py` and `rows.py`, `common.py`, `service.py`,
+  `registry.py`) and `content/` (`helper.py` for rendering, `scene.py` for
+  composing a layout's containers). Handlers
   go through `socketio_handlers/actions.py` (see
   [Architecture](architecture.md)).
 - `models/` — SQLAlchemy models, split by area (`content`, `screen`,
@@ -44,22 +46,29 @@ A map of the repository: where things live and where a new file belongs.
   `startup`, `factory`, `logfmt`, `version`, `migration`, `dbcopy`, `backup`.
 - `security/` — `auth`, `oidc`, `permissions`, `session`,
   `security_headers`, `net`.
-- `cli.py` — the `flask dh …` commands. Domain helpers sit with their
+- `cli/` — the `flask dh …` commands, one module per topic (`users`, `media`,
+  `database`, `check`) on the shared group in `group.py`. Domain helpers sit with their
   domain: `admin/media/renditions.py`, `admin/icons/libraries.py`,
   `admin/help/content.py`, `admin/screens/logs.py`, `utils/aspect_ratio.py`.
 
 ## Admin frontend (`frontends/admin/src/`)
 
-- `views/` — one component per route (page).
-- `components/` — reusable pieces; feature folders (`contentEdit/`,
-  `designs/`, `layout/`, `fields/`, `media/`, `devices/`, `screengroups/`, `contenttypes/`,
-  `pretalx/`, `settings/`, `users/`, `dashboard/`) hold
-  what belongs to one feature. Field handlers live in `components/fields/`
-  with the registry in `fields/registry.ts`.
+- `views/` — one component per route (page). A view keeps the page's
+  filtering, table and wiring; self-contained parts live in `components/`.
+- `components/` — grouped by what a component belongs to:
+  - `ui/` — generic building blocks (`DialogTitle`, `DialogFooter`,
+    `PageActions`, `PageHeader`, `RouteLink`, `ColorPicker`, …),
+  - `app/` — the app shell (`AppHeader`, `AppBanners`, `CommandPalette`, …),
+  - one folder per feature (`media/`, `devices/`, `screens/`, `screengroups/`,
+    `contenttypes/`, `pretalx/`, `importexport/`, `settings/`, `users/`,
+    `dashboard/`, `designs/`, `layout/`, `content/`, `contentEdit/`).
+    Field handlers live in `fields/` with the registry in `fields/registry.ts`.
 - `composables/` — shared stateful logic (`useXxx.ts`), grouped in folders
-  per feature.
+  per feature; a page's socket state can live here too (`useAlerting.ts`).
 - `stores/` — Pinia stores.
-- `router/`, `types/`, `utils/` — routing, shared types, pure helpers.
+- `utils/` — pure helpers, grouped by topic (`content/`, `design/`,
+  `layout/`, `media/`); unit tests in `utils/__tests__/`.
+- `router/`, `types/` — routing and shared types.
 - `tour/` — the guided tour system (see `CLAUDE.md`).
 
 ## Backend tests (`tests/`)
@@ -85,13 +94,16 @@ read repository files compute the root relative to their folder
 
 A view over roughly 500 lines gets its self-contained parts (a dialog with
 its own state and styles, a card) moved into a feature folder under
-`components/`, as done for the Media page (`components/media/`:
-`MediaEditDialog.vue`, `MediaUploadDialog.vue`; the view keeps filtering and
-the grid), Devices (`devices/`: adopt, rename, assign), Screen Groups
-(`screengroups/`: edit, screens, content), Content Types (`contenttypes/`:
-the edit dialog), Pretalx (`pretalx/`: URL dialogs, cache viewer, the two
-settings cards) and the Dashboard (`dashboard/DashboardCommunity.vue`).
-A dialog owns its state and takes `v-model:visible` plus the
-data it needs as props; CSS used by both the view and the part lives in a
-plain `.css` file pulled in with `<style scoped src="…">`. `data-tour`
-attributes stay on the same elements, so tours keep working.
+`components/`: Media (`media/`: edit and upload dialog), Devices (`devices/`),
+Screens (`screens/`), Screen Groups (`screengroups/`), Content Types
+(`contenttypes/`), Pretalx (`pretalx/`), Im-/Export (`importexport/`),
+Settings (`settings/`) and the Dashboard (`dashboard/DashboardCommunity.vue`).
+Page state that is mostly socket plumbing moves into a composable instead
+(Alerting: `composables/useAlerting.ts`).
+
+A dialog owns its state and takes `v-model:visible` plus the data it needs as
+props; it fills itself when it opens (a `watch` on `visible`). A card that
+shows server settings takes them as a prop and copies them into its own
+form state. CSS used by both the view and a part lives in a plain `.css`
+file pulled in with `<style scoped src="…">`. `data-tour` attributes stay on
+the same elements, so tours keep working.

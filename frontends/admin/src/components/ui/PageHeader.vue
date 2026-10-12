@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { useHelpStore } from '../stores/help'
-import { useAdminNavigation } from '../composables/useAdminNavigation'
+import { useHelpStore } from '../../stores/help'
+import { useAdminNavigation } from '../../composables/useAdminNavigation'
 import Popover from 'primevue/popover'
 
 // Icon, title, a one-line description and the help popover of the current page, plus the

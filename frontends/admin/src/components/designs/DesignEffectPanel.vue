@@ -8,10 +8,10 @@ import {
   defaultSettingsFor,
   applyEffectAttributes,
   type EffectParam,
-} from '../../utils/backgroundEffects'
+} from '../../utils/design/backgroundEffects'
 import type { DefaultColor } from '../../types/models'
 import DesignPanel from './DesignPanel.vue'
-import ColorPalettePicker from '../ColorPalettePicker.vue'
+import ColorPalettePicker from '../ui/ColorPalettePicker.vue'
 import Select from 'primevue/select'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'

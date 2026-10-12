@@ -1,8 +1,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useAspectRatios, BASE_ASPECT_RATIO } from '../useAspectRatios'
 import type { Layout, ContentContainer } from '../../types/models'
-import type { Pos } from '../../utils/layoutGeometry'
-import { defaultContentFor } from '../../utils/containerDefaultContent'
+import type { Pos } from '../../utils/layout/layoutGeometry'
+import { defaultContentFor } from '../../utils/content/containerDefaultContent'
 
 export interface EditorProps {
   layout: Layout

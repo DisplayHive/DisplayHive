@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { provideLayoutEditor } from '../composables/layoutEditor/useLayoutEditor'
-import type { Layout, ContentContainer } from '../types/models'
-import LayoutContainerSidebar from './layout/LayoutContainerSidebar.vue'
-import LayoutCanvas from './layout/LayoutCanvas.vue'
-import ContainerDesignCard from './layout/ContainerDesignCard.vue'
-import LayoutRatioCard from './layout/LayoutRatioCard.vue'
-import LayoutOptionsCard from './layout/LayoutOptionsCard.vue'
-import ContainerSettingsCard from './layout/ContainerSettingsCard.vue'
+import { provideLayoutEditor } from '../../composables/layoutEditor/useLayoutEditor'
+import type { Layout, ContentContainer } from '../../types/models'
+import LayoutContainerSidebar from './LayoutContainerSidebar.vue'
+import LayoutCanvas from './LayoutCanvas.vue'
+import ContainerDesignCard from './ContainerDesignCard.vue'
+import LayoutRatioCard from './LayoutRatioCard.vue'
+import LayoutOptionsCard from './LayoutOptionsCard.vue'
+import ContainerSettingsCard from './ContainerSettingsCard.vue'
 
 // The Layout canvas editor: containers as rectangles on a canvas (move, resize, draw), the lists
 // of containers, the aspect-ratio variations, preview options and the selected container's

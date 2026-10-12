@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import DialogTitle from './DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useSocket } from '../composables/useSocket'
+import { useSocket } from '../../composables/useSocket'
 
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'

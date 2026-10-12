@@ -105,14 +105,14 @@ def _container(cid, show_when_empty):
 
 
 def test_empty_container_is_omitted_unless_show_when_empty():
-    from application.admin.content.helper import combine_layout_containers
+    from application.admin.content.scene import combine_layout_containers
     result = combine_layout_containers([_container(1, False), _container(2, True)], {})
     assert list(result) == ['2']
     assert result['2']['html'] == ''
 
 
 def test_rendered_container_is_kept_regardless_of_show_when_empty():
-    from application.admin.content.helper import combine_layout_containers
+    from application.admin.content.scene import combine_layout_containers
     result = combine_layout_containers([_container(1, False)], {'1': '<b>x</b>'})
     assert result['1']['html'] == '<b>x</b>'
 

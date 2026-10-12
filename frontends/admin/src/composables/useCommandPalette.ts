@@ -2,7 +2,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const isOpen = ref(false)
 
-/** Open state of the command palette (components/CommandPalette.vue), shared app-wide. */
+/** Open state of the command palette (components/app/CommandPalette.vue), shared app-wide. */
 export function useCommandPalette() {
   return {
     isOpen,

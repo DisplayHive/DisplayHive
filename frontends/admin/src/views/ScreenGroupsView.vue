@@ -3,7 +3,7 @@ import ScreenGroupEditDialog from '../components/screengroups/ScreenGroupEditDia
 import ScreenGroupScreensDialog from '../components/screengroups/ScreenGroupScreensDialog.vue'
 import ScreenGroupContentDialog from '../components/screengroups/ScreenGroupContentDialog.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
-import PageActions from '../components/PageActions.vue'
+import PageActions from '../components/ui/PageActions.vue'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted } from 'vue'
 import { useAck } from '../composables/useAck'

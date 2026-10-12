@@ -2,7 +2,7 @@
 import { useContentEditor } from '../../composables/contentEdit/useContentEditor'
 import { useSettingsStore } from '../../stores/settings'
 import { cssAspectRatio } from '../../composables/useAspectRatios'
-import PreviewFrame from '../PreviewFrame.vue'
+import PreviewFrame from '../ui/PreviewFrame.vue'
 import Select from 'primevue/select'
 
 // The live preview next to the form (its width is a Settings option).

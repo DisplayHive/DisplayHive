@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useFieldContext } from '../../composables/fields/useFieldContext'
 import { usePreviewClock } from '../../composables/fields/usePreviewClock'
 import { useSocket } from '../../composables/useSocket'
-import { FORMAT_TOKENS, formatDateString } from '../../utils/fieldPreviews'
+import { FORMAT_TOKENS, formatDateString } from '../../utils/content/fieldPreviews'
 import FieldSlot from './FieldSlot.vue'
 import InputText from 'primevue/inputtext'
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useLayoutEditor } from '../../composables/layoutEditor/useLayoutEditor'
 import CollapsibleCard from './CollapsibleCard.vue'
-import ContainerDesignFields from '../ContainerDesignFields.vue'
+import ContainerDesignFields from '../designs/ContainerDesignFields.vue'
 
 // Font & alignment of the selected container in the active Design (staged, saved with the Layout).
 const ed = useLayoutEditor()

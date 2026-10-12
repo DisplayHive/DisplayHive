@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useContentEditor } from '../../composables/contentEdit/useContentEditor'
-import DialogTitle from '../DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Dialog from 'primevue/dialog'

@@ -4,7 +4,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import InputNumber from 'primevue/inputnumber'
-import DialogTitle from '../DialogTitle.vue'
+import DialogTitle from '../ui/DialogTitle.vue'
 import { useAck } from '../../composables/useAck'
 import type { PretalxUrl } from './types'
 

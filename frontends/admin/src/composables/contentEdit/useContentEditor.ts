@@ -5,8 +5,8 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useSocket } from '../useSocket'
 import { useScreengroupAssignment } from './useScreengroupAssignment'
 import { useContentPreview } from './useContentPreview'
-import { seedField, seedMissingField, type FieldValue } from '../../utils/contentFieldDefaults'
-import type { OptionFlags } from '../../utils/optionFlags'
+import { seedField, seedMissingField, type FieldValue } from '../../utils/content/contentFieldDefaults'
+import type { OptionFlags } from '../../utils/content/optionFlags'
 
 export interface ContentType {
   id: number

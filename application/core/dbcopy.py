@@ -6,7 +6,7 @@ their keys, settings, content — in one transaction on the target, which is
 emptied first. If anything fails, the target is left exactly as it was.
 
 Both databases must already have the schema (``alembic upgrade head``); the
-revision check is the CLI's job (application/cli.py, ``flask dh copy-database``).
+revision check is the CLI's job (application/cli/, ``flask dh copy-database``).
 Media files are not in the database and are not touched.
 """
 

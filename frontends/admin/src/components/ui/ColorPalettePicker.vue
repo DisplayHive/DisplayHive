@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import Button from 'primevue/button'
 import Popover from 'primevue/popover'
-import type { DefaultColor } from '../types/models'
+import type { DefaultColor } from '../../types/models'
 
 defineProps<{
   palette: DefaultColor[]

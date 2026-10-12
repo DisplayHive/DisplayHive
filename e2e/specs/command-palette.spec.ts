@@ -1,5 +1,5 @@
 /**
- * E2E tests for the Ctrl+K command palette (components/CommandPalette.vue).
+ * E2E tests for the Ctrl+K command palette (components/app/CommandPalette.vue).
  */
 
 import test, { expect } from './fixtures.js'

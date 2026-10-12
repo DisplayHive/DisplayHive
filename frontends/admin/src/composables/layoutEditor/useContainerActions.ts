@@ -2,7 +2,7 @@ import { useToast } from 'primevue/usetoast'
 import { useSocket } from '../useSocket'
 import { useAck, type Ack } from '../useAck'
 import { useConfirmAction } from '../useConfirmAction'
-import { round1 } from '../../utils/layoutGeometry'
+import { round1 } from '../../utils/layout/layoutGeometry'
 import type { ContentContainer } from '../../types/models'
 import type { EditorCore } from './useEditorCore'
 

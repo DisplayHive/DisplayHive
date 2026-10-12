@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_FIELD_HANDLER_OPTIONS, defaultContentFor } from '../containerDefaultContent'
+import { DEFAULT_FIELD_HANDLER_OPTIONS, defaultContentFor } from '../content/containerDefaultContent'
 
 describe('defaultContentFor', () => {
   it('gives structured handlers an empty value of their shape', () => {

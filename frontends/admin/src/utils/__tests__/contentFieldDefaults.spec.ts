@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultFieldValues, seedField, seedMissingField, type FieldValue } from '../contentFieldDefaults'
+import { defaultFieldValues, seedField, seedMissingField, type FieldValue } from '../content/contentFieldDefaults'
 
 describe('content field defaults', () => {
   it('seeds each handler with its empty value', () => {

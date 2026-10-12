@@ -11,7 +11,7 @@ import { useConfirmAction } from '../../composables/useConfirmAction'
 import { useSocket } from '../../composables/useSocket'
 import { useAuthStore } from '../../stores/auth'
 import { useRightsStore } from '../../stores/rights'
-import { uploadIconLibrary } from '../../utils/uploadIconLibrary'
+import { uploadIconLibrary } from '../../utils/media/uploadIconLibrary'
 
 // DisplayHive ships no icons: libraries are installed here, from the list of known ones (downloaded
 // from the npm registry, checked against a pinned checksum) or from a ZIP file / download link of your
