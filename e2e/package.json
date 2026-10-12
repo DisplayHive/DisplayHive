@@ -1,5 +1,5 @@
 {
-  "name": "displayhive-testing",
+  "name": "displayhive-e2e",
   "version": "0.0.0",
   "private": true,
   "type": "module",

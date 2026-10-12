@@ -36,7 +36,7 @@ static/media_previews
 static/media_renditions
 
 # Not needed at runtime
-testing
+e2e
 docs
 notes
 _old

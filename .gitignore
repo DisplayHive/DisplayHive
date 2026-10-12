@@ -23,9 +23,9 @@ project.db
 static/media/
 static/media_previews/
 static/media_renditions/
-testing/playwright-report/
-testing/playwright-report/index.html
-testing/test-results/
+e2e/playwright-report/
+e2e/playwright-report/index.html
+e2e/test-results/
 
 # Test coverage (pytest --cov, vitest --coverage)
 .coverage

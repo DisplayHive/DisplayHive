@@ -6,9 +6,9 @@
     "dev:admin": "npm --prefix frontends/admin run dev",
     "dev:screen": "npm --prefix frontends/screen run dev",
     "dev": "run-p dev:backend dev:admin dev:screen",
-    "test:e2e": "npm --prefix testing run test:e2e",
-    "test:e2e:headed": "npm --prefix testing run test:e2e:headed",
-    "test:e2e:ui": "npm --prefix testing run test:e2e:ui",
+    "test:e2e": "npm --prefix e2e run test:e2e",
+    "test:e2e:headed": "npm --prefix e2e run test:e2e:headed",
+    "test:e2e:ui": "npm --prefix e2e run test:e2e:ui",
     "docs:serve": "mkdocs serve",
     "docs:build": "mkdocs build",
     "deps:lock": "sh scripts/lock-python-deps.sh"

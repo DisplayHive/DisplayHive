@@ -23,7 +23,7 @@ jobs:
 
       # Both frontends are built up front: the admin SPA is served via
       # `vite preview` (started by Playwright's webServer, see
-      # testing/playwright.config.ts), and the screen client's dist/ is
+      # e2e/playwright.config.ts), and the screen client's dist/ is
       # served by Flask itself, so both need a prior `npm run build`.
       - name: Install and build admin frontend
         working-directory: frontends/admin
@@ -38,15 +38,15 @@ jobs:
           npm run build
 
       - name: Install e2e test dependencies
-        working-directory: testing
+        working-directory: e2e
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: testing
+        working-directory: e2e
         run: npx playwright install --with-deps chromium firefox
 
       - name: Run Playwright e2e tests
-        working-directory: testing
+        working-directory: e2e
         run: npm run test:e2e
 
       - name: Upload Playwright report
@@ -54,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: testing/playwright-report/
+          path: e2e/playwright-report/
           retention-days: 14

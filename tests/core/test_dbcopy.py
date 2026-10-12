@@ -6,7 +6,7 @@ import uuid
 import pytest
 import sqlalchemy as sa
 
-from application.admin.importexport.helper import import_database
+from application.admin.importexport.importer import import_database
 from application.core.dbcopy import CopyError, copy_database
 from application.core.factory import create_app
 from application.models import db

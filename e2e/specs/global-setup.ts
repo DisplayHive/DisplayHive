@@ -23,7 +23,7 @@ export const PORT_MAP_PATH = '/tmp/displayhive-test-portmap.json'
 
 const WORKER_COUNT = parseInt(process.env.PW_WORKER_COUNT || '1', 10)
 const BASE_PORT = parseInt(process.env.PW_BASE_PORT || '5001', 10)
-// Repo root is two levels above testing/e2e/
+// Repo root is two levels above e2e/specs/
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 // Python executable — can be overridden if nix-shell provides a specific path
 const PYTHON = process.env.TEST_PYTHON || 'python'

@@ -62,7 +62,7 @@ export default defineConfig({
     },
   ],
   server: {
-    // Pinned so Playwright's `reuseExistingServer` (testing/playwright.config.ts)
+    // Pinned so Playwright's `reuseExistingServer` (e2e/playwright.config.ts)
     // always finds *this* dev server on 5173, not the screen frontend's (which
     // must use a different port — see frontends/screen/vite.config.ts).
     port: 5173,

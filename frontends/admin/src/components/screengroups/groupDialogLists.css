@@ -1,0 +1,131 @@
+/* Layout of the assigned / not-assigned lists in the screens and content dialogs. */
+.screens-container {
+}
+
+.content-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.screens-section,
+.content-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  color: var(--p-text-color, #333);
+}
+
+.divider {
+  height: 1px;
+  background: var(--p-content-border-color, #e0e0e0);
+  margin: 1rem 0;
+}
+
+.screens-list,
+.content-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.screen-item,
+.content-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--p-content-background, #f9f9f9);
+  border: 1px solid var(--p-content-border-color, #e0e0e0);
+  border-radius: 4px;
+}
+
+.screen-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 1rem;
+}
+
+.screen-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.screen-info,
+.content-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.content-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 1rem;
+}
+
+.content-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.content-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.screen-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.screen-name,
+.content-title,
+.content-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.screen-resolution,
+.content-type {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color, #666);
+}
+
+.online-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--p-content-border-color, #e0e0e0);
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: var(--p-text-muted-color, #666);
+}

@@ -644,7 +644,7 @@ zero *unpaired* ones. Concretely fixed in this pass: `ScreensView.vue`'s
 `.dark-mode` pairing existed at all — `useTheme()` runs before login, so
 the login screen needs one same as every other page), `ScreenGroupsView.vue`'s
 section title/divider/list-item/pagination colors, `MediaView.vue`'s
-upload drop-zone border and card action-row divider, `ContentEditView.vue`'s
+upload drop-zone border (now in `components/media/MediaUploadDialog.vue`) and card action-row divider, `ContentEditView.vue`'s
 two remaining `border-top: 1px solid #ddd` dividers plus a whole
 pale-amber warning banner whose text colors needed inverting (not just
 swapping the background) for dark-mode contrast, and `MediaPickerDialog.vue`

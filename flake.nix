@@ -5,7 +5,7 @@
     # Pinned to the same revision as this machine's `<nixpkgs>` channel so
     # `nix-shell` and `nix develop` always resolve identical package versions
     # (e.g. `playwright-driver`'s bundled browser revisions, which must match
-    # the `@playwright/test` version pinned in testing/package-lock.json).
+    # the `@playwright/test` version pinned in e2e/package-lock.json).
     nixpkgs.url = "github:NixOS/nixpkgs/1c3fe55ad329cbcb28471bb30f05c9827f724c76";
     flake-utils.url = "github:numtide/flake-utils";
   };

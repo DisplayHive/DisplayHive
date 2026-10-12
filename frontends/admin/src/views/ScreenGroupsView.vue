@@ -1,41 +1,27 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
+import ScreenGroupEditDialog from '../components/screengroups/ScreenGroupEditDialog.vue'
+import ScreenGroupScreensDialog from '../components/screengroups/ScreenGroupScreensDialog.vue'
+import ScreenGroupContentDialog from '../components/screengroups/ScreenGroupContentDialog.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
-import RouteLink from '../components/RouteLink.vue'
-import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useSocket } from '../composables/useSocket'
+import { ref, computed, onMounted } from 'vue'
 import { useAck } from '../composables/useAck'
-import { useToast } from 'primevue/usetoast'
 import { useScreengroupsStore } from '../stores/screengroups'
 import { useScreensStore } from '../stores/screens'
 import { useContentStore } from '../stores/content'
 import { useRightsStore } from '../stores/rights'
-import type { Screengroup, Content } from '../types/models'
+import type { Screengroup } from '../types/models'
 
 // PrimeVue components
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Dialog from 'primevue/dialog'
 import Card from 'primevue/card'
 import Badge from 'primevue/badge'
 
-// Dialog-local screen shape (backend sends flat is_online, not nested in attached_device)
-interface DialogScreen {
-  id: number
-  name: string
-  resolution?: string
-  is_online?: boolean
-}
-
-const toast = useToast()
 const { confirmDanger } = useConfirmAction()
-const { on, off } = useSocket()
 const { request } = useAck()
 const screengroupsStore = useScreengroupsStore()
 const screensStore = useScreensStore()
@@ -45,38 +31,8 @@ const rightsStore = useRightsStore()
 const canCreate = computed(() => rightsStore.can('screengroups.create'))
 const canRename = computed(() => rightsStore.can('screengroups.rename'))
 const canDelete = computed(() => rightsStore.can('screengroups.delete'))
-const canManageScreens = computed(() => rightsStore.can('screengroups.manage_screens'))
-const canManageContent = computed(() => rightsStore.can('screengroups.manage_content'))
 
 const filterText = ref('')
-
-// Edit/Create dialog
-const isSaving = ref(false)
-const showEditDialog = ref(false)
-const isNew = ref(false)
-const editForm = ref({
-  id: null as number | null,
-  name: '',
-})
-
-// Screens management dialog
-const showScreensDialog = ref(false)
-const selectedScreenGroup = ref<Screengroup | null>(null)
-const assignedScreens = ref<DialogScreen[]>([])
-const availableScreens = ref<DialogScreen[]>([])
-const screensLoading = ref(false)
-const assignedScreensFilter = ref('')
-const availableScreensFilter = ref('')
-const screensPerPage = 10
-
-// Content management dialog
-const showContentDialog = ref(false)
-const assignedContent = ref<Content[]>([])
-const availableContent = ref<Content[]>([])
-const contentLoading = ref(false)
-const assignedContentFilter = ref('')
-const availableContentFilter = ref('')
-const contentPerPage = 10
 
 const filteredScreenGroups = computed(() => {
   const visible = screengroupsStore.screengroups.filter((sg) => !sg.is_one_screen)
@@ -85,108 +41,28 @@ const filteredScreenGroups = computed(() => {
   return visible.filter((sg) => sg.name?.toLowerCase().includes(search))
 })
 
-const filteredAssignedScreens = computed(() => {
-  if (!assignedScreensFilter.value) return assignedScreens.value
-  const search = assignedScreensFilter.value.toLowerCase()
-  return assignedScreens.value.filter((s) => s.name?.toLowerCase().includes(search))
-})
-
-const filteredAvailableScreens = computed(() => {
-  if (!availableScreensFilter.value) return availableScreens.value
-  const search = availableScreensFilter.value.toLowerCase()
-  return availableScreens.value.filter((s) => s.name?.toLowerCase().includes(search))
-})
-
-const filteredAssignedContent = computed(() => {
-  if (!assignedContentFilter.value) return assignedContent.value
-  const search = assignedContentFilter.value.toLowerCase()
-  return assignedContent.value.filter((c) => c.title?.toLowerCase().includes(search))
-})
-
-const filteredAvailableContent = computed(() => {
-  if (!availableContentFilter.value) return availableContent.value
-  const search = availableContentFilter.value.toLowerCase()
-  return availableContent.value.filter((c) => c.title?.toLowerCase().includes(search))
-})
-
-// Dialog-specific: receives assigned screens for the open screengroup
-const handleScreenGroupScreens = (data: { screens?: DialogScreen[] }) => {
-  if (data && data.screens) {
-    assignedScreens.value = data.screens.map((s) => ({
-      id: s.id,
-      name: s.name,
-      resolution: s.resolution || 'n/a',
-      is_online: s.is_online ?? false,
-    }))
-    const assignedIds = new Set(assignedScreens.value.map((s) => s.id))
-    availableScreens.value = screensStore.screens
-      .filter((s) => !assignedIds.has(s.id))
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        resolution: s.resolution || 'n/a',
-        is_online: s.attached_device?.is_online ?? false,
-      }))
-  }
-  screensLoading.value = false
-}
-
-// Dialog-specific: receives assigned content for the open screengroup
-const handleScreenGroupContent = (data: { content?: Array<{ id: number; title: string; type?: string; contenttype_name?: string }> }) => {
-  if (data && data.content) {
-    assignedContent.value = data.content.map((c) => ({
-      id: c.id,
-      title: c.title,
-      contenttype_name: c.type || c.contenttype_name,
-    }))
-    const assignedIds = new Set(assignedContent.value.map((c) => c.id))
-    availableContent.value = contentStore.content.filter((c) => !assignedIds.has(c.id))
-  }
-  contentLoading.value = false
-}
-
 onMounted(() => {
-  on('displayhive:admin:stc:screengroup_screens_data', handleScreenGroupScreens)
-  on('displayhive:admin:stc:screengroup_content_data', handleScreenGroupContent)
   screengroupsStore.fetch()
   screensStore.fetch()
   contentStore.fetch()
 })
 
-onUnmounted(() => {
-  off('displayhive:admin:stc:screengroup_screens_data', handleScreenGroupScreens)
-  off('displayhive:admin:stc:screengroup_content_data', handleScreenGroupContent)
-})
-
+const showEditDialog = ref(false)
+const showScreensDialog = ref(false)
+const showContentDialog = ref(false)
+// The group the edit dialog renames (null: it creates a new one) and the group the
+// screens / content dialogs manage.
+const editingGroup = ref<Screengroup | null>(null)
+const selectedScreenGroup = ref<Screengroup | null>(null)
 
 const openNewDialog = () => {
-  isNew.value = true
-  editForm.value = { id: null, name: '' }
+  editingGroup.value = null
   showEditDialog.value = true
 }
 
 const openEditDialog = (sg: Screengroup) => {
-  isNew.value = false
-  editForm.value = { id: sg.id, name: sg.name }
+  editingGroup.value = sg
   showEditDialog.value = true
-}
-
-const closeDialog = () => { showEditDialog.value = false }
-
-const saveScreenGroup = async (keepOpen = false) => {
-  if (!editForm.value.name.trim()) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Name is required', life: 3000 })
-    return
-  }
-  isSaving.value = true
-  try {
-    const ack = isNew.value
-      ? await request('displayhive:admin:cts:create_screengroup', { name: editForm.value.name }, { success: 'Screen group created', error: 'Failed to create screen group' })
-      : await request('displayhive:admin:cts:rename_screengroup', { screengroup_id: editForm.value.id, new_name: editForm.value.name }, { success: 'Screen group updated', error: 'Failed to rename screen group' })
-    if (ack && !keepOpen) showEditDialog.value = false
-  } finally {
-    isSaving.value = false
-  }
 }
 
 const deleteScreenGroup = (sg: Screengroup) => {
@@ -200,95 +76,12 @@ const deleteScreenGroup = (sg: Screengroup) => {
 
 const openScreensDialog = (sg: Screengroup) => {
   selectedScreenGroup.value = sg
-  assignedScreens.value = []
-  availableScreens.value = []
-  screensLoading.value = true
-  assignedScreensFilter.value = ''
-  availableScreensFilter.value = ''
   showScreensDialog.value = true
-  screengroupsStore.getScreenGroupScreens(sg.id)
-}
-
-const closeScreensDialog = () => {
-  showScreensDialog.value = false
-  selectedScreenGroup.value = null
-  assignedScreens.value = []
-}
-
-const removeScreenFromGroup = async (screen: DialogScreen) => {
-  if (!selectedScreenGroup.value) return
-  const ack = await request('displayhive:admin:cts:remove_screen_from_screengroup', { screengroup_id: selectedScreenGroup.value.id, screen_id: screen.id }, { error: 'Could not remove the screen' })
-  if (!ack) return
-  assignedScreens.value = assignedScreens.value.filter((s) => s.id !== screen.id)
-  availableScreens.value.push(screen)
-}
-
-const addScreenToGroup = async (screen: DialogScreen) => {
-  if (!selectedScreenGroup.value) return
-  const ack = await request('displayhive:admin:cts:add_screen_to_screengroup', { screengroup_id: selectedScreenGroup.value.id, screen_id: screen.id }, { error: 'Could not add the screen' })
-  if (!ack) return
-  availableScreens.value = availableScreens.value.filter((s) => s.id !== screen.id)
-  assignedScreens.value.push(screen)
-}
-
-const removeAllScreensFromGroup = () => {
-  if (!selectedScreenGroup.value) return
-  confirmDanger({
-    message: `Remove ALL screens from "${selectedScreenGroup.value.name}"?`,
-    header: 'Confirm Remove All',
-    accept: async () => {
-      const ack = await request('displayhive:admin:cts:remove_all_screens_from_screengroup', { screengroup_id: selectedScreenGroup.value!.id }, { error: 'Could not remove the screens' })
-      if (ack) assignedScreens.value = []
-    },
-  })
 }
 
 const openContentDialog = (sg: Screengroup) => {
   selectedScreenGroup.value = sg
-  assignedContent.value = []
-  availableContent.value = []
-  contentLoading.value = true
-  assignedContentFilter.value = ''
-  availableContentFilter.value = ''
   showContentDialog.value = true
-  screengroupsStore.getScreenGroupContent(sg.id)
-}
-
-const closeContentDialog = () => {
-  showContentDialog.value = false
-  selectedScreenGroup.value = null
-  assignedContent.value = []
-  availableContent.value = []
-}
-
-const removeContentFromGroup = async (content: Content) => {
-  if (!selectedScreenGroup.value) return
-  const ack = await request('displayhive:admin:cts:remove_content_from_screengroup', { screengroup_id: selectedScreenGroup.value.id, content_id: content.id }, { error: 'Could not remove the content' })
-  if (!ack) return
-  assignedContent.value = assignedContent.value.filter((c) => c.id !== content.id)
-  availableContent.value.push(content)
-}
-
-const addContentToGroup = async (content: Content) => {
-  if (!selectedScreenGroup.value) return
-  const ack = await request('displayhive:admin:cts:add_content_to_screengroup', { screengroup_id: selectedScreenGroup.value.id, content_id: content.id }, { error: 'Could not add the content' })
-  if (!ack) return
-  availableContent.value = availableContent.value.filter((c) => c.id !== content.id)
-  assignedContent.value.push(content)
-}
-
-const removeAllContentFromGroup = () => {
-  if (!selectedScreenGroup.value) return
-  confirmDanger({
-    message: `Remove ALL content from "${selectedScreenGroup.value.name}"?`,
-    header: 'Confirm Remove All',
-    accept: async () => {
-      const ack = await request('displayhive:admin:cts:remove_all_content_from_screengroup', { screengroup_id: selectedScreenGroup.value!.id }, { error: 'Could not remove the content' })
-      if (!ack) return
-      availableContent.value.push(...assignedContent.value)
-      assignedContent.value = []
-    },
-  })
 }
 
 // Reached via a link like /screengroups?edit=<id>: open that group's dialog.
@@ -381,213 +174,9 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
       </template>
     </Card>
 
-    <!-- Edit/Create Dialog -->
-    <Dialog
-      v-model:visible="showEditDialog"
-      modal
-      :style="{ width: '500px' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-th-large" :title="isNew ? 'New Screen Group' : 'Edit Screen Group'" />
-      </template>
-      <div class="dialog-content">
-        <div class="field" data-tour="screengroup-name-field">
-          <label for="sg-name">Name</label>
-          <InputText id="sg-name" v-model="editForm.name" class="w-full" />
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter cancel-tour="screengroups-create-cancel" :show-update="!isNew" :loading="isSaving" :cancel-disabled="isSaving" @cancel="closeDialog" @update="saveScreenGroup(true)" @confirm="saveScreenGroup()" />
-      </template>
-    </Dialog>
-
-    <!-- Screens Management Dialog -->
-    <Dialog
-      v-model:visible="showScreensDialog"
-      modal
-      :style="{ width: '900px', maxHeight: '90vh' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-desktop" :title="`Screens in ${selectedScreenGroup?.name || ''}`" />
-      </template>
-      <div class="dialog-content">
-        <div v-if="screensLoading" class="loading-state">
-          <i class="pi pi-spin pi-spinner"></i>
-          <p>Loading screens...</p>
-        </div>
-        <div v-else class="screens-container">
-          <!-- Assigned Screens Section -->
-          <div class="screens-section">
-            <h6 class="section-title">Assigned Screens</h6>
-            <InputText
-              v-model="assignedScreensFilter"
-              placeholder="Filter assigned screens..."
-              class="w-full mb-3"
-            />
-            <div v-if="filteredAssignedScreens.length === 0" class="empty-state">
-              <p class="text-muted">No assigned screens{{ assignedScreensFilter ? ' matching filter' : '' }}.</p>
-            </div>
-            <div v-else>
-              <DataTable :value="filteredAssignedScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAssignedScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name">
-                  <template #body="{ data }">
-                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
-                    <template v-else>{{ data.name }}</template>
-                  </template>
-                </Column>
-                <Column field="resolution" header="Resolution" style="width:160px" />
-                <Column header="Online" style="width:120px">
-                  <template #body="{ data }">
-                    <Badge :value="data.is_online ? 'Online' : 'Offline'" :severity="data.is_online ? 'success' : 'secondary'" class="online-badge" />
-                  </template>
-                </Column>
-                <Column header="Actions" style="width:120px">
-                  <template #body="{ data }">
-                    <Button v-if="canManageScreens" icon="pi pi-minus" @click="removeScreenFromGroup(data)" size="small" severity="danger" text title="Remove from group" />
-                  </template>
-                </Column>
-              </DataTable>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <!-- Available Screens Section -->
-          <div class="screens-section" data-tour="screengroups-available-screens">
-            <h6 class="section-title">Not Assigned Screens</h6>
-            <InputText
-              v-model="availableScreensFilter"
-              placeholder="Filter available screens..."
-              class="w-full mb-3"
-            />
-            <div v-if="filteredAvailableScreens.length === 0" class="empty-state">
-              <p class="text-muted">No available screens{{ availableScreensFilter ? ' matching filter' : '' }}.</p>
-            </div>
-            <div v-else>
-              <DataTable :value="filteredAvailableScreens" sortField="name" :sortOrder="1" stripedRows :paginator="filteredAvailableScreens.length > screensPerPage" :rows="screensPerPage" size="small" responsiveLayout="scroll">
-                <Column field="name" header="Name">
-                  <template #body="{ data }">
-                    <RouteLink v-if="rightsStore.can('screens.page')" :to="links.screen(data.id)" title="Open this screen">{{ data.name }}</RouteLink>
-                    <template v-else>{{ data.name }}</template>
-                  </template>
-                </Column>
-                <Column field="resolution" header="Resolution" style="width:160px" />
-                <Column header="Online" style="width:120px">
-                  <template #body="{ data }">
-                    <Badge :value="data.is_online ? 'Online' : 'Offline'" :severity="data.is_online ? 'success' : 'secondary'" class="online-badge" />
-                  </template>
-                </Column>
-                <Column header="Actions" style="width:120px">
-                  <template #body="{ data }">
-                    <Button v-if="canManageScreens" icon="pi pi-plus" @click="addScreenToGroup(data)" size="small" severity="success" text title="Add to group" />
-                  </template>
-                </Column>
-              </DataTable>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button
-          v-if="canManageScreens && assignedScreens.length > 0"
-          label="Remove All"
-          @click="removeAllScreensFromGroup"
-          severity="danger"
-          outlined
-          size="small"
-        />
-        <Button data-tour="screengroups-screens-dialog-close" label="Close" @click="closeScreensDialog" />
-      </template>
-    </Dialog>
-
-    <!-- Content Management Dialog -->
-    <Dialog
-      v-model:visible="showContentDialog"
-      modal
-      :style="{ width: '900px', maxHeight: '90vh' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-file" :title="`Content in ${selectedScreenGroup?.name || ''}`" />
-      </template>
-      <div class="dialog-content">
-        <div v-if="contentLoading" class="loading-state">
-          <i class="pi pi-spin pi-spinner"></i>
-          <p>Loading content...</p>
-        </div>
-        <div v-else class="content-container">
-          <!-- Assigned Content Section -->
-          <div class="content-section">
-            <h6 class="section-title">Assigned Content</h6>
-            <InputText
-              v-model="assignedContentFilter"
-              placeholder="Filter assigned content..."
-              class="w-full mb-3"
-            />
-            <div v-if="filteredAssignedContent.length === 0" class="empty-state">
-              <p class="text-muted">No assigned content{{ assignedContentFilter ? ' matching filter' : '' }}.</p>
-            </div>
-            <div v-else>
-              <DataTable :value="filteredAssignedContent" stripedRows :paginator="filteredAssignedContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title">
-                  <template #body="{ data }">
-                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
-                    <template v-else>{{ data.title }}</template>
-                  </template>
-                </Column>
-                <Column field="contenttype_name" header="Type" style="width:180px" />
-                <Column header="Actions" style="width:120px">
-                  <template #body="{ data }">
-                    <Button v-if="canManageContent" icon="pi pi-minus" @click="removeContentFromGroup(data)" size="small" severity="danger" text title="Remove from group" />
-                  </template>
-                </Column>
-              </DataTable>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <!-- Available Content Section -->
-          <div class="content-section" data-tour="screengroups-available-content">
-            <h6 class="section-title">Not Assigned Content</h6>
-            <InputText
-              v-model="availableContentFilter"
-              placeholder="Filter available content..."
-              class="w-full mb-3"
-            />
-            <div v-if="filteredAvailableContent.length === 0" class="empty-state">
-              <p class="text-muted">No available content{{ availableContentFilter ? ' matching filter' : '' }}.</p>
-            </div>
-            <div v-else>
-              <DataTable :value="filteredAvailableContent" stripedRows :paginator="filteredAvailableContent.length > contentPerPage" :rows="contentPerPage" size="small" responsiveLayout="scroll">
-                <Column field="title" header="Title">
-                  <template #body="{ data }">
-                    <RouteLink v-if="rightsStore.can('content.page')" :to="links.content(data.id)" title="Open this content">{{ data.title }}</RouteLink>
-                    <template v-else>{{ data.title }}</template>
-                  </template>
-                </Column>
-                <Column field="contenttype_name" header="Type" style="width:180px" />
-                <Column header="Actions" style="width:120px">
-                  <template #body="{ data }">
-                    <Button v-if="canManageContent" icon="pi pi-plus" @click="addContentToGroup(data)" size="small" severity="success" text title="Add to group" />
-                  </template>
-                </Column>
-              </DataTable>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button
-          v-if="canManageContent && assignedContent.length > 0"
-          label="Remove All"
-          @click="removeAllContentFromGroup"
-          severity="danger"
-          outlined
-          size="small"
-        />
-        <Button data-tour="screengroups-content-dialog-close" label="Close" @click="closeContentDialog" />
-      </template>
-    </Dialog>
+    <ScreenGroupEditDialog v-model:visible="showEditDialog" :group="editingGroup" />
+    <ScreenGroupScreensDialog v-model:visible="showScreensDialog" :group="selectedScreenGroup" />
+    <ScreenGroupContentDialog v-model:visible="showContentDialog" :group="selectedScreenGroup" />
   </div>
 </template>
 
@@ -602,136 +191,5 @@ useOpenFromQuery(() => screengroupsStore.screengroups, openEditDialog, () => can
    right-aligned instead of collapsing to the start. */
 .card-header {
   justify-content: flex-end;
-}
-
-.screens-container {
-}
-
-.content-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.screens-section,
-.content-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.section-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
-  color: var(--p-text-color, #333);
-}
-
-.divider {
-  height: 1px;
-  background: var(--p-content-border-color, #e0e0e0);
-  margin: 1rem 0;
-}
-
-.screens-list,
-.content-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.screen-item,
-.content-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  background: var(--p-content-background, #f9f9f9);
-  border: 1px solid var(--p-content-border-color, #e0e0e0);
-  border-radius: 4px;
-}
-
-.screen-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  gap: 1rem;
-}
-
-.screen-main {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex: 1;
-}
-
-.screen-info,
-.content-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.content-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  gap: 1rem;
-}
-
-.content-main {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex: 1;
-}
-
-.content-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.screen-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.screen-name,
-.content-title,
-.content-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.screen-resolution,
-.content-type {
-  font-size: 0.85rem;
-  color: var(--p-text-muted-color, #666);
-}
-
-.online-badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-}
-
-.pagination-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--p-content-border-color, #e0e0e0);
-}
-
-.pagination-info {
-  font-size: 0.875rem;
-  color: var(--p-text-muted-color, #666);
 }
 </style>

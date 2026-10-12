@@ -33,7 +33,7 @@ def register_importexport_routes(app, db, socketio):
     @require_http_right(app, 'importexport.export')
     def admin_export_tree():
         """Per-entity-type listing (uuid/id/label) for building the export selection tree."""
-        from application.admin.importexport.helper import export_manifest
+        from application.admin.importexport.exporter import export_manifest
         return jsonify(export_manifest(app, db))
 
     @app.route('/admin/export/download', methods=['POST'])
@@ -58,7 +58,7 @@ def register_importexport_routes(app, db, socketio):
     def admin_import_preview():
         """Parse an uploaded ZIP/JSON export and stage it server-side under a
         short-lived token, returning a manifest for the selection tree."""
-        from application.admin.importexport.helper import import_manifest, prepare_import_payload
+        from application.admin.importexport.importer import import_manifest, prepare_import_payload
 
         service.cleanup_stale_stages(stage_dir())
 

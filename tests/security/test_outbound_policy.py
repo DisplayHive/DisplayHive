@@ -85,7 +85,7 @@ def test_the_generic_settings_endpoint_cannot_set_it(settings_editor, db_session
 
 
 def test_it_is_not_part_of_an_export_or_import():
-    from application.admin.importexport.helper import _exportable_setting_keys
+    from application.admin.importexport.common import _exportable_setting_keys
     assert net.SETTING_KEY not in _exportable_setting_keys()
 
 

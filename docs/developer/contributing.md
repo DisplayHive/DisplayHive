@@ -115,7 +115,7 @@ database and data directory (`tests/conftest.py`). Against PostgreSQL
 (`TEST_DATABASE_URL`, as in CI) run sequentially: the workers would share one
 database.
 
-End-to-end tests use Playwright, in `testing/`:
+End-to-end tests use Playwright, in `e2e/` (specs in `e2e/specs/`):
 
 ```bash
 npm run test:e2e         # headless

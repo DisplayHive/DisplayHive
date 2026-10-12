@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import { ref, computed, onMounted } from 'vue'
@@ -9,20 +7,17 @@ import { useAck, type Ack } from '../composables/useAck'
 import { useToast } from 'primevue/usetoast'
 import { useMediaStore } from '../stores/media'
 import { useRightsStore } from '../stores/rights'
-import { useAuthStore } from '../stores/auth'
-import { deleteWarning, isUnused, usageLabel, usageLink } from '../utils/mediaUsage'
-import RouteLink from '../components/RouteLink.vue'
+import { deleteWarning, isUnused } from '../utils/mediaUsage'
+import MediaEditDialog from '../components/media/MediaEditDialog.vue'
+import MediaUploadDialog from '../components/media/MediaUploadDialog.vue'
 import SelectButton from 'primevue/selectbutton'
-import { uploadMedia, MAX_MEDIA_UPLOAD_BYTES } from '../utils/uploadMedia'
 import type { MediaItem } from '../types/models'
 
 // PrimeVue components
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
-import ProgressBar from 'primevue/progressbar'
 
 const toast = useToast()
 const { confirmDanger } = useConfirmAction()
@@ -32,9 +27,7 @@ const rightsStore = useRightsStore()
 
 const canUpload = computed(() => rightsStore.can('media.upload'))
 const canDelete = computed(() => rightsStore.can('media.delete'))
-const canRename = computed(() => rightsStore.can('media.rename'))
-const canTag = computed(() => rightsStore.can('media.tag'))
-const canEdit = computed(() => canRename.value || canTag.value)
+const canEdit = computed(() => rightsStore.can('media.rename') || rightsStore.can('media.tag'))
 
 const selectedFolder = ref<string>('')
 // `/media?search=<file>` (from the command palette) arrives with the search already typed.
@@ -48,142 +41,6 @@ const usageOptions = [
   { label: 'In use', value: 'used' },
 ]
 const unusedCount = computed(() => mediaStore.mediaItems.filter(isUnused).length)
-
-// Edit dialog
-const isSavingMedia = ref(false)
-const showEditDialog = ref(false)
-const editForm = ref({
-  id: null as number | null,
-  title: '',
-  preview_url: '',
-  url: '',
-  mimetype: '',
-})
-const editTags = ref<string[]>([])
-const editUsedBy = ref<MediaItem['used_by']>([])
-const newTagInput = ref('')
-
-const editAssignedSet = computed(() => new Set(editTags.value.map((t) => t.toLowerCase())))
-
-const editAvailableTags = computed(() => {
-  const map = new Map<string, number>()
-  mediaStore.mediaItems.forEach((m) => {
-    ;(m.tags || []).forEach((t) => {
-      const key = (t || '').trim()
-      if (!key || editAssignedSet.value.has(key.toLowerCase())) return
-      map.set(key, (map.get(key) || 0) + 1)
-    })
-  })
-  return Array.from(map.entries())
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
-})
-
-const editRemoveTag = (tag: string) => {
-  if (!canTag.value) return
-  editTags.value = editTags.value.filter((t) => t !== tag)
-}
-
-const editAddTag = (tag: string) => {
-  if (!canTag.value) return
-  const trimmed = tag.trim()
-  if (!trimmed || editAssignedSet.value.has(trimmed.toLowerCase())) return
-  editTags.value.push(trimmed)
-}
-
-const editNewTagKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    editAddTag(newTagInput.value)
-    newTagInput.value = ''
-  }
-}
-
-// Upload dialog
-const showUploadDialog = ref(false)
-const uploadFiles = ref<File[]>([])
-const uploadProgress = ref<
-  { name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; loaded: number }[]
->([])
-const authStore = useAuthStore()
-const maxUploadMb = MAX_MEDIA_UPLOAD_BYTES / 1024 / 1024
-
-// Overall progress across the batch, by bytes sent (finished/failed files count as fully sent).
-const uploadPercent = computed(() => {
-  const total = uploadFiles.value.reduce((sum, f) => sum + f.size, 0)
-  if (!total) return 0
-  const sent = uploadProgress.value.reduce(
-    (sum, p, i) => sum + (p.status === 'done' || p.status === 'error' ? (uploadFiles.value[i]?.size ?? 0) : p.loaded),
-    0,
-  )
-  return Math.min(100, Math.round((sent / total) * 100))
-})
-const isUploading = ref(false)
-const uploadDropActive = ref(false)
-
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png']
-
-const onUploadDrop = (event: DragEvent) => {
-  uploadDropActive.value = false
-  const dropped = Array.from(event.dataTransfer?.files || []).filter(f => ACCEPTED_TYPES.includes(f.type))
-  uploadFiles.value = [...uploadFiles.value, ...dropped]
-}
-
-const onUploadFileInput = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const selected = Array.from(input.files || [])
-  uploadFiles.value = [...uploadFiles.value, ...selected]
-  input.value = ''
-}
-
-const removeUploadFile = (index: number) => {
-  uploadFiles.value = uploadFiles.value.filter((_, i) => i !== index)
-  uploadProgress.value = uploadProgress.value.filter((_, i) => i !== index)
-}
-
-const closeUploadDialog = () => {
-  if (isUploading.value) return
-  showUploadDialog.value = false
-  uploadFiles.value = []
-  uploadProgress.value = []
-}
-
-const startUpload = async () => {
-  if (!uploadFiles.value.length || isUploading.value) return
-  isUploading.value = true
-  uploadProgress.value = uploadFiles.value.map((f) => ({ name: f.name, status: 'pending', loaded: 0 }))
-
-  // One request per file, one after another: per-file progress and errors,
-  // and never more than one large body in flight.
-  for (let i = 0; i < uploadFiles.value.length; i++) {
-    const file = uploadFiles.value[i] as File
-    const progress = uploadProgress.value[i]!
-    progress.status = 'uploading'
-    const result = await uploadMedia(
-      file,
-      { folder: selectedFolder.value || '', title: file.name, tags: '' },
-      authStore.authHeader(),
-      (loaded) => (progress.loaded = loaded),
-    )
-    if (result.success) {
-      progress.status = 'done'
-    } else {
-      progress.status = 'error'
-      progress.error = result.error
-    }
-  }
-
-  isUploading.value = false
-  const failed = uploadProgress.value.filter((p) => p.status === 'error')
-  if (failed.length === 0) {
-    toast.add({ severity: 'success', summary: 'Upload complete', detail: `${uploadFiles.value.length} file(s) uploaded`, life: 3000 })
-    closeUploadDialog()
-    mediaStore.fetch()
-  } else {
-    toast.add({ severity: 'warn', summary: 'Upload finished with errors', detail: `${failed.length} file(s) failed`, life: 5000 })
-    mediaStore.fetch()
-  }
-}
 
 const filteredMedia = computed(() => {
   let items = mediaStore.mediaItems
@@ -213,36 +70,18 @@ const toggleTag = (tag: string) => {
 
 const clearTagFilters = () => { selectedTags.value = [] }
 
-onMounted(() => {
-  mediaStore.fetch()
-})
+const showUploadDialog = ref(false)
+const showEditDialog = ref(false)
+const editingItem = ref<MediaItem | null>(null)
 
 const openEditDialog = (item: MediaItem) => {
-  editForm.value = {
-    id: item.id,
-    title: item.title,
-    preview_url: item.preview_url || item.url || '',
-    url: item.url || '',
-    mimetype: item.mimetype || '',
-  }
-  editTags.value = [...(item.tags || [])]
-  editUsedBy.value = item.used_by ?? []
-  newTagInput.value = ''
+  editingItem.value = item
   showEditDialog.value = true
 }
 
-const saveMedia = async (keepOpen = false) => {
-  isSavingMedia.value = true
-  try {
-    // The server pushes the refreshed media list itself.
-    const ack = await request('displayhive:media:cts:update_media', {
-      id: editForm.value.id, title: editForm.value.title, tags: editTags.value,
-    }, { success: 'Media updated', error: 'Save failed' })
-    if (ack && !keepOpen) showEditDialog.value = false
-  } finally {
-    isSavingMedia.value = false
-  }
-}
+onMounted(() => {
+  mediaStore.fetch()
+})
 
 const deleteMedia = (item: MediaItem) => {
   confirmDanger({
@@ -395,237 +234,33 @@ const copyUrl = (url: string) => {
       </Card>
     </div>
 
-    <!-- Edit Dialog -->
-    <Dialog
-      v-model:visible="showEditDialog"
-      modal
-      :style="{ width: '820px', maxWidth: '95vw' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-pencil" title="Edit Media" />
-      </template>
-      <div class="edit-dialog-content">
-        <!-- Media preview -->
-        <div class="edit-preview" v-if="editForm.preview_url || editForm.url">
-          <img
-            v-if="editForm.mimetype.startsWith('image/')"
-            :src="editForm.preview_url || editForm.url"
-            class="edit-preview-img"
-            alt="preview"
-          />
-          <video
-            v-else-if="editForm.mimetype.startsWith('video/')"
-            :src="editForm.url"
-            class="edit-preview-img"
-            controls
-          />
-          <div v-else class="edit-preview-file">
-            <i class="pi pi-file" />
-          </div>
-        </div>
-
-        <!-- Where the file is used -->
-        <div class="field edit-usage" data-tour="media-edit-usage">
-          <label>Used in</label>
-          <ul v-if="editUsedBy?.length" class="edit-usage-list">
-            <li v-for="u in editUsedBy" :key="u.kind + u.id">
-              <RouteLink v-if="usageLink(u)" :to="usageLink(u)!">{{ usageLabel(u) }}</RouteLink>
-              <span v-else>{{ usageLabel(u) }}</span>
-            </li>
-          </ul>
-          <span v-else class="hint">Not used anywhere.</span>
-        </div>
-
-        <!-- Title field -->
-        <div class="field" data-tour="media-edit-title-field">
-          <label for="media-title">Title</label>
-          <InputText id="media-title" v-model="editForm.title" class="w-full" :disabled="!canRename" />
-        </div>
-
-        <!-- Tag clouds -->
-        <div class="edit-tag-area" data-tour="media-edit-tags">
-          <!-- Assigned tags -->
-          <div class="edit-tag-panel">
-            <div class="edit-tag-panel-header">
-              <span class="edit-tag-panel-label">Assigned tags</span>
-              <span class="edit-tag-panel-count">{{ editTags.length }}</span>
-            </div>
-            <div class="edit-tag-cloud" :class="{ 'cloud-empty': editTags.length === 0 }">
-              <span
-                v-for="tag in editTags"
-                :key="tag"
-                class="tag-pill tag-pill--assigned"
-                role="button"
-                tabindex="0"
-                title="Click to remove"
-                @click="editRemoveTag(tag)"
-                @keydown.enter="editRemoveTag(tag)"
-              >
-                {{ tag }}
-                <i class="pi pi-times tag-pill-icon" />
-              </span>
-              <span v-if="editTags.length === 0" class="cloud-placeholder">No tags assigned</span>
-            </div>
-            <!-- New tag input -->
-            <div class="new-tag-row">
-              <InputText
-                v-model="newTagInput"
-                placeholder="New tag… press Enter"
-                class="new-tag-input"
-                :disabled="!canTag"
-                @keydown="editNewTagKeydown"
-              />
-              <Button
-                icon="pi pi-plus"
-                size="small"
-                :disabled="!canTag || !newTagInput.trim()"
-                @click="() => { editAddTag(newTagInput); newTagInput = '' }"
-              />
-            </div>
-          </div>
-
-          <!-- Arrow divider -->
-          <div class="edit-tag-divider">
-            <i class="pi pi-arrows-h" />
-          </div>
-
-          <!-- Available tags (not yet assigned) -->
-          <div class="edit-tag-panel">
-            <div class="edit-tag-panel-header">
-              <span class="edit-tag-panel-label">Available tags</span>
-              <span class="edit-tag-panel-count">{{ editAvailableTags.length }}</span>
-            </div>
-            <div class="edit-tag-cloud" :class="{ 'cloud-empty': editAvailableTags.length === 0 }">
-              <span
-                v-for="t in editAvailableTags"
-                :key="t.tag"
-                class="tag-pill tag-pill--available"
-                role="button"
-                tabindex="0"
-                title="Click to assign"
-                @click="editAddTag(t.tag)"
-                @keydown.enter="editAddTag(t.tag)"
-              >
-                <i class="pi pi-plus tag-pill-icon" />
-                {{ t.tag }}
-                <small class="tag-count">{{ t.count }}</small>
-              </span>
-              <span v-if="editAvailableTags.length === 0" class="cloud-placeholder">All tags assigned</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter cancel-tour="media-edit-cancel" show-update :loading="isSavingMedia" :cancel-disabled="isSavingMedia" @cancel="showEditDialog = false" @update="saveMedia(true)" @confirm="saveMedia()" />
-      </template>
-    </Dialog>
-
-    <!-- Upload Dialog -->
-    <Dialog
-      v-model:visible="showUploadDialog"
-      modal
-      :style="{ width: '620px' }"
-      :closable="!isUploading"
-      @hide="closeUploadDialog"
-    >
-      <template #header>
-        <DialogTitle icon="pi-upload" title="Upload Media" />
-      </template>
-      <!-- Drop zone -->
-      <div
-        class="upload-drop-zone"
-        data-tour="media-upload-dropzone"
-        :class="{ 'drop-active': uploadDropActive }"
-        @dragover.prevent="uploadDropActive = true"
-        @dragleave.prevent="uploadDropActive = false"
-        @drop.prevent="onUploadDrop"
-        @click="($refs.uploadInput as HTMLInputElement).click()"
-      >
-        <i class="pi pi-cloud-upload" />
-        <p class="upload-drop-zone-text">Drag &amp; drop files here, or <strong>click to browse</strong></p>
-        <p class="upload-drop-zone-hint">JPEG &amp; PNG only (max {{ maxUploadMb }} MB each)</p>
-      </div>
-      <input
-        ref="uploadInput"
-        type="file"
-        multiple
-        accept="image/jpeg,image/png"
-        style="display: none"
-        @change="onUploadFileInput"
-      />
-
-      <!-- File list -->
-      <div v-if="uploadFiles.length" class="upload-file-list">
-        <div
-          v-for="(file, idx) in uploadFiles"
-          :key="idx"
-          class="upload-file-row"
-        >
-          <span class="upload-file-name">{{ file.name }}</span>
-          <span class="upload-file-size">{{ (file.size / 1024 / 1024).toFixed(1) }} MB</span>
-          <span v-if="uploadProgress[idx]" :class="'upload-status-' + uploadProgress[idx].status">
-            <template v-if="uploadProgress[idx].status === 'uploading'">
-              <span class="upload-file-percent">{{ file.size ? Math.round((uploadProgress[idx].loaded / file.size) * 100) : 0 }}%</span>
-              <i class="pi pi-spin pi-spinner" />
-            </template>
-            <i v-else-if="uploadProgress[idx].status === 'done'" class="pi pi-check" />
-            <i v-else-if="uploadProgress[idx].status === 'error'" class="pi pi-times" :title="uploadProgress[idx].error" />
-          </span>
-          <Button
-            v-if="!isUploading"
-            icon="pi pi-times"
-            text
-            rounded
-            size="small"
-            @click.stop="removeUploadFile(idx)"
-          />
-          <small v-if="uploadProgress[idx]?.status === 'error'" class="upload-file-error">{{ uploadProgress[idx].error }}</small>
-        </div>
-      </div>
-
-      <ProgressBar v-if="isUploading" :value="uploadPercent" :show-value="false" class="mt-4 thin-progress" />
-
-      <template #footer>
-        <DialogFooter
-          cancel-tour="media-upload-cancel"
-          confirm-label="Upload"
-          confirm-icon="pi pi-upload"
-          :disabled="!uploadFiles.length"
-          :loading="isUploading"
-          :cancel-disabled="isUploading"
-          @cancel="closeUploadDialog"
-          @confirm="startUpload"
-        />
-      </template>
-    </Dialog>
+    <MediaEditDialog v-model:visible="showEditDialog" :item="editingItem" />
+    <MediaUploadDialog v-model:visible="showUploadDialog" :folder="selectedFolder" />
   </div>
 </template>
 
+<style scoped src="../components/media/tagPill.css"></style>
 <style scoped>
 .media-view {
   display: flex;
   gap: 1rem;
   height: calc(100vh - 150px);
 }
-
 /* No title text left in the card header — keep the action buttons
    right-aligned instead of collapsing to the start. */
 .card-header {
   justify-content: flex-end;
 }
-
 .media-content {
   flex: 1;
   overflow: hidden;
 }
-
 .filter-bar {
   display: flex;
   gap: 1rem;
   margin-bottom: 1rem;
   align-items: center;
 }
-
 .tag-cloud {
   display: flex;
   justify-content: space-between;
@@ -639,35 +274,14 @@ const copyUrl = (url: string) => {
   flex-wrap: wrap;
   align-items: center;
 }
-.tag-pill {
-  background: var(--p-content-background, #f1f5f9);
-  border: 1px solid var(--p-content-border-color, #e2e8f0);
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  color: var(--p-text-color, #334155);
-  cursor: pointer;
-  display: inline-flex;
-  gap: 0.4rem;
-  align-items: center;
-}
 .tag-pill.selected {
   background: var(--p-primary-color, #3b82f6);
   color: white;
   border-color: rgba(255,255,255,0.1);
 }
-.tag-pill:focus {
-  outline: 2px solid rgba(59,130,246,0.25);
-}
-.tag-count {
-  opacity: 0.7;
-  font-size: 0.75rem;
-  margin-left: 0.2rem;
-}
 .tag-cloud-actions {
   flex-shrink: 0;
 }
-
 .media-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -675,7 +289,6 @@ const copyUrl = (url: string) => {
   max-height: calc(100vh - 350px);
   overflow-y: auto;
 }
-
 .media-item {
   background: var(--p-content-background, #f9f9f9);
   border: 1px solid var(--p-content-border-color, #e0e0e0);
@@ -683,11 +296,9 @@ const copyUrl = (url: string) => {
   overflow: hidden;
   transition: box-shadow 0.2s;
 }
-
 .media-item:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
-
 .media-preview {
   position: relative;
   height: 150px;
@@ -697,23 +308,19 @@ const copyUrl = (url: string) => {
   justify-content: center;
   overflow: hidden;
 }
-
 .media-preview img,
 .media-preview video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
 .file-icon {
   color: var(--p-text-muted-color, #888);
   font-size: 3rem;
 }
-
 .media-info {
   padding: 0.75rem;
 }
-
 .media-title {
   display: block;
   font-weight: 600;
@@ -722,7 +329,6 @@ const copyUrl = (url: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .media-filename {
   display: block;
   font-size: 0.75rem;
@@ -731,13 +337,11 @@ const copyUrl = (url: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 /* Dark mode: --p-surface-200 is a fixed ramp point, kept as the light-mode
    placeholder shade above — see docs/developer/styleguide.md. */
 .dark-mode .media-preview {
   background: var(--p-surface-700, #334155);
 }
-
 .media-url-row {
   display: flex;
   align-items: center;
@@ -745,7 +349,6 @@ const copyUrl = (url: string) => {
   margin-top: 0.1rem;
   min-width: 0;
 }
-
 .media-url {
   font-size: 0.7rem;
   color: var(--p-primary-color, #6366f1);
@@ -756,29 +359,24 @@ const copyUrl = (url: string) => {
   flex: 1;
   min-width: 0;
 }
-
 .media-url:hover {
   text-decoration: underline;
 }
-
 .media-url-copy {
   font-size: 0.7rem;
   color: var(--p-text-muted-color, #9ca3af);
   flex-shrink: 0;
   cursor: pointer;
 }
-
 .media-url-copy:hover {
   color: var(--p-primary-color, #6366f1);
 }
-
 .media-tags {
   display: flex;
   gap: 0.25rem;
   margin-top: 0.5rem;
   flex-wrap: wrap;
 }
-
 .media-actions {
   padding: 0.5rem 0.75rem;
   border-top: 1px solid var(--p-content-border-color, #e0e0e0);
@@ -786,244 +384,11 @@ const copyUrl = (url: string) => {
   gap: 0.5rem;
   justify-content: flex-end;
 }
-
-.edit-dialog-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  padding: 0.5rem 0 0.25rem;
-}
-
-.edit-preview {
-  width: 100%;
-  max-height: 280px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--p-surface-200, #e2e8f0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.edit-preview-img {
-  width: 100%;
-  max-height: 280px;
-  object-fit: contain;
-  display: block;
-}
-
-.edit-preview-file {
-  padding: 2rem;
-  font-size: 3rem;
-  color: var(--p-text-muted-color, #94a3b8);
-}
-
-/* Tag-cloud area inside edit dialog */
-.edit-tag-area {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-.edit-tag-panel {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.edit-tag-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.edit-tag-panel-label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--p-text-color, #334155);
-}
-
-.edit-tag-panel-count {
-  font-size: 0.75rem;
-  color: var(--p-text-muted-color, #94a3b8);
-  background: var(--p-content-background, #f1f5f9);
-  border-radius: 999px;
-  padding: 0.1rem 0.45rem;
-}
-
-.edit-tag-cloud {
-  min-height: 90px;
-  max-height: 220px;
-  overflow-y: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-content: flex-start;
-  padding: 0.5rem;
-  border: 1px solid var(--p-content-border-color, #e2e8f0);
-  border-radius: 8px;
-  background: var(--p-content-background, #fafafa);
-}
-
-.edit-tag-cloud.cloud-empty {
-  align-items: center;
-  justify-content: center;
-}
-
-.cloud-placeholder {
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color, #94a3b8);
-  font-style: italic;
-}
-
-.tag-pill--assigned {
-  background: var(--p-primary-color, #3b82f6);
-  color: white;
-  border-color: transparent;
-}
-
-.tag-pill--assigned:hover {
-  background: #2563eb;
-}
-
-.tag-pill--available {
-  background: var(--p-content-background, #f1f5f9);
-  color: var(--p-text-color, #334155);
-  border-color: var(--p-content-border-color, #e2e8f0);
-}
-
-.tag-pill--available:hover {
-  background: #e0f2fe;
-  border-color: #7dd3fc;
-  color: #0369a1;
-}
-
-.tag-pill-icon {
-  font-size: 0.65rem;
-  opacity: 0.8;
-}
-
-.edit-tag-divider {
-  display: flex;
-  align-items: center;
-  padding-top: 2.2rem;
-  flex-shrink: 0;
-}
-
-.edit-tag-divider i {
-  font-size: 1.2rem;
-  color: var(--p-text-muted-color, #94a3b8);
-}
-
-.new-tag-row {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-}
-
-.new-tag-input {
-  flex: 1;
-  font-size: 0.85rem;
-}
-
-/* Upload dialog styles */
-.upload-drop-zone {
-  border: 2px dashed var(--p-content-border-color, #ccc);
-  border-radius: 8px;
-  padding: 2rem;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  user-select: none;
-}
-.upload-drop-zone:hover,
-.upload-drop-zone.drop-active {
-  border-color: var(--p-primary-color, #3b82f6);
-  background: rgba(59, 130, 246, 0.04);
-}
-.upload-drop-zone i {
-  font-size: 2rem;
-  color: var(--p-text-muted-color, #aaa);
-}
-.upload-drop-zone-text {
-  margin: 0.5rem 0 0;
-}
-.upload-drop-zone-hint {
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color, #aaa);
-}
-.upload-file-list {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.upload-file-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-  background: var(--p-content-background, #f5f5f5);
-  font-size: 0.85rem;
-}
-.upload-file-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.upload-file-size {
-  color: var(--p-text-muted-color, #888);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.upload-status-done {
-  color: var(--p-green-500, #22c55e);
-}
-
-.upload-status-error {
-  color: var(--p-red-500, #ef4444);
-}
-
-.upload-file-percent {
-  color: var(--p-text-muted-color, #888);
-  font-size: 0.8rem;
-  margin-right: 0.35rem;
-}
-
-/* Full-width line under the row; same fixed status red as the icon above. */
-.upload-file-error {
-  flex-basis: 100%;
-  color: var(--p-red-500, #ef4444);
-}
-
-/* Dark mode: --p-surface-200 is a fixed ramp point, kept as the light-mode
-   placeholder shade for .edit-preview above — see docs/developer/styleguide.md. */
-.dark-mode .edit-preview {
-  background: var(--p-surface-700, #334155);
-}
-
 /* Badge for a file nothing uses — a theme-aware PrimeVue Tag, so no dark-mode override needed. */
 .media-unused-tag {
   position: absolute;
   top: 0.4rem;
   left: 0.4rem;
   z-index: 1;
-}
-
-.edit-usage-list {
-  margin: 0;
-  padding-left: 1.2rem;
-}
-
-.edit-usage-list a {
-  text-decoration: underline;
 }
 </style>

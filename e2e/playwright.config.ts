@@ -31,13 +31,13 @@ process.env.PLAYWRIGHT_BACKEND_URL = BACKEND_URL
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './specs',
   /* Run tests serially, one at a time — no parallel workers. */
   fullyParallel: false,
   workers: 1,
   /* Global setup/teardown: spawn per-worker Flask processes before tests, clean up after. */
-  globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
+  globalSetup: './specs/global-setup.ts',
+  globalTeardown: './specs/global-teardown.ts',
   /* Maximum time one test can run for. */
   timeout: 30 * 1000,
   expect: {

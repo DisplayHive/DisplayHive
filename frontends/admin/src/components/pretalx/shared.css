@@ -1,0 +1,38 @@
+/* Rules shared by the Pretalx page and the parts split out of it. */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.settings-hint {
+  font-size: 0.82rem;
+  color: var(--p-text-muted-color, #6b7280);
+  margin-bottom: 1rem;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field-actions {
+  display: flex;
+  justify-content: flex-end;
+}

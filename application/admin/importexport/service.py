@@ -173,7 +173,7 @@ def restore_from_zip_bytes(raw: bytes, *, app, db, socketio, media_folder: str, 
     of the zip, wipe the media folder and restore any files it contains, then
     run import_database with selection=None, mode='reset'.
     """
-    from application.admin.importexport.helper import import_database
+    from application.admin.importexport.importer import import_database
 
     with zipfile.ZipFile(io.BytesIO(raw), 'r') as zf:
         if 'db.json' not in zf.namelist():
@@ -192,7 +192,7 @@ def restore_from_zip_bytes(raw: bytes, *, app, db, socketio, media_folder: str, 
 def build_export_zip(app, db, selection: Optional[dict], media_folder: str) -> io.BytesIO:
     """A ZIP with db.json plus the matching media files for the selected
     entities (selection None = everything), ready to stream."""
-    from application.admin.importexport.helper import export_database
+    from application.admin.importexport.exporter import export_database
 
     export_data = export_database(app, db, selection)
 
@@ -310,7 +310,7 @@ def apply_staged_import(stage_dir: str, token: str, *, selection, mode: str, con
     Returns the import result, or None if the staged upload doesn't exist
     (expired or unknown token).
     """
-    from application.admin.importexport.helper import import_database
+    from application.admin.importexport.importer import import_database
 
     json_path, zip_path = stage_paths(stage_dir, token)
     if not os.path.isfile(json_path):

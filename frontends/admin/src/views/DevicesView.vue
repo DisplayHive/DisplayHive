@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import DialogTitle from '../components/DialogTitle.vue'
-import DialogFooter from '../components/DialogFooter.vue'
 import { useConfirmAction } from '../composables/useConfirmAction'
 import PageActions from '../components/PageActions.vue'
 import RouteLink from '../components/RouteLink.vue'
 import { links } from '../utils/links'
 import { useOpenFromQuery } from '../composables/useOpenFromQuery'
 import { ref, computed, onMounted } from 'vue'
-import { Html5Qrcode } from 'html5-qrcode'
+import DeviceAdoptDialog from '../components/devices/DeviceAdoptDialog.vue'
+import DeviceRenameDialog from '../components/devices/DeviceRenameDialog.vue'
+import DeviceAssignDialog from '../components/devices/DeviceAssignDialog.vue'
 import { useOnlineFilter } from '../composables/useOnlineFilter'
 import { getScreenBaseUrl, openDevicePreview } from '../composables/useDevicePreview'
 import type { Device } from '../types/models'
@@ -22,8 +22,6 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
-import Dialog from 'primevue/dialog'
-import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Card from 'primevue/card'
@@ -55,32 +53,6 @@ const toggleActionsHelp = (e: Event) => actionsHelpPopover.value?.toggle(e)
 // Online/offline visibility toggles
 const { showOnline, showOffline, toggleShowOnline, toggleShowOffline, applyOnlineFilter } = useOnlineFilter()
 
-// Adopt device dialog
-const isAdopting = ref(false)
-const showAdoptDialog = ref(false)
-const adoptForm = ref({
-  name: '',
-  adoptiontoken: '',
-  screen_id: null as number | null,
-})
-
-// QR scanner state
-const scannerActive = ref(false)
-const scannerEl = ref<HTMLElement | null>(null)
-let html5QrScanner: Html5Qrcode | null = null
-
-// Rename device dialog
-const isSavingRename = ref(false)
-const showRenameDialog = ref(false)
-const renamingDevice = ref<Device | null>(null)
-const renameForm = ref({ name: '' })
-
-// Assign-to-screen dialog
-const isSavingAssign = ref(false)
-const showAssignDialog = ref(false)
-const assigningDevice = ref<Device | null>(null)
-const assignForm = ref({ screen_id: null as number | null })
-
 const filteredDevices = computed(() => {
   let list = devicesStore.devices.slice()
   const search = (filterText.value || '').trim().toLowerCase()
@@ -97,168 +69,30 @@ const filteredDevices = computed(() => {
 const onlineCount = computed(() => devicesStore.onlineDevices.length)
 const offlineCount = computed(() => devicesStore.devices.filter((d) => !d.is_online).length)
 
-const screenOptions = computed(() => {
-  const assigned = new Set<number>()
-  devicesStore.devices.forEach((d) => { if (d.screen_id) assigned.add(d.screen_id) })
-  return [
-    { label: '-- No Screen --', value: null as number | null },
-    ...screensStore.screens
-      .filter((s) => !assigned.has(s.id))
-      .map((s) => ({ label: s.name, value: s.id as number | null })),
-  ]
-})
-
-const screenOptionsForAssign = computed(() => {
-  const assigned = new Set<number>()
-  devicesStore.devices.forEach((d) => {
-    if (d.screen_id) assigned.add(d.screen_id)
-  })
-  const options: Array<{ label: string; value: number | null }> = [
-    { label: '-- No Screen --', value: null },
-  ]
-  screensStore.screens.forEach((s) => {
-    if (!assigned.has(s.id) || assigningDevice.value?.screen_id === s.id) {
-      options.push({ label: s.name, value: s.id })
-    }
-  })
-  return options
-})
-
 onMounted(() => {
   devicesStore.fetch()
   screensStore.fetch()
 })
 
 
+const showAdoptDialog = ref(false)
+const showRenameDialog = ref(false)
+const showAssignDialog = ref(false)
+const renamingDevice = ref<Device | null>(null)
+const assigningDevice = ref<Device | null>(null)
+
 const openAdoptDialog = () => {
-  adoptForm.value = { name: '', adoptiontoken: '', screen_id: null }
   showAdoptDialog.value = true
-}
-
-const closeAdoptDialog = () => {
-  stopQRScanner()
-  showAdoptDialog.value = false
-}
-
-const startQRScanner = async () => {
-  try {
-    scannerActive.value = true
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    if (!scannerEl.value) {
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Scanner element not found', life: 3000 })
-      scannerActive.value = false
-      return
-    }
-
-    html5QrScanner = new Html5Qrcode('qr-reader-element')
-
-    let cameraId: string | null = null
-    try {
-      const devices = await Html5Qrcode.getCameras()
-      if (devices && devices.length) {
-        const backCamera = devices.find((d) => /back|rear|environment/i.test(d.label))
-        cameraId = backCamera?.id ?? devices[devices.length - 1]?.id ?? null
-      }
-    } catch (e) {
-      console.warn('[DevicesView] getCameras failed', e)
-    }
-
-    await html5QrScanner.start(
-      cameraId ? { deviceId: { exact: cameraId } } : { facingMode: 'environment' },
-      { fps: 10, qrbox: 250 },
-      (decodedText: string) => {
-        adoptForm.value.adoptiontoken = decodedText
-        toast.add({ severity: 'success', summary: 'QR Code Scanned', detail: 'Adoptiontoken captured', life: 2000 })
-        stopQRScanner()
-      },
-      () => { /* ignore per-frame decode errors */ }
-    )
-  } catch (e) {
-    console.error('[DevicesView] QR scanner error:', e)
-    scannerActive.value = false
-    toast.add({ severity: 'error', summary: 'Scanner Error', detail: 'Failed to start camera. Please enter key manually.', life: 5000 })
-  }
-}
-
-const stopQRScanner = async () => {
-  try {
-    if (html5QrScanner) {
-      try {
-        await html5QrScanner.stop()
-      } catch (e) {
-        console.warn('[DevicesView] scanner stop error', e)
-      }
-      try {
-        html5QrScanner.clear()
-      } catch {}
-      html5QrScanner = null
-    }
-    scannerActive.value = false
-  } catch (e) {
-    console.warn('[DevicesView] stopQRScanner error', e)
-  }
-}
-
-const adoptDevice = async () => {
-  isAdopting.value = true
-  const screenName = adoptForm.value.screen_id
-    ? screensStore.screens.find((s) => s.id === adoptForm.value.screen_id)?.name ?? null
-    : null
-
-  try {
-    const result = await devicesStore.adoptDevice({
-      token: adoptForm.value.adoptiontoken,
-      device_name: adoptForm.value.name,
-      screen_name: screenName ?? null,
-    })
-
-    if (result?.success) {
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Device adopted', life: 3000 })
-      showAdoptDialog.value = false
-      devicesStore.fetch()
-    } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: result?.error || 'Failed to adopt device', life: 5000 })
-    }
-  } catch {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to adopt device', life: 5000 })
-  } finally {
-    isAdopting.value = false
-  }
 }
 
 const openRenameDialog = (device: Device) => {
   renamingDevice.value = device
-  renameForm.value = { name: device.name ?? '' }
   showRenameDialog.value = true
-}
-
-const saveRename = async (keepOpen = false) => {
-  if (!renamingDevice.value) return
-  isSavingRename.value = true
-  try {
-    const ack = await request('displayhive:devices:cts:update_device', { device_id: renamingDevice.value.id, name: renameForm.value.name }, { success: 'Device renamed', error: 'Rename failed' })
-    if (ack && !keepOpen) showRenameDialog.value = false
-  } finally {
-    isSavingRename.value = false
-  }
 }
 
 const openAssignDialog = (device: Device) => {
   assigningDevice.value = device
-  assignForm.value = { screen_id: device.screen_id ?? null }
   showAssignDialog.value = true
-}
-
-const saveAssign = async () => {
-  if (!assigningDevice.value) return
-  isSavingAssign.value = true
-  try {
-    const ack = await request('displayhive:devices:cts:assign_device_screen', { device_id: assigningDevice.value.id, screen_id: assignForm.value.screen_id ?? null }, { success: 'Screen assignment updated', error: 'Assignment failed' })
-    if (ack) showAssignDialog.value = false
-  } finally {
-    isSavingAssign.value = false
-  }
 }
 
 const toggleFind = (device: Device) => {
@@ -553,95 +387,9 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
       </template>
     </Card>
 
-    <!-- Adopt Device Dialog -->
-    <Dialog v-model:visible="showAdoptDialog" modal :style="{ width: '600px' }" @hide="closeAdoptDialog">
-      <template #header>
-        <DialogTitle icon="pi-qrcode" title="Adopt Device" />
-      </template>
-      <div class="dialog-content">
-        <div class="field" data-tour="devices-adopt-name-field">
-          <label for="adopt-name">Device Name</label>
-          <InputText id="adopt-name" v-model="adoptForm.name" class="w-full" />
-        </div>
-          <div class="field" data-tour="devices-adopt-qr">
-            <label for="adopt-key">Adoptiontoken</label>
-            <div class="key-input-group">
-              <InputText id="adopt-key" v-model="adoptForm.adoptiontoken" class="w-full" placeholder="Enter or scan adoption token" />
-            <Button
-              v-if="!scannerActive"
-              icon="pi pi-camera"
-              @click="startQRScanner"
-              outlined
-              title="Scan QR Code"
-            />
-            <Button 
-              v-else
-              icon="pi pi-times" 
-              @click="stopQRScanner" 
-              severity="danger"
-              outlined
-              title="Stop Scanner"
-            />
-          </div>
-        </div>
-        <div v-if="scannerActive" class="scanner-container">
-          <div id="qr-reader-element" ref="scannerEl"></div>
-        </div>
-        <div class="field">
-          <label for="adopt-screen">Assign to Screen</label>
-          <Select
-            id="adopt-screen"
-            v-model="adoptForm.screen_id"
-            :options="screenOptions"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter cancel-tour="devices-adopt-cancel" confirm-label="Adopt" :loading="isAdopting" :cancel-disabled="isAdopting" @cancel="closeAdoptDialog" @confirm="adoptDevice" />
-      </template>
-    </Dialog>
-
-    <!-- Rename Device Dialog -->
-    <Dialog v-model:visible="showRenameDialog" modal :style="{ width: '420px' }">
-      <template #header>
-        <DialogTitle icon="pi-pencil" title="Rename Device" />
-      </template>
-      <div class="dialog-content">
-        <div class="field">
-          <label for="rename-name">Device Name</label>
-          <InputText id="rename-name" v-model="renameForm.name" class="w-full" />
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter show-update :loading="isSavingRename" :cancel-disabled="isSavingRename" @cancel="showRenameDialog = false" @update="saveRename(true)" @confirm="saveRename()" />
-      </template>
-    </Dialog>
-
-    <!-- Assign to Screen Dialog -->
-    <Dialog v-model:visible="showAssignDialog" modal :style="{ width: '420px' }">
-      <template #header>
-        <DialogTitle icon="pi-desktop" title="Assign to Screen" />
-      </template>
-      <div class="dialog-content">
-        <div class="field">
-          <label for="assign-screen">Assign to Screen</label>
-          <Select
-            id="assign-screen"
-            v-model="assignForm.screen_id"
-            :options="screenOptionsForAssign"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <DialogFooter cancel-tour="devices-assign-cancel" :loading="isSavingAssign" :cancel-disabled="isSavingAssign" @cancel="showAssignDialog = false" @confirm="saveAssign()" />
-      </template>
-    </Dialog>
+    <DeviceAdoptDialog v-model:visible="showAdoptDialog" />
+    <DeviceRenameDialog v-model:visible="showRenameDialog" :device="renamingDevice" />
+    <DeviceAssignDialog v-model:visible="showAssignDialog" :device="assigningDevice" />
   </div>
 </template>
 
@@ -714,19 +462,6 @@ useOpenFromQuery(() => devicesStore.devices, openRenameDialog, () => canRename.v
 .key-cell:hover .key-text {
   visibility: visible;
   opacity: 1;
-}
-
-.scanner-container {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--p-content-background, #f8f9fa);
-  border-radius: 8px;
-  border: 2px dashed var(--p-content-border-color, #dee2e6);
-}
-
-#qr-reader-element {
-  width: 100%;
-  max-width: 100%;
 }
 
 .connection-cell {

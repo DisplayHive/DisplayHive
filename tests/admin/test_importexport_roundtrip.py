@@ -1,4 +1,4 @@
-"""Export -> import round trips through application/admin/importexport/helper.py.
+"""Export -> import round trips through application/admin/importexport/exporter.py and importer.py.
 
 The seed is the bundled example content (examplecontent/event.zip), so the
 data covers every entity type with real relations, not hand-built rows.
@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from application.admin.importexport.helper import export_database, import_database
+from application.admin.importexport.exporter import export_database
+from application.admin.importexport.importer import import_database
 from application.core.factory import create_app
 from application.models import db
 

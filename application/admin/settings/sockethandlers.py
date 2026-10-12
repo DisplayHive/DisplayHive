@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Keys the generic settings endpoint is allowed to write, and the only
 # SystemSetting keys the import/export feature ever touches (see
-# application/admin/importexport/helper.py). Anything else (e.g.
+# application/admin/importexport/common.py). Anything else (e.g.
 # telegram_token) has its own dedicated, validated handler and must not be
 # settable through this catch-all upsert, nor leave the instance in an
 # export file.
