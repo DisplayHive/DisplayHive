@@ -11,7 +11,7 @@ def register_admin_screengroups_handlers(socketio, app, db):
 
     from application.socketio_handlers.auth import require_right, fields, admin_handler, current_admin_user
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     from application.models import ContentElement, Screen, Screengroup
 
     def _apply_membership_change(screengroup_id, item_id, *, collection_attr, item_model, action):

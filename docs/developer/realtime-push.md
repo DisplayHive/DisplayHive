@@ -54,7 +54,7 @@ to its own screen.
   `displayhive:screen:stc:server_time` — clock sync, used by scheduling and
   active-window logic.
 - `displayhive:logger:*` — the screen log. A screen sends `cts:log_entry`; the server stores it
-  (`application/screen_logs.py`, table `screen_log`, under the screen of that connection) and pushes
+  (`application/admin/screens/logs.py`, table `screen_log`, under the screen of that connection) and pushes
   `stc:log_entry` to the admins on the Logger page. `cts:query` (ack) returns stored lines, filtered
   and paged. Screens send warnings and errors always, debug/info only while the Logger page is open
   (`logger_active`).

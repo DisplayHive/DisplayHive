@@ -1,8 +1,8 @@
-"""application/version.py: release, build revision, asset cache-busting version."""
+"""application/core/version.py: release, build revision, asset cache-busting version."""
 
 import pytest
 
-from application import version
+from application.core import version
 
 
 @pytest.fixture(autouse=True)
@@ -92,7 +92,7 @@ def test_app_config_carries_version_and_asset_version(flask_app):
 
 
 def test_auth_me_returns_the_version(flask_app, db_session, make_user):
-    from application.auth import create_token
+    from application.security.auth import create_token
     token = create_token(flask_app.app, make_user())
     body = flask_app.app.test_client().get('/admin/api/auth/me', headers={'Authorization': f'Bearer {token}'}).get_json()
     assert body['version'] == version.release() and body['revision'] == version.revision()
@@ -104,7 +104,7 @@ def test_the_screen_page_uses_the_asset_version(flask_app):
 
 
 def test_admin_connect_reports_the_version_in_the_status_event(flask_app, db_session, make_user):
-    from application.auth import create_token
+    from application.security.auth import create_token
     client = flask_app.socketio.test_client(flask_app.app, auth={'token': create_token(flask_app.app, make_user())})
     try:
         events = [m['args'][0] for m in client.get_received() if m['name'] == 'displayhive:system:stc:security_status']

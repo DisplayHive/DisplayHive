@@ -17,7 +17,7 @@ project.db
 .pytest_cache/
 # Dev-shell venv synced from requirements-dev.txt (shell.nix)
 .venv/
-# DATA_DIR default (application/paths.py): media, previews, renditions, SQLite, import staging
+# DATA_DIR default (application/core/paths.py): media, previews, renditions, SQLite, import staging
 /data/
 # Legacy data locations, still honoured until migrated
 static/media/

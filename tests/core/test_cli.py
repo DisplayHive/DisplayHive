@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import click
 import pytest
 
-from application.auth import verify_password, user_from_token, create_token
+from application.security.auth import verify_password, user_from_token, create_token
 
 
 @pytest.fixture()
@@ -29,7 +29,7 @@ def _user(db_session, username):
 
 
 def test_create_admin_makes_a_superadmin(cli, flask_app, db_session):
-    from application.permissions import is_superadmin
+    from application.security.permissions import is_superadmin
 
     result = cli('create-admin', 'cli-alice', '--password-stdin', input='a-long-password\n')
     assert result.exit_code == 0, result.output
@@ -40,7 +40,7 @@ def test_create_admin_makes_a_superadmin(cli, flask_app, db_session):
 
 
 def test_create_admin_options_and_errors(cli, flask_app, db_session, make_user):
-    from application.permissions import is_superadmin
+    from application.security.permissions import is_superadmin
 
     result = cli('create-admin', 'cli-bob', '--password-stdin', '--no-superadmin', '--force-change',
                  input='a-long-password\n')
@@ -108,7 +108,7 @@ def big_image(flask_app, db_session):
 
 
 def test_rerender_creates_previews_and_renditions(cli, flask_app, big_image):
-    from application import media_renditions
+    from application.admin.media import renditions as media_renditions
 
     config = flask_app.app.config
     preview = media_renditions.preview_path(config['PREVIEW_FOLDER'], big_image)

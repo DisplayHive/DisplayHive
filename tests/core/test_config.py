@@ -1,11 +1,11 @@
-"""Environment parsing in application/config.py (pure functions + apply_config)."""
+"""Environment parsing in application/core/config.py (pure functions + apply_config)."""
 
 import pytest
 from flask import Flask
 
-from application import paths as data_paths
-from application.db_url import DatabaseConfigError
-from application.config import (
+from application.core import paths as data_paths
+from application.core.db_url import DatabaseConfigError
+from application.core.config import (
     DEV_CORS_ORIGINS, ConfigError, apply_config, engine_options, env_int, is_truthy,
     resolve_cors_origins, resolve_public_url, resolve_secret_key, trusted_proxy_count,
 )

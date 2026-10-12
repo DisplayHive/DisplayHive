@@ -2,8 +2,8 @@
 
 import pytest
 
-from application import net
-from application.auth import create_token
+from application.security import net
+from application.security.auth import create_token
 from application.models import PretalxApiUrl, SystemSetting
 
 GET = 'displayhive:admin:cts:get_outbound_policy'

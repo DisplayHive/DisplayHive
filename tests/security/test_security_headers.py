@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from application.security_headers import (
+from application.security.security_headers import (
     ADMIN_POLICY, PREVIEW_FRAME_PATH, PREVIEW_POLICY, SCREEN_POLICY, csp_for,
 )
 

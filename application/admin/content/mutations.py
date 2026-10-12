@@ -17,7 +17,7 @@ def register_content_mutation_handlers(socketio, app, db):
     """Register the mutating Content handlers (create/update/delete/move)."""
     from application.socketio_handlers.auth import fields, current_admin_user
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
 
     def _push_upd_content(content_id):
         """Best-effort incremental push of a single content element to screens."""

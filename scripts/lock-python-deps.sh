@@ -1,7 +1,7 @@
 #!/bin/sh
 # Regenerate the Python lock files from their inputs:
-#   requirements.in      → requirements.txt      (runtime; the Docker image)
-#   requirements-dev.in  → requirements-dev.txt  (runtime + test/docs; CI)
+#   requirements/requirements.in      → requirements.txt      (runtime; the Docker image)
+#   requirements/requirements-dev.in  → requirements-dev.txt  (runtime + test/docs; CI)
 #
 # Pins every package (transitive ones too) with hashes, for the Python version
 # in .python-version, resolved for every platform (--universal), so the same
@@ -13,8 +13,8 @@
 #
 # CI (ci.yml, job python-locks) fails if the committed locks don't match the inputs.
 set -eu
-cd "$(dirname "$0")/.."
-PY="$(tr -d '[:space:]' < .python-version)"
+cd "$(dirname "$0")/../requirements"
+PY="$(tr -d '[:space:]' < ../.python-version)"
 COMMON="--python-version $PY --universal --generate-hashes --quiet"
 
 uv pip compile $COMMON "$@" \

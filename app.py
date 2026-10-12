@@ -13,7 +13,7 @@ def _loaded_for_flask_cli_command() -> bool:
     skipped then (`create_app(startup=False)`). Flask's CLI imports the app
     while resolving the command, inside a click context; gunicorn,
     `python app.py` and pytest import it without one. Code that builds its own
-    app (tests, scripts) calls `application.factory.create_app` directly and
+    app (tests, scripts) calls `application.core.factory.create_app` directly and
     needs none of this.
     """
     # Only look at click if it's already loaded (the `flask` command loads
@@ -37,10 +37,10 @@ def _loaded_for_flask_cli_command() -> bool:
 
 CLI_MODE = _loaded_for_flask_cli_command()
 
-from application.config import configure_logging, env_int as _env_int  # noqa: E402,F401  (_env_int: kept for tests)
-from application.factory import create_app, run_dev  # noqa: E402
+from application.core.config import configure_logging, env_int as _env_int  # noqa: E402,F401  (_env_int: kept for tests)
+from application.core.factory import create_app, run_dev  # noqa: E402
 from application.models import db  # noqa: E402,F401  (re-exported: tests use `app_module.db`)
-from application.startup import raise_open_files_limit as _raise_open_files_limit  # noqa: E402,F401
+from application.core.startup import raise_open_files_limit as _raise_open_files_limit  # noqa: E402,F401
 
 configure_logging(CLI_MODE)
 

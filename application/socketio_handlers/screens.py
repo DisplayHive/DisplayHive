@@ -14,7 +14,7 @@ def register_screen_handlers(socketio, app, db):
     from application.utils import emit_zuweisungen_matrix_update, reload_devices_on_screen
     from application.socketio_handlers.auth import admin_handler, current_admin_user, fields
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     from flask import request
 
     def _reload_devices_on_screen(screen):
@@ -114,7 +114,7 @@ def register_screen_handlers(socketio, app, db):
                 rotation_changed = rotation != (screen.rotation or 0)
                 screen.rotation = rotation
         if 'aspect_ratio' in message:
-            from application.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list
+            from application.utils.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list
             from application.utils.design import get_default_design
             ratio = normalize_ratio(message.get('aspect_ratio'))
             design = get_default_design(db)

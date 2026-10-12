@@ -27,7 +27,7 @@
 #
 # Database migrations (`flask dh migrate`) run before every start of the app:
 # after a database backup, and if one fails the app does not start — see
-# application/migration.py. The backups (and scheduled ones) are written to
+# application/core/migration.py. The backups (and scheduled ones) are written to
 # <dataDirectory>/backups; see the `backup` options below.
 #
 # ── Socket.IO / WebSocket forwarding hint (nginx, out of scope) ──────────────
@@ -115,7 +115,7 @@ let
         default     = "/var/lib/displayhive/${name}";
         description = ''
           Where this instance keeps uploaded media, previews, renditions, import staging and
-          backups (DATA_DIR, see application/paths.py). Created with mode 0750 for the instance's
+          backups (DATA_DIR, see application/core/paths.py). Created with mode 0750 for the instance's
           user. Updates never touch it. Back it up (the media; the database has its own
           backups, see {option}`backup`).
         '';
@@ -371,7 +371,7 @@ let
         # gunicorn's control socket (gunicornc) is unused, and it wants to create a file
         # in a directory the sandbox keeps read-only.
         + " --no-control-socket"
-        + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${appOf icfg}/gunicorn-logging.json"
+        + lib.optionalString (icfg.logFormat == "json") " --log-config-json ${appOf icfg}/deploy/gunicorn-logging.json"
         + " app:app";
       Restart    = "on-failure";
       RestartSec = "5s";
@@ -418,9 +418,9 @@ let
 in {
   imports = [
     (mkRemovedOptionModule [ "services" "displayhive" "pythonEnv" ] ''
-      Python packages come from the lock file requirements.txt, built into the Nix package
+      Python packages come from the lock file requirements/requirements.txt, built into the Nix package
       (nix/package.nix), so the server runs exactly the versions CI tests and the Docker image
-      ships. Add a dependency to requirements.in, run `npm run deps:lock`, then
+      ships. Add a dependency to requirements/requirements.in, run `npm run deps:lock`, then
       `nix run .#update-hashes`.
     '')
   ];

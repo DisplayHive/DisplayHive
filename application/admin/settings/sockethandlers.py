@@ -65,14 +65,14 @@ def register_admin_settings_handlers(socketio, app, db):
     def get_admin_settings(message=None):
         _emit_settings(getattr(request, 'sid', None))
 
-    # ── Outgoing requests to private networks (application/net.py) ─────────────
+    # ── Outgoing requests to private networks (application/security/net.py) ─────────────
     # Deliberately not one of ALLOWED_SETTING_KEYS: it is a security switch, so it
     # is neither writable through the generic endpoint below nor part of an
     # export/import file, and only a Superadmin may flip it.
 
     def _outbound_state():
         from application.models import SystemSetting
-        from application import net
+        from application.security import net
         row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == net.SETTING_KEY)).scalar_one_or_none()
         stored = bool(row and (row.value or '').strip().lower() in ('1', 'true', 'yes', 'on'))
         return ok(allow_private=stored or net.env_allows_private(), forced_by_env=net.env_allows_private())
@@ -86,8 +86,8 @@ def register_admin_settings_handlers(socketio, app, db):
     @admin_action('settings.edit')
     def set_outbound_policy(data=None):
         from application.models import SystemSetting
-        from application import net
-        from application.permissions import is_superadmin
+        from application.security import net
+        from application.security.permissions import is_superadmin
         from application.socketio_handlers.auth import current_admin_user
         if not is_superadmin(db, current_admin_user()):
             raise Fail('Only a Superadmin can change this.')
@@ -136,7 +136,7 @@ def register_admin_settings_handlers(socketio, app, db):
             raise Fail('No settings provided')
 
         from application.models import SystemSetting
-        from application import screen_logs
+        from application.admin.screens import logs as screen_logs
         rejected = []
         for key, value in settings.items():
             if key == 'screen_reload_at':

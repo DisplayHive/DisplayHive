@@ -414,7 +414,7 @@ def verify_integrity(data: bytes, integrity: str) -> bool:
 
 def download(url: str, max_bytes: int = MAX_DOWNLOAD_BYTES) -> bytes:
     """The body of *url*, through the outbound policy (no private networks unless an admin allowed them)."""
-    from application import net
+    from application.security import net
     try:
         response = net.get(url, timeout=60, max_bytes=max_bytes)
     except net.OutboundError as problem:

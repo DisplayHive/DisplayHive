@@ -17,7 +17,7 @@ def register_admin_contenttypes_handlers(socketio, app, db):
     from application.admin.content.helper import rerender_content_element_for_contenttype
     from application.socketio_handlers.auth import current_admin_user
     from application.socketio_handlers.actions import admin_action, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     from application.utils import push_content_list_to_all_screens
     from application.models import Contenttype, TagConfig
 

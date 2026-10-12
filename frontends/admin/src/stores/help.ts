@@ -13,7 +13,7 @@ export interface HelpTopic {
 /**
  * In-app contextual help content, fetched once per connection from the
  * backend (application/admin/help) instead of being hardcoded per view.
- * Keyed by topic key, e.g. "page.devices" — see application/help_content.py.
+ * Keyed by topic key, e.g. "page.devices" — see application/admin/help/content.py.
  */
 export const useHelpStore = defineStore('help', () => {
   const topics = ref<Record<string, HelpTopic>>({})

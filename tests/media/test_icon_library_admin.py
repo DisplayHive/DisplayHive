@@ -7,8 +7,8 @@ import zipfile
 
 import pytest
 
-from application import icon_libraries as icons
-from application.auth import create_token
+from application.admin.icons import libraries as icons
+from application.security.auth import create_token
 from tests.admin.test_admin_actions import plain_client, superadmin_client  # noqa: F401  (fixtures)
 from tests.media.test_icon_libraries import SVG, _zip
 

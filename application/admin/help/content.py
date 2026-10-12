@@ -1,6 +1,6 @@
 """Built-in in-app help content: single source of truth for the initial
 HelpTopic/HelpTranslation seed data, kept in sync with the DB on every
-startup (see sync_help_topics), mirroring how application.permissions
+startup (see sync_help_topics), mirroring how application.security.permissions
 keeps right_definition in sync with RIGHTS.
 
 Topic metadata (category/context/docs_url) is always synced from PAGE_HELP

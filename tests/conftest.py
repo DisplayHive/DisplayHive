@@ -1,7 +1,7 @@
 """Shared pytest fixtures for the backend test suite.
 
 `app.py` builds the default `app`/`db`/`socketio` with
-`application.factory.create_app()` and — as a server — fully bootstraps the DB
+`application.core.factory.create_app()` and — as a server — fully bootstraps the DB
 (create_all + bootstrap admin + right sync + superadmin group) when it is
 imported, driven by env vars. For the bulk of the suite:
 
@@ -36,7 +36,7 @@ atexit.register(lambda: os.path.exists(_tmp_db_path) and os.unlink(_tmp_db_path)
 os.environ['DATABASE_URL'] = os.environ.get('TEST_DATABASE_URL') or f'sqlite:///{_tmp_db_path}'
 
 # Keep media/staging written by tests out of the checkout — and out of a
-# developer's real legacy static/media (application/paths.py would otherwise
+# developer's real legacy static/media (application/core/paths.py would otherwise
 # fall back to it): point both DATA_DIR and the legacy lookup at temp dirs.
 import shutil  # noqa: E402
 _tmp_data_dir = tempfile.mkdtemp(prefix='displayhive_pytest_data_')
@@ -49,8 +49,8 @@ atexit.register(lambda: shutil.rmtree(_tmp_app_root, ignore_errors=True))
 if 'PYTEST_XDIST_WORKER' in os.environ or 'DATA_DIR' not in os.environ:
     os.environ['DATA_DIR'] = _tmp_data_dir
 
-import application.paths  # noqa: E402
-application.paths.APP_ROOT = _tmp_app_root
+import application.core.paths  # noqa: E402
+application.core.paths.APP_ROOT = _tmp_app_root
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-not-for-production')
 os.environ.setdefault('ADMIN_BOOTSTRAP_USERNAME', 'testadmin')
 os.environ.setdefault('ADMIN_BOOTSTRAP_PASSWORD', 'test-admin-password')
@@ -161,10 +161,10 @@ def db_session(flask_app):
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    """`application.auth._failed_attempts` is process-global mutable state
+    """`application.security.auth._failed_attempts` is process-global mutable state
     (an in-memory login-rate-limiter dict) — clear it before and after every
     test so failures in one test can't affect another."""
-    import application.auth as auth_module
+    import application.security.auth as auth_module
     auth_module._failed_attempts.clear()
     auth_module._last_sweep = 0.0
     yield
@@ -176,7 +176,7 @@ def reset_rate_limiter():
 def make_user(db_session):
     """Factory fixture: create+commit an AdminUser with sensible defaults."""
     from application.models import AdminUser
-    from application.auth import hash_password
+    from application.security.auth import hash_password
 
     def _make(username=None, password='testpass123', is_active=True, token_version=0):
         if username is None:
@@ -218,7 +218,7 @@ def make_group(db_session):
 def get_right(db_session):
     """Look up a RightDefinition row by key.
 
-    Real right keys (see application.permissions.RIGHTS) already exist —
+    Real right keys (see application.security.permissions.RIGHTS) already exist —
     app.py's module-level startup runs sync_right_definitions() on import —
     so tests exercising real rights (e.g. 'media.page') just look them up
     rather than creating them.

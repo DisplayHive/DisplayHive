@@ -1,9 +1,9 @@
-"""Tests for SSO (OpenID Connect) login: application/oidc.py, its HTTP routes
+"""Tests for SSO (OpenID Connect) login: application/security/oidc.py, its HTTP routes
 in application/admin/auth/routes.py, and the account-management rules that
 come with it (password-login flag, merging, the break-glass Superadmin).
 
 The identity provider is faked in-process: its discovery document and token
-endpoint replace `net.get`/`net.post` (application/net.py) inside application.oidc, and
+endpoint replace `net.get`/`net.post` (application/security/net.py) inside application.security.oidc, and
 its signing key replaces the JWKS client. Everything DisplayHive itself does
 — PKCE, state/nonce/cookie checks, ID-token verification, account mapping,
 the handoff code — runs for real.
@@ -18,8 +18,8 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from application import oidc
-from application.auth import user_from_token
+from application.security import oidc
+from application.security.auth import user_from_token
 
 ISSUER = 'https://idp.example.com/realms/main'
 CLIENT_ID = 'displayhive'
@@ -68,7 +68,7 @@ class FakeIdP:
         }
         return jwt.encode(claims, self.key, algorithm='RS256', headers={'kid': 'k1'})
 
-    # Stand-ins for requests.get / requests.post inside application.oidc.
+    # Stand-ins for requests.get / requests.post inside application.security.oidc.
     def get(self, url, timeout=None):
         assert url == f'{ISSUER}/.well-known/openid-configuration'
         return _Response(self.doc)
@@ -313,7 +313,7 @@ def admin_socket(flask_app, db_session, make_user):
     after taking the startup bootstrap admin out of the break-glass count so
     tests control exactly who still has password login."""
     from application.models import AdminUser, Group, UserGroup
-    from application.auth import create_token
+    from application.security.auth import create_token
 
     for other in db_session.query(AdminUser).all():
         other.password_login_allowed = False
@@ -447,7 +447,7 @@ def test_provider_admin_rejects_bad_issuers(db_session, admin_socket, issuer):
     assert result['success'] is False
 
 
-# --- Outgoing requests go through application/net.py ----------------------------------
+# --- Outgoing requests go through application/security/net.py ----------------------------------
 
 
 def test_the_providers_signing_keys_are_fetched_through_the_guarded_client(monkeypatch):

@@ -22,7 +22,7 @@ def register_device_connection_handlers(socketio, app, db):
     from flask import request
     from datetime import datetime, timezone
     from application.utils import emit_screengroups_update
-    from application.auth import user_from_token
+    from application.security.auth import user_from_token
 
     @socketio.on('connect')
     def _auto_join_admins_on_connect(auth=None):
@@ -34,7 +34,7 @@ def register_device_connection_handlers(socketio, app, db):
           * If valid: generate/return devicekey via socket event, accept connection
           * If invalid: raise ConnectionRefusedError('invalid_key')
         - If client sends a 'token' in the handshake `auth` payload:
-          * Server verifies the JWT (see application.auth.decode_token)
+          * Server verifies the JWT (see application.security.auth.decode_token)
           * If valid: Admin connection → join 'admins' room
           * If invalid/expired: raise ConnectionRefusedError('invalid_token')
         - If client sends 'devicekey' in handshake:
@@ -110,7 +110,7 @@ def register_device_connection_handlers(socketio, app, db):
         # browser may keep no cookies at all), and only from our own origin: another site's
         # page must not be able to open an admin socket with the visitor's cookie.
         if not token and not adoptionkey and not devicekey:
-            from application import session as web_session
+            from application.security import session as web_session
             cookie_token, source = web_session.token_from_request(request)
             if cookie_token and source == 'cookie':
                 if not web_session.handshake_origin_ok(app, request):
@@ -156,15 +156,15 @@ def register_device_connection_handlers(socketio, app, db):
                     'sqlite_in_use': bool(app.config.get('SQLITE_IN_USE')),
                     'debug_enabled': bool(app.config.get('DEBUG_ENABLED')),
                 }
-                # Data still in pre-DATA_DIR locations (application/paths.py):
+                # Data still in pre-DATA_DIR locations (application/core/paths.py):
                 # a server-side chore, so only for those who run the instance —
                 # and it reveals filesystem paths.
-                from application.permissions import has_right
+                from application.security.permissions import has_right
                 if app.config.get('LEGACY_DATA_PATHS') and has_right(db, admin_user, 'settings.page'):
                     status['legacy_data_paths'] = app.config['LEGACY_DATA_PATHS']
                     status['data_dir'] = app.config.get('DATA_DIR')
                     status['deployment'] = app.config.get('DEPLOYMENT_KIND', 'manual')
-                from application import version
+                from application.core import version
                 status.update(version.info())
                 socketio.emit('displayhive:system:stc:security_status', status, room=sid_info)
             except Exception:

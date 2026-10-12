@@ -12,7 +12,7 @@ log() {
     fi
 }
 
-# `docker-entrypoint.sh migrate`: only migrate the database, then exit. The
+# `deploy/docker-entrypoint.sh migrate`: only migrate the database, then exit. The
 # compose file runs this as a separate one-shot service ("migrate") that the app
 # service waits for.
 if [ "$1" = "migrate" ]; then
@@ -20,7 +20,7 @@ if [ "$1" = "migrate" ]; then
 fi
 
 # Bring the database schema up to date before the app starts: a backup first,
-# then the migration (flask dh migrate, see application/migration.py). If that
+# then the migration (flask dh migrate, see application/core/migration.py). If that
 # fails (exit 78) the app is NOT started on a half-migrated database; the
 # message names the backup. Set MIGRATE_ON_START=0 when a separate migrate
 # service does this.
@@ -37,7 +37,7 @@ fi
 # LOG_FORMAT=json: gunicorn's own lines in the same JSON format as the app's.
 log_args=""
 if [ "${LOG_FORMAT:-text}" = "json" ]; then
-    log_args="--log-config-json /app/gunicorn-logging.json"
+    log_args="--log-config-json /app/deploy/gunicorn-logging.json"
 fi
 
 log INFO "Starting DisplayHive on port 5000..."

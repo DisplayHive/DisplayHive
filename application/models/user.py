@@ -97,7 +97,7 @@ class AuthProvider(db.Model):
 
     Endpoints are not stored: they are discovered from
     ``<issuer>/.well-known/openid-configuration`` at login time (see
-    application/oidc.py), so a provider only needs its issuer and client
+    application/security/oidc.py), so a provider only needs its issuer and client
     credentials.
     """
     __tablename__ = 'auth_provider'

@@ -36,7 +36,7 @@ def require_admin() -> bool:
          client cannot forge), and
       2. the token it presented at connect is *still* valid right now — the
          account has not since been deleted, deactivated, or had its password
-         changed (see application.auth.user_from_token).
+         changed (see application.security.auth.user_from_token).
 
     Fails closed: any error resolving the token denies the action.
 
@@ -55,7 +55,7 @@ def require_admin() -> bool:
             return False
 
         from application.models import db
-        from application.auth import user_from_token
+        from application.security.auth import user_from_token
         return user_from_token(current_app._get_current_object(), db, token) is not None
     except Exception:
         return False
@@ -75,7 +75,7 @@ def resolve_admin_user(sid: str):
     try:
         from flask import current_app
         from application.models import db
-        from application.auth import user_from_token
+        from application.security.auth import user_from_token
         return user_from_token(current_app._get_current_object(), db, token)
     except Exception:
         return None
@@ -94,7 +94,7 @@ def is_impersonating() -> bool:
     """True if the current socket authenticated with an impersonation token.
 
     An impersonation token authenticates as the target user but carries a
-    signed 'imp' claim (see application.auth.create_token) recording who
+    signed 'imp' claim (see application.security.auth.create_token) recording who
     actually started the session. Used to refuse chaining — an impersonated
     session can't itself start another impersonation, even if the target
     user happens to also hold special.impersonate.
@@ -105,7 +105,7 @@ def is_impersonating() -> bool:
         token = _admin_sessions.get(sid)
         if not token:
             return False
-        from application.auth import decode_token
+        from application.security.auth import decode_token
         payload = decode_token(current_app._get_current_object(), token)
         return bool(payload and payload.get('imp') is not None)
     except Exception:
@@ -116,7 +116,7 @@ def require_right(right_key: str):
     """Decorator factory: admin-only Socket.IO handler that also requires *right_key*.
 
     Combines admin_handler's authentication + exception-safety with a
-    permission check (application.permissions.has_right). Denies (silently,
+    permission check (application.security.permissions.has_right). Denies (silently,
     matching admin_handler's convention) if the caller is not a valid admin
     or lacks the right — this is the actual security boundary; any
     frontend-side hiding of buttons/pages is UX only and must not be relied on.
@@ -135,7 +135,7 @@ def require_right(right_key: str):
                 return None
             try:
                 from application.models import db
-                from application.permissions import has_right
+                from application.security.permissions import has_right
                 user = current_admin_user()
                 if not has_right(db, user, right_key):
                     return None
@@ -163,7 +163,7 @@ def require_any_right(*right_keys: str):
                 return None
             try:
                 from application.models import db
-                from application.permissions import has_right
+                from application.security.permissions import has_right
                 user = current_admin_user()
                 if not any(has_right(db, user, k) for k in right_keys):
                     return None

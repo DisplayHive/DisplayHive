@@ -2,7 +2,7 @@
  * The icon libraries selectable by the 'icon' field handler.
  *
  * DisplayHive ships no icons: an administrator installs libraries in Settings → Icon libraries
- * (application/icon_libraries.py), and they are served as plain SVG files at
+ * (application/admin/icons/libraries.py), and they are served as plain SVG files at
  * /static/icons/<library>/<name>.svg, resolved at runtime with fetch(). `manifest.json` there lists the
  * installed libraries' icon names ({library id: names[]}), `libraries.json` their labels and licenses.
  * `ICON_LIBRARIES` below is what is known about the libraries on the install list (license texts for the

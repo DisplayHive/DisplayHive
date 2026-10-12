@@ -5,7 +5,7 @@ compose ``migrate`` service and the NixOS unit before the app starts:
 
 1. Already at the newest schema: nothing to do.
 2. A new, empty database: migrate, no backup (there is nothing to lose).
-3. Otherwise: back up first (``premigrate-…``, see application/backup.py), and
+3. Otherwise: back up first (``premigrate-…``, see application/core/backup.py), and
    only if that worked, migrate. A failed migration raises ``MigrationFailed``
    naming the backup; the caller exits with ``EXIT_FAILED`` so that nothing
    starts the app on a half-migrated database and a restart policy has no
@@ -24,7 +24,7 @@ from typing import Callable, Optional
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
-from application import backup
+from application.core import backup
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def upgrade_to_head(engine: Engine) -> None:
     from alembic import command
     from alembic.config import Config
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     config = Config(str(root / 'alembic.ini'))
     config.set_main_option('script_location', str(root / 'migrations'))
     alembic_log = logging.getLogger('alembic.runtime.migration')

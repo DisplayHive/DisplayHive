@@ -21,7 +21,7 @@ import Message from 'primevue/message'
 // SSO login providers (OpenID Connect), shown on SettingsView for holders of
 // `authproviders.manage`. The backend side is
 // application/admin/authproviders/sockethandlers.py; the login flow itself is
-// application/oidc.py.
+// application/security/oidc.py.
 
 const { emitWithAck } = useSocket()
 const { request } = useAck()

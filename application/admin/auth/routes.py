@@ -13,9 +13,9 @@ from functools import wraps
 
 from flask import request, jsonify, redirect
 
-from application import session as web_session
-from application import version
-from application.auth import (
+from application.security import session as web_session
+from application.core import version
+from application.security.auth import (
     begin_impersonation,
     verify_password,
     hash_password,
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def require_jwt_auth(app, allow_pending_password_change=False):
     """Return a decorator that requires a valid session: `Authorization: Bearer <jwt>`
-    or the session cookie (application/session.py), the latter with its CSRF checks.
+    or the session cookie (application/security/session.py), the latter with its CSRF checks.
 
     *allow_pending_password_change* lets an account flagged
     `must_change_password` through — only for the self-service routes it
@@ -72,7 +72,7 @@ def require_http_right(app, right_key):
             if problem:
                 return jsonify({'success': False, 'error': problem}), 403
             from application.models import db
-            from application.permissions import has_right
+            from application.security.permissions import has_right
             user = user_from_token(app, db, token)
             if not user or not has_right(db, user, right_key):
                 return jsonify({'success': False, 'error': 'Unauthorized'}), 401
@@ -284,11 +284,11 @@ def register_auth_routes(app, db):
         return jsonify({'success': True, 'preferences': preferences})
 
     # --- SSO (OpenID Connect) -------------------------------------------------
-    # See application/oidc.py for the flow. These routes stay under
+    # See application/security/oidc.py for the flow. These routes stay under
     # /admin/api/auth/ like the password login, so a reverse proxy protecting
     # that prefix covers them too.
     from application.models import AuthProvider
-    from application import oidc
+    from application.security import oidc
 
     OIDC_COOKIE = 'dh_oidc'
     OIDC_COOKIE_PATH = '/admin/api/auth/oidc'
@@ -418,7 +418,7 @@ def register_auth_routes(app, db):
         """Log the caller in as another user. data: {user_id}. Needs special.impersonate and
         refuses to chain (see begin_impersonation). A browser session keeps its own session
         in a second cookie for "stop impersonating"; Bearer clients get the token back."""
-        from application.permissions import has_right
+        from application.security.permissions import has_right
         (token, source), actor, payload, error = _cookie_session()
         if error:
             return error

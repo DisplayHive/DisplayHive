@@ -24,7 +24,7 @@ def register_admin_designs_handlers(socketio, app, db):
         """Validated JSON list of the extra aspect ratios (base 16:9 excluded),
         or None when there are none."""
         import json
-        from application.aspect_ratio import parse_ratio_list
+        from application.utils.aspect_ratio import parse_ratio_list
         ratios = parse_ratio_list(raw)
         return json.dumps(ratios) if ratios else None
 

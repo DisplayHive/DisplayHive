@@ -2,7 +2,7 @@
 
 import pytest
 
-from application.factory import create_app
+from application.core.factory import create_app
 from application.models import Design, Device, db
 
 
@@ -58,7 +58,7 @@ def test_startup_false_leaves_the_data_alone(tmp_path):
 
 
 def test_startup_steps_reset_devices_and_enforce_a_default_design(tmp_path):
-    from application.startup import run_startup_steps
+    from application.core.startup import run_startup_steps
 
     uri = f"sqlite:///{tmp_path / 'boot.db'}"
     app, _ = create_app({'SQLALCHEMY_DATABASE_URI': uri}, startup=False)

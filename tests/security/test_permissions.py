@@ -1,4 +1,4 @@
-"""Tests for application/permissions.py: the rights resolution algorithm.
+"""Tests for application/security/permissions.py: the rights resolution algorithm.
 
 Every function under test takes the Flask-SQLAlchemy extension object (it
 calls `db.session`/`db.select` internally) — passed here as `flask_app.db`
@@ -7,14 +7,14 @@ use the raw `db_session` Session directly for setup, same as everywhere else
 in this suite.
 
 Real RightDefinition rows already exist for every key in
-application.permissions.RIGHTS — app.py's module-level startup runs
+application.security.permissions.RIGHTS — app.py's module-level startup runs
 sync_right_definitions() on import — so these tests exercise real right keys
 rather than inventing fake ones (has_right() silently returns False for a
 right_key with no RightDefinition row, which would mask what these tests are
 actually trying to exercise).
 """
 
-from application.permissions import (
+from application.security.permissions import (
     effective_group_closure,
     has_right,
     is_superadmin,
@@ -180,7 +180,7 @@ def test_a_superadmin_group_grants_every_right_including_inherited_via_a_parent(
 
 
 def test_password_superadmin_exists_needs_an_active_password_login_superadmin(flask_app, db_session, make_user, make_group):
-    from application.permissions import password_superadmin_exists
+    from application.security.permissions import password_superadmin_exists
 
     # Other tests' committed users are rolled back, but the app's own
     # bootstrap admin may exist: neutralise every superadmin first.

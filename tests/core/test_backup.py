@@ -1,4 +1,4 @@
-"""application/backup.py: naming, never overwriting, retention, SQLite round trip
+"""application/core/backup.py: naming, never overwriting, retention, SQLite round trip
 (and PostgreSQL where pg_dump/pg_restore and a server are available)."""
 
 import hashlib
@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 
-from application import backup
-from application.backup import Backup, BackupError, Settings
+from application.core import backup
+from application.core.backup import Backup, BackupError, Settings
 
 NOW = datetime(2026, 10, 8, 4, 0, 0, tzinfo=timezone.utc)
 

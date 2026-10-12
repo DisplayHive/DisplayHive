@@ -9,9 +9,9 @@ and backups/volumes cover a single directory::
     ├── media/                0750  uploads, served at /static/media/
     ├── media_previews/       0750  thumbnails, served at /static/media_previews/
     ├── media_renditions/     0750  scaled copies, served at /static/media_renditions/
-    ├── icons/                0750  installed icon libraries, served at /static/icons/ (application/icon_libraries.py)
+    ├── icons/                0750  installed icon libraries, served at /static/icons/ (application/admin/icons/libraries.py)
     ├── import-staging/       0700  uploaded import files between preview and confirm
-    └── backups/              0700  database dumps and media archives (application/backup.py)
+    └── backups/              0700  database dumps and media archives (application/core/backup.py)
 
 The URLs stay /static/media/… etc. (they're stored in content), only the
 files moved; app.py serves them from here explicitly.
@@ -21,7 +21,7 @@ Nothing is moved automatically — for every location whose old copy still holds
 data while the new one doesn't, the old path keeps being used and is reported in
 ``DataPaths.legacy``, which the admin UI turns into a banner with migration
 steps. (The database has no such fallback any more: DATABASE_URL is required,
-see application/db_url.py; ``existing_sqlite_files`` finds files that earlier
+see application/core/db_url.py; ``existing_sqlite_files`` finds files that earlier
 versions would have used silently.)
 
 Imported by app.py and migrations/env.py, so it
@@ -33,11 +33,11 @@ import os
 import stat
 from dataclasses import dataclass, field
 
-from application.db_url import normalize_database_url, sqlite_path_from_url
+from application.core.db_url import normalize_database_url, sqlite_path_from_url
 
 logger = logging.getLogger(__name__)
 
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Subdirectories of DATA_DIR that hold media, with their old location
 # relative to APP_ROOT.

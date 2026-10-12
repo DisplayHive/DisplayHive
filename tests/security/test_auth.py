@@ -1,4 +1,4 @@
-"""Tests for application/auth.py: password hashing, JWT issuing/verification,
+"""Tests for application/security/auth.py: password hashing, JWT issuing/verification,
 first-run admin bootstrap, and the login rate limiter."""
 
 from datetime import datetime, timedelta, timezone
@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
-from application.auth import (
+from application.security.auth import (
     TOKEN_ALGORITHM,
     _lockout_seconds,
     clear_failed_attempts,
@@ -89,7 +89,7 @@ def test_clear_failed_attempts_resets_state():
 
 
 def test_is_rate_limited_prunes_attempts_outside_window(monkeypatch):
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     key = 'ip:stale-attempts'
     now = 1_000_000.0
@@ -106,7 +106,7 @@ def test_is_rate_limited_prunes_attempts_outside_window(monkeypatch):
 @pytest.fixture()
 def clock(monkeypatch):
     """A controllable time.time() for the rate limiter: `clock.now += 60`."""
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     class _Clock:
         now = 1_000_000.0
@@ -117,7 +117,7 @@ def clock(monkeypatch):
 
 
 def test_is_rate_limited_does_not_create_entries():
-    import application.auth as auth_module
+    import application.security.auth as auth_module
     assert is_rate_limited('ip:never-failed') is False
     assert 'ip:never-failed' not in auth_module._failed_attempts
 
@@ -125,7 +125,7 @@ def test_is_rate_limited_does_not_create_entries():
 def test_lockout_escalates_past_the_window_up_to_the_cap(clock):
     """Each failure after the threshold doubles the lock, and that escalation
     survives locks longer than the 15-minute window (up to the 1 h cap)."""
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     key = 'ip:escalating'
     for _ in range(5):
@@ -141,7 +141,7 @@ def test_lockout_escalates_past_the_window_up_to_the_cap(clock):
 
 
 def test_escalation_is_forgiven_after_a_quiet_window(clock):
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     key = 'ip:forgiven'
     for _ in range(5):
@@ -156,7 +156,7 @@ def test_escalation_is_forgiven_after_a_quiet_window(clock):
 
 
 def test_sweep_removes_expired_keys_nobody_asks_about_again(clock):
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     for i in range(10):
         record_failed_attempt(f'user:1.2.3.4:typo-{i}')
@@ -167,7 +167,7 @@ def test_sweep_removes_expired_keys_nobody_asks_about_again(clock):
 
 
 def test_key_cap_evicts_unlocked_keys_but_never_locked_ones(clock, monkeypatch):
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     monkeypatch.setattr(auth_module, '_MAX_TRACKED_KEYS', 3)
     for _ in range(5):
@@ -184,7 +184,7 @@ def test_key_cap_evicts_unlocked_keys_but_never_locked_ones(clock, monkeypatch):
 
 
 def test_per_ip_limit_stops_spraying_across_usernames():
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     for i in range(auth_module._IP_MAX_ATTEMPTS):
         assert begin_login_attempt('1.2.3.4', f'victim-{i}') is not None  # counted as a failure
@@ -202,7 +202,7 @@ def test_per_account_limit_still_applies_below_the_ip_threshold():
 
 def test_successful_login_keeps_the_ip_counter_but_is_not_counted_itself():
     """A valid account of the attacker's own must not reset the IP counter."""
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     for i in range(auth_module._IP_MAX_ATTEMPTS - 1):
         begin_login_attempt('1.2.3.4', f'victim-{i}')
@@ -247,7 +247,7 @@ def test_parallel_guesses_cannot_slip_past_the_limit():
 def test_limiter_survives_concurrent_sweeps(monkeypatch):
     """_sweep() iterates the whole dict; other threads insert meanwhile."""
     import threading
-    import application.auth as auth_module
+    import application.security.auth as auth_module
 
     monkeypatch.setattr(auth_module, '_SWEEP_INTERVAL_SECONDS', 0)  # sweep on every call
     errors = []

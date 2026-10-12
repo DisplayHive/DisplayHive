@@ -9,15 +9,15 @@
 ## Backend entrypoint
 
 `app.py` is a thin entry point: it calls the application factory
-`create_app()` ([`application/factory.py`](https://github.com/DisplayHive/DisplayHive/blob/main/application/factory.py))
+`create_app()` ([`application/core/factory.py`](https://github.com/DisplayHive/DisplayHive/blob/main/application/core/factory.py))
 and exposes the result as `app` / `socketio` — what `gunicorn app:app`,
 `flask --app app …` and `python app.py` expect. The pieces:
 
 | Module | Responsibility |
 |---|---|
-| `application/factory.py` | `create_app(overrides=None, *, startup=True)` builds a complete, independent app and returns `(app, socketio)`; `run_dev()` is the `python app.py` server. Importing it has no side effects. |
-| `application/config.py` | Environment → configuration (CORS origins, pool options, proxy count, secret key, data paths) as small pure functions; `apply_config()` copies them onto the app. |
-| `application/startup.py` | The one-time work of a real server: raise the open-files limit, run the startup steps, start the log-retention and rendition-backfill tasks. |
+| `application/core/factory.py` | `create_app(overrides=None, *, startup=True)` builds a complete, independent app and returns `(app, socketio)`; `run_dev()` is the `python app.py` server. Importing it has no side effects. |
+| `application/core/config.py` | Environment → configuration (CORS origins, pool options, proxy count, secret key, data paths) as small pure functions; `apply_config()` copies them onto the app. |
+| `application/core/startup.py` | The one-time work of a real server: raise the open-files limit, run the startup steps, start the log-retention and rendition-backfill tasks. |
 | `application/web/` | The HTTP surface outside Socket.IO and the admin API: `static_routes`, `screen_page`, `admin_spa` (Blueprints) and `importexport_routes` (`register_importexport_routes`, because its auth decorators take the app). |
 | `application/admin/importexport/service.py` | The import/export/demo workflow itself (parse uploads, stage, extract media, wipe, broadcast) — no request handling, so it is unit-tested directly. |
 
@@ -35,16 +35,16 @@ The backend in detail:
   thread, WebSockets via `simple-websocket`, served by gunicorn's `gthread`
   worker — one process, many threads. There is no monkey-patching. Shared
   in-memory state is guarded by locks: the login rate limiter
-  (`application/auth.py`, which also counts a login attempt *before* the
+  (`application/security/auth.py`, which also counts a login attempt *before* the
   password check so parallel guesses can't slip past it), pending SSO
-  logins (`application/oidc.py`) and the connection registry
+  logins (`application/security/oidc.py`) and the connection registry
   (`registry_lock` in `application/socketio_handlers/lifecycle.py`). New
   module-level state shared between requests needs the same — and tests
   for it need real `threading.Thread`s.
 - The Flask app is configured with the DB URI (`DATABASE_URL`, required:
   PostgreSQL, or an explicit `sqlite:///…` URL for development only — there is
   no fallback file, and the Docker image and NixOS module refuse SQLite
-  (`application/db_url.py`)), CORS restricted to `/api/*`
+  (`application/core/db_url.py`)), CORS restricted to `/api/*`
   with an allowlist from `CORS_ALLOWED_ORIGINS`, and a `SocketIO` instance
   sharing the same CORS origins. `max_http_buffer_size` is 10 MB — room
   for large content payloads, not files: media uploads are a separate HTTP
@@ -64,10 +64,10 @@ The backend in detail:
   under `application/admin/*` is Socket.IO handlers, not HTTP.
   `tests/core/test_route_map.py` pins the whole HTTP route table, so moving
   routes between modules can't silently drop or rename one.
-- On startup (`application/startup.py`, inside `app.app_context()`), the app resets stale
+- On startup (`application/core/startup.py`, inside `app.app_context()`), the app resets stale
   `Device.is_online` flags, enforces exactly one default design, prunes old
   screen logs, seeds the built-in Superadmin group and right-definition
-  catalog (`sync_right_definitions()`, see `application/permissions.py`),
+  catalog (`sync_right_definitions()`, see `application/security/permissions.py`),
   and bootstraps an admin user if none exists.
 - `register_all_handlers(socketio, app, db)`
   ([`application/socketio_handlers/__init__.py`](https://github.com/DisplayHive/DisplayHive/blob/main/application/socketio_handlers/__init__.py))
@@ -102,7 +102,7 @@ Defined under `application/models/`:
   ratio: its own member containers) and `ContainerPosition` (a container's
   position/size at one non-base ratio; 16:9 is the base and lives in
   `layout_container` / the container's own columns — see
-  `application/aspect_ratio.py`; `Design.aspect_ratios` is the ratio list and
+  `application/utils/aspect_ratio.py`; `Design.aspect_ratios` is the ratio list and
   `Screen.aspect_ratio` picks the best-matching variation in `upd_content`),
   `SystemSetting`,
   Telegram alerting models (`AlertSubscription`, `TelegramUser`), `Media`,
@@ -116,12 +116,12 @@ Defined under `application/models/`:
   `Screengroup`.
 - **`user.py`** — `AdminUser`.
 - **`rights.py`** — the rights system: `RightDefinition` (the right
-  catalog, synced from `application/permissions.py`'s `RIGHTS` list on
+  catalog, synced from `application/security/permissions.py`'s `RIGHTS` list on
   startup), `Group` (nestable via `parent_group_id`; `is_superadmin`
   grants everything), `GroupRight` (allow-only grants on a group),
   `UserGroup` (user↔group membership), `UserRight` (per-user allow/deny
   override; absence of a row means inherit from group membership). See
-  `application/permissions.py` for the resolution algorithm.
+  `application/security/permissions.py` for the resolution algorithm.
 - **`base.py`** — the `Screen` ↔ `Screengroup` and `ContentElement` ↔
   `Screengroup` many-to-many association tables.
 
@@ -161,7 +161,7 @@ admin panel features:
   queries, debug-mode and logger-state emits.
 - **`devconfig.py`** — emits `upd_deviceconfig` to a device/room.
 - **`logger.py`** — the screen log: receives a screen's lines (stored via
-  `application/screen_logs.py`), live feed (subscribe/unsubscribe) and the filtered `query`.
+  `application/admin/screens/logs.py`), live feed (subscribe/unsubscribe) and the filtered `query`.
 - **`screens.py`** — reload one or all screens, fetch a screen's groups,
   rename a screen; emits a `RELOAD` command and triggers a content push.
 - **`refresh_content.py`** — server time sync, and
@@ -255,7 +255,7 @@ def handle_delete_user(data):
 - Ctrl+K: `components/CommandPalette.vue` (opened by `composables/useCommandPalette.ts`) lists pages, actions
   and the items of the stores; the matching is `utils/commandSearch.ts`. A new page shows up through
   `useAdminNavigation`; a new kind of item is one block in the palette's `entries`.
-- Icon libraries: DisplayHive ships no icons. `application/icon_libraries.py` installs libraries into
+- Icon libraries: DisplayHive ships no icons. `application/admin/icons/libraries.py` installs libraries into
   `DATA_DIR/icons` (from the catalog — npm tarballs with a pinned version and checksum — or from an uploaded ZIP/TAR
   or a link), sanitising every SVG (an allow-list of elements and attributes: the screen puts the markup into the
   page) and unpacking archives by hand with limits. They are served at `/static/icons/<library>/<name>.svg`

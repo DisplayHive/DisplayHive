@@ -31,7 +31,7 @@ def test_dev_shell_syncs_the_dev_lock():
 
 def test_nix_package_is_built_from_the_runtime_lock():
     package = _read('nix/package.nix')
-    assert 'pip download' in package and '../requirements.txt' in package
+    assert 'pip download' in package and '../requirements/requirements.txt' in package
     assert 'requirements-dev' not in package, 'production must not install test/docs tools'
 
 
@@ -56,7 +56,7 @@ def test_npm_locks_name_where_every_package_comes_from():
 
 
 def test_runtime_lock_has_no_dev_tools():
-    lock = _read('requirements.txt').lower()
+    lock = _read('requirements/requirements.txt').lower()
     for tool in ('pytest', 'mkdocs', 'pyan3'):
         assert not re.search(rf'^{tool}[=-]', lock, re.MULTILINE), f'{tool} is in the runtime lock'
 
@@ -64,7 +64,7 @@ def test_runtime_lock_has_no_dev_tools():
 def test_tests_run_on_the_locked_versions():
     """Catches running the suite outside the synced venv (e.g. a stale one)."""
     import importlib.metadata as md
-    pins = dict(re.findall(r'^([A-Za-z0-9_.\-]+)==([^\s\\;]+)', _read('requirements-dev.txt'), re.MULTILINE))
+    pins = dict(re.findall(r'^([A-Za-z0-9_.\-]+)==([^\s\\;]+)', _read('requirements/requirements-dev.txt'), re.MULTILINE))
     for name in ('flask', 'flask-socketio', 'sqlalchemy', 'pytest'):
         pinned = next(v for k, v in pins.items() if k.lower() == name)
         assert md.version(name) == pinned, f'{name} {md.version(name)} installed, lock says {pinned}'

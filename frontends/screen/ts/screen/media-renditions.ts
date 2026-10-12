@@ -2,7 +2,7 @@
  * Picks the right size of an uploaded image for this screen.
  *
  * The server keeps FHD / 4K / 8K renditions of every uploaded image under
- * /static/media_renditions/<tier>/… (see application/media_renditions.py) —
+ * /static/media_renditions/<tier>/… (see application/admin/media/renditions.py) —
  * measured on the long edge: 1920 / 3840 / 7680 px, and never larger than the
  * original (a tier the source can't fill simply doesn't exist). This module
  * chooses the smallest tier that is still at least as big as the screen's own

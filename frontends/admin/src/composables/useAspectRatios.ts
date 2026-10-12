@@ -15,7 +15,7 @@ const ratioNumber = (ratio: string): number => {
 }
 
 /** The ratio from *available* closest to *target* (log distance; the base on
- * ties, then the first listed) — mirrors application/aspect_ratio.py's
+ * ties, then the first listed) — mirrors application/utils/aspect_ratio.py's
  * best_ratio, so a preview shows what a screen of that ratio would get. */
 export const bestAspectRatio = (target: string | null | undefined, available: string[]): string => {
   if (!available.length) return BASE_ASPECT_RATIO

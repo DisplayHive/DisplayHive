@@ -49,7 +49,7 @@ def _devices_payload_for_sid(devices_data, sid):
     """Return the devices payload as *sid* is entitled to see it."""
     from application.socketio_handlers.auth import resolve_admin_user
     from application.models import db
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     user = resolve_admin_user(sid)
     if has_right(db, user, 'device.showkey'):
         return devices_data

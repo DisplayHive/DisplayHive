@@ -159,7 +159,7 @@ What the module handles automatically for each declared instance:
   database backup, and if it fails the app does not start (see
   [Backup & restore](backup.md)). `backup.intervalHours`, `backup.keep` and
   `backup.beforeMigration` configure the backups.
-- The Python packages: exactly the versions of the lock file `requirements.txt`
+- The Python packages: exactly the versions of the lock file `requirements/requirements.txt`
   (the same ones CI tests and the Docker image ships), built into the package
   from the hash-checked wheels. The server needs no internet access to start.
 - **Secrets outside the Nix store:** `secretKeyFile` (a root-only file, handed
@@ -529,7 +529,7 @@ retention are up to whatever collects them:
 one JSON object, from the app, gunicorn and the Docker entrypoint alike:
 
 ```json
-{"time": "2026-10-09T08:15:02.123Z", "level": "WARNING", "logger": "application.backup", "message": "Scheduled backup failed: …"}
+{"time": "2026-10-09T08:15:02.123Z", "level": "WARNING", "logger": "application.core.backup", "message": "Scheduled backup failed: …"}
 ```
 
 `exception` holds the traceback of an error. The log of the **screens** (the

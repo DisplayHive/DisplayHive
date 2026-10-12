@@ -1,11 +1,11 @@
-"""The persistent screen log: storing, paging, filtering, retention (application/screen_logs.py)
+"""The persistent screen log: storing, paging, filtering, retention (application/admin/screens/logs.py)
 and the socket handler that feeds it."""
 
 from datetime import datetime, timedelta
 
 import pytest
 
-from application import screen_logs
+from application.admin.screens import logs as screen_logs
 from application.models import Screen, ScreenLog, SystemSetting, db
 from application.socketio_handlers import logger as logger_handlers
 

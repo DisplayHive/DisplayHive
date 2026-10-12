@@ -16,7 +16,7 @@ from application.admin.content.serializers import (
     build_content_dict,
     fmt_dt,
 )
-from application.aspect_ratio import BASE_RATIO, normalize_ratio
+from application.utils.aspect_ratio import BASE_RATIO, normalize_ratio
 from application.models import ContentElement, Contenttype, Layout, LayoutVariation
 from application.models.content import Media
 from application.utils.design import media_file_urls
@@ -279,7 +279,7 @@ def register_content_query_handlers(socketio, app, db):
         (screengroups.manage_content). Either right is sufficient — this is
         not a mutation, just a listing, so there's no reason to require both.
         """
-        from application.permissions import has_right
+        from application.security.permissions import has_right
         user = current_admin_user()
         if not (has_right(db, user, 'content.page') or has_right(db, user, 'screengroups.manage_content')):
             return

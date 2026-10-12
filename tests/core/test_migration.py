@@ -1,4 +1,4 @@
-"""application/migration.py and `flask dh migrate|backup|backups|restore`:
+"""application/core/migration.py and `flask dh migrate|backup|backups|restore`:
 back up first, protect the original, stop clearly on failure."""
 
 import hashlib
@@ -13,10 +13,10 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 
-from application import backup, migration
-from application.backup import Settings
-from application.factory import create_app
-from application.migration import MigrationFailed
+from application.core import backup, migration
+from application.core.backup import Settings
+from application.core.factory import create_app
+from application.core.migration import MigrationFailed
 
 ROOT = Path(__file__).resolve().parents[2]
 OLD_REVISION = '9c5e1f3a7b42'
@@ -193,10 +193,10 @@ def test_migrate_command_logs_instead_of_printing_in_json_mode(cli, monkeypatch,
     app, runner, database = cli
     monkeypatch.setenv('LOG_FORMAT', 'json')
     monkeypatch.setattr(migration, 'upgrade_to_head', _failing_upgrade)
-    with caplog.at_level(logging.INFO, logger='application.migration'):
+    with caplog.at_level(logging.INFO, logger='application.core.migration'):
         result = runner.invoke(args=['dh', 'migrate'])
     assert result.exit_code == 78 and result.output == ''                      # nothing printed outside the log
-    messages = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == 'application.migration']
+    messages = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == 'application.core.migration']
     assert ('INFO', 'Backing up the database before migrating...') in messages
     assert any(level == 'ERROR' and 'Migration failed' in m for level, m in messages)
     assert any(level == 'ERROR' and 'flask dh restore premigrate-' in m for level, m in messages)
@@ -236,7 +236,7 @@ def _entrypoint(tmp_path, flask_exit, env=None):
     (bin_dir / 'gunicorn').write_text(f'#!/bin/sh\necho "gunicorn $@" >> {log}\n')
     for tool in bin_dir.iterdir():
         tool.chmod(0o755)
-    result = subprocess.run(['sh', str(ROOT / 'docker-entrypoint.sh'), *(env or {}).pop('args', [])],
+    result = subprocess.run(['sh', str(ROOT / 'deploy' / 'docker-entrypoint.sh'), *(env or {}).pop('args', [])],
                             env={'PATH': f'{bin_dir}:/usr/bin:/bin', **(env or {})}, capture_output=True, text=True)
     return result, log.read_text().splitlines()
 
@@ -266,7 +266,7 @@ def test_entrypoint_migrate_mode_only_migrates(tmp_path):
 def test_entrypoint_json_logging_covers_gunicorn_and_its_own_lines(tmp_path):
     import json
     result, calls = _entrypoint(tmp_path, 0, {'LOG_FORMAT': 'json'})
-    assert '--log-config-json /app/gunicorn-logging.json' in calls[1]
+    assert '--log-config-json /app/deploy/gunicorn-logging.json' in calls[1]
     lines = [json.loads(line) for line in result.stdout.strip().splitlines()]
     assert [l['logger'] for l in lines] == ['entrypoint', 'entrypoint'] and lines[0]['level'] == 'INFO'
 

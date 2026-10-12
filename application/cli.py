@@ -39,7 +39,7 @@ def _read_password(from_stdin: bool, prompt: str) -> str:
         password = sys.stdin.readline().rstrip('\r\n')
     else:
         password = click.prompt(prompt, hide_input=True, confirmation_prompt=True)
-    from application.auth import password_problem
+    from application.security.auth import password_problem
     problem = password_problem(password)
     if problem:
         raise click.ClickException(problem)
@@ -66,8 +66,8 @@ def create_admin(username, password_stdin, no_superadmin, force_change):
     """Create an admin account (a Superadmin unless --no-superadmin)."""
     from flask import current_app
     from application.models import AdminUser, Group, UserGroup
-    from application.auth import hash_password
-    from application.permissions import sync_right_definitions, ensure_superadmin_group
+    from application.security.auth import hash_password
+    from application.security.permissions import sync_right_definitions, ensure_superadmin_group
 
     db = current_app.extensions['sqlalchemy']
     username = username.strip()
@@ -119,7 +119,7 @@ def reset_password(username, password_stdin, force_change, activate):
     every SSO provider is down or the last Superadmin is locked out.
     """
     from flask import current_app
-    from application.auth import hash_password
+    from application.security.auth import hash_password
 
     db = current_app.extensions['sqlalchemy']
     user = _find_user(db, username)
@@ -149,7 +149,7 @@ def rerender_media(db, media_root, previews_root, renditions_root, missing_only=
     changing the preview or rendition settings, or to repair corrupt files.
     *progress* is called once per media item. Returns counts.
     """
-    from application import media_renditions
+    from application.admin.media import renditions as media_renditions
     from application.models import Media
 
     stats = {'media': 0, 'previews': 0, 'renditions': 0, 'missing_source': 0}
@@ -265,11 +265,11 @@ def migrate_command(no_backup):
     message names the backup; `flask dh restore` puts it back.
     """
     import logging
-    from application import logfmt, migration
+    from application.core import logfmt, migration
     engine, directory, settings = _backup_context()
     if logfmt.wanted(os.environ) == 'json':
         # Machine-readable logs: these lines are log records like the rest, not plain output.
-        log = logging.getLogger('application.migration')
+        log = logging.getLogger('application.core.migration')
         log.setLevel(logging.INFO)
         say, fail, hint = log.info, log.error, log.error
     else:
@@ -291,7 +291,7 @@ def migrate_command(no_backup):
 def backup_command(with_media):
     """Back up the database now (and, with --media, the uploaded files)."""
     from flask import current_app
-    from application import backup
+    from application.core import backup
     engine, directory, settings = _backup_context()
     try:
         written = [backup.create_db_backup(engine, directory, 'manual')]
@@ -308,7 +308,7 @@ def backup_command(with_media):
 def backups_command():
     """List the backups (newest first)."""
     from datetime import datetime, timezone
-    from application import backup
+    from application.core import backup
     _engine, directory, _settings = _backup_context()
     found = backup.list_backups(directory)
     if not found:
@@ -332,7 +332,7 @@ def restore_command(file, yes):
     start the app: it migrates the restored database to the current version.
     """
     from pathlib import Path
-    from application import backup
+    from application.core import backup
     engine, directory, _settings = _backup_context()
     path = Path(file)
     if not path.is_absolute() and not path.exists():
@@ -358,7 +358,7 @@ def _revision_of(engine):
 
 def _upgrade_to_head(engine):
     """`alembic upgrade head` on *engine*, whatever DATABASE_URL says (see migrations/env.py)."""
-    from application.migration import upgrade_to_head
+    from application.core.migration import upgrade_to_head
     try:
         upgrade_to_head(engine)
     except Exception as exc:
@@ -383,8 +383,8 @@ def copy_database_command(source_url, upgrade_source, yes):
     """
     import sqlalchemy as sa
     from flask import current_app
-    from application.dbcopy import CopyError, copy_database
-    from application.db_url import normalize_database_url
+    from application.core.dbcopy import CopyError, copy_database
+    from application.core.db_url import normalize_database_url
     from application.web.health import _migration_heads
 
     db = current_app.extensions['sqlalchemy']
@@ -483,7 +483,7 @@ def check_config(online):
     from flask import current_app
     app = current_app
     db = app.extensions['sqlalchemy']
-    from application import paths as data_paths
+    from application.core import paths as data_paths
     import logging
     logging.getLogger('alembic').setLevel(logging.WARNING)  # its INFO lines would drown the report
     report = _Report()
@@ -517,9 +517,9 @@ def check_config(online):
     proxies = os.environ.get('TRUSTED_PROXY_COUNT', '0') or '0'
     report('info', f'TRUSTED_PROXY_COUNT={proxies} — must equal the number of reverse proxies in front of the app')
     report('info', f"Deployment: {app.config.get('DEPLOYMENT_KIND', 'manual')}")
-    from application import version
+    from application.core import version
     report('info', f'Version: {version.display()}')
-    from application import net
+    from application.security import net
     if net.private_allowed():
         report('warn', 'Outgoing requests to private networks are allowed (Settings / OUTBOUND_ALLOW_PRIVATE) — '
                        'Pretalx and SSO URLs can reach internal addresses; fine if they must, e.g. an internal Pretalx')
@@ -573,7 +573,7 @@ def check_config(online):
 
 def _check_database(report, app, db, paths) -> bool:
     """Connection, schema revision, SQLite file permissions. True if the schema is current."""
-    from application import paths as data_paths
+    from application.core import paths as data_paths
     from alembic.config import Config
     from alembic.runtime.migration import MigrationContext
     from alembic.script import ScriptDirectory
@@ -610,7 +610,7 @@ def _check_backups(report, app, db):
     """Is there a recent backup, and can the tools make the next one?"""
     import shutil
     from datetime import datetime, timezone
-    from application import backup
+    from application.core import backup
 
     settings = app.config['BACKUP_SETTINGS']
     directory = app.config['BACKUP_DIR']
@@ -641,7 +641,7 @@ def _check_backups(report, app, db):
 
 def _check_accounts(report, db):
     from application.models import AdminUser
-    from application.permissions import password_superadmin_exists
+    from application.security.permissions import password_superadmin_exists
 
     active = db.session.execute(
         db.select(db.func.count()).select_from(AdminUser).where(AdminUser.is_active.is_(True))
@@ -658,7 +658,7 @@ def _check_accounts(report, db):
 
 def _check_sso(report, db, online):
     from application.models import AuthProvider
-    from application import oidc
+    from application.security import oidc
 
     providers = db.session.execute(
         db.select(AuthProvider).where(AuthProvider.enabled.is_(True)).order_by(AuthProvider.name)

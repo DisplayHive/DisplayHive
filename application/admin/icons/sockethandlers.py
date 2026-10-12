@@ -1,6 +1,6 @@
 """Admin socket handlers for the icon libraries (Settings → Icon libraries).
 
-The libraries themselves are application/icon_libraries.py. Downloads run in a background task, one at
+The libraries themselves are application/admin/icons/libraries.py. Downloads run in a background task, one at
 a time (a library can be tens of megabytes), and the state is pushed to every admin:
 
     displayhive:admin:stc:icon_libraries  {catalog: [...], custom: [...], job: {running, current, queue, errors}}
@@ -11,7 +11,7 @@ import threading
 
 from flask import current_app
 
-from application import icon_libraries as icons
+from application.admin.icons import libraries as icons
 from application.socketio_handlers.actions import Fail, admin_action, ok
 from application.socketio_handlers.auth import fields
 

@@ -16,7 +16,7 @@ def register_admin_layouts_handlers(socketio, app, db):
     """
     from application.admin.layouts.helper import emit_layouts_update, emit_containers_update
     from application.socketio_handlers.actions import admin_action, Fail, ok
-    from application.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list, same_ratio
+    from application.utils.aspect_ratio import BASE_RATIO, normalize_ratio, parse_ratio_list, same_ratio
     from application.admin.layouts.helper import all_member_container_ids, container_geometry, containers_for_ratio
     from application.models import Layout, LayoutVariation, ContainerPosition, ContentContainer, Contenttype, TagConfig
     from application.utils import push_content_list_to_all_screens

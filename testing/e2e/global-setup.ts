@@ -98,7 +98,7 @@ export default async function globalSetup() {
     const port = BASE_PORT + i
     const dbPath = `/tmp/displayhive_test_${i}.db`
     // Per-worker DATA_DIR (media, previews, import staging — see
-    // application/paths.py), so test uploads never land in the checkout.
+    // application/core/paths.py), so test uploads never land in the checkout.
     const dataDir = `/tmp/displayhive_test_${i}_data`
 
     // Remove stale DB / data from a previous run so every test starts clean
@@ -121,7 +121,7 @@ export default async function globalSetup() {
       ADMIN_BOOTSTRAP_MUST_CHANGE: 'off',
       // The admin page (Vite dev server or `vite preview`) is a different origin than this
       // worker's Flask instance, and the session cookie is only accepted from an origin the
-      // server knows (application/session.py origin_allowed): name them, `*` would not do.
+      // server knows (application/security/session.py origin_allowed): name them, `*` would not do.
       CORS_ALLOWED_ORIGINS: [
         process.env.PLAYWRIGHT_ADMIN_URL,
         'http://localhost:5173',

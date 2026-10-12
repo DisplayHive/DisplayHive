@@ -1,5 +1,5 @@
 /**
- * E2E tests for the installable icon libraries (Settings → Icon libraries, application/icon_libraries.py).
+ * E2E tests for the installable icon libraries (Settings → Icon libraries, application/admin/icons/libraries.py).
  * DisplayHive ships no icons; the catalog download needs the internet and is covered by unit tests, so
  * here a library of one's own is uploaded as a ZIP file, served and removed again.
  */

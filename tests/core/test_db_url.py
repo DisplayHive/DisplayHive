@@ -1,6 +1,6 @@
 import pytest
 
-from application.db_url import normalize_database_url
+from application.core.db_url import normalize_database_url
 
 
 @pytest.mark.parametrize('url,expected', [

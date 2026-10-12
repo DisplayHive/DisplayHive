@@ -1,4 +1,4 @@
-"""LOG_FORMAT=json (application/logfmt.py), configure_logging, the bootstrap
+"""LOG_FORMAT=json (application/core/logfmt.py), configure_logging, the bootstrap
 account's log line, and gunicorn's JSON logging config."""
 
 import io
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from application import logfmt
-from application.config import configure_logging
+from application.core import logfmt
+from application.core.config import configure_logging
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -89,20 +89,20 @@ def test_text_stays_the_default(clean_root_logger, monkeypatch):
 
 
 def test_gunicorns_logging_config_is_valid_and_uses_our_formatter(clean_root_logger):
-    config = json.loads((ROOT / 'gunicorn-logging.json').read_text())
+    config = json.loads((ROOT / 'deploy' / 'gunicorn-logging.json').read_text())
     logging.config.dictConfig(config)
     handler = logging.getLogger('gunicorn.error').handlers[0]
     assert isinstance(handler.formatter, logfmt.JsonFormatter)
 
 
 def test_the_bootstrap_account_is_logged_not_printed(monkeypatch, caplog, capsys, db_session):
-    from application.auth import ensure_bootstrap_admin
+    from application.security.auth import ensure_bootstrap_admin
     from application.models import AdminUser
 
     db_session.query(AdminUser).delete()
     db_session.commit()
     monkeypatch.delenv('ADMIN_BOOTSTRAP_PASSWORD', raising=False)
-    with caplog.at_level(logging.WARNING, logger='application.auth'):
+    with caplog.at_level(logging.WARNING, logger='application.security.auth'):
         ensure_bootstrap_admin(None, __import__('app').db)
     user = db_session.query(AdminUser).one()
     messages = [r.getMessage() for r in caplog.records]

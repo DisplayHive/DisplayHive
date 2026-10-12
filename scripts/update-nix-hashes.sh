@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Recomputes nix/hashes.nix — the hashes of the Nix package's fixed-output inputs (nix/package.nix):
 #   • npm.admin / npm.screen   from frontends/*/package-lock.json
-#   • pythonWheels.<system>    from requirements.txt (the wheels pip downloads for that platform)
+#   • pythonWheels.<system>    from requirements/requirements.txt (the wheels pip downloads for that platform)
 # Run it after changing a lock file:   nix run .#update-hashes     (or: sh scripts/update-nix-hashes.sh)
 # It needs network access, and nothing else installed: every tool comes from Nix.
 set -euo pipefail
@@ -50,7 +50,7 @@ wheels_hash() {
   nix shell --quiet nixpkgs#python3Packages.pip --command pip download \
     --disable-pip-version-check --no-deps --only-binary=:all: \
     --python-version "$py" --implementation cp --abi "cp${py/./}" --abi abi3 --abi none \
-    "${platforms[@]}" -r requirements.txt --dest "$out" >/dev/null
+    "${platforms[@]}" -r requirements/requirements.txt --dest "$out" >/dev/null
   nix hash path "$out"
 }
 

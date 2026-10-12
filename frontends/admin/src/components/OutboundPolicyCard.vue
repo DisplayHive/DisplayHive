@@ -9,7 +9,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import Message from 'primevue/message'
 
 // Whether the server may fetch addresses inside private networks (Pretalx sources,
-// SSO providers). Backend: application/net.py and
+// SSO providers). Backend: application/security/net.py and
 // application/admin/settings/sockethandlers.py (get/set_outbound_policy). Everybody
 // who can open Settings sees the state; only a Superadmin can change it.
 

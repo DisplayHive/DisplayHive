@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 
 from application.admin.media import storage
-from application.auth import create_token
+from application.security.auth import create_token
 
 
 def _png_bytes(size=(64, 32), fmt='PNG'):
@@ -41,7 +41,7 @@ def cleanup(flask_app):
             path = os.path.join(root, rel)
             if os.path.exists(path):
                 os.remove(path)
-        from application import media_renditions
+        from application.admin.media import renditions as media_renditions
         preview = media_renditions.preview_path(config['PREVIEW_FOLDER'], rel)
         if os.path.exists(preview):
             os.remove(preview)
@@ -60,7 +60,7 @@ def _staging_files(flask_app):
 
 def test_upload_stores_file_preview_and_row(flask_app, db_session, uploader, cleanup):
     from application.models import Media
-    from application import media_renditions
+    from application.admin.media import renditions as media_renditions
 
     client, headers = uploader
     response = _upload(client, headers, title='Hello', tags='a,b')

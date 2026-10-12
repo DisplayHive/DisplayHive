@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from application.admin.importexport.helper import export_database, import_database
-from application.factory import create_app
+from application.core.factory import create_app
 from application.models import db
 
 EXAMPLE_ZIP = Path(__file__).resolve().parents[2] / 'examplecontent' / 'event.zip'

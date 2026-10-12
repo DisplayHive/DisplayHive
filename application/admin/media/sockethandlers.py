@@ -5,7 +5,7 @@ import logging
 
 from flask_socketio import emit
 
-from application import media_renditions
+from application.admin.media import renditions as media_renditions
 from application.admin.media.usage import media_usage
 
 logger = logging.getLogger(__name__)
@@ -16,9 +16,9 @@ def register_admin_media_handlers(socketio, app, db):
     from application.models.content import Media
     from application.socketio_handlers.auth import require_right, current_admin_user, fields
     from application.socketio_handlers.actions import admin_action, get_or_fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
 
-    # Absolute paths inside DATA_DIR, set by app.py from application/paths.py.
+    # Absolute paths inside DATA_DIR, set by app.py from application/core/paths.py.
     MEDIA_FOLDER = app.config['MEDIA_FOLDER']
     PREVIEW_FOLDER = app.config['PREVIEW_FOLDER']
     RENDITIONS_FOLDER = app.config['MEDIA_RENDITIONS_FOLDER']

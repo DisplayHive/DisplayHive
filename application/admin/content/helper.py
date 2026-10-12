@@ -7,7 +7,7 @@ import urllib.parse
 from html import escape as _html_escape
 from markupsafe import Markup
 
-from application.aspect_ratio import BASE_RATIO
+from application.utils.aspect_ratio import BASE_RATIO
 
 from application.admin.content.pretalx_render import (
     _get_pretalx_data,

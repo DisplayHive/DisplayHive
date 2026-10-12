@@ -1,4 +1,4 @@
-"""Installable icon libraries (application/icon_libraries.py): what comes in is untrusted."""
+"""Installable icon libraries (application/admin/icons/libraries.py): what comes in is untrusted."""
 
 import base64
 import hashlib
@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from application import icon_libraries as icons
+from application.admin.icons import libraries as icons
 
 SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M1 1h22" stroke="currentColor"/></svg>'
 
@@ -195,7 +195,7 @@ def test_a_catalog_download_is_checked_against_the_pinned_checksum(icons_dir, mo
 
 
 def test_download_goes_through_the_outbound_policy(monkeypatch):
-    from application import net
+    from application.security import net
 
     def blocked(url, **kwargs):
         raise net.OutboundBlocked('blocked: private address')

@@ -15,7 +15,7 @@ import { uploadIconLibrary } from '../../utils/uploadIconLibrary'
 
 // DisplayHive ships no icons: libraries are installed here, from the list of known ones (downloaded
 // from the npm registry, checked against a pinned checksum) or from a ZIP file / download link of your
-// own. Backend: application/icon_libraries.py, application/admin/icons/. The state comes from the server
+// own. Backend: application/admin/icons/libraries.py, application/admin/icons/. The state comes from the server
 // (and is pushed when a download finishes).
 const { on, off, emit } = useSocket()
 const { request } = useAck()

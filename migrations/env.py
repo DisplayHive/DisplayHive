@@ -1,7 +1,7 @@
 """Alembic migration environment.
 
 The database is DATABASE_URL, exactly as for the app (PostgreSQL; SQLite only
-as an explicit development URL) — application/db_url.py decides, and there is
+as an explicit development URL) — application/core/db_url.py decides, and there is
 no fallback file.
 """
 
@@ -15,8 +15,8 @@ from alembic import context
 # Make the project root importable so models can be imported below.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from application.db_url import DatabaseConfigError, resolve_database_url  # noqa: E402
-from application import paths as data_paths  # noqa: E402
+from application.core.db_url import DatabaseConfigError, resolve_database_url  # noqa: E402
+from application.core import paths as data_paths  # noqa: E402
 
 # Alembic Config object, giving access to values in alembic.ini.
 config = context.config

@@ -17,7 +17,7 @@ Resolution (has_right, below):
      closure is the superadmin group, which always grants everything.
 
 This module intentionally does no caching: rights are recomputed from the
-DB on every check. The app is already single-worker (see application/auth.py),
+DB on every check. The app is already single-worker (see application/security/auth.py),
 group hierarchies here are small, and this avoids the staleness problems a
 cache would introduce every time a group/right/membership changes.
 """

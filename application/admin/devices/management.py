@@ -16,7 +16,7 @@ def register_device_management_handlers(socketio, app, db):
     from datetime import datetime, timezone
     from application.socketio_handlers.auth import admin_handler, require_right, current_admin_user, fields
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
 
     def _assign_screen_to_device(device, screen):
         """Assign *screen* to *device*, un-assigning any other device currently on that screen.

@@ -6,7 +6,7 @@ module has no side effects, so tests, scripts and `flask dh` commands can build
 exactly what they need.
 
 `startup=True` (the default, for a real server) additionally runs the one-time
-startup work from application/startup.py: raise the open-files limit, run the
+startup work from application/core/startup.py: raise the open-files limit, run the
 startup steps, start background tasks, and create the data directories.
 """
 
@@ -19,10 +19,10 @@ from typing import Optional
 from flask import Flask
 from flask_socketio import SocketIO
 
-from application import paths as data_paths
-from application.config import ASYNC_MODE, apply_config, trusted_proxy_count
+from application.core import paths as data_paths
+from application.core.config import ASYNC_MODE, apply_config, trusted_proxy_count
 from application.models import db
-from application.security_headers import register_security_headers
+from application.security.security_headers import register_security_headers
 from application.web import PROJECT_ROOT, register_web_routes
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
     except Exception:
         logger.warning('flask_cors not installed; API CORS not enabled')
 
-    # Security headers + Content-Security-Policy (see application/security_headers.py)
+    # Security headers + Content-Security-Policy (see application/security/security_headers.py)
     register_security_headers(app)
 
     socketio = SocketIO(
@@ -126,7 +126,7 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
         max_http_buffer_size=10 * 1024 * 1024,
     )
 
-    from application import startup as startup_tasks
+    from application.core import startup as startup_tasks
     if startup:
         startup_tasks.raise_open_files_limit()
         startup_tasks.run_startup_steps(app, db)
@@ -136,7 +136,7 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
     from application.cli import register_cli
     from application.socketio_handlers import register_all_handlers
 
-    from application import net
+    from application.security import net
     net.register_policy(app, db)
     register_all_handlers(socketio, app, db)
     register_auth_routes(app, db)             # /admin/api/auth/*

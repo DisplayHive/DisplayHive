@@ -6,7 +6,7 @@ export type SecurityStatus = {
   cors_wildcard?: boolean
   sqlite_in_use?: boolean
   debug_enabled?: boolean
-  // What the server runs (application/version.py).
+  // What the server runs (application/core/version.py).
   version?: string
   revision?: string
   // Only sent to holders of settings.page (application/admin/devices/connection.py).

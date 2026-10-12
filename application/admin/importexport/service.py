@@ -25,7 +25,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Optional
 
-from application import media_renditions
+from application.admin.media import renditions as media_renditions
 
 logger = logging.getLogger(__name__)
 

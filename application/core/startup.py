@@ -8,7 +8,7 @@ to offline would do real damage) and for tests that build their own state.
 
 import logging
 
-from application import media_renditions
+from application.admin.media import renditions as media_renditions
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +75,9 @@ def prune_screen_logs_startup(db) -> None:
 
 def run_startup_steps(app, db) -> None:
     """Create tables (SQLite dev convenience) and run the server's startup steps."""
-    from application.auth import ensure_bootstrap_admin
-    from application.help_content import sync_help_topics
-    from application.permissions import ensure_superadmin_group, sync_right_definitions
+    from application.security.auth import ensure_bootstrap_admin
+    from application.admin.help.content import sync_help_topics
+    from application.security.permissions import ensure_superadmin_group, sync_right_definitions
 
     with app.app_context():
         # In production "alembic upgrade head" manages the schema. create_all()
@@ -114,8 +114,8 @@ def screen_log_retention_loop(app, db, socketio) -> None:
 
 def backup_loop(app, db, socketio) -> None:
     """Scheduled database (and media) backups with their retention, while the
-    process runs. See application/backup.py; the settings are BACKUP_*."""
-    from application import backup
+    process runs. See application/core/backup.py; the settings are BACKUP_*."""
+    from application.core import backup
     # Let the app settle first, so a crash loop doesn't write a dump per restart.
     socketio.sleep(600)
     while True:

@@ -13,7 +13,7 @@ _DIST_SCREEN = PROJECT_ROOT / 'dist' / 'screen'
 _SCREEN_ASSETS = PROJECT_ROOT / 'frontends' / 'screen' / 'assets'
 
 
-# Media live in DATA_DIR (see application/paths.py), not in the static folder,
+# Media live in DATA_DIR (see application/core/paths.py), not in the static folder,
 # but keep their /static/… URLs — stored content references them. More specific
 # than Flask's own /static/<path:filename>, so these win.
 @bp.route('/static/media/<path:filename>')
@@ -33,7 +33,7 @@ def static_media_renditions(filename):
 
 @bp.route('/static/icons/<path:filename>')
 def static_icons(filename):
-    """Installed icon libraries (application/icon_libraries.py). The two index files change when a
+    """Installed icon libraries (application/admin/icons/libraries.py). The two index files change when a
     library is installed or removed, so the browser asks again each time; the SVG files do not."""
     response = send_from_directory(current_app.config['ICON_LIBRARIES_FOLDER'], filename)
     if filename in ('manifest.json', 'libraries.json'):

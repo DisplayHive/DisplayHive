@@ -6,7 +6,7 @@ import os
 import pytest
 from PIL import Image
 
-from application import media_renditions as mr
+from application.admin.media import renditions as mr
 
 
 def _make(path, size, fmt='PNG', mode='RGB'):

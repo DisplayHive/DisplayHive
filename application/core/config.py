@@ -11,9 +11,9 @@ import warnings
 from typing import Mapping, Optional, Union
 from urllib.parse import urlsplit
 
-from application import paths as data_paths
-from application import backup, logfmt, version
-from application.db_url import is_sqlite_url, resolve_database_url
+from application.core import paths as data_paths
+from application.core import backup, logfmt, version
+from application.core.db_url import is_sqlite_url, resolve_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # WebSockets via simple-websocket, served by gunicorn's gthread worker (one
 # connected screen or admin tab holds one thread — size --threads accordingly).
 # No monkey-patching. Shared in-memory state is guarded by locks: the login rate
-# limiter (application/auth.py), pending SSO logins (application/oidc.py) and
+# limiter (application/security/auth.py), pending SSO logins (application/security/oidc.py) and
 # the connection registry (application/socketio_handlers/lifecycle.py).
 ASYNC_MODE = 'threading'
 
@@ -40,7 +40,7 @@ def configure_logging(cli_mode: bool = False) -> None:
     operational messages (startup, content pushes, …) go to stderr, and the
     level can be tuned via LOG_LEVEL. A `flask dh` command defaults to WARNING
     so its own output isn't buried. LOG_FORMAT=json writes one JSON object per
-    line instead of the readable text (application/logfmt.py).
+    line instead of the readable text (application/core/logfmt.py).
     """
     level = getattr(logging, os.environ.get('LOG_LEVEL', 'WARNING' if cli_mode else 'INFO').upper(), logging.INFO)
     logging.basicConfig(level=level, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -184,7 +184,7 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
         )
     cfg = app.config
     # Every on-disk location (DATA_DIR: media, previews, renditions, import
-    # staging, the SQLite file) comes from application/paths.py.
+    # staging, the SQLite file) comes from application/core/paths.py.
     cfg['DATA_DIR'] = paths.data_dir
     cfg['MEDIA_FOLDER'] = paths.media
     cfg['PREVIEW_FOLDER'] = paths.media_previews

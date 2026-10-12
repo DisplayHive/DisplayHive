@@ -1,7 +1,7 @@
 """JSON log lines (LOG_FORMAT=json): one JSON object per line on stderr, for log
 collectors (Loki, ELK, journald fields …). The default stays the readable text
 format. Standard library only, so gunicorn's logging config can load it too
-(gunicorn-logging.json in the repository root)."""
+(deploy/gunicorn-logging.json)."""
 
 import json
 import logging

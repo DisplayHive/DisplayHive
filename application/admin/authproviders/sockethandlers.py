@@ -22,7 +22,7 @@ def register_admin_authprovider_handlers(socketio, app, db):
     """Register list/save/delete/test handlers for AuthProvider rows."""
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.models import AuthProvider, AdminUserIdentity
-    from application import oidc
+    from application.security import oidc
 
     def _providers_payload():
         providers = db.session.execute(db.select(AuthProvider).order_by(AuthProvider.name)).scalars().all()

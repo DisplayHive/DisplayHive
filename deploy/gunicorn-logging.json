@@ -1,7 +1,7 @@
 {
   "version": 1,
   "disable_existing_loggers": false,
-  "formatters": {"json": {"()": "application.logfmt.JsonFormatter"}},
+  "formatters": {"json": {"()": "application.core.logfmt.JsonFormatter"}},
   "handlers": {"stderr": {"class": "logging.StreamHandler", "formatter": "json", "stream": "ext://sys.stderr"}},
   "loggers": {
     "gunicorn.error": {"level": "INFO", "handlers": ["stderr"], "propagate": false},

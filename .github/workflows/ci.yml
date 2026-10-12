@@ -71,11 +71,11 @@ jobs:
         with:
           python-version-file: '.python-version'
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: requirements/requirements-dev.txt
 
       # The locked versions: runtime pins identical to the Docker image's.
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements/requirements-dev.txt
 
       - name: Run pytest with coverage
         run: pytest -n auto --cov --cov-report=term
@@ -122,13 +122,13 @@ jobs:
         with:
           python-version-file: '.python-version'
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: requirements/requirements-dev.txt
 
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements/requirements-dev.txt
 
       # The backup tests dump and restore a real database; the tools must be
-      # the server's major version (see application/backup.py).
+      # the server's major version (see application/core/backup.py).
       - name: Install the PostgreSQL 16 client tools
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client-16
 
@@ -144,7 +144,7 @@ jobs:
         run: pytest
 
   python-locks:
-    # Fails when requirements.txt / requirements-dev.txt don't match their .in
+    # Fails when requirements/requirements.txt and requirements-dev.txt don't match their .in
     # inputs — someone edited an .in file without running `npm run deps:lock`.
     runs-on: ubuntu-latest
     steps:
@@ -156,7 +156,7 @@ jobs:
         run: sh scripts/lock-python-deps.sh
 
       - name: Compare with the committed ones
-        run: git diff --exit-code -- requirements.txt requirements-dev.txt
+        run: git diff --exit-code -- requirements/requirements.txt requirements/requirements-dev.txt
 
   nix-package:
     # The NixOS module runs the Nix package: it must build, and its pinned hashes (nix/hashes.nix) must
@@ -187,7 +187,7 @@ jobs:
       - name: Build the package
         run: |
           nix build .#default -L || {
-            echo "::error::The Nix package did not build. If a package-lock.json or requirements.txt changed, run 'nix run .#update-hashes' and commit nix/hashes.nix."
+            echo "::error::The Nix package did not build. If a package-lock.json or requirements/requirements.txt changed, run 'nix run .#update-hashes' and commit nix/hashes.nix."
             exit 1
           }
 

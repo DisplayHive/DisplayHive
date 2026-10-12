@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from application.auth import create_token
+from application.security.auth import create_token
 
 APPROVE = 'displayhive:devices:cts:approve_registration'
 APPROVED = 'displayhive:devices:stc:registration_approved'

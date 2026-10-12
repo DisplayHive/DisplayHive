@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from application.aspect_ratio import (
+from application.utils.aspect_ratio import (
     BASE_RATIO, best_ratio, normalize_ratio, parse_ratio_list, ratio_value,
 )
 from application.admin.layouts.helper import (
@@ -22,7 +22,7 @@ def test_normalize_ratio(raw, expected):
 
 
 def test_same_ratio():
-    from application.aspect_ratio import same_ratio
+    from application.utils.aspect_ratio import same_ratio
     assert same_ratio('4:3', '8:6')
     assert not same_ratio('4:3', '3:4')
 

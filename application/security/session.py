@@ -1,6 +1,6 @@
 """Where an admin request's token comes from, and the cookie it can travel in.
 
-The session is the same signed JWT as ever (application/auth.py). It reaches the
+The session is the same signed JWT as ever (application/security/auth.py). It reaches the
 server in one of two ways:
 
 * ``Authorization: Bearer <jwt>`` — scripts, the CLI, tests. The caller holds the
@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlsplit
 
-from application.auth import TOKEN_TTL, decode_token
+from application.security.auth import TOKEN_TTL, decode_token
 
 SESSION_COOKIE = 'dh_session'
 ORIGINAL_COOKIE = 'dh_original'

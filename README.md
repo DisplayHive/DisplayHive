@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://docs.displayhive.org/">Documentation</a> ·
   <a href="https://docs.displayhive.org/user/installation/">Installation</a> ·
-  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href=".github/CONTRIBUTING.md">Contributing</a> ·
   <a href="https://displayhive.org">Website</a>
 </p>
 
@@ -68,9 +68,9 @@ the docs at **[docs.displayhive.org](https://docs.displayhive.org/)**.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get set up, PR conventions,
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for how to get set up, PR conventions,
 and our AI-assisted contributions policy. Please report security
-vulnerabilities privately per [SECURITY.md](SECURITY.md) rather than as a
+vulnerabilities privately per [SECURITY.md](.github/SECURITY.md) rather than as a
 public issue.
 
 ## License

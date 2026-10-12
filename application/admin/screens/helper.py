@@ -18,7 +18,7 @@ def _screens_access(db, sid):
     gated by device.showkey, same as the Devices page list.
     """
     from application.socketio_handlers.auth import resolve_admin_user
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     user = resolve_admin_user(sid)
     may_see_list = has_right(db, user, 'screens.page') or has_right(db, user, 'device.page')
     may_see_devicekeys = has_right(db, user, 'device.showkey')

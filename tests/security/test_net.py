@@ -1,4 +1,4 @@
-"""application/net.py: admin-supplied URLs must not reach internal addresses."""
+"""application/security/net.py: admin-supplied URLs must not reach internal addresses."""
 
 import socket
 import threading
@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 import requests
 
-from application import net
+from application.security import net
 
 
 # --- which addresses ---------------------------------------------------------------------

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from werkzeug.utils import secure_filename
 
-from application import media_renditions
+from application.admin.media import renditions as media_renditions
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
  * application/admin/icons/routes.py. Same approach as uploadMedia.ts (XMLHttpRequest, for the progress).
  */
 
-/** Must match MAX_DOWNLOAD_BYTES in application/icon_libraries.py. */
+/** Must match MAX_DOWNLOAD_BYTES in application/admin/icons/libraries.py. */
 export const MAX_ICON_LIBRARY_UPLOAD_BYTES = 250 * 1024 * 1024
 
 export type IconLibraryUploadResult = { success: true } | { success: false; error: string }

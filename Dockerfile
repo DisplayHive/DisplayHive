@@ -50,7 +50,7 @@ WORKDIR /app
 # major version of the SERVER: a dump from pg_dump 17 does not restore on a
 # version 16 server. Debian ships only 17, so the PostgreSQL project's own
 # repository (PGDG) supplies 16 (what compose.yml runs) next to it; the tools of
-# the right version are picked at run time (application/backup.py).
+# the right version are picked at run time (application/core/backup.py).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/keyrings/pgdg.asc \
@@ -64,7 +64,7 @@ RUN apt-get update \
 
 # psycopg2-binary and pillow ship manylinux wheels that bundle their native
 # libs, so no system build/runtime packages are required here.
-COPY requirements.txt ./
+COPY requirements/requirements.txt ./requirements.txt
 # requirements.txt is the runtime lock (every package pinned, with hashes —
 # pip checks them); test/docs tools live in requirements-dev.txt only.
 RUN pip install --no-cache-dir -r requirements.txt \
@@ -73,7 +73,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && pip uninstall -y pip
 
 # Shown in the admin footer and the admin API, and part of the asset cache-busting
-# version (application/version.py). After the dependency install, so a new commit
+# version (application/core/version.py). After the dependency install, so a new commit
 # doesn't redo it.
 ARG GIT_COMMIT=
 ENV DISPLAYHIVE_REVISION=${GIT_COMMIT}
@@ -89,7 +89,7 @@ COPY --chown=displayhive:displayhive . .
 # Built frontends from stage 1 (app.py serves dist/admin and dist/screen).
 COPY --from=frontend --chown=displayhive:displayhive /build/dist ./dist
 
-# Everything the app writes goes to DATA_DIR (see application/paths.py);
+# Everything the app writes goes to DATA_DIR (see application/core/paths.py);
 # DISPLAYHIVE_DEPLOYMENT tells the admin UI to show Docker-specific steps
 # when data still sits in the old /app/static/media* locations.
 ENV DATA_DIR=/data \
@@ -115,4 +115,4 @@ USER displayhive
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=4)"]
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/deploy/docker-entrypoint.sh"]

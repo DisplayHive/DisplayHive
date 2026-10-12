@@ -1,4 +1,4 @@
-"""Copying a whole database (application/dbcopy.py, `flask dh copy-database`)."""
+"""Copying a whole database (application/core/dbcopy.py, `flask dh copy-database`)."""
 
 import os
 import uuid
@@ -7,8 +7,8 @@ import pytest
 import sqlalchemy as sa
 
 from application.admin.importexport.helper import import_database
-from application.dbcopy import CopyError, copy_database
-from application.factory import create_app
+from application.core.dbcopy import CopyError, copy_database
+from application.core.factory import create_app
 from application.models import db
 from tests.admin.test_importexport_roundtrip import _example_payload
 

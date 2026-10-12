@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
 
 // The login itself is an HttpOnly cookie that only the server can read or write
-// (application/session.py): no script in the page — an XSS bug included — can get at
+// (application/security/session.py): no script in the page — an XSS bug included — can get at
 // it. What this store keeps in localStorage is NOT a credential, just a hint that the
 // browser has a session: who it is, when it ends, and whether it is an impersonation.
 // The server stays the source of truth: restore() asks it on every start.
@@ -78,7 +78,7 @@ const parseExpiry = (value?: string | null): number | null => {
  * logging in or out in one tab/window is reflected in every other open tab (via the
  * native `storage` event, below) instead of each tab carrying its own independent
  * session — the cookie is shared by all tabs anyway. The session expires on its own
- * (the backend issues it for 12 h, see application/auth.py TOKEN_TTL) and
+ * (the backend issues it for 12 h, see application/security/auth.py TOKEN_TTL) and
  * `scheduleExpiry` mirrors that client-side so a stale tab logs itself out proactively.
  */
 export const useAuthStore = defineStore('auth', () => {
@@ -100,7 +100,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => signedIn.value)
   // While set, the server rejects this session everywhere except the
-  // password-change routes (see application/auth.py user_from_token), so App.vue
+  // password-change routes (see application/security/auth.py user_from_token), so App.vue
   // shows ChangePasswordView instead of the app and doesn't connect the socket.
   const mustChangePassword = ref(localStorage.getItem(MUST_CHANGE_PASSWORD_STORAGE_KEY) === '1')
   const hasUsableSession = computed(() => isAuthenticated.value && !mustChangePassword.value)

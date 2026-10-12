@@ -5,7 +5,7 @@
     → {success, library} | {success: false, error}      (needs icons.manage)
 
 Like the media upload, the file goes to a temp file in DATA_DIR while it arrives (DataDirRequest) and is
-read from there; the installation itself is application/icon_libraries.py.
+read from there; the installation itself is application/admin/icons/libraries.py.
 """
 
 import logging
@@ -13,7 +13,7 @@ import logging
 from flask import current_app, jsonify, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from application import icon_libraries
+from application.admin.icons import libraries as icon_libraries
 
 logger = logging.getLogger(__name__)
 

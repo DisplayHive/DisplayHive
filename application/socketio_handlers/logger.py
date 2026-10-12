@@ -1,7 +1,7 @@
 """Socket.IO handlers for the screen log: screens report, the admin Logger page reads.
 
 A screen sends ``displayhive:logger:cts:log_entry``. The server stores the line (see
-application/screen_logs.py) under the screen of that connection — the payload's own idea of the
+application/admin/screens/logs.py) under the screen of that connection — the payload's own idea of the
 screen is not trusted — and pushes it live to every admin watching the Logger page. The page loads
 older entries, filtered, with ``displayhive:logger:cts:query``.
 """
@@ -12,7 +12,7 @@ import time
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 
-from application import screen_logs
+from application.admin.screens import logs as screen_logs
 
 log = logging.getLogger(__name__)
 

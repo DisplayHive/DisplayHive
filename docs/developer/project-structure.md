@@ -6,7 +6,7 @@ A map of the repository: where things live and where a new file belongs.
 
 | Path | Contents |
 | --- | --- |
-| `app.py` | Entry point (`create_app` from `application/factory.py`). |
+| `app.py` | Entry point (`create_app` from `application/core/factory.py`). |
 | `application/` | The Python backend (Flask + Socket.IO + SQLAlchemy). |
 | `frontends/admin/` | Admin SPA (Vue 3, TypeScript, Vite). |
 | `frontends/screen/` | Screen client shown on the displays. |
@@ -15,7 +15,10 @@ A map of the repository: where things live and where a new file belongs.
 | `testing/` | End-to-end tests (Playwright); builds the admin itself. |
 | `docs/`, `mkdocs.yml` | This documentation (`user/` and `developer/`). |
 | `nix/`, `flake.nix`, `shell.nix` | Nix package, NixOS module and dev shell. |
-| `Dockerfile`, `compose.yml`, `docker-entrypoint.sh` | Container deployment. |
+| `Dockerfile`, `compose.yml` | Container image and compose setup (kept at the root: `docker build .` / `docker compose up`). |
+| `deploy/` | Files the image and the NixOS module run: `docker-entrypoint.sh`, `gunicorn-logging.json`. |
+| `requirements/` | Python dependencies: the `.in` inputs and the generated, hashed locks (`npm run deps:lock`). |
+| `.github/` | CI workflows, `CONTRIBUTING.md`, `SECURITY.md`. |
 | `examplecontent/` | Demo Mode example content package. |
 | `scripts/` | Maintenance helpers (hashes, lock files). |
 | `notes/` | Local notes (roadmap, technical debt). |
@@ -35,11 +38,13 @@ A map of the repository: where things live and where a new file belongs.
 - `web/` — plain HTTP routes (admin SPA, health, static files, import/export,
   screen page).
 - `utils/` — small shared helpers.
-- Top-level modules — configuration and start-up (`config`, `paths`,
-  `startup`, `factory`, `db_url`, `migration`, `backup`, `dbcopy`, `cli`),
-  security (`auth`, `oidc`, `permissions`, `session`, `security_headers`,
-  `net`) and a few domain helpers (`aspect_ratio`, `media_renditions`,
-  `icon_libraries`, `screen_logs`).
+- `core/` — configuration and start-up: `config`, `paths`, `db_url`,
+  `startup`, `factory`, `logfmt`, `version`, `migration`, `dbcopy`, `backup`.
+- `security/` — `auth`, `oidc`, `permissions`, `session`,
+  `security_headers`, `net`.
+- `cli.py` — the `flask dh …` commands. Domain helpers sit with their
+  domain: `admin/media/renditions.py`, `admin/icons/libraries.py`,
+  `admin/help/content.py`, `admin/screens/logs.py`, `utils/aspect_ratio.py`.
 
 ## Admin frontend (`frontends/admin/src/`)
 

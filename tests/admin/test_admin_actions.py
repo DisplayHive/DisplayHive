@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from application.auth import create_token
+from application.security.auth import create_token
 
 CREATE_USER = 'displayhive:admin:users:cts:create_user'
 DELETE_USER = 'displayhive:admin:users:cts:delete_user'

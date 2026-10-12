@@ -114,7 +114,7 @@ def admin_action(*rights: str):
             try:
                 if rights:
                     from application.models import db
-                    from application.permissions import has_right
+                    from application.security.permissions import has_right
                     user = current_admin_user()
                     if not any(has_right(db, user, key) for key in rights):
                         return failure(PERMISSION_DENIED)

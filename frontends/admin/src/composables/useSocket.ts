@@ -60,7 +60,7 @@ export function useSocket() {
       window.location.origin
     socket = io(url, {
       // The admin session is an HttpOnly cookie (see stores/auth.ts and
-      // application/session.py): the browser attaches it to the handshake by itself,
+      // application/security/session.py): the browser attaches it to the handshake by itself,
       // so there is no token for this code to read or send — and none in a URL or
       // access log. (`withCredentials` matters when the socket URL has another origin
       // than the page, as in the E2E tests and the Vite dev setup.)

@@ -1,6 +1,6 @@
 """User-rights system: groups, subgroups, right definitions, and per-user overrides.
 
-See application/permissions.py for the resolution algorithm (effective group
+See application/security/permissions.py for the resolution algorithm (effective group
 closure, allow/deny/inherit precedence, superadmin bypass) that consumes
 these tables. Kept deliberately data-only here; no business logic.
 """
@@ -16,7 +16,7 @@ class RightDefinition(db.Model):
     """A single checkable right, e.g. ``media.upload``.
 
     The catalog of rows here is kept in sync with the ``RIGHTS`` list in
-    application/permissions.py on every startup (see sync_right_definitions),
+    application/security/permissions.py on every startup (see sync_right_definitions),
     so that list is the actual source of truth — this table exists so groups
     and users can hold a stable foreign key to a right, and so the admin UI
     can list/group rights without hardcoding them a second time.
@@ -36,7 +36,7 @@ class Group(db.Model):
     """A group of users that can be granted rights (allow-only) and nested via subgroups.
 
     A subgroup's effective rights include everything granted to its
-    ancestors — see effective_group_closure() in application/permissions.py.
+    ancestors — see effective_group_closure() in application/security/permissions.py.
     """
     __tablename__ = 'group'
 
@@ -97,5 +97,5 @@ class UserRight(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey('admin_user.id', ondelete='CASCADE'), nullable=False, index=True)
     right_id: Mapped[int] = mapped_column(ForeignKey('right_definition.id', ondelete='CASCADE'), nullable=False)
-    # 'allow' or 'deny'. Validated in application/permissions.py, not at the DB layer.
+    # 'allow' or 'deny'. Validated in application/security/permissions.py, not at the DB layer.
     value: Mapped[str] = mapped_column(String(10), nullable=False)

@@ -34,7 +34,7 @@ class DataDirRequest(Request):
     Werkzeug's default keeps small parts in memory and writes larger ones to
     the system temp dir, which may be a small tmpfs and is shared with every
     local user. Here every file part goes to UPLOAD_STAGING_DIR (0700,
-    application/paths.py) — on the same filesystem as the media folder, so
+    application/core/paths.py) — on the same filesystem as the media folder, so
     a finished upload is moved in with a hard link instead of a copy. The
     temp file is deleted when the request closes it.
     """

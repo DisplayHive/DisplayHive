@@ -5,7 +5,7 @@
 The release version is the one line in the `VERSION` file in the repository
 root; bump it when you release. The build revision comes from git, or from the
 `DISPLAYHIVE_REVISION` variable / `GIT_COMMIT` build argument where there is no
-`.git` (the Docker image). See `application/version.py`.
+`.git` (the Docker image). See `application/core/version.py`.
 
 ## Getting set up
 
@@ -47,10 +47,10 @@ move to a new version:
 
 | File | What | Used by |
 |---|---|---|
-| `requirements.in` | Runtime dependencies (what the server imports) — edit this | |
-| `requirements.txt` | Lock: every runtime package pinned, with hashes — generated | Docker image |
-| `requirements-dev.in` | Test and docs tools on top — edit this | |
-| `requirements-dev.txt` | Lock: runtime + dev, runtime pins identical to `requirements.txt` — generated | CI, e2e, docs |
+| `requirements/requirements.in` | Runtime dependencies (what the server imports) — edit this | |
+| `requirements/requirements.txt` | Lock: every runtime package pinned, with hashes — generated | Docker image |
+| `requirements/requirements-dev.in` | Test and docs tools on top — edit this | |
+| `requirements/requirements-dev.txt` | Lock: runtime + dev, runtime pins identical to `requirements/requirements.txt` — generated | CI, e2e, docs |
 
 After changing an `.in` file, regenerate both locks with `npm run deps:lock`
 (uv, included in `nix develop`); `npm run deps:lock -- --upgrade` moves every
@@ -59,10 +59,10 @@ together — CI's `python-locks` job fails otherwise.
 
 Every environment installs from the locks, so there's nothing else to keep
 in sync: `nix develop` takes only the interpreter from Nix and syncs
-`./.venv` from `requirements-dev.txt` on every shell entry (instant when
+`./.venv` from `requirements/requirements-dev.txt` on every shell entry (instant when
 nothing changed; recreated when the Nix interpreter changes), and the Nix
 package (`nix/package.nix`, which the NixOS module runs) builds its Python
-environment from the hash-checked wheels named in `requirements.txt`.
+environment from the hash-checked wheels named in `requirements/requirements.txt`.
 Native libraries some wheels need (e.g. `libz` for psycopg2) come from Nix
 via `LD_LIBRARY_PATH`. `tests/core/test_dependency_sync.py` fails if a Nix file
 starts listing Python packages of its own again.
@@ -71,7 +71,7 @@ starts listing Python packages of its own again.
 
 `nix build .#default` builds the whole application (both frontends, the Python packages, the app).
 Its fixed-output inputs are pinned in `nix/hashes.nix`: the npm dependencies of each frontend and the
-Python wheels (per CPU architecture). **After changing a `package-lock.json` or `requirements.txt`,
+Python wheels (per CPU architecture). **After changing a `package-lock.json` or `requirements/requirements.txt`,
 run `nix run .#update-hashes`** (`scripts/update-nix-hashes.sh`) and commit `nix/hashes.nix`; CI's
 `nix-package` job fails with the same hint otherwise. Every `package-lock.json` entry must carry
 `resolved` and `integrity` (Nix fetches the packages itself); if npm leaves them out,
@@ -150,5 +150,5 @@ and understood by the person submitting it — no blind commits. If you use
 AI tooling, keep changes small, topic-focused, and easy to review, exactly
 as you would for hand-written code. If you spot something that looks
 AI-generated and unreviewed, flag it — see
-[CONTRIBUTING.md](https://github.com/DisplayHive/DisplayHive/blob/main/CONTRIBUTING.md#ai-assisted-contributions)
+[CONTRIBUTING.md](https://github.com/DisplayHive/DisplayHive/blob/main/.github/CONTRIBUTING.md#ai-assisted-contributions)
 for more.

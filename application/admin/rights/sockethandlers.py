@@ -17,7 +17,7 @@ def register_admin_rights_handlers(socketio, app, db):
     from application.socketio_handlers.auth import admin_handler, current_admin_user
     from application.socketio_handlers.actions import admin_action, Fail, ok
     from application.models import Group, RightDefinition, GroupRight, UserGroup, UserRight, AdminUser
-    from application.permissions import (
+    from application.security.permissions import (
         RIGHTS,
         get_effective_rights,
         has_right,

@@ -1,9 +1,9 @@
-"""Browser sessions in an HttpOnly cookie (application/session.py), next to Bearer tokens."""
+"""Browser sessions in an HttpOnly cookie (application/security/session.py), next to Bearer tokens."""
 
 import pytest
 
-from application import oidc
-from application.auth import create_token
+from application.security import oidc
+from application.security.auth import create_token
 
 PASSWORD = 'a-long-enough-password'
 CSRF = {'X-DisplayHive-Request': '1'}

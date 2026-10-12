@@ -12,7 +12,7 @@ def register_admin_screens_handlers(socketio, app, db):
 
     from application.socketio_handlers.auth import fields, admin_handler, current_admin_user
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     from application.models import Screen, Device, Screengroup
     from application.admin.screens.helper import emit_admin_screen
 

@@ -6,7 +6,7 @@
 #
 # Three pieces, each reproducible and each pinned by a hash:
 #   • the frontends: buildNpmPackage from the package-lock.json files (npmDepsHash);
-#   • the Python packages: the wheels named in requirements.txt (the one lock file Docker, CI and
+#   • the Python packages: the wheels named in requirements/requirements.txt (the one lock file Docker, CI and
 #     the dev shell use too — it pins every version with hashes), downloaded by pip into a
 #     fixed-output derivation (pythonWheelsHash) and unpacked;
 #   • the application: the source files the server needs, next to dist/.
@@ -34,8 +34,8 @@ let
     in
       !(builtins.elem base [ "node_modules" "__pycache__" ".venv" "dist" ".git" ])
       && (builtins.elem top [
-        "app.py" "application" "migrations" "alembic.ini" "VERSION" "gunicorn-logging.json"
-        "examplecontent" "static" "requirements.txt" ".python-version" "frontends"
+        "app.py" "application" "migrations" "alembic.ini" "VERSION" "deploy"
+        "examplecontent" "static" "requirements" ".python-version" "frontends"
       ])
       && !(lib.hasPrefix "static/media" rel);
   source = lib.cleanSourceWith {
@@ -73,7 +73,7 @@ let
   screenDist = mkFrontend { name = "screen"; script = "build"; };
 
   # ── Python packages ────────────────────────────────────────────────────────
-  # `pip download` verifies every file against the hashes in requirements.txt. Naming the platform
+  # `pip download` verifies every file against the hashes in requirements/requirements.txt. Naming the platform
   # makes the choice of wheels independent of the machine that evaluates this.
   archOf = { x86_64-linux = "x86_64"; aarch64-linux = "aarch64"; }.${system}
     or (throw "displayhive: no Python wheels are locked for ${system}");
@@ -83,7 +83,7 @@ let
   wheels = pkgs.stdenvNoCC.mkDerivation {
     name = "displayhive-python-wheels";
     nativeBuildInputs = [ python.pkgs.pip pkgs.cacert ];
-    src = ../requirements.txt;
+    src = ../requirements/requirements.txt;
     dontUnpack = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";

@@ -17,7 +17,7 @@ def _has_screengroups_access(db, sid):
     a content-only user.
     """
     from application.socketio_handlers.auth import resolve_admin_user
-    from application.permissions import has_right
+    from application.security.permissions import has_right
     user = resolve_admin_user(sid)
     return has_right(db, user, 'screengroups.page') or has_right(db, user, 'content.page')
 

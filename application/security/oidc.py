@@ -5,7 +5,7 @@ the authorization code on the callback, swaps it for an ID token at the
 provider's token endpoint, verifies that token, and maps its (issuer, sub)
 onto an AdminUser — creating one on first login. After that the person holds
 exactly the same DisplayHive JWT a password login produces (see
-application/auth.py), so sockets, rights, impersonation and token_version
+application/security/auth.py), so sockets, rights, impersonation and token_version
 revocation need no SSO awareness at all.
 
 The JWT reaches the SPA through a short-lived single-use handoff code in the
@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 import jwt
 import requests
 
-from application import net
+from application.security import net
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def discover(issuer: str, *, force: bool = False) -> dict:
 
 
 class _JwksClient:
-    """The provider's signing keys, fetched through application/net.py (PyJWT's own
+    """The provider's signing keys, fetched through application/security/net.py (PyJWT's own
     PyJWKClient would use urllib and fetch whatever address the provider's
     configuration names, internal ones included)."""
 

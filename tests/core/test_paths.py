@@ -1,4 +1,4 @@
-"""Tests for application/paths.py (DATA_DIR resolution, legacy fallback,
+"""Tests for application/core/paths.py (DATA_DIR resolution, legacy fallback,
 directory permissions) and the /static/media* routes that serve from it."""
 
 import os
@@ -6,7 +6,7 @@ import stat
 
 import pytest
 
-from application import paths
+from application.core import paths
 
 
 def _mode(path):

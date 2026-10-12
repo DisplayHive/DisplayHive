@@ -25,7 +25,7 @@ jobs:
     steps:
       # The public site is always main; the development docs (this checkout's own) are built
       # next to it under /devbranch/. Nothing links there, and robots.txt keeps it out of search
-      # engines. main predates .python-version/requirements-dev.txt, so the tooling comes from
+      # engines. main predates .python-version/requirements/requirements-dev.txt, so the tooling comes from
       # development.
       - uses: actions/checkout@v7
         with:
@@ -41,7 +41,7 @@ jobs:
           python-version-file: '.python-version'
 
       - name: Install MkDocs
-        run: pip install -r requirements-dev.txt
+        run: pip install -r requirements/requirements-dev.txt
 
       - name: Build main docs
         working-directory: main-docs

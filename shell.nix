@@ -3,7 +3,7 @@
 let
   # Only the interpreter comes from Nix (version from .python-version, see
   # nix/python.nix). Python packages come from the lock file
-  # requirements-dev.txt into ./.venv — the exact versions CI tests and the
+  # requirements/requirements-dev.txt into ./.venv — the exact versions CI tests and the
   # Docker image ships (runtime pins are shared), instead of whatever
   # nixpkgs happens to carry.
   python = import ./nix/python.nix { inherit pkgs; };
@@ -59,7 +59,7 @@ pkgs.mkShell {
       rm -rf "$venv"
       uv venv --quiet --python "${python}/bin/python3" "$venv" && echo "${python}" > "$venv/.interpreter"
     fi
-    uv pip sync --quiet --python "$venv/bin/python" "$dh_root/requirements-dev.txt" \
+    uv pip sync --quiet --python "$venv/bin/python" "$dh_root/requirements/requirements-dev.txt" \
       || echo "uv pip sync failed — Python packages may be out of date (offline?)"
     export VIRTUAL_ENV="$venv"
     export PATH="$venv/bin:$PATH"

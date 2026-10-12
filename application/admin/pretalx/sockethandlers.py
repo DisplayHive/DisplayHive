@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 
 from flask import request
 
-from application import net
+from application.security import net
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
             json_data = resp.json()
             is_valid = True
         except net.OutboundBlocked as exc:
-            # Not saved at all: an address DisplayHive would never fetch (see application/net.py).
+            # Not saved at all: an address DisplayHive would never fetch (see application/security/net.py).
             raise Fail(str(exc))
         except Exception:
             logger.debug('Initial validation fetch failed for new pretalx url=%s', url, exc_info=True)

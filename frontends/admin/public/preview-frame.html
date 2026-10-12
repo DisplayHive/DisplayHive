@@ -3,7 +3,7 @@
   Host page for the admin's content/design previews (components/PreviewFrame.vue).
   It is served with its own, more permissive Content-Security-Policy (inline
   scripts allowed — designs, raw-HTML fields and background effects need them;
-  see application/security_headers.py) and loaded with sandbox="allow-scripts",
+  see application/security/security_headers.py) and loaded with sandbox="allow-scripts",
   so nothing rendered here can reach the admin session. The admin posts the
   preview document's HTML; it is shown in the inner frame below, which inherits
   this page's policy.

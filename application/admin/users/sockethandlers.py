@@ -12,8 +12,8 @@ def register_admin_user_handlers(socketio, app, db):
     from application.socketio_handlers.auth import require_right, current_admin_user, fields, is_impersonating
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.models import AdminUser, AdminUserLogin, AdminUserIdentity
-    from application.auth import hash_password, create_token, password_problem
-    from application.permissions import password_superadmin_exists, PASSWORD_SUPERADMIN_ERROR
+    from application.security.auth import hash_password, create_token, password_problem
+    from application.security.permissions import password_superadmin_exists, PASSWORD_SUPERADMIN_ERROR
 
     def _commit_keeping_break_glass(had_break_glass):
         """Commit, unless the pending change removed the last active Superadmin
@@ -93,7 +93,7 @@ def register_admin_user_handlers(socketio, app, db):
         caller lacks the right for that specific field — same pattern as
         media.rename/media.tag and device.rename/device.enable.
         """
-        from application.permissions import has_right
+        from application.security.permissions import has_right
         caller = current_admin_user()
 
         user = get_or_fail(db, AdminUser, (data or {}).get('id'), 'User')
@@ -179,7 +179,7 @@ def register_admin_user_handlers(socketio, app, db):
         account its first login created is folded into the real one.
         Needs both users.edit and users.delete.
         """
-        from application.permissions import has_right
+        from application.security.permissions import has_right
         caller = current_admin_user()
         if not (has_right(db, caller, 'users.edit') and has_right(db, caller, 'users.delete')):
             raise Fail('Permission denied')
@@ -259,7 +259,7 @@ def register_admin_user_handlers(socketio, app, db):
         holds special.impersonate (see application.socketio_handlers.auth.is_impersonating).
         """
         from flask import current_app
-        from application.auth import begin_impersonation
+        from application.security.auth import begin_impersonation
         actor = current_admin_user()
         token, target, error = begin_impersonation(
             current_app._get_current_object(), db, actor, (data or {}).get('user_id'), is_impersonating())

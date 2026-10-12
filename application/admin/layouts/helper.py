@@ -6,7 +6,7 @@ Provides helpers to emit the layouts and containers list payloads to admin clien
 import logging
 from typing import Optional
 
-from application.aspect_ratio import BASE_RATIO, best_ratio
+from application.utils.aspect_ratio import BASE_RATIO, best_ratio
 from application.models import Layout, ContentContainer, TagConfig
 
 logger = logging.getLogger(__name__)

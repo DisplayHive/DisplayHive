@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 
 // Shown by App.vue while the server still uses pre-DATA_DIR locations for
-// media or the SQLite file (application/paths.py → `legacy_data_paths` in the
+// media or the SQLite file (application/core/paths.py → `legacy_data_paths` in the
 // connect-time status message, sent only to holders of settings.page). It
 // goes away on its own once nothing is left in the old locations.
 
