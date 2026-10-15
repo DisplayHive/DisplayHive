@@ -58,6 +58,7 @@ def require_admin() -> bool:
         from application.security.auth import user_from_token
         return user_from_token(current_app._get_current_object(), db, token) is not None
     except Exception:
+        logger.warning('Admin session check failed; treating the socket as not an admin', exc_info=True)
         return False
 
 
@@ -78,6 +79,7 @@ def resolve_admin_user(sid: str):
         from application.security.auth import user_from_token
         return user_from_token(current_app._get_current_object(), db, token)
     except Exception:
+        logger.warning('Could not resolve the admin user of a session', exc_info=True)
         return None
 
 
@@ -87,6 +89,7 @@ def current_admin_user():
         from flask import request
         return resolve_admin_user(getattr(request, 'sid', None))
     except Exception:
+        logger.warning('Could not read the current admin user', exc_info=True)
         return None
 
 
@@ -109,6 +112,7 @@ def is_impersonating() -> bool:
         payload = decode_token(current_app._get_current_object(), token)
         return bool(payload and payload.get('imp') is not None)
     except Exception:
+        logger.warning('Could not tell whether the session is an impersonation; assuming it is not', exc_info=True)
         return False
 
 

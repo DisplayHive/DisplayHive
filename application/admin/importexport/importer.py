@@ -225,6 +225,19 @@ def _clear_all_tables(db, models):
     db.session.execute(db.delete(Gradient))
     db.session.execute(db.delete(Media))
     db.session.commit()
+def _sqlite_foreign_keys(db, enabled: bool) -> None:
+    """Switch SQLite's foreign-key enforcement on or off for the import (other databases have no such
+    pragma and keep enforcing). A failure to switch it back *on* is logged: the connection would carry
+    on without the constraints."""
+    if db.engine.dialect.name != 'sqlite':
+        return
+    try:
+        db.session.execute(db.text(f"PRAGMA foreign_keys = {'ON' if enabled else 'OFF'}"))
+    except Exception:
+        logger.warning('Could not switch SQLite foreign keys %s', 'on' if enabled else 'off', exc_info=True)
+        db.session.rollback()
+
+
 def import_database(app, db, data: dict, selection=None, mode: str = 'reset', conflict_resolution='skip') -> dict:
     """Import an exported JSON dict, either replacing the whole database
     (``mode='reset'``) or adding into the existing one (``mode='merge'``).
@@ -252,10 +265,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
 
     with app.app_context():
         try:
-            try:
-                db.session.execute(db.text('PRAGMA foreign_keys = OFF'))
-            except Exception:
-                db.session.rollback()
+            _sqlite_foreign_keys(db, False)
 
             if mode == 'reset':
                 _clear_all_tables(db, _clear_all_models())
@@ -283,10 +293,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             db.session.commit()
             db.session.expire_all()
 
-            try:
-                db.session.execute(db.text('PRAGMA foreign_keys = ON'))
-            except Exception:
-                pass
+            _sqlite_foreign_keys(db, True)
 
             logger.info('Import committed successfully')
 
@@ -294,10 +301,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             return {'success': True, 'counts': counts}
         except Exception as e:
             db.session.rollback()
-            try:
-                db.session.execute(db.text('PRAGMA foreign_keys = ON'))
-            except Exception:
-                pass
+            _sqlite_foreign_keys(db, True)
             logger.exception('Import failed')
             return {'success': False, 'error': str(e)}
 

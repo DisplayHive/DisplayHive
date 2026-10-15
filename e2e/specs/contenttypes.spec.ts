@@ -282,6 +282,35 @@ test.describe('Content Types page', () => {
   })
 
   // ---------------------------------------------------------------------------
+  // A field that cannot be read is refused, not silently skipped
+  // ---------------------------------------------------------------------------
+
+  test('a malformed field is refused and a non-numeric order does not drop the field', async ({ page, backendUrl }) => {
+    await gotoContentTypes(page, backendUrl)
+    const create = (tagconfigs: unknown[]) =>
+      page.evaluate(
+        ({ name, layoutId, tagconfigs }: { name: string; layoutId: number; tagconfigs: unknown[] }) =>
+          new Promise<any>((resolve, reject) => {
+            const socket = (window as any).__displayhive_socket__
+            const t = setTimeout(() => reject(new Error('Timed out: create_contenttype')), 10_000)
+            socket.emit('displayhive:admin:cts:create_contenttype', { name, layout_id: layoutId, tagconfigs }, (ack: any) => {
+              clearTimeout(t)
+              resolve(ack)
+            })
+          }),
+        { name: `e2e-ct-fields-${Math.random().toString(36).slice(2, 6)}`, layoutId, tagconfigs },
+      )
+
+    const refused = await create(['not an object'])
+    expect(refused.success).toBe(false)
+    expect(refused.error).toMatch(/malformed/i)
+
+    const saved = await create([{ name: 'headline', field_handler: 'textklein', order: 'not-a-number' }])
+    expect(saved.success).toBe(true)
+    await deleteContentTypeById(page, saved.id)
+  })
+
+  // ---------------------------------------------------------------------------
   // Cleanup
   // ---------------------------------------------------------------------------
 

@@ -63,6 +63,7 @@ def reload_devices_on_screen(socketio, db, screen):
                 db.session.add(device)
                 db.session.commit()
             except Exception:
+                logger.warning('Could not mark device %s offline before the reload', device.devicekey, exc_info=True)
                 db.session.rollback()
             socketio.emit('command', {'CMD': 'RELOAD'}, room=f'device_{device.devicekey}')
     logger.info("Reload command sent to screen '%s'", screen.name)

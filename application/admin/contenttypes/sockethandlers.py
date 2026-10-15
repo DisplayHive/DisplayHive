@@ -41,63 +41,69 @@ def register_admin_contenttypes_handlers(socketio, app, db):
 
         provided_names: set[str] = set()
 
-        for item in (tagcfgs or []):
+        def _order_of(value):
+            """The sort position as an int, or ``None`` when none (or something that is not a number) was sent."""
+            if value is None:
+                return None
             try:
-                item_id = item.get('id')
-                name = item.get('name') or item.get('field_name') or ''
-                title = item.get('title') or item.get('field_label')
-                order = item.get('order')
-                field_handler = item.get('field_handler', 'textklein')
-                default_value = item.get('default_value')
-                option_flags = item.get('option_flags')
+                return int(value)
+            except (ValueError, TypeError):
+                return None
 
-                contentcontainer_id = item.get('contentcontainer_id')
-                try:
-                    contentcontainer_id = int(contentcontainer_id) if contentcontainer_id is not None else None
-                except (ValueError, TypeError):
-                    contentcontainer_id = None
-                if contentcontainer_id is not None and contentcontainer_id not in allowed_container_ids:
-                    # Container doesn't belong to this Contenttype's Layout — drop the link, keep the field.
-                    contentcontainer_id = None
+        for item in (tagcfgs or []):
+            # A field that cannot be read is refused, so a save never "succeeds" with fields missing.
+            if not isinstance(item, dict):
+                raise Fail('A field of the content type is malformed')
+            item_id = item.get('id')
+            name = item.get('name') or item.get('field_name') or ''
+            title = item.get('title') or item.get('field_label')
+            order = item.get('order')
+            field_handler = item.get('field_handler', 'textklein')
+            default_value = item.get('default_value')
+            option_flags = item.get('option_flags')
 
-                try:
-                    item_id_int = int(item_id) if item_id is not None else None
-                except (ValueError, TypeError):
-                    item_id_int = None
+            contentcontainer_id = item.get('contentcontainer_id')
+            try:
+                contentcontainer_id = int(contentcontainer_id) if contentcontainer_id is not None else None
+            except (ValueError, TypeError):
+                contentcontainer_id = None
+            if contentcontainer_id is not None and contentcontainer_id not in allowed_container_ids:
+                # Container doesn't belong to this Contenttype's Layout — drop the link, keep the field.
+                contentcontainer_id = None
 
-                if name:
-                    provided_names.add(name)
+            try:
+                item_id_int = int(item_id) if item_id is not None else None
+            except (ValueError, TypeError):
+                item_id_int = None
 
-                target_tc = (
-                    tc_by_id.get(item_id_int) if item_id_int else None
-                ) or tc_by_name.get(name)
-                if target_tc:
-                    if title is not None:
-                        target_tc.field_label = title
-                    if order is not None:
-                        try:
-                            target_tc.order = int(order)
-                        except (ValueError, TypeError):
-                            pass
-                    if field_handler is not None:
-                        target_tc.field_handler = field_handler
-                    target_tc.contentcontainer_id = contentcontainer_id
-                    target_tc.default_value = default_value
-                    target_tc.option_flags = option_flags
-                    db.session.add(target_tc)
-                else:
-                    db.session.add(TagConfig(
-                        contenttype_id=ct.id,
-                        contentcontainer_id=contentcontainer_id,
-                        field_name=name,
-                        field_label=title or name,
-                        field_handler=field_handler,
-                        order=int(order) if order is not None else 0,
-                        default_value=default_value,
-                        option_flags=option_flags,
-                    ))
-            except Exception:
-                continue
+            if name:
+                provided_names.add(name)
+
+            target_tc = (
+                tc_by_id.get(item_id_int) if item_id_int else None
+            ) or tc_by_name.get(name)
+            if target_tc:
+                if title is not None:
+                    target_tc.field_label = title
+                if _order_of(order) is not None:
+                    target_tc.order = _order_of(order)
+                if field_handler is not None:
+                    target_tc.field_handler = field_handler
+                target_tc.contentcontainer_id = contentcontainer_id
+                target_tc.default_value = default_value
+                target_tc.option_flags = option_flags
+                db.session.add(target_tc)
+            else:
+                db.session.add(TagConfig(
+                    contenttype_id=ct.id,
+                    contentcontainer_id=contentcontainer_id,
+                    field_name=name,
+                    field_label=title or name,
+                    field_handler=field_handler,
+                    order=_order_of(order) or 0,
+                    default_value=default_value,
+                    option_flags=option_flags,
+                ))
 
         for tc in list(tc_by_name.values()):
             if tc.field_name not in provided_names:

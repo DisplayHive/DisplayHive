@@ -21,6 +21,7 @@ def get_registered_devices_handler(app, socketio, db):
                 # Prefer model-provided serialization which formats datetimes
                 entry = dev.to_dict()
             except Exception:
+                logger.warning('Device %s: to_dict failed, using the fallback fields', getattr(dev, 'id', '?'), exc_info=True)
                 # Fallback: manual extraction with ISO-formatted datetimes
                 from datetime import datetime  # noqa: PLC0415
                 entry = {

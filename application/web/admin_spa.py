@@ -3,6 +3,7 @@
 import os
 
 from flask import Blueprint, redirect, send_from_directory
+from werkzeug.exceptions import NotFound
 
 from application.web import PROJECT_ROOT
 
@@ -44,5 +45,5 @@ def admin_spa(filename='index.html'):
         resp = send_from_directory(dist_dir, 'index.html')
         resp.headers['Cache-Control'] = 'no-store'
         return resp
-    except Exception:
+    except NotFound:
         return "Not Found", 404

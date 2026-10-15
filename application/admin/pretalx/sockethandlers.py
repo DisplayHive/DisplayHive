@@ -111,6 +111,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
                 try:
                     si = json_module.loads(mc.serialized_input or '{}')
                 except Exception:
+                    logger.warning('Content %s has unreadable serialized_input; skipped', mc.id)
                     continue
                 field_names = ct_fields.get(mc.contenttype_id, [])
                 if any(str(si.get(fn, '')) == url_id_str for fn in field_names):
@@ -231,6 +232,7 @@ def register_admin_pretalx_handlers(socketio, app, db):
                             db.select(PretalxApiUrl).where(PretalxApiUrl.polling_enabled == True)
                         ).scalars().all()
                     except Exception:
+                        logger.exception('Pretalx polling: could not read the URLs to fetch')
                         db.session.rollback()
                         continue
 

@@ -1,9 +1,12 @@
 """The screen/kiosk page served at `/`."""
 
+import logging
+
 from flask import Blueprint, current_app, render_template, request
 
 from application.models import db
 
+logger = logging.getLogger(__name__)
 bp = Blueprint('screen_page', __name__)
 
 
@@ -39,6 +42,8 @@ def index():
         row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == 'hide_powered_by')).scalar_one_or_none()
         hide_powered_by = (row.value if row else '') in ('true', '1', 'yes')
     except Exception:
+        logger.warning('Could not read the hide_powered_by setting; showing the badge', exc_info=True)
+        db.session.rollback()
         hide_powered_by = False
 
     return render_template('index.html',

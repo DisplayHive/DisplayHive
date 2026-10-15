@@ -73,6 +73,7 @@ def emit_admin_screen(socketio, app, db, room=None):
                 else:
                     device_obj = None
             except Exception:
+                logger.warning('Could not read the device attached to screen %s', entry.id, exc_info=True)
                 device_obj = None
                 device_info = None
 
