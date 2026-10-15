@@ -3,7 +3,7 @@
 {
   npm = {
     admin  = "sha256-vlamJtXzZgSJDf0yDzrIAx6nJFTkR9cnxdcWdX6TK94=";
-    screen = "sha256-61daTaUr0FvxTUPyRUkipUolUneOn7cwTOqnifyB3xo=";
+    screen = "sha256-6I+xDz5NBVTekMTNsZyKYMlSiuscI/YzdVj+cgUHUiI=";
   };
   pythonWheels = {
     x86_64-linux  = "sha256-Q8dLathBWCuMnTpzGGb8FMhHGt4s8bSJGTSpATIPOBM=";

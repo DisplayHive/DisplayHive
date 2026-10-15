@@ -7,6 +7,10 @@ they are called out under **Breaking changes**.
 
 ## [Unreleased]
 
+## [1.0.0-rc1] — 2026-10-15
+
+First release candidate for 1.0.
+
 ### Breaking changes
 
 - **NixOS module: nothing is built on the server any more.** The module runs a Nix package

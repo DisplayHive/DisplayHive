@@ -507,11 +507,11 @@ Keep the SQLite file until you have checked the result.
 ## Version
 
 The admin panel's footer shows the running version and commit (for example
-`Version 0.1.0 · Commit: 2be5109`), the same values as
+`Version 1.0.0-rc1 · Commit: 2be5109`), the same values as
 `flask dh check-config` and the `version` / `revision` fields of
 `GET /admin/api/auth/me` (signed-in admins only; the health endpoints below
 don't reveal them). The screen client's JS and CSS are requested with the
-version and commit in the URL (`?v=0.1.0-2be5109`), so browsers load the new
+version and commit in the URL (`?v=1.0.0-rc1-2be5109`), so browsers load the new
 files after every update.
 
 ## Where the logs go
