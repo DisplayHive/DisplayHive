@@ -9,6 +9,7 @@ import type { TreeNode } from 'primevue/treenode'
 import { useAuthStore } from '../../stores/auth'
 import { useRightsStore } from '../../stores/rights'
 import { onRightsReady } from '../../composables/useRightsReady'
+import { httpErrorMessage, errorText } from '../../utils/httpError'
 import { buildTree, allCheckedKeys, selectionFromKeys, type Manifest, type SelectionKeys } from '../../utils/importExportTree'
 
 // "Export Database" card of the Im-/Export page: pick items in a checkbox tree
@@ -29,13 +30,13 @@ const loadExportTree = async () => {
   exportTreeLoading.value = true
   try {
     const response = await fetch('/admin/export/tree', { headers: authStore.authHeader() })
-    if (!response.ok) throw new Error(`Server error: ${response.status}`)
+    if (!response.ok) throw new Error(await httpErrorMessage(response))
     const manifest: Manifest = await response.json()
     exportTree.value = buildTree(manifest)
     exportSelectionKeys.value = allCheckedKeys(exportTree.value)
     exportTreeLoaded.value = true
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Could not load export tree', detail: String(e), life: 5000 })
+    toast.add({ severity: 'error', summary: 'Could not load export tree', detail: errorText(e), life: 5000 })
   } finally {
     exportTreeLoading.value = false
   }
@@ -53,7 +54,7 @@ const triggerExport = async () => {
       headers: { ...authStore.authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ selection }),
     })
-    if (!response.ok) throw new Error(`Server error: ${response.status}`)
+    if (!response.ok) throw new Error(await httpErrorMessage(response))
     const blob = await response.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -67,7 +68,7 @@ const triggerExport = async () => {
     URL.revokeObjectURL(url)
     toast.add({ severity: 'success', summary: 'Export Complete', detail: 'Selected data exported as ZIP file.', life: 3000 })
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Export Failed', detail: String(e), life: 5000 })
+    toast.add({ severity: 'error', summary: 'Export Failed', detail: errorText(e), life: 5000 })
   } finally {
     exporting.value = false
   }

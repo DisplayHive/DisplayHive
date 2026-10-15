@@ -82,8 +82,11 @@ def register_media_routes(app, db):
             return jsonify({'success': False, 'error': str(e)}), e.status
         except Exception:
             db.session.rollback()
-            logger.exception('media upload failed')
-            return jsonify({'success': False, 'error': 'Upload failed'}), 500
+            from application.socketio_handlers.actions import new_error_reference, unexpected_error_message
+            reference = new_error_reference()
+            logger.exception('media upload failed (reference %s)', reference)
+            return jsonify({'success': False, 'error': f'Upload failed. {unexpected_error_message(reference)}',
+                            'error_ref': reference}), 500
         finally:
             upload.close()
 

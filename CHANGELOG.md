@@ -83,6 +83,11 @@ First release candidate for 1.0.
 - The Docker image is smaller: the application is copied with its owner set (`COPY --chown`) instead of being
   stored twice by a `chown -R` (a layer of about 370 MB shrank to a few kilobytes), and generated icon folders no
   longer reach the build context.
+- **Unexpected errors say more than "Internal error".** An admin action that fails for an unforeseen reason now
+  answers "Unexpected server error (reference 3f9a2c1b) — the details are in the server log", with the page's own
+  wording in front ("Save failed — …"); the same reference is in the log line with the traceback. The same
+  goes for uploads, icon library installs and the export/import/demo requests, which used to show "Server error: 500"
+  or a parse error; the usual statuses (401, 403, 413, 502–504) have a plain explanation too.
 - Two concurrent changes to the same rows (two admins deleting a layout and its container at the same moment)
   answer with "changed or deleted by someone else, reload and try again" instead of "Internal error".
 - Admin socket handlers answer in one format (`{success, …}`) and the admin's large views are split into

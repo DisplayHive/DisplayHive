@@ -18,10 +18,11 @@ A handler that changes something used to repeat the same few lines: load the row
 * ``raise Fail('message')`` — the caller gets ``{'success': False, 'error': 'message'}`` and the
   session is rolled back, so nothing written before the check survives.
 * Two admins changing the same rows at once (``StaleDataError``) get a plain "changed by someone
-  else, reload" answer instead of "Internal error".
-* An unexpected exception is logged with its traceback, the session is rolled back and the caller
-  gets ``{'success': False, 'error': 'Internal error'}`` (``require_right`` answered ``None``, which
-  a page cannot tell from "no answer yet").
+  else, reload" answer instead of an unexpected-error one.
+* An unexpected exception is logged with its traceback and a short reference, the session is rolled
+  back and the caller gets ``{'success': False, 'error': 'Unexpected server error (reference …) …',
+  'error_ref': '…'}`` — the reference is also in the log line, so a report from a user can be found
+  (``require_right`` answered ``None``, which a page cannot tell from "no answer yet").
 * A socket that is not a valid admin gets no answer at all (as before). An admin who lacks the
   right gets ``{'success': False, 'error': 'Permission denied'}``.
 
@@ -30,6 +31,7 @@ Whatever the handler returns is passed on unchanged, so handlers that answer by 
 """
 
 import logging
+import uuid
 from functools import wraps
 
 from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
@@ -39,7 +41,15 @@ from application.socketio_handlers.auth import current_admin_user, require_admin
 logger = logging.getLogger(__name__)
 
 PERMISSION_DENIED = 'Permission denied'
-INTERNAL_ERROR = 'Internal error'
+
+
+def new_error_reference() -> str:
+    """A short id that goes into both the log line and the answer, to find one from the other."""
+    return uuid.uuid4().hex[:8]
+
+
+def unexpected_error_message(reference: str) -> str:
+    return f'Unexpected server error (reference {reference}) — the details are in the server log.'
 CONCURRENT_CHANGE = 'This was changed or deleted by someone else at the same moment — reload and try again'
 
 
@@ -59,6 +69,11 @@ def ok(**extra) -> dict:
 def failure(message: str) -> dict:
     """The failure acknowledgement, for code that returns instead of raising."""
     return {'success': False, 'error': message}
+
+
+def internal_failure(reference: str) -> dict:
+    """The answer for an exception nobody expected: what to tell, and which log line to look for."""
+    return {'success': False, 'error': unexpected_error_message(reference), 'error_ref': reference}
 
 
 def _as_primary_key(model, ident):
@@ -129,8 +144,9 @@ def admin_action(*rights: str):
                 _rollback()
                 return failure(CONCURRENT_CHANGE)
             except Exception:
-                logger.exception('Unhandled error in admin handler %s', fn.__name__)
+                reference = new_error_reference()
+                logger.exception('Unhandled error in admin handler %s (reference %s)', fn.__name__, reference)
                 _rollback()
-                return failure(INTERNAL_ERROR)
+                return internal_failure(reference)
         return wrapper
     return decorator

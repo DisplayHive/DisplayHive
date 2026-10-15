@@ -4,6 +4,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '../stores/auth'
 import { useRightsStore } from '../stores/rights'
+import { httpErrorMessage, errorText } from '../utils/httpError'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -34,10 +35,10 @@ const loadPackages = async () => {
   loadError.value = null
   try {
     const response = await fetch('/admin/demo/list', { headers: authStore.authHeader() })
-    if (!response.ok) throw new Error(`Server error: ${response.status}`)
+    if (!response.ok) throw new Error(await httpErrorMessage(response))
     packages.value = await response.json()
   } catch (e) {
-    loadError.value = String(e)
+    loadError.value = errorText(e)
   } finally {
     loading.value = false
   }
@@ -65,7 +66,7 @@ const runImport = async (pkg: DemoPackage) => {
       toast.add({ severity: 'error', summary: 'Import Failed', detail: result.error || 'Unknown error', life: 6000 })
     }
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Import Failed', detail: String(e), life: 6000 })
+    toast.add({ severity: 'error', summary: 'Import Failed', detail: errorText(e), life: 6000 })
   } finally {
     importingFilename.value = null
   }

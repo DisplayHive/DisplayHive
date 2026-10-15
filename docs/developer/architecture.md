@@ -193,8 +193,9 @@ def handle_delete_user(data):
 ```
 
 - A socket that is not a valid admin gets no answer; an admin without the right gets
-  `Permission denied`; an unexpected exception is logged, rolled back and answered with
-  `Internal error` (never an empty answer).
+  `Permission denied`; an unexpected exception is logged (with a short reference), rolled back and
+  answered with `Unexpected server error (reference …)` plus `error_ref`, so the admin shows which log
+  line to look for (never an empty answer).
 - Send replies to the requester with `room=request.sid` — an emit without a room reaches **every**
   connected client, screens included.
 - Don't call `fetch()` on the page right after a change the handler already broadcasts (see the

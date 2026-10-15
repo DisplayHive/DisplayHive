@@ -18,6 +18,7 @@ def register_web_routes(app: Flask, db, socketio) -> None:
     from application.web.admin_spa import bp as admin_spa_bp
     from application.web.health import bp as health_bp
     from application.web.importexport_routes import register_importexport_routes
+    from application.web.errors import register_error_handlers
     from application.web.screen_page import bp as screen_page_bp
     from application.web.static_routes import bp as static_routes_bp
 
@@ -26,3 +27,4 @@ def register_web_routes(app: Flask, db, socketio) -> None:
     app.register_blueprint(screen_page_bp)
     app.register_blueprint(admin_spa_bp)
     register_importexport_routes(app, db, socketio)
+    register_error_handlers(app)

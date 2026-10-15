@@ -13,6 +13,7 @@ import type { TreeNode } from 'primevue/treenode'
 import { useConfirmAction } from '../../composables/useConfirmAction'
 import { useAuthStore } from '../../stores/auth'
 import { useRightsStore } from '../../stores/rights'
+import { httpErrorMessage, errorText } from '../../utils/httpError'
 import { buildTree, allCheckedKeys, selectionFromKeys, type Manifest, type SelectionKeys } from '../../utils/importExportTree'
 
 // "Import Database" card of the Im-/Export page: choose a file, preview what it
@@ -103,7 +104,7 @@ const onFileSelected = async (event: Event) => {
     })
     const result = await response.json()
     if (!response.ok || result.error) {
-      throw new Error(result.error || `Server error: ${response.status}`)
+      throw new Error(result.error || (await httpErrorMessage(response)))
     }
     importToken.value = result.token
     importIsLegacy.value = !!result.is_legacy
@@ -111,7 +112,7 @@ const onFileSelected = async (event: Event) => {
     importTree.value = buildTree(manifest, 'import-')
     importSelectionKeys.value = allCheckedKeys(importTree.value)
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Could not read file', detail: String(e), life: 6000 })
+    toast.add({ severity: 'error', summary: 'Could not read file', detail: errorText(e), life: 6000 })
     resetImportStagingState()
   } finally {
     previewing.value = false
@@ -151,8 +152,8 @@ const runImport = async () => {
       toast.add({ severity: 'error', summary: 'Import Failed', detail: result.error || 'Unknown error', life: 6000 })
     }
   } catch (e) {
-    importResult.value = { success: false, error: String(e) }
-    toast.add({ severity: 'error', summary: 'Import Failed', detail: String(e), life: 6000 })
+    importResult.value = { success: false, error: errorText(e) }
+    toast.add({ severity: 'error', summary: 'Import Failed', detail: errorText(e), life: 6000 })
   } finally {
     importing.value = false
   }

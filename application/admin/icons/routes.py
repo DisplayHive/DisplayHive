@@ -47,8 +47,11 @@ def register_icon_routes(app, db, on_change=None):
         except icon_libraries.IconLibraryError as problem:
             return jsonify({'success': False, 'error': str(problem)}), 400
         except Exception:
-            logger.exception('icon library upload failed')
-            return jsonify({'success': False, 'error': 'Installation failed'}), 500
+            from application.socketio_handlers.actions import new_error_reference, unexpected_error_message
+            reference = new_error_reference()
+            logger.exception('icon library upload failed (reference %s)', reference)
+            return jsonify({'success': False, 'error': f'Installation failed. {unexpected_error_message(reference)}',
+                            'error_ref': reference}), 500
         finally:
             upload.close()
         if on_change:

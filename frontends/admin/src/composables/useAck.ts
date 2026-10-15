@@ -5,6 +5,8 @@ import { useSocket } from './useSocket'
 export interface Ack {
   success: boolean
   error?: string
+  /** Set when the server hit an unexpected error: the reference that is also in its log. */
+  error_ref?: string
 }
 
 export interface AckOptions<T extends Ack> {
@@ -43,7 +45,11 @@ export function useAck() {
     } catch {
       return fail('Request failed — the connection to the server is down.')
     }
-    if (!ack?.success) return fail(ack?.error || options.error || 'Request failed')
+    if (!ack?.success) {
+      // An unexpected server error says nothing about what was being done: put the page's own wording first.
+      if (ack?.error_ref && options.error) return fail(`${options.error} — ${ack.error}`)
+      return fail(ack?.error || options.error || 'Request failed')
+    }
     const message = typeof options.success === 'function' ? options.success(ack) : options.success
     if (message) toast.add({ severity: 'success', summary: 'Success', detail: message, life: 3000 })
     return ack

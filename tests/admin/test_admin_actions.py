@@ -79,7 +79,7 @@ def test_a_fail_rolls_back_what_the_handler_wrote_before_it(flask_app, db_sessio
     assert db.session.execute(db.select(SystemSetting).where(SystemSetting.key == 'actions-rollback')).first() is None
 
 
-def test_an_unexpected_error_is_answered_not_swallowed(flask_app, db_session):
+def test_an_unexpected_error_is_answered_with_a_reference(flask_app, db_session):
     from application.socketio_handlers import actions
 
     @actions.admin_action()
@@ -89,7 +89,10 @@ def test_an_unexpected_error_is_answered_not_swallowed(flask_app, db_session):
     original = actions.require_admin
     actions.require_admin = lambda: True
     try:
-        assert handler() == {'success': False, 'error': 'Internal error'}
+        answer = handler()
+        assert answer['success'] is False
+        assert answer['error_ref'] and answer['error_ref'] in answer['error']
+        assert 'server log' in answer['error']
     finally:
         actions.require_admin = original
 
