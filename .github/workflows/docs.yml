@@ -2,7 +2,7 @@ name: docs
 
 on:
   push:
-    branches: [main, development]
+    branches: [main, development, release/1.0]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
@@ -23,10 +23,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # The public site is always main; the development docs (this checkout's own) are built
-      # next to it under /devbranch/. Nothing links there, and robots.txt keeps it out of search
-      # engines. main predates .python-version/requirements/requirements-dev.txt, so the tooling comes from
-      # development.
+      # The public site is always main. The docs of the other lines are built next to it, under
+      # /devbranch/ (development, the next major version) and /v1.0/ (release/1.0, the release
+      # candidate; skipped while that branch does not exist). Nothing links there, and robots.txt
+      # keeps them out of search engines. main predates .python-version/requirements/requirements-dev.txt,
+      # so the tooling comes from development.
       - uses: actions/checkout@v7
         with:
           ref: development
@@ -35,6 +36,16 @@ jobs:
         with:
           ref: main
           path: main-docs
+
+      - name: Check out the release/1.0 docs (when that branch exists)
+        id: rc
+        run: |
+          if git fetch --depth=1 origin release/1.0; then
+            git worktree add --detach rc-docs FETCH_HEAD
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-python@v7
         with:
@@ -50,9 +61,14 @@ jobs:
       - name: Build development docs
         run: mkdocs build --strict --site-dir site/devbranch
 
-      - name: Keep the development docs out of search engines
+      - name: Build release/1.0 docs
+        if: steps.rc.outputs.present == 'true'
+        working-directory: rc-docs
+        run: mkdocs build --strict --site-dir ../site/v1.0
+
+      - name: Keep the development and release candidate docs out of search engines
         run: |
-          printf 'User-agent: *\nDisallow: /devbranch/\n' > site/robots.txt
+          printf 'User-agent: *\nDisallow: /devbranch/\nDisallow: /v1.0/\n' > site/robots.txt
 
       - uses: actions/configure-pages@v6
 
