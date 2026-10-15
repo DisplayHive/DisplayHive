@@ -35,7 +35,7 @@ let
       !(builtins.elem base [ "node_modules" "__pycache__" ".venv" "dist" ".git" ])
       && (builtins.elem top [
         "app.py" "application" "migrations" "alembic.ini" "VERSION" "deploy"
-        "examplecontent" "static" "requirements" ".python-version" "frontends"
+        "static" "requirements" ".python-version" "frontends"
       ])
       && !(lib.hasPrefix "static/media" rel);
   source = lib.cleanSourceWith {

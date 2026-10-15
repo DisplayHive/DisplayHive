@@ -1,6 +1,6 @@
 """Export -> import round trips through application/admin/importexport/exporter.py and importer.py.
 
-The seed is the bundled example content (examplecontent/event.zip), so the
+The seed is the bundled example content (application/examplecontent/event.zip), so the
 data covers every entity type with real relations, not hand-built rows.
 
 A reset import wipes every table (and reads the engine URL), so these tests
@@ -21,7 +21,7 @@ from application.admin.importexport.importer import import_database
 from application.core.factory import create_app
 from application.models import db
 
-EXAMPLE_ZIP = Path(__file__).resolve().parents[2] / 'examplecontent' / 'event.zip'
+EXAMPLE_ZIP = Path(__file__).resolve().parents[2] / 'application' / 'examplecontent' / 'event.zip'
 ENTITY_KEYS = [
     'screens', 'screengroups', 'designs', 'gradients', 'layouts', 'contentcontainers',
     'contenttypes', 'tagconfigs', 'content_elements', 'media',

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import Flask
 
-# Repository root: where dist/, frontends/ and examplecontent/ live.
+# Repository root: where dist/ and frontends/ live.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 

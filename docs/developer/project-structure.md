@@ -14,12 +14,12 @@ A map of the repository: where things live and where a new file belongs.
 | `tests/` | Backend unit and integration tests (pytest). |
 | `e2e/` | End-to-end tests (Playwright; specs in `e2e/specs/`); builds the admin itself. |
 | `docs/`, `mkdocs.yml` | This documentation (`user/` and `developer/`). |
-| `nix/`, `flake.nix`, `shell.nix` | Nix package, NixOS module and dev shell. |
+| `nix/`, `flake.nix`, `shell.nix` | Nix package, NixOS module and dev shell (`shell.nix` stays at the root so `nix-shell` works). |
+| `pyproject.toml` | Test and coverage configuration only (pytest, coverage); not a package. |
 | `Dockerfile`, `compose.yml` | Container image and compose setup (kept at the root: `docker build .` / `docker compose up`). |
 | `deploy/` | Files the image and the NixOS module run: `docker-entrypoint.sh`, `gunicorn-logging.json`. |
 | `requirements/` | Python dependencies: the `.in` inputs and the generated, hashed locks (`npm run deps:lock`). |
 | `.github/` | CI workflows, `CONTRIBUTING.md`, `SECURITY.md`. |
-| `examplecontent/` | Demo Mode example content package. |
 | `scripts/` | Maintenance helpers (hashes, lock files). |
 | `notes/` | Local notes (roadmap, technical debt). |
 
@@ -42,6 +42,7 @@ A map of the repository: where things live and where a new file belongs.
 - `web/` — plain HTTP routes (admin SPA, health, static files, import/export,
   screen page).
 - `utils/` — small shared helpers.
+- `examplecontent/` — the example package Demo Mode imports (`event.zip`, `exampledesc.json`).
 - `core/` — configuration and start-up: `config`, `paths`, `db_url`,
   `startup`, `factory`, `logfmt`, `version`, `migration`, `dbcopy`, `backup`.
 - `security/` — `auth`, `oidc`, `permissions`, `session`,

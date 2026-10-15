@@ -1,0 +1,16 @@
+# Tool configuration only — DisplayHive is an application, not an installable package
+# (dependencies: requirements/, see docs/developer/contributing.md).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["application", "app"]
+branch = true
+# Socket.IO handlers and background tasks run in their own threads.
+concurrency = ["thread"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = false

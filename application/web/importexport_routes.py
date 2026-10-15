@@ -12,9 +12,9 @@ from flask import jsonify, request, send_file
 
 from application.admin.auth.routes import require_http_right, require_jwt_auth
 from application.admin.importexport import service
-from application.web import PROJECT_ROOT
 
-_EXAMPLECONTENT_FOLDER = str(PROJECT_ROOT / 'examplecontent')
+# Demo Mode's example package: application/examplecontent/.
+_EXAMPLECONTENT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'examplecontent')
 _EXAMPLECONTENT_DESC = os.path.join(_EXAMPLECONTENT_FOLDER, 'exampledesc.json')
 
 
