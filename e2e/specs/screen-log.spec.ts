@@ -158,6 +158,17 @@ test('the status dot: hidden when well, red when disconnected, yellow without co
   await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_indicator: 'true' } })
   await expect(dot).toBeVisible({ timeout: 10_000 })
 
+  // Icons instead of the dot with codes: one pictogram per problem, no text; an invalid style is refused
+  const badStyle = await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_style: 'sparkles' } })
+  expect(badStyle.success).toBe(false)
+  await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_style: 'icons' } })
+  await expect(dot).toHaveAttribute('data-style', 'icons', { timeout: 10_000 })
+  await expect(dot.locator('svg.status-icon--mim')).toBeVisible()
+  await expect(dot).toHaveText('')
+  await emitAck(page, 'displayhive:admin:cts:set_system_settings', { settings: { screen_status_style: 'dot' } })
+  await expect(dot).toHaveAttribute('data-style', 'dot', { timeout: 10_000 })
+  await expect(dot).toHaveText('mim')
+
   await removeScreen(page, rest)
 })
 

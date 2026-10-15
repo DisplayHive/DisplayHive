@@ -54,6 +54,8 @@ First release candidate for 1.0.
   lines, with filters (screen, severity, text) and *Load older lines*. Screens always report warnings and errors,
   everything else while someone watches the Logger page. Retention is set in Settings → Screens (72 hours and
   250,000 lines by default).
+- **Status indicator as icons:** Settings → Screens → *Look of the status indicator* switches the dot with
+  codes to one pictogram per problem (connection lost, content missing, script error).
 - **Status dot on screens:** a small dot appears in the corner only when something is wrong. Red `con` is a lost
   connection; yellow `mim` is missing content or a picture that did not load, `js` a script error. The codes are
   also written to the screen log, and the dot can be switched off in Settings.

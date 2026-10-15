@@ -25,7 +25,7 @@ These are stored in the database, belong to the instance, and are part of an [ex
 
 **Screens**
 
-- **Status dot** on screens: show or hide it (see [Screens](screens-devices-groups.md#what-a-screen-does-on-its-own)).
+- **Status dot** on screens: show or hide it, and choose between a dot with codes and icons (see [Screens](screens-devices-groups.md#what-a-screen-does-on-its-own)).
 - **Reload screens once a day** at a given time.
 - **Screen log**: how long lines are kept (hours, 1 to 8760) and the most lines kept (1,000 to 5 million);
   whichever limit is reached first deletes the oldest lines.

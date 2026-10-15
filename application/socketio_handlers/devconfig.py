@@ -22,6 +22,17 @@ def status_indicator_enabled(db) -> bool:
     return not (row and (row.value or '').strip().lower() in ('false', '0', 'no', 'off'))
 
 
+# SystemSetting: how the status indicator looks — 'dot' (a coloured dot with its codes, the default) or
+# 'icons' (a pictogram per problem). Only matters while the indicator is on.
+STATUS_STYLE_SETTING = 'screen_status_style'
+
+
+def status_indicator_style(db) -> str:
+    from application.models import SystemSetting
+    row = db.session.execute(db.select(SystemSetting).where(SystemSetting.key == STATUS_STYLE_SETTING)).scalar_one_or_none()
+    return 'icons' if row and (row.value or '').strip().lower() == 'icons' else 'dot'
+
+
 # SystemSetting: "HH:MM" at which screens reload themselves once a day, in the instance's time zone
 # (the `timezone` setting); empty = off. See frontends/screen/ts/screen/scheduled-reload.ts.
 RELOAD_AT_SETTING = 'screen_reload_at'
@@ -95,6 +106,7 @@ def send_upd_deviceconfig(socketio, db, room: Optional[str] = None, to: Optional
                 'glow':             glow_state,
                 'rotation':         int(getattr(screen_obj, 'rotation', 0) or 0) if screen_obj else 0,
                 'statusindicator':  'yes' if status_indicator_enabled(db) else 'no',
+                'statusstyle':      status_indicator_style(db),
                 'reloadat':         system_setting(db, RELOAD_AT_SETTING),
                 'timezone':         system_setting(db, 'timezone', 'UTC') or 'UTC',
             }

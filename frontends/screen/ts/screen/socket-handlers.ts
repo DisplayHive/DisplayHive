@@ -18,7 +18,7 @@
 import { reconnectDelay } from "./reconnect";
 import { setConnectionCheck, setScheduledReload } from "./scheduled-reload";
 import { loadContentSnapshot, saveContentSnapshot } from "./content-snapshot";
-import { setStatus, setStatusIndicatorEnabled, initStatusIndicator } from "./status-indicator";
+import { setStatus, setStatusIndicatorEnabled, setStatusIndicatorStyle, initStatusIndicator } from "./status-indicator";
 import { log, setLoggerConnected, setLoggerSocketEmitter } from "./logger";
 import type {
   AdoptionApprovedMessage,
@@ -335,6 +335,7 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
     // page when it changes, so this only fixes up a stale/missing stored value.
     setRotation(Number(cfg.rotation) || 0);
     setStatusIndicatorEnabled(cfg.statusindicator !== "no");
+    setStatusIndicatorStyle(cfg.statusstyle === "icons" ? "icons" : "dot");
     setScheduledReload(cfg.reloadat, cfg.timezone);
     window._lastDeviceConfig = cfg;
   });

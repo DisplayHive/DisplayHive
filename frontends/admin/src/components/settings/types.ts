@@ -11,6 +11,7 @@ export interface SystemSettings {
   content_edit_preview_size?: number | string
   content_list_preview_size?: number | string
   screen_status_indicator?: boolean | string
+  screen_status_style?: string
   screen_reload_at?: string
   screen_log_max_age_hours?: number | string
   screen_log_max_rows?: number | string

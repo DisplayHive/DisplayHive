@@ -65,6 +65,8 @@ export interface DeviceConfig {
   rotation?: number;
   /** Show the status dot (status-indicator.ts)? Missing means yes. */
   statusindicator?: "yes" | "no";
+  /** How the status indicator looks: a coloured dot with codes, or icons. Missing means dot. */
+  statusstyle?: "dot" | "icons";
   /** Daily reload time "HH:MM" in `timezone`; empty = off (scheduled-reload.ts). */
   reloadat?: string;
   /** The instance's time zone (IANA name). */

@@ -10,6 +10,11 @@
  * logger.ts), so an admin sees the cause without standing in front of the screen. The Settings page
  * can switch the dot off (`statusindicator` in upd_deviceconfig); the states are tracked and logged
  * either way.
+ *
+ * Style: by default the colored dot plus the codes above. Settings can switch it to icons
+ * (`statusstyle` in upd_deviceconfig): one pictogram per active problem instead, in the order
+ * red first, without the dot and without text. The icons are drawn here (inline SVG) so the screen
+ * needs no icon font; the codes stay in the tooltip and the screen log.
  */
 
 import { log } from "./logger.js";
@@ -19,8 +24,51 @@ export type StatusCode = "con" | "mim" | "js";
 const RED: StatusCode[] = ["con"];
 const JS_ERROR_TTL_MS = 5 * 60 * 1000;
 
+export type StatusStyle = "dot" | "icons";
+
+/** 24×24 line pictograms, drawn with `currentColor`. */
+const ICONS: Record<StatusCode, { label: string; paths: string[] }> = {
+  // wifi arcs with a slash: no connection to the server
+  con: {
+    label: "No connection to the server",
+    paths: ["M3 9c5-4.5 13-4.5 18 0", "M6 13c3.5-3 8.5-3 12 0", "M9.5 17c1.5-1.2 3.5-1.2 5 0", "M12 20.5h.01", "M3 3l18 18"],
+  },
+  // picture frame with a slash: content missing or an image/video did not load
+  mim: {
+    label: "Content is missing",
+    paths: ["M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M3 16l5-5 4 4 3-3 6 6", "M9 8.5h.01", "M3 3l18 18"],
+  },
+  // angle brackets with an exclamation mark: a script error
+  js: {
+    label: "A script error occurred",
+    paths: ["M8 7l-5 5 5 5", "M16 7l5 5-5 5", "M12 8v5", "M12 16.5h.01"],
+  },
+};
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function iconElement(code: StatusCode): SVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("class", `status-icon status-icon--${code}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", ICONS[code].label);
+  for (const d of ICONS[code].paths) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
 const reasons = new Map<StatusCode, string>();
 let enabled = true;
+let style: StatusStyle = "dot";
 let jsTimer: ReturnType<typeof setTimeout> | undefined;
 const failedMedia = new Set<string>();
 
@@ -60,7 +108,9 @@ function render(): void {
     return;
   }
   el.dataset.level = level;
-  el.textContent = activeCodes().join(" ");
+  el.dataset.style = style;
+  if (style === "icons") el.replaceChildren(...activeCodes().map(iconElement));
+  else el.textContent = activeCodes().join(" ");
   el.title = Array.from(reasons.entries()).map(([c, r]) => `${c}: ${r}`).join("\n");
   el.hidden = false;
 }
@@ -83,6 +133,12 @@ export function setStatus(code: StatusCode, reason: string | null): void {
 /** Show or hide the dot (the admin's setting). */
 export function setStatusIndicatorEnabled(value: boolean): void {
   enabled = value;
+  render();
+}
+
+/** Dot with codes (default) or icons (the admin's setting). */
+export function setStatusIndicatorStyle(value: StatusStyle): void {
+  style = value;
   render();
 }
 

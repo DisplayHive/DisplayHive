@@ -95,6 +95,11 @@ is wrong** — nothing is shown while all is well:
 Red wins over yellow. Hover the dot for the reason. You can switch the dot off under
 [Settings](settings.md) → **Screens**; the codes are still written to the screen log.
 
+Instead of the dot with codes, the indicator can show **icons**: one pictogram per problem (a crossed-out
+signal for `con`, a crossed-out picture for `mim`, angle brackets with an exclamation mark for `js`),
+red problem first, in white on the dark pill and without text. Choose the look in the same place
+(**Look of the status indicator**); the reason is still in the tooltip and the codes in the screen log.
+
 **Screen log.** The **Logger** page shows what screens report about themselves, live, and also what
 they reported earlier: the log is stored on the server. Filter by screen, severity and text, and load
 older lines on demand. Screens always report warnings and errors; debug and info lines are sent while

@@ -291,6 +291,22 @@ html.cursor-hidden * {
     background: #e5392b;
 }
 
+/* Icon style: a pictogram per problem, no coloured dot and no codes. */
+#status-indicator[data-style="icons"]::before {
+    display: none;
+}
+
+#status-indicator[data-style="icons"] {
+    gap: 0.9vmin;
+    padding: 0.5vmin 1vmin;
+}
+
+#status-indicator .status-icon {
+    width: 2.6vmin;
+    height: 2.6vmin;
+    display: block;
+}
+
 /* ── Persistent powered-by badge — bottom-right corner during normal playback.
    Only rendered when the "hide powered by" setting is off (see index.html). ── */
 #powered-by-badge {

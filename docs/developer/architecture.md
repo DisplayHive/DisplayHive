@@ -296,7 +296,8 @@ framework:
   retry with the same timing covers what Socket.IO does not retry (server refused or closed the connection).
 - `status-indicator.ts` — the dot in the corner that appears only when something is wrong: red `con`
   (connection), yellow `mim` (content/media missing) and `js` (script error); the codes also go to the
-  screen log, and Settings can switch the dot off (`statusindicator` in `upd_deviceconfig`).
+  screen log, and Settings can switch the dot off (`statusindicator` in `upd_deviceconfig`) or show
+  icons instead of the dot and codes (`statusstyle`: `dot` or `icons`, the `screen_status_style` setting).
 - `clock.ts`, `storage.ts`, `debug-panel.ts`, `viewport-tracker.ts`,
   `preload-iframes.ts` — supporting concerns.
 

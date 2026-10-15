@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
+import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -18,11 +19,17 @@ const logSaving = ref(false)
 const screenLogMaxAgeHours = ref(72)
 const screenLogMaxRows = ref(250000)
 const statusIndicator = ref(true)
+const statusStyle = ref<'dot' | 'icons'>('dot')
+const statusStyleOptions = [
+  { label: 'Dot with codes', value: 'dot' },
+  { label: 'Icons', value: 'icons' },
+]
 const reloadEnabled = ref(false)
 const reloadAt = ref('04:00')
 
 watch(() => props.settings, (sys) => {
   statusIndicator.value = !(sys.screen_status_indicator === false || sys.screen_status_indicator === 'false')
+  statusStyle.value = sys.screen_status_style === 'icons' ? 'icons' : 'dot'
   reloadEnabled.value = !!sys.screen_reload_at
   if (sys.screen_reload_at) reloadAt.value = sys.screen_reload_at
   const logHours = Number(sys.screen_log_max_age_hours)
@@ -42,6 +49,7 @@ const saveLogSettings = async () => {
           screen_log_max_age_hours: String(screenLogMaxAgeHours.value),
           screen_log_max_rows: String(screenLogMaxRows.value),
           screen_status_indicator: statusIndicator.value ? 'true' : 'false',
+          screen_status_style: statusStyle.value,
           screen_reload_at: reloadEnabled.value ? reloadAt.value : '',
         },
       },
@@ -67,6 +75,19 @@ const saveLogSettings = async () => {
           <div class="field toggle-field">
             <label for="status-indicator-switch">Show a status dot on screens when something is wrong</label>
             <ToggleSwitch id="status-indicator-switch" v-model="statusIndicator" :disabled="!canEdit" />
+          </div>
+          <div v-if="statusIndicator" class="field toggle-field">
+            <label for="status-indicator-style">Look of the status indicator</label>
+            <SelectButton
+              id="status-indicator-style"
+              v-model="statusStyle"
+              :options="statusStyleOptions"
+              option-label="label"
+              option-value="value"
+              :allow-empty="false"
+              size="small"
+              :disabled="!canEdit"
+            />
           </div>
         </div>
         <div class="toggle-group" data-tour="settings-screen-reload">

@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./logger.js", () => ({ log: vi.fn() }));
 
-import { activeCodes, setContentMissing, setStatus, setStatusIndicatorEnabled, statusLevel } from "./status-indicator";
+import {
+  activeCodes,
+  setContentMissing,
+  setStatus,
+  setStatusIndicatorEnabled,
+  setStatusIndicatorStyle,
+  statusLevel,
+} from "./status-indicator";
 import { log } from "./logger.js";
 
 const dot = () => document.getElementById("status-indicator");
@@ -13,6 +20,7 @@ describe("status indicator", () => {
     document.body.innerHTML = '<div id="main-container"></div>';
     for (const code of ["con", "mim", "js"] as const) setStatus(code, null);
     setStatusIndicatorEnabled(true);
+    setStatusIndicatorStyle("dot");
     vi.mocked(log).mockClear();
   });
 
@@ -51,5 +59,27 @@ describe("status indicator", () => {
     expect(statusLevel()).toBe("red");
     setStatusIndicatorEnabled(true);
     expect(dot()?.hidden).toBe(false);
+  });
+
+  it("icon style shows a pictogram per problem instead of the codes, red first", () => {
+    setStatusIndicatorStyle("icons");
+    setContentMissing(true);
+    setStatus("con", "disconnected");
+    const el = dot()!;
+    expect(el.dataset.style).toBe("icons");
+    expect(el.textContent).toBe("");
+    const icons = Array.from(el.querySelectorAll("svg.status-icon"));
+    expect(icons.map((i) => i.getAttribute("class"))).toEqual(["status-icon status-icon--con", "status-icon status-icon--mim"]);
+    expect(icons[0]!.getAttribute("aria-label")).toMatch(/connection/i);
+    expect(el.title).toContain("con: disconnected");
+  });
+
+  it("switching the style back restores the codes", () => {
+    setStatus("js", "boom");
+    setStatusIndicatorStyle("icons");
+    expect(dot()?.querySelectorAll("svg").length).toBe(1);
+    setStatusIndicatorStyle("dot");
+    expect(dot()?.dataset.style).toBe("dot");
+    expect(dot()?.textContent).toBe("js");
   });
 });
