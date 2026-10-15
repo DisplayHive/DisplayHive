@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import Button from 'primevue/button'
 import Card from 'primevue/card'
 import RouteLink from '../ui/RouteLink.vue'
 import { useContentStore } from '../../stores/content'
 import { useRightsStore } from '../../stores/rights'
 import { links } from '../../utils/links'
-import { expiringSoon, recentlyChanged, relativeTime, scheduleState, startingSoon } from '../../utils/content/contentSchedule'
+import { expiringSoon, recentlyChanged, relativeTime, startingSoon } from '../../utils/content/contentSchedule'
 
-// The Dashboard's working part: quick actions, what is on air / about to expire or start,
-// and what was changed last. The stat tiles above it stay in DashboardView.vue; the content
-// store is loaded there.
-const router = useRouter()
+// The Dashboard's working part: what is about to expire or start, and what was
+// changed last. The stat tiles above it ("On air" included) stay in DashboardView.vue;
+// the content store is loaded there.
 const rights = useRightsStore()
 const contentStore = useContentStore()
 
@@ -23,51 +20,14 @@ onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 60_000)
 onUnmounted(() => clearInterval(ticker))
 
 const canSeeContent = computed(() => rights.can('content.page'))
-const live = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'live'))
 const expiring = computed(() => expiringSoon(contentStore.content, now.value).slice(0, 6))
 const starting = computed(() => startingSoon(contentStore.content, now.value).slice(0, 6))
-const expired = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'expired'))
 const recent = computed(() => recentlyChanged(contentStore.content, 6))
-
-interface QuickAction { label: string; icon: string; tour: string; run: () => void }
-const actions = computed<QuickAction[]>(() => {
-  const list: Array<QuickAction | false> = [
-    rights.can('content.create') && { label: 'New content', icon: 'pi pi-plus', tour: 'quick-content', run: () => router.push('/content/new') },
-    rights.can('media.upload') && { label: 'Upload media', icon: 'pi pi-upload', tour: 'quick-media', run: () => router.push('/media') },
-    rights.can('screens.create') && { label: 'Add screen', icon: 'pi pi-window-maximize', tour: 'quick-screen', run: () => router.push('/screens') },
-    rights.can('screens.page') && rights.can('screengroups.page') && { label: 'Matrix', icon: 'pi pi-th-large', tour: 'quick-matrix', run: () => router.push('/matrix') },
-  ]
-  return list.filter((a): a is QuickAction => !!a)
-})
 </script>
 
 <template>
   <section class="dash-overview" data-tour="dashboard-overview">
-    <div v-if="actions.length" class="dash-actions" data-tour="dashboard-quick-actions">
-      <Button
-        v-for="a in actions"
-        :key="a.tour"
-        :label="a.label"
-        :icon="a.icon"
-        :data-tour="a.tour"
-        size="small"
-        outlined
-        @click="a.run()"
-      />
-    </div>
-
     <div v-if="canSeeContent" class="dash-panels">
-      <Card class="dash-panel" data-testid="dash-onair">
-        <template #title><span class="dash-title"><i class="pi pi-play-circle" /> On air</span></template>
-        <template #content>
-          <div class="dash-big">{{ live.length }}</div>
-          <div class="dash-sub">content element(s) shown right now</div>
-          <div v-if="expired.length" class="dash-note dash-note--warn">
-            <i class="pi pi-exclamation-triangle" /> {{ expired.length }} expired, still switched on
-          </div>
-        </template>
-      </Card>
-
       <Card class="dash-panel" data-testid="dash-expiring">
         <template #title><span class="dash-title"><i class="pi pi-clock" /> Ending soon</span></template>
         <template #content>
@@ -117,12 +77,6 @@ const actions = computed<QuickAction[]>(() => {
   gap: 1rem;
 }
 
-.dash-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
 .dash-panels {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -136,22 +90,9 @@ const actions = computed<QuickAction[]>(() => {
   font-size: 1rem;
 }
 
-.dash-big {
-  font-size: 2.2rem;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.dash-sub,
 .dash-empty,
 .dash-when {
   color: var(--p-text-muted-color);
-  font-size: 0.85rem;
-}
-
-.dash-note--warn {
-  margin-top: 0.5rem;
-  color: var(--p-amber-400, #f59e0b);
   font-size: 0.85rem;
 }
 

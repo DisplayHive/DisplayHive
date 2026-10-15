@@ -10,6 +10,7 @@ import { useMediaStore } from '../stores/media'
 import { useContentStore } from '../stores/content'
 import { useRightsStore } from '../stores/rights'
 import { isWindowed, isFullscreen } from '../composables/useMaximizedFilter'
+import { scheduleState } from '../utils/content/contentSchedule'
 
 // PrimeVue components
 import Card from 'primevue/card'
@@ -51,7 +52,12 @@ const screengroupsStore = useScreengroupsStore()
 const mediaStore = useMediaStore()
 const contentStore = useContentStore()
 
+// Re-judged every minute, so an element that expires drops out of "On air" on an open Dashboard too.
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | undefined
+
 onMounted(() => {
+  ticker = setInterval(() => { now.value = Date.now() }, 60_000)
   on('displayhive:admin:stc:admin_settings', handleSettings)
   emit('displayhive:admin:cts:get_admin_settings')
   devicesStore.fetch()
@@ -62,6 +68,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearInterval(ticker)
   off('displayhive:admin:stc:admin_settings', handleSettings)
 })
 
@@ -82,6 +89,8 @@ const screensInFind = computed(() => {
   return findScreens.size
 })
 
+const liveContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'live').length)
+const expiredContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'expired').length)
 const totalContent = computed(() => contentStore.content.length)
 const unassignedContent = computed(() => contentStore.unassignedContent.length)
 // Every screen also has a hidden one-screen group of its own (is_one_screen) —
@@ -92,6 +101,7 @@ const mediaCount = computed(() => mediaStore.mediaItems.length)
 // Warning indicators
 const screensWarn = computed(() => screensCount.value > 0 && onlineScreens.value < screensCount.value)
 const devicesWarn = computed(() => activeDevices.value > 0 && onlineDevices.value < activeDevices.value)
+const onAirWarn = computed(() => expiredContent.value > 0)
 const contentWarn = computed(() => unassignedContent.value >= 1)
 const findWarn = computed(() => screensInFind.value > 0)
 const debugWarn = computed(() => screensInDebug.value > 0)
@@ -139,6 +149,24 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 
     <!-- Status cards grid -->
     <div class="stats-grid" data-tour="dashboard-stats-grid">
+
+      <!-- On air -->
+      <Card v-if="rightsStore.can('content.page')" data-tour="stat-onair" data-testid="dash-onair" :class="['stat-card', onAirWarn ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/content')">
+        <template #content>
+          <div class="stat-header">
+            <i class="pi pi-play-circle stat-icon"></i>
+            <span class="stat-label">On air</span>
+            <i v-if="onAirWarn" class="pi pi-exclamation-triangle warn-icon" :title="`${expiredContent} expired element(s) still switched on`"></i>
+          </div>
+          <div class="stat-value">{{ liveContent }}</div>
+          <div class="stat-detail">
+            <span>content element(s) shown right now</span>
+          </div>
+          <div class="stat-detail" v-if="expiredContent > 0">
+            <span class="detail-warn">{{ expiredContent }} expired, still switched on</span>
+          </div>
+        </template>
+      </Card>
 
       <!-- Screens -->
       <Card v-if="rightsStore.can('screens.page')" data-tour="stat-screens" :class="['stat-card', screensWarn || windowedScreens > 0 ? 'stat-card--warn' : 'stat-card--ok']" @click="router.push('/screens')">

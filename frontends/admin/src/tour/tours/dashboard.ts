@@ -16,6 +16,13 @@ export const dashboardTour: TourDefinition = {
       side: 'bottom',
     },
     {
+      selector: '[data-tour="stat-onair"]',
+      title: 'On air',
+      description:
+        'How many content elements are shown on screens right now (judged by their start and end times). It turns orange when elements have expired but are still switched on.',
+      side: 'right',
+    },
+    {
       selector: '[data-tour="stat-screens"]',
       title: 'Screens',
       description:
