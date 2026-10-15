@@ -40,6 +40,13 @@ First release candidate for 1.0.
   your content uses** (or all of them); until then icon fields show no icon. The icon values stay the same
   (`<library>/<name>`), so nothing in your content needs to change.
 
+- **Raw HTML runs in a sandbox.** A Raw HTML field is now rendered in an isolated frame
+  (`<iframe sandbox="allow-scripts" srcdoc=…>` without `allow-same-origin`) instead of straight into the screen
+  page, so HTML pasted into a content element can no longer read or control the screen (its server connection,
+  device key or page). Scripts and embed codes keep working inside the frame. **Because the frame is a separate
+  document, it no longer inherits the design's fonts and colours: look at existing Raw HTML content and set
+  font, colour and size in the HTML itself where needed.**
+
 ### Added
 
 - **Dashboard:** what is on air right now, what ends or starts in the next seven days, what was changed last.

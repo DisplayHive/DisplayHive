@@ -47,6 +47,28 @@ def _image_style(ctx: dict, field_name: str) -> str:
     return f'height:{size}vh;width:auto;max-width:100%;object-fit:contain;' if size > 0 else 'max-width:100%;height:auto;'
 
 
+# What a Raw HTML field is shown in: a document of its own. The iframe is sandboxed without
+# `allow-same-origin`, so it gets an opaque origin — whatever the HTML does (scripts, event handlers,
+# `javascript:` links) cannot reach the page around it, its DOM, its Socket.IO connection or its
+# storage. Scripts still run inside, so embed codes keep working. The frame does not inherit the
+# design's fonts or colours: it is a separate document.
+_RAW_HTML_FRAME_STYLE = 'html,body{margin:0;width:100%;height:100%;background:transparent;}'
+
+
+def _sandboxed_html(html: str) -> Markup:
+    """The Raw HTML field's value as a sandboxed ``<iframe srcdoc>``."""
+    document = (
+        '<!doctype html><meta charset="utf-8">'
+        f'<style>{_RAW_HTML_FRAME_STYLE}</style>'
+        f'{html}'
+    )
+    return Markup(
+        '<iframe sandbox="allow-scripts" referrerpolicy="no-referrer"'
+        ' style="width:100%;height:100%;border:none;background:transparent;"'
+        f' srcdoc="{_html_escape(document, quote=True)}"></iframe>'
+    )
+
+
 def _resolve_icon_color(raw, db=None) -> str:
     """Resolve an `icon` field's color value to a literal CSS color.
 
@@ -308,7 +330,7 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
                     f' allowfullscreen></iframe>'
                 )
         elif ftype == 'rawhtml' and field_name in ctx and ctx[field_name]:
-            ctx[field_name] = Markup(str(ctx[field_name]))
+            ctx[field_name] = _sandboxed_html(str(ctx[field_name]))
         elif ftype == 'marquee' and field_name in ctx:
             text = str(ctx.get(field_name, '')).strip()
             speed = ctx.get(f'{field_name}__speed', 20)

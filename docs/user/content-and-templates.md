@@ -142,7 +142,11 @@ For each field you can set:
   icon, arrow, date/time format, countdown, table, Pretalx table — see
   [Pretalx](pretalx.md) — raw HTML, iFrame, marquee, or none). Leaving a
   field as **None** means it has no input of its own and always falls back
-  to showing its container's default content. A **countdown** field counts
+  to showing its container's default content. A **Raw HTML** field is shown
+  in a sandbox: its own small document in an isolated frame, where scripts
+  and embed codes still run but cannot reach the screen page, its connection
+  to the server or its stored data. The frame does not take over the
+  design's fonts or colours, so set them in the HTML itself. A **countdown** field counts
   down to a target date/time, with a customizable format (day/hour/minute/
   second tokens) and an optional "finished" text shown once the target has
   passed.
