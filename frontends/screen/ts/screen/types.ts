@@ -3,6 +3,7 @@
  */
 
 import type { ManagerOptions, Socket, SocketOptions as SocketIoOptions } from "socket.io-client";
+import type { WeeklyWindow } from "./recurrence.js";
 
 /** One container's rendered fragment within a Scene, positioned in vh/vw. */
 export interface SceneContainer {
@@ -34,6 +35,10 @@ export interface Scene {
   start_time?: string;
   /** ISO 8601 datetime string — scene must not be shown after this time. */
   end_time?: string;
+  /** Weekly windows the scene is shown in, on top of start/end (recurrence.ts). Missing = always. */
+  recurrence?: WeeklyWindow[];
+  /** IANA time zone the windows are read in. */
+  recurrence_tz?: string;
   /** Keyed by ContentContainer id (string). */
   containers: Record<string, SceneContainer>;
 }

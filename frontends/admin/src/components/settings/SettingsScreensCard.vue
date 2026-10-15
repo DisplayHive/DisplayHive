@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import InputNumber from 'primevue/inputnumber'
-import InputText from 'primevue/inputtext'
 import SelectButton from 'primevue/selectbutton'
+import TimeField from '../ui/TimeField.vue'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -97,7 +97,7 @@ const saveLogSettings = async () => {
           </div>
           <div v-if="reloadEnabled" class="field">
             <label for="screen-reload-at">at (time zone: {{ timezone }})</label>
-            <InputText id="screen-reload-at" v-model="reloadAt" type="time" :disabled="!canEdit" data-testid="screen-reload-at" />
+            <TimeField input-id="screen-reload-at" v-model="reloadAt" :disabled="!canEdit" data-testid="screen-reload-at" />
           </div>
         </div>
         <p class="hint">

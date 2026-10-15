@@ -12,6 +12,7 @@ import { renderScene, clearAllContainers, getSocketEmitter } from "./container-m
 import { log } from "./logger.js";
 import { setContentMissing } from "./status-indicator.js";
 import { setIndicatorSuppressed, startIndicator, stopIndicator } from "./indicator.js";
+import { isInWindows, minutesToNextBoundary } from "./recurrence.js";
 
 let scenes: Scene[] = [];
 let currentSceneId: number | null = null;
@@ -20,11 +21,13 @@ let stopped = false;
 let startTime: number | null = null;
 
 /**
- * Returns true when a scene is within its scheduled window.
- * Scenes without start_time / end_time are always considered active.
+ * Returns true when a scene is within its schedule: between start_time and end_time (when set)
+ * and inside one of its weekly windows (when it has any).
+ * Scenes without any of these are always considered active.
  */
 function isSceneActive(scene: Scene): boolean {
   const now = Date.now();
+  if (!isInWindows(scene.recurrence, new Date(now), scene.recurrence_tz)) return false;
   if (scene.start_time) {
     const start = new Date(scene.start_time).getTime();
     if (!isNaN(start) && now < start) return false;
@@ -223,6 +226,10 @@ export function startSceneRotation(newScenes: Scene[]): void {
   const firstActive = scenes.find(isSceneActive);
   if (!firstActive) {
     log("warn", "startSceneRotation", "All scenes are outside their scheduled window — retrying in 60 s");
+    // Whatever was on screen has run out of its window: take it down instead of leaving it up.
+    currentSceneId = null;
+    clearAllContainers();
+    stopIndicator();
     advanceTimer = setTimeout(() => startSceneRotation(scenes), 60_000);
     return;
   }
@@ -244,6 +251,8 @@ export function startSceneRotation(newScenes: Scene[]): void {
 
 let scheduleTimer: ReturnType<typeof setTimeout> | null = null;
 let _lastActiveIds = "";
+/** While a scene has weekly windows the watcher looks again at least this often (time changes). */
+const WINDOW_RECHECK_MS = 5 * 60 * 1000;
 
 function activeIdsKey(): string {
   return JSON.stringify(scenes.filter(isSceneActive).map((s) => s.id).sort((a, b) => a - b));
@@ -270,10 +279,23 @@ export function armScheduleWatcher(): void {
     }
   }
 
+  // Weekly windows: the next start or end of any of them. Their arithmetic is in wall-clock
+  // minutes, so a time change can make one long wait an hour off — look again at least every few
+  // minutes while a scene has windows.
+  let hasWindows = false;
+  for (const scene of scenes) {
+    const minutes = minutesToNextBoundary(scene.recurrence, new Date(now), scene.recurrence_tz);
+    if (minutes !== null) {
+      hasWindows = true;
+      boundaries.push(now + minutes * 60_000);
+    }
+  }
+
   if (boundaries.length === 0) return; // no scheduled scenes — nothing to watch
 
   const nextBoundary = Math.min(...boundaries);
-  const delay = nextBoundary - now + 500; // +500 ms so we fire just after the boundary
+  let delay = nextBoundary - now + 500; // +500 ms so we fire just after the boundary
+  if (hasWindows) delay = Math.min(delay, WINDOW_RECHECK_MS);
 
   log("debug", "armScheduleWatcher", `Next boundary in ${Math.round(delay / 1000)} s`);
 

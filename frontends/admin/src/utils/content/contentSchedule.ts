@@ -1,7 +1,8 @@
 import type { Content } from '../../types/models'
+import { isInWindows } from './recurrence'
 
 /** What a content element is doing right now, judged by its switch, schedule and assignment. */
-export type ScheduleState = 'live' | 'scheduled' | 'expired' | 'inactive' | 'unassigned'
+export type ScheduleState = 'live' | 'scheduled' | 'expired' | 'inactive' | 'unassigned' | 'resting'
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -12,29 +13,34 @@ const at = (text?: string | null): number | null => {
   return Number.isNaN(t) ? null : t
 }
 
-export function scheduleState(c: Content, now: number): ScheduleState {
+/**
+ * `resting`: inside its start/end range, but outside every weekly window right now. Wall-clock
+ * windows are read in *timeZone* (the instance's; the viewer's own if unknown).
+ */
+export function scheduleState(c: Content, now: number, timeZone?: string | null): ScheduleState {
   if (c.active === false) return 'inactive'
   if (c.assigned === false) return 'unassigned'
   const start = at(c.start_time)
   const end = at(c.end_time)
   if (end !== null && end <= now) return 'expired'
   if (start !== null && start > now) return 'scheduled'
+  if (!isInWindows(c.recurrence, new Date(now), timeZone)) return 'resting'
   return 'live'
 }
 
 /** Live content that stops within *days* days, soonest first. */
-export function expiringSoon(list: Content[], now: number, days = 7): Array<Content & { endsAt: number }> {
+export function expiringSoon(list: Content[], now: number, days = 7, timeZone?: string | null): Array<Content & { endsAt: number }> {
   return list
-    .filter((c) => scheduleState(c, now) === 'live')
+    .filter((c) => scheduleState(c, now, timeZone) === 'live')
     .map((c) => ({ ...c, endsAt: at(c.end_time) }))
     .filter((c): c is Content & { endsAt: number } => c.endsAt !== null && c.endsAt - now <= days * DAY)
     .sort((a, b) => a.endsAt - b.endsAt)
 }
 
 /** Not yet running (but switched on and assigned) content that starts within *days* days. */
-export function startingSoon(list: Content[], now: number, days = 7): Array<Content & { startsAt: number }> {
+export function startingSoon(list: Content[], now: number, days = 7, timeZone?: string | null): Array<Content & { startsAt: number }> {
   return list
-    .filter((c) => scheduleState(c, now) === 'scheduled')
+    .filter((c) => scheduleState(c, now, timeZone) === 'scheduled')
     .map((c) => ({ ...c, startsAt: at(c.start_time) }))
     .filter((c): c is Content & { startsAt: number } => c.startsAt !== null && c.startsAt - now <= days * DAY)
     .sort((a, b) => a.startsAt - b.startsAt)

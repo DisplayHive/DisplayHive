@@ -12,6 +12,7 @@ import logging
 from flask import request
 from sqlalchemy.orm import joinedload, selectinload
 
+from application.admin.content.recurrence import load_recurrence
 from application.admin.content.serializers import (
     build_content_dict,
     fmt_dt,
@@ -57,6 +58,7 @@ def emit_all_content_element(socketio, db, room):
             # The schedule is wall-clock text, read in the viewer's time zone — same as on a screen.
             'start_time': fmt_dt(mc.start_time),
             'end_time': fmt_dt(mc.end_time),
+            'recurrence': load_recurrence(mc.recurrence),
             'updated_at': mc.updated_at.isoformat() + 'Z' if mc.updated_at else None,
             'assigned': bool(mc.screengroups),
         }
@@ -181,6 +183,7 @@ def register_content_query_handlers(socketio, app, db):
             'duration': content_element.duration,
             'start_time': fmt_dt(getattr(content_element, 'start_time', None)),
             'end_time': fmt_dt(getattr(content_element, 'end_time', None)),
+            'recurrence': load_recurrence(getattr(content_element, 'recurrence', None)),
             'contenttype_id': content_element.contenttype_id,
             'screengroups': [{'id': sg.id, 'name': sg.name} for sg in content_element.screengroups],
         }

@@ -168,6 +168,13 @@ def register_admin_settings_handlers(socketio, app, db):
         if {'screen_status_indicator', 'screen_status_style', 'screen_reload_at', 'timezone'} & set(settings):
             from application.socketio_handlers.devconfig import push_deviceconfig_to_connected_devices
             push_deviceconfig_to_connected_devices(socketio, db)
+        if 'timezone' in settings:
+            # The weekly windows of content are read in this time zone; screens hold a copy of it.
+            try:
+                from application.utils import push_content_list_to_all_screens
+                push_content_list_to_all_screens(socketio, app, db)
+            except Exception:
+                logger.exception('set_system_settings: failed to push content after a time zone change')
 
         if rejected:
             # The known keys above are already saved; only the unknown ones are refused.

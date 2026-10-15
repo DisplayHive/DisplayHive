@@ -182,12 +182,27 @@ To create an item:
    locked/hidden sub-options from the content type respected.
 4. Optionally expand **Scheduling** to set a start/end date-time — an
    active-window outside of which the content won't show, even if otherwise
-   assigned.
+   assigned. Under **Weekly time windows** you can limit it further to
+   recurring times — for example *Mon–Fri 08:00–18:00*, or *Sat, Sun 10:00–16:00*
+   (see below).
 5. Assign it to the **screen groups** and/or individual **screens** that
    should show it, via searchable checkbox lists. There's no manual
    per-container assignment step — where the content lands on the screen is
    determined entirely by which container each field maps to in the content
    type's layout.
+
+**Weekly time windows.** Each window is a set of weekdays plus a "from" and a "to" time. The content is
+shown only while one of its windows is open, and only between its start and end date-time: both must
+hold. Without any window the content is shown at any time. A few things to know:
+
+- Times are read in the **instance's time zone** (Settings → Time), not in the browser of the screen. When
+  you change the time zone, screens pick up the new times at once.
+- A window whose "to" is earlier than its "from" runs past midnight into the next day (22:00 to 02:00 on
+  Friday ends on Saturday at 02:00).
+- Outside every window the content is simply not in the rotation; a screen with nothing else to show then
+  goes blank. The Dashboard's *On air* tile counts only content that is inside its window right now.
+- Several windows can be combined (office hours on weekdays plus a shorter window on Saturday). The preset
+  buttons next to **Add window** insert common ones.
 
 While editing, a live, sandboxed preview re-renders on every field change,
 showing the design and layout with your in-progress values — useful for

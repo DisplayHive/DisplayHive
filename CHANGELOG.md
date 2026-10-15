@@ -7,6 +7,16 @@ they are called out under **Breaking changes**.
 
 ## [Unreleased]
 
+### Added
+
+- **Weekly time windows for content.** Under *Scheduling* a content element can be limited to recurring times
+  (for example Mon–Fri 08:00–18:00; a window may run past midnight). They apply on top of the start and end
+  date-time, are read in the instance's time zone, and are evaluated by the screens themselves, so they work
+  offline too. The Dashboard's *On air* tile counts only content inside its window. Database migration
+  `e2b7c9d4f1a8` adds `content_element.recurrence`; export files get version 11 (older files import as
+  "always"). A screen now also takes down content whose window has closed, instead of leaving it on screen
+  until the next change.
+
 ## [1.0.0-rc1] — 2026-10-15
 
 First release candidate for 1.0.

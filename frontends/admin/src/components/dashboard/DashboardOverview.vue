@@ -11,6 +11,7 @@ import { expiringSoon, recentlyChanged, relativeTime, startingSoon } from '../..
 // changed last. The stat tiles above it ("On air" included) stay in DashboardView.vue;
 // the content store is loaded there.
 const rights = useRightsStore()
+const props = defineProps<{ timeZone?: string }>()
 const contentStore = useContentStore()
 
 // Re-judged every minute, so an element expires on the screen of an open Dashboard too.
@@ -20,8 +21,8 @@ onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 60_000)
 onUnmounted(() => clearInterval(ticker))
 
 const canSeeContent = computed(() => rights.can('content.page'))
-const expiring = computed(() => expiringSoon(contentStore.content, now.value).slice(0, 6))
-const starting = computed(() => startingSoon(contentStore.content, now.value).slice(0, 6))
+const expiring = computed(() => expiringSoon(contentStore.content, now.value, 7, props.timeZone).slice(0, 6))
+const starting = computed(() => startingSoon(contentStore.content, now.value, 7, props.timeZone).slice(0, 6))
 const recent = computed(() => recentlyChanged(contentStore.content, 6))
 </script>
 

@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
 import type { Content } from '../types/models'
+import type { WeeklyWindow } from '../utils/content/recurrence'
 
 export const useContentStore = defineStore('content', () => {
   const { on, off, emit } = useSocket()
@@ -18,6 +19,7 @@ export const useContentStore = defineStore('content', () => {
     active?: boolean
     start_time?: string | null
     end_time?: string | null
+    recurrence?: WeeklyWindow[]
     updated_at?: string | null
     assigned?: boolean
   }
@@ -29,6 +31,7 @@ export const useContentStore = defineStore('content', () => {
     active: c.active,
     start_time: c.start_time,
     end_time: c.end_time,
+    recurrence: c.recurrence,
     updated_at: c.updated_at,
     assigned: c.assigned,
   })

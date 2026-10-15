@@ -6,6 +6,8 @@
  * of the payload from the backend still type-check correctly.
  */
 
+import type { WeeklyWindow } from '../utils/content/recurrence'
+
 /** A physical device (client hardware) that connects to the socket server. */
 export interface Device {
   id: number
@@ -180,6 +182,8 @@ export interface Content {
   /** Wall-clock "YYYY-MM-DDTHH:MM" (read in the viewer's time zone, like on a screen). */
   start_time?: string | null
   end_time?: string | null
+  /** Weekly time windows (instance time zone); none = always. */
+  recurrence?: WeeklyWindow[]
   /** ISO instant (UTC) of the last write; null for rows older than the column. */
   updated_at?: string | null
   /** Shown on at least one screen group. */

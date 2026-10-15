@@ -7,6 +7,8 @@ import DatePicker from 'primevue/datepicker'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Paginator from 'primevue/paginator'
+import TimeField from '../ui/TimeField.vue'
+import { WEEKDAYS, WINDOW_PRESETS } from '../../utils/content/recurrence'
 
 // The "Delivery settings" section: scheduling, duration and the screen groups / screens the
 // content is assigned to (three collapsible blocks, each with a summary of its value).
@@ -50,6 +52,46 @@ const ed = useContentEditor()
             placeholder="No end restriction"
             class="w-full"
           />
+        </div>
+
+        <div class="field weekly-windows" data-tour="content-weekly-windows">
+          <label>Weekly time windows</label>
+          <small class="text-muted">
+            Show this content only at these times, within the start and end above. Times are read in the
+            instance's time zone (Settings → Time). Without a window it is shown at any time.
+          </small>
+          <div v-for="(win, wi) in ed.createForm.recurrence" :key="wi" class="weekly-window">
+            <div class="weekday-chips" role="group" aria-label="Weekdays">
+              <button
+                v-for="day in WEEKDAYS"
+                :key="day.value"
+                type="button"
+                class="weekday-chip"
+                :class="{ selected: win.days.includes(day.value) }"
+                :aria-pressed="win.days.includes(day.value)"
+                :title="day.label"
+                @click="ed.toggleWindowDay(win, day.value)"
+              >{{ day.short }}</button>
+            </div>
+            <div class="weekly-window-times">
+              <TimeField v-model="win.from" aria-label="From" />
+              <span class="text-muted">to</span>
+              <TimeField v-model="win.to" aria-label="To" />
+              <small v-if="win.to <= win.from && win.to !== win.from" class="text-muted">(until the next day)</small>
+              <Button icon="pi pi-trash" size="small" text severity="danger" title="Remove this window" @click="ed.removeWindow(wi)" />
+            </div>
+          </div>
+          <div class="weekly-window-actions">
+            <Button label="Add window" icon="pi pi-plus" size="small" outlined @click="ed.addWindow()" />
+            <Button
+              v-for="preset in WINDOW_PRESETS"
+              :key="preset.label"
+              :label="preset.label"
+              size="small"
+              text
+              @click="ed.addWindow(preset.window)"
+            />
+          </div>
         </div>
       </div>
     </details>
@@ -157,6 +199,56 @@ const ed = useContentEditor()
 .summary-icon {
   margin-right: 0.4rem;
   font-size: 0.85rem;
+}
+
+.weekly-windows {
+  gap: 0.6rem;
+}
+
+.weekly-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--p-content-border-color, #e5e7eb);
+  border-radius: 8px;
+}
+
+.weekday-chips {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.weekday-chip {
+  min-width: 2.6rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--p-content-border-color, #d1d5db);
+  border-radius: 999px;
+  background: var(--p-content-background, #fff);
+  color: var(--p-text-color, #333);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.weekday-chip.selected {
+  background: var(--p-primary-color, #3b82f6);
+  border-color: var(--p-primary-color, #3b82f6);
+  color: var(--p-primary-contrast-color, #fff);
+}
+
+.weekly-window-times {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weekly-window-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .duration-fields {

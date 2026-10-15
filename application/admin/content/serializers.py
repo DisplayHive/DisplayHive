@@ -8,6 +8,8 @@ Flask-SQLAlchemy ``db`` instance explicitly.
 
 import json
 
+from application.admin.content.recurrence import load_recurrence
+
 
 def fmt_dt(dt) -> str | None:
     """Return an ISO-8601 string for a datetime or None."""
@@ -39,6 +41,7 @@ def build_content_dict(content, design_payload=None, db=None):
         'duration': content.duration,
         'start_time': fmt_dt(getattr(content, 'start_time', None)),
         'end_time': fmt_dt(getattr(content, 'end_time', None)),
+        'recurrence': load_recurrence(getattr(content, 'recurrence', None)),
         'contenttypeName': content.contenttype.name if content.contenttype else '',
         'contenttype_id': content.contenttype_id,
         'design': design_payload,

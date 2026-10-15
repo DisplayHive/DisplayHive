@@ -8,6 +8,7 @@ import logging
 from flask_socketio import emit
 
 from application.utils import push_content_list_to_all_screens
+from application.admin.content.recurrence import dump_recurrence, normalize_recurrence
 from application.models import ContentElement, Contenttype
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,10 @@ def register_content_mutation_handlers(socketio, app, db):
 
         start_time = _parse_dt(get_val('start_time'))
         end_time = _parse_dt(get_val('end_time'))
+        try:
+            recurrence = dump_recurrence(normalize_recurrence(get_val('recurrence')))
+        except ValueError as problem:
+            raise Fail(str(problem)) from None
 
         # Load contenttype if provided
         contenttype_obj = None
@@ -135,7 +140,7 @@ def register_content_mutation_handlers(socketio, app, db):
                 logger.exception('Error loading contenttype in socket create')
 
         # Build serialized representation: only custom fields, exclude metadata
-        metadata_keys = ('title', 'contenttype_id', 'duration', 'id', 'start_time', 'end_time')
+        metadata_keys = ('title', 'contenttype_id', 'duration', 'id', 'start_time', 'end_time', 'recurrence')
         serialized_data = {
             k: v for k, v in (message.items() if isinstance(message, dict) else [])
             if k not in metadata_keys
@@ -160,6 +165,7 @@ def register_content_mutation_handlers(socketio, app, db):
             mc.duration = duration
             mc.start_time = start_time
             mc.end_time = end_time
+            mc.recurrence = recurrence
             mc.serialized_input = serialized
             mc.contenttype_id = contenttype_obj.id if contenttype_obj else None
             db.session.add(mc)
@@ -176,6 +182,7 @@ def register_content_mutation_handlers(socketio, app, db):
             duration=duration,
             start_time=start_time,
             end_time=end_time,
+            recurrence=recurrence,
             serialized_input=serialized,
             contenttype_id=contenttype_obj.id if contenttype_obj else None,
         )

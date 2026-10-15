@@ -30,6 +30,9 @@ container divs from the per-scene `containers` map (vh/vw top/left/width/height)
 import logging
 from typing import List, Optional
 
+from application.admin.content.recurrence import load_recurrence
+from application.socketio_handlers.devconfig import system_setting
+
 logger = logging.getLogger(__name__)
 
 
@@ -128,6 +131,11 @@ def _build_payload(db, screen):
             scene['start_time'] = mc.start_time.isoformat()
         if mc.end_time is not None:
             scene['end_time'] = mc.end_time.isoformat()
+        windows = load_recurrence(mc.recurrence)
+        if windows:
+            # Weekly windows, read in the instance's time zone (the screen evaluates them itself).
+            scene['recurrence'] = windows
+            scene['recurrence_tz'] = system_setting(db, 'timezone', 'UTC') or 'UTC'
         try:
             # random_tags image fields no longer need this: the candidate
             # pool is rendered straight into the HTML as a

@@ -8,12 +8,14 @@ stable ``uuid`` column) is described there."""
 import logging
 from datetime import datetime, timezone
 
+from application.admin.content.recurrence import load_recurrence
+
 from .common import _exportable_setting_keys, _support_models
 from .registry import ENTITY_TYPES, get_model
 
 logger = logging.getLogger(__name__)
 
-EXPORT_VERSION = 10  # bumped from 9: added the 'system_settings' blob.
+EXPORT_VERSION = 11  # bumped from 10: content elements carry 'recurrence' (weekly windows); 10 added 'system_settings'.
 
 # Export — one row-serialiser per entity type, filtered to a resolved id set.
 # ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ def _row_content_element(m):
         'serialized_input': m.serialized_input,
         'start_time': m.start_time.isoformat() if m.start_time else None,
         'end_time': m.end_time.isoformat() if m.end_time else None,
+        'recurrence': load_recurrence(m.recurrence),
         'contenttype_id': m.contenttype_id,
     }
 

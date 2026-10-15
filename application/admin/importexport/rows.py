@@ -4,6 +4,8 @@ entity type. ``importer.py`` drives them."""
 
 from datetime import datetime, timezone
 
+from application.admin.content.recurrence import dump_recurrence, load_recurrence
+
 from .common import _exportable_setting_keys, _support_models
 from .registry import ENTITY_TYPES, ENTITY_TYPES_BY_KEY, get_model
 
@@ -250,6 +252,7 @@ def import_content_elements(ctx):
         duration=row.get('duration') or 10, serialized_input=row.get('serialized_input') or '',
         start_time=datetime.fromisoformat(row['start_time']) if row.get('start_time') else None,
         end_time=datetime.fromisoformat(row['end_time']) if row.get('end_time') else None,
+        recurrence=dump_recurrence(load_recurrence(row.get('recurrence'))),
         contenttype_id=ctx.id_map['contenttypes'].get(row.get('contenttype_id')),
     ))
 

@@ -28,7 +28,11 @@ const hideCommunityLinks = ref(false)
 const hideHelpingHand = ref(false)
 const hideDemoMode = ref(false)
 
+// The weekly windows of content are read in this time zone (the Settings page's).
+const instanceTimezone = ref<string | undefined>(undefined)
+
 interface SystemSettings {
+  timezone?: string
   welcome_headline?: string
   welcome_text?: string
   hide_community_links?: boolean | string
@@ -38,6 +42,7 @@ interface SystemSettings {
 
 const handleSettings = (data: { system_settings?: SystemSettings }) => {
   const sys = data?.system_settings || {}
+  if (sys.timezone) instanceTimezone.value = sys.timezone
   if (sys.welcome_headline !== undefined) welcomeHeadline.value = sys.welcome_headline
   if (sys.welcome_text !== undefined) welcomeText.value = sys.welcome_text
   if (sys.hide_community_links !== undefined) hideCommunityLinks.value = sys.hide_community_links === true || sys.hide_community_links === 'true'
@@ -89,8 +94,8 @@ const screensInFind = computed(() => {
   return findScreens.size
 })
 
-const liveContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'live').length)
-const expiredContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value) === 'expired').length)
+const liveContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value, instanceTimezone.value) === 'live').length)
+const expiredContent = computed(() => contentStore.content.filter((c) => scheduleState(c, now.value, instanceTimezone.value) === 'expired').length)
 const totalContent = computed(() => contentStore.content.length)
 const unassignedContent = computed(() => contentStore.unassignedContent.length)
 // Every screen also has a hidden one-screen group of its own (is_one_screen) —
@@ -287,7 +292,7 @@ const debugWarn = computed(() => screensInDebug.value > 0)
 
     </div>
 
-    <DashboardOverview />
+    <DashboardOverview :time-zone="instanceTimezone" />
 
     <DashboardCommunity :hide-community-links="hideCommunityLinks" :hide-helping-hand="hideHelpingHand" />
 

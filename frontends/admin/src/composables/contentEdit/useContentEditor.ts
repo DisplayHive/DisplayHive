@@ -7,6 +7,7 @@ import { useScreengroupAssignment } from './useScreengroupAssignment'
 import { useContentPreview } from './useContentPreview'
 import { seedField, seedMissingField, type FieldValue } from '../../utils/content/contentFieldDefaults'
 import type { OptionFlags } from '../../utils/content/optionFlags'
+import { describeWindows, type WeeklyWindow } from '../../utils/content/recurrence'
 
 export interface ContentType {
   id: number
@@ -50,6 +51,7 @@ interface RawContentDetail {
   screengroups?: Array<{ id: number }>
   start_time?: string | null
   end_time?: string | null
+  recurrence?: WeeklyWindow[]
   [key: string]: unknown
 }
 
@@ -57,6 +59,10 @@ interface RawContentDetail {
 // (rendered as InputText/Textarea/rich-text — the handlers rendered by other widgets, e.g.
 // numbers/checkbox/image/table, wouldn't produce sensible title text).
 const TEXT_FIELD_HANDLERS = new Set(['textklein', 'textbig', 'wysiwyg'])
+
+/** A copy of the windows from the server (or none), so editing the form never touches the loaded data. */
+const cloneWindows = (v: unknown): WeeklyWindow[] =>
+  Array.isArray(v) ? v.map((w) => ({ days: [...(w.days ?? [])], from: String(w.from ?? ''), to: String(w.to ?? '') })) : []
 
 const parseIsoDate = (v: string | null | undefined): Date | null => {
   if (!v) return null
@@ -113,6 +119,7 @@ function createContentEditor() {
     duration: 10,
     start_time: null as Date | null,
     end_time: null as Date | null,
+    recurrence: [] as WeeklyWindow[],
     contenttype_id: null as number | null,
     fields: {} as Record<string, FieldValue>,
   })
@@ -167,12 +174,28 @@ function createContentEditor() {
   })
 
   const schedulingSummary = computed(() => {
-    const { start_time: start, end_time: end } = createForm.value
-    if (!start && !end) return 'no restriction'
-    if (start && end) return `${formatDateDisplay(start)} → ${formatDateDisplay(end)}`
-    if (start) return `from ${formatDateDisplay(start)}`
-    return `until ${formatDateDisplay(end)}`
+    const { start_time: start, end_time: end, recurrence } = createForm.value
+    const range = (() => {
+      if (!start && !end) return ''
+      if (start && end) return `${formatDateDisplay(start)} → ${formatDateDisplay(end)}`
+      if (start) return `from ${formatDateDisplay(start)}`
+      return `until ${formatDateDisplay(end)}`
+    })()
+    const windows = recurrence.length ? describeWindows(recurrence) : ''
+    if (!range && !windows) return 'no restriction'
+    return [range, windows].filter(Boolean).join(', ')
   })
+
+  // --- Weekly windows -----------------------------------------------------------------------
+  const addWindow = (preset?: WeeklyWindow) => {
+    createForm.value.recurrence.push(preset ? { days: [...preset.days], from: preset.from, to: preset.to } : { days: [1, 2, 3, 4, 5], from: '08:00', to: '18:00' })
+  }
+  const removeWindow = (index: number) => {
+    createForm.value.recurrence.splice(index, 1)
+  }
+  const toggleWindowDay = (window: WeeklyWindow, day: number) => {
+    window.days = window.days.includes(day) ? window.days.filter((d) => d !== day) : [...window.days, day].sort((a, b) => a - b)
+  }
 
   const durationSummary = computed(() => {
     const m = durationMinutes.value
@@ -184,7 +207,7 @@ function createContentEditor() {
 
   // --- Loading what the URL names ---------------------------------------------------------
   const resetCreateForm = () => {
-    createForm.value = { id: null, title: '', duration: 10, start_time: null, end_time: null, contenttype_id: null, fields: {} }
+    createForm.value = { id: null, title: '', duration: 10, start_time: null, end_time: null, recurrence: [], contenttype_id: null, fields: {} }
     tagConfigs.value = []
     selectedContentType.value = null
     editMode.value = false
@@ -303,7 +326,7 @@ function createContentEditor() {
           })
           // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`, etc.)
           // aren't their own tagConfigs entry — copy any of those over too.
-          const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
+          const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'recurrence', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
           for (const k of Object.keys(pending)) {
             if (!pendingIgnore.has(k) && !tagConfigs.value.some((t) => t.name === k)) {
               createForm.value.fields[k] = pending[k] as FieldValue
@@ -312,6 +335,7 @@ function createContentEditor() {
           // start_time / end_time are not tag fields — apply them explicitly
           createForm.value.start_time = parseIsoDate(pending.start_time)
           createForm.value.end_time = parseIsoDate(pending.end_time)
+          createForm.value.recurrence = cloneWindows(pending.recurrence)
           pendingContentDetail.value = null
         }
       }
@@ -356,6 +380,7 @@ function createContentEditor() {
 
     createForm.value.start_time = parseIsoDate(content.start_time)
     createForm.value.end_time = parseIsoDate(content.end_time)
+    createForm.value.recurrence = cloneWindows(content.recurrence)
 
     selectedContentType.value = contentTypes.value.find((ct) => ct.id === content.contenttype_id) || null
 
@@ -404,6 +429,7 @@ function createContentEditor() {
       duration: createForm.value.duration,
       start_time: fmtDt(createForm.value.start_time),
       end_time: fmtDt(createForm.value.end_time),
+      recurrence: cloneWindows(createForm.value.recurrence),
       contenttype_id: createForm.value.contenttype_id,
       ...createForm.value.fields,
     }
@@ -481,7 +507,7 @@ function createContentEditor() {
     goBack, contentTypes, showSelectContentTypeDialog, selectContentType,
     editMode, loadingContentTypeDetail, selectedContentType,
     createForm, tagConfigs, tagHasVisibleControl,
-    durationMinutes, durationSeconds, schedulingSummary, durationSummary,
+    durationMinutes, durationSeconds, schedulingSummary, durationSummary, addWindow, removeWindow, toggleWindowDay,
     submitCreateContent,
     ...assignment,
     ...preview,

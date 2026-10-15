@@ -47,6 +47,8 @@ class ContentElement(db.Model):
     # Scheduling: optional start/end datetime for time-limited display
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     end_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Weekly time windows (JSON text, see application/admin/content/recurrence.py); NULL = always.
+    recurrence: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # When the row was last written (UTC, naive) — the Dashboard's "recently changed". Rows from
     # before the column existed stay NULL until they are edited.
     updated_at: Mapped[Optional[datetime]] = mapped_column(
