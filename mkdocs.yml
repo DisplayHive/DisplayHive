@@ -60,6 +60,7 @@ nav:
   - Home: index.md
   - User Guide:
       - Installation: user/installation.md
+      - Upgrading Docker to 1.0 RC: user/upgrade-to-1.0-rc.md
       - Overview: user/index.md
       - Getting started: user/getting-started.md
       - Layouts, designs, content types & content: user/content-and-templates.md

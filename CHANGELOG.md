@@ -13,6 +13,12 @@ First release candidate for 1.0.
 
 ### Breaking changes
 
+- **Docker: upgrading from 0.x.** `:latest` keeps the old version until 1.0; the release candidate is the image
+  `ghcr.io/displayhive/displayhive:1.0.0-rc1`. The old image has no backup commands, so **take a backup by hand
+  first**: the migrations change the schema (the way back is a restore). The step-by-step guide is
+  [Upgrading a Docker install to 1.0](https://docs.displayhive.org/user/upgrade-to-1.0-rc/). New rights
+  `icons.manage` and `authproviders.manage` must be granted to existing groups.
+
 - **NixOS module: nothing is built on the server any more.** The module runs a Nix package
   (`nix/package.nix`: both frontends, the locked Python packages and the application) instead of cloning the
   repository and running `npm ci`/`npm run build` at start. Use the flake (`inputs.displayhive.nixosModules.default`)
