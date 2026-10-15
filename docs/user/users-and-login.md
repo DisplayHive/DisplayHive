@@ -21,6 +21,41 @@ Alternatively, create the first account yourself with
 access, [`flask dh reset-password`](cli.md#reset-password-username) gets
 you back in.
 
+## My account
+
+Click your name in the top bar to open **My account**. It shows who you are, lets you pick your **theme**
+(light, dark or follow the system), **change your password** and manage your **passkeys** (below). The
+password card is only there for accounts that log in with a password; an account that exists only
+through [SSO](sso.md) has none. Changing the password signs out your other sessions; this one carries on.
+The page is for you alone — nothing on it is visible to or editable by other admins (an admin with the
+right to edit users can only remove someone's passkey, from the Users page).
+
+## Passkeys
+
+A **passkey** lets you sign in without a username or password: you press **Sign in with a passkey** on
+the login page, and your device asks for its fingerprint, face, PIN or security key. A passkey is a key
+pair your device made for DisplayHive; the server only keeps the public half, so nothing in it can be
+stolen and reused elsewhere, and it only works at the address it was made for. A passkey is an
+*alternative* to the password, not an extra step after it: an account can still log in with its
+password (unless password login is switched off for it).
+
+- **Adding one.** Click your name in the top bar to open **My account**, give the passkey a name (for
+  example *Work laptop*) in the **Passkeys** card and press **Add a passkey**. Add one per device; you can
+  rename or remove them there.
+  Accounts created by an [SSO](sso.md) login can add passkeys too.
+- **Requirements.** Passkeys work over **https** (or on `localhost` for development), and only at one
+  address: set `PUBLIC_URL` to the address people use. If you later move DisplayHive to another
+  address, passkeys made at the old one stop working; sign in with the password and add them again.
+  `flask dh check-config` reports whether passkeys are possible.
+- **Always with a PIN or biometrics.** DisplayHive requires user verification, so a passkey on a
+  stolen device is of no use without the device's lock.
+- **Lost a device.** Another admin with the right to edit users opens the account on the **Users** page
+  and removes the passkey there (**Passkeys** list). A password reset does not remove passkeys.
+- **Not while impersonating.** A session that impersonates another account cannot add or remove that
+  account's passkeys.
+- **Limits.** At most 20 passkeys per account. Failed sign-in attempts count against the same rate
+  limit as wrong passwords.
+
 ## Sessions
 
 A login lasts 12 hours; you'll be asked to log in again once it has expired.

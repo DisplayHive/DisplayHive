@@ -37,7 +37,8 @@ The backend in detail:
   in-memory state is guarded by locks: the login rate limiter
   (`application/security/auth.py`, which also counts a login attempt *before* the
   password check so parallel guesses can't slip past it), pending SSO
-  logins (`application/security/oidc.py`) and the connection registry
+  logins (`application/security/oidc.py`), pending passkey challenges
+  (`application/security/passkeys.py`) and the connection registry
   (`registry_lock` in `application/socketio_handlers/lifecycle.py`). New
   module-level state shared between requests needs the same — and tests
   for it need real `threading.Thread`s.

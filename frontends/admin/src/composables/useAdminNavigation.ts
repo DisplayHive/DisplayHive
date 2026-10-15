@@ -87,6 +87,7 @@ const PAGES: Record<string, { title: string; icon: string }> = {
   layouts: { title: 'Layouts', icon: 'pi pi-th-large' },
   'layout-new': { title: 'New Layout', icon: 'pi pi-plus' },
   'layout-edit': { title: 'Edit Layout', icon: 'pi pi-pencil' },
+  account: { title: 'My account', icon: 'pi pi-user' },
   settings: { title: 'Settings', icon: 'pi pi-cog' },
   logger: { title: 'Logger', icon: 'pi pi-list' },
   media: { title: 'Media', icon: 'pi pi-images' },

@@ -64,6 +64,11 @@ const router = createRouter({
       component: () => import('../views/LayoutEditView.vue'),
     },
     {
+      path: '/account',
+      name: 'account',
+      component: () => import('../views/AccountView.vue'),
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),

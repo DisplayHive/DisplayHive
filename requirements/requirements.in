@@ -28,3 +28,5 @@ pyjwt[crypto]
 # Only needed with PostgreSQL (DATABASE_URL). On NixOS its wheel needs libz,
 # provided via LD_LIBRARY_PATH by shell.nix / nix/module.nix.
 psycopg2-binary
+# WebAuthn / passkeys: verifies registration and sign-in responses (application/security/passkeys.py).
+webauthn>=2.5

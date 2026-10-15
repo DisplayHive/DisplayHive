@@ -270,7 +270,7 @@ def test_provider_error_and_disabled_provider(flask_app, db_session, idp, provid
     provider.enabled = False
     db_session.commit()
     assert 'not available' in _fragment(client.get('/admin/api/auth/oidc/main/start'))['oidc_error']
-    assert client.get('/admin/api/auth/providers').get_json() == {'providers': []}
+    assert client.get('/admin/api/auth/providers').get_json()['providers'] == []
 
 
 def test_deactivated_account_cannot_log_in(flask_app, db_session, idp, provider):

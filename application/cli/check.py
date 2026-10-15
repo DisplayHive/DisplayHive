@@ -86,6 +86,17 @@ def check_config(online):
     else:
         report('warn', 'PUBLIC_URL is unset — set it to the address people reach DisplayHive at '
                        '(the SSO redirect URI then comes from each request\'s Host header)')
+    if public_url:
+        from urllib.parse import urlsplit
+        passkey_host = urlsplit(public_url).hostname or ''
+        if not public_url.startswith('https://') and passkey_host != 'localhost':
+            report('warn', 'Passkeys need https (or localhost): browsers refuse them on plain http')
+        elif passkey_host.replace('.', '').isdigit() or ':' in passkey_host:
+            report('warn', 'Passkeys cannot use an IP address: set PUBLIC_URL to a host name')
+        else:
+            report('ok', f'Passkeys can be used at {public_url}')
+    else:
+        report('info', 'Passkeys need PUBLIC_URL (an https host name); on localhost they work for development')
     if app.config.get('CORS_WILDCARD'):
         report('warn', 'CORS allows any origin — set PUBLIC_URL (or CORS_ALLOWED_ORIGINS)')
     else:

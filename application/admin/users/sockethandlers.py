@@ -169,6 +169,19 @@ def register_admin_user_handlers(socketio, app, db):
         _emit_users()
         return ok()
 
+    @socketio.on('displayhive:admin:users:cts:remove_passkey')
+    @admin_action('users.edit')
+    def handle_remove_passkey(data):
+        """Remove one passkey of any account, e.g. when its device is lost. data: {id} (passkey id)."""
+        from application.models import AdminUserPasskey
+        passkey = get_or_fail(db, AdminUserPasskey, (data or {}).get('id'), 'Passkey')
+        logger.info("Passkey '%s' of user id %s removed by %s", passkey.name, passkey.user_id,
+                    getattr(current_admin_user(), 'username', '?'))
+        db.session.delete(passkey)
+        db.session.commit()
+        _emit_users()
+        return ok()
+
     @socketio.on('displayhive:admin:users:cts:merge_user')
     @admin_action()
     def handle_merge_user(data):

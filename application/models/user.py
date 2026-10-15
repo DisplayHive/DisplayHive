@@ -47,6 +47,12 @@ class AdminUser(db.Model):
         'AdminUserIdentity', back_populates='user', cascade='all, delete-orphan', lazy='selectin',
     )
 
+    # Passkeys (WebAuthn credentials) the account signs in with — application/security/passkeys.py.
+    passkeys = relationship(
+        'AdminUserPasskey', cascade='all, delete-orphan', lazy='selectin',
+        order_by='AdminUserPasskey.created_at',
+    )
+
     def __repr__(self):
         return f"<AdminUser {self.username}>"
 
@@ -71,6 +77,12 @@ class AdminUser(db.Model):
             'password_login_allowed': bool(self.password_login_allowed),
             'has_password': bool(self.password_hash),
             'identities': [i.to_dict() for i in self.identities],
+            'passkeys': [
+                {'id': p.id, 'name': p.name, 'synced': bool(p.synced),
+                 'created_at': p.created_at.isoformat() if p.created_at else None,
+                 'last_used_at': p.last_used_at.isoformat() if p.last_used_at else None}
+                for p in self.passkeys
+            ],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
         }
@@ -166,3 +178,27 @@ class AdminUserIdentity(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
         }
+
+
+class AdminUserPasskey(db.Model):
+    """A passkey (WebAuthn credential) an admin signs in with, instead of a password.
+
+    The private key never leaves the person's device; this row holds the public half. The
+    credential id and public key are stored as base64url text (portable across SQLite and
+    PostgreSQL). A person can have several (a phone, a laptop, a security key).
+    """
+    __tablename__ = 'admin_user_passkey'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('admin_user.id', ondelete='CASCADE'), nullable=False, index=True)
+    credential_id: Mapped[str] = mapped_column(String(1024), unique=True, nullable=False, index=True)
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # Signature counter of the last sign-in; an authenticator that counts must never go backwards.
+    sign_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    # JSON list of the transports the browser reported ("internal", "usb", "hybrid" …), to hint at sign-in.
+    transports: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Whether the passkey is synced between devices (backup eligible), for display only.
+    synced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

@@ -15,7 +15,9 @@ from flask import request, jsonify, redirect
 
 from application.security import session as web_session
 from application.core import version
+from application.security import passkeys
 from application.security.auth import (
+    PASSWORDLESS_METHODS,
     begin_impersonation,
     verify_password,
     hash_password,
@@ -83,7 +85,7 @@ def require_http_right(app, right_key):
 
 def register_auth_routes(app, db):
     """Register the login and session-check HTTP routes."""
-    from application.models import AdminUser, AdminUserLogin
+    from application.models import AdminUser, AdminUserLogin, AdminUserPasskey
     from datetime import datetime, timezone
 
     # Self-service preference keys settable via PATCH /admin/api/auth/me/preferences.
@@ -201,9 +203,12 @@ def register_auth_routes(app, db):
             'expires_at': web_session.expires_at(app, token),
             'impersonator_username': impersonator.username if impersonator else None,
             'can_stop_impersonating': bool(impersonator and original),
+            # Whether the account has a password it can sign in with (the My account page offers
+            # "change password" only then; an account made by SSO has none).
+            'password_login_allowed': bool(user.password_login_allowed),
             **version.info(),
             'must_change_password': (bool(user.must_change_password)
-                                     and 'imp' not in payload and payload.get('am') != 'oidc'),
+                                     and 'imp' not in payload and payload.get('am') not in PASSWORDLESS_METHODS),
         })
 
     @app.route('/admin/api/auth/me/password', methods=['POST'])
@@ -315,7 +320,11 @@ def register_auth_routes(app, db):
         providers = db.session.execute(
             db.select(AuthProvider).where(AuthProvider.enabled.is_(True)).order_by(AuthProvider.name)
         ).scalars().all()
-        return jsonify({'providers': [{'slug': p.slug, 'name': p.name} for p in providers]})
+        return jsonify({
+            'providers': [{'slug': p.slug, 'name': p.name} for p in providers],
+            # Whether signing in with a passkey can work at this address (see security/passkeys.py).
+            'passkeys': passkeys.relying_party(app, request) is not None,
+        })
 
     @app.route('/admin/api/auth/oidc/<slug>/start', methods=['GET'])
     def admin_auth_oidc_start(slug):
@@ -388,6 +397,157 @@ def register_auth_routes(app, db):
             'preferences': user.get_preferences(),
             'must_change_password': False,
         }, create_token(app, user, auth_method='oidc'), as_cookie)
+
+    # --- Passkeys (WebAuthn) ---------------------------------------------------------------------
+    # Sign-in is public (no username: the device offers its passkeys); managing them needs a session.
+    # The ceremonies themselves are in application/security/passkeys.py.
+
+    PASSKEYS_UNAVAILABLE = ('Passkeys are not available at this address. They need the address set as PUBLIC_URL '
+                            '(https), or localhost for development.')
+    # The sign-in has no username to count failures against; all attempts of an address share this key.
+    PASSKEY_ATTEMPT_KEY = '<passkey>'
+
+    @app.route('/admin/api/auth/passkey/login/options', methods=['POST'])
+    def admin_auth_passkey_login_options():
+        """Challenge and options for ``navigator.credentials.get``. Public."""
+        rp = passkeys.relying_party(app, request)
+        if rp is None:
+            return jsonify({'success': False, 'error': PASSKEYS_UNAVAILABLE}), 400
+        return jsonify({'success': True, **passkeys.begin_login(rp)})
+
+    @app.route('/admin/api/auth/passkey/login/verify', methods=['POST'])
+    def admin_auth_passkey_login_verify():
+        """Finish a passkey sign-in. data: {challenge_id, credential, session?}. Same reply as the password login."""
+        data = request.get_json(silent=True) or {}
+        as_cookie = data.get('session') == 'cookie'
+        problem = _login_csrf_problem(as_cookie)
+        if problem:
+            return jsonify({'success': False, 'error': problem}), 403
+        rp = passkeys.relying_party(app, request)
+        if rp is None:
+            return jsonify({'success': False, 'error': PASSKEYS_UNAVAILABLE}), 400
+        attempt = begin_login_attempt(request.remote_addr, PASSKEY_ATTEMPT_KEY)
+        if attempt is None:
+            return jsonify({'success': False, 'error': 'Too many failed attempts. Try again shortly.'}), 429
+        try:
+            user = passkeys.finish_login(db, rp, data.get('challenge_id'), data.get('credential'))
+        except passkeys.PasskeyError as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 401
+        if not user.is_active:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'This account has been deactivated'}), 403
+        finish_login_attempt(attempt, success=True)
+        _record_login(user)
+        db.session.commit()
+        return _session_reply({
+            'success': True,
+            'username': user.username,
+            'preferences': user.get_preferences(),
+            'must_change_password': False,
+        }, create_token(app, user, auth_method='passkey'), as_cookie)
+
+    def _own_passkey_user():
+        """``(user, None)`` for the caller's own account, or ``(None, error reply)``. An impersonation
+        session is refused: it must not add a passkey (a way back in) to somebody else's account."""
+        token, _ = web_session.token_from_request(request)
+        user = user_from_token(app, db, token)
+        if not user:
+            return None, (jsonify({'success': False, 'error': 'Unauthorized'}), 401)
+        if (decode_token(app, token) or {}).get('imp') is not None:
+            return None, (jsonify({'success': False, 'error': 'Passkeys cannot be changed while impersonating'}), 403)
+        return user, None
+
+    def _passkey_json(passkey):
+        return {
+            'id': passkey.id,
+            'name': passkey.name,
+            'created_at': passkey.created_at.isoformat() + 'Z' if passkey.created_at else None,
+            'last_used_at': passkey.last_used_at.isoformat() + 'Z' if passkey.last_used_at else None,
+            'synced': bool(passkey.synced),
+        }
+
+    @app.route('/admin/api/auth/me/passkeys', methods=['GET'])
+    @require_jwt_auth(app)
+    def admin_auth_list_passkeys():
+        """The caller's passkeys, and whether a new one can be registered at this address."""
+        user, error = _own_passkey_user()
+        if error:
+            return error
+        rows = db.session.execute(
+            db.select(AdminUserPasskey).where(AdminUserPasskey.user_id == user.id).order_by(AdminUserPasskey.created_at)
+        ).scalars().all()
+        return jsonify({
+            'success': True,
+            'available': passkeys.relying_party(app, request) is not None,
+            'passkeys': [_passkey_json(p) for p in rows],
+        })
+
+    @app.route('/admin/api/auth/me/passkeys/options', methods=['POST'])
+    @require_jwt_auth(app)
+    def admin_auth_passkey_register_options():
+        """Challenge and options for ``navigator.credentials.create``."""
+        user, error = _own_passkey_user()
+        if error:
+            return error
+        rp = passkeys.relying_party(app, request)
+        if rp is None:
+            return jsonify({'success': False, 'error': PASSKEYS_UNAVAILABLE}), 400
+        try:
+            return jsonify({'success': True, **passkeys.begin_registration(db, rp, user)})
+        except passkeys.PasskeyError as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    @app.route('/admin/api/auth/me/passkeys/verify', methods=['POST'])
+    @require_jwt_auth(app)
+    def admin_auth_passkey_register_verify():
+        """Store the new passkey. data: {challenge_id, credential, name}."""
+        user, error = _own_passkey_user()
+        if error:
+            return error
+        rp = passkeys.relying_party(app, request)
+        if rp is None:
+            return jsonify({'success': False, 'error': PASSKEYS_UNAVAILABLE}), 400
+        data = request.get_json(silent=True) or {}
+        try:
+            passkey = passkeys.finish_registration(db, rp, user, data.get('challenge_id'), data.get('credential'), data.get('name'))
+        except passkeys.PasskeyError as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 400
+        return jsonify({'success': True, 'passkey': _passkey_json(passkey)})
+
+    def _own_passkey(passkey_id, user):
+        row = db.session.get(AdminUserPasskey, passkey_id)
+        return row if row is not None and row.user_id == user.id else None
+
+    @app.route('/admin/api/auth/me/passkeys/<int:passkey_id>', methods=['PATCH'])
+    @require_jwt_auth(app)
+    def admin_auth_rename_passkey(passkey_id):
+        """Rename one of the caller's passkeys. data: {name}."""
+        user, error = _own_passkey_user()
+        if error:
+            return error
+        passkey = _own_passkey(passkey_id, user)
+        if passkey is None:
+            return jsonify({'success': False, 'error': 'Passkey not found'}), 404
+        name = passkeys.clean_name((request.get_json(silent=True) or {}).get('name'))
+        passkey.name = name
+        db.session.commit()
+        return jsonify({'success': True, 'passkey': _passkey_json(passkey)})
+
+    @app.route('/admin/api/auth/me/passkeys/<int:passkey_id>', methods=['DELETE'])
+    @require_jwt_auth(app)
+    def admin_auth_delete_passkey(passkey_id):
+        """Remove one of the caller's passkeys."""
+        user, error = _own_passkey_user()
+        if error:
+            return error
+        passkey = _own_passkey(passkey_id, user)
+        if passkey is None:
+            return jsonify({'success': False, 'error': 'Passkey not found'}), 404
+        db.session.delete(passkey)
+        db.session.commit()
+        return jsonify({'success': True})
 
     # --- Logout and impersonation for cookie sessions ----------------------------------------------
     # A cookie can only be set or removed by the server (it is HttpOnly), so these are

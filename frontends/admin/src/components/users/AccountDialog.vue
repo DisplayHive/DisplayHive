@@ -4,7 +4,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirmAction } from '../../composables/useConfirmAction'
 import { useAck } from '../../composables/useAck'
 import { useUsersPage, formatDate } from '../../composables/users/useUsersPage'
-import type { AdminUser, AdminUserIdentity } from '../../types/models'
+import type { AdminUser, AdminUserIdentity, AdminUserPasskey } from '../../types/models'
 import DialogTitle from '../ui/DialogTitle.vue'
 import DialogFooter from '../ui/DialogFooter.vue'
 import Button from 'primevue/button'
@@ -65,6 +65,17 @@ const unlinkIdentity = (identity: AdminUserIdentity) => {
     header: 'Unlink SSO login',
     accept: async () => {
       const ack = await request('displayhive:admin:users:cts:unlink_identity', { id: identity.id }, { success: 'SSO login unlinked', error: 'Unlink failed' })
+      if (ack) page.loadUsers()
+    },
+  })
+}
+
+const removePasskey = (passkey: AdminUserPasskey) => {
+  confirmDanger({
+    message: `Remove the passkey "${passkey.name}" of this account? It can no longer sign in with it (for a lost device).`,
+    header: 'Remove passkey',
+    accept: async () => {
+      const ack = await request('displayhive:admin:users:cts:remove_passkey', { id: passkey.id }, { success: 'Passkey removed', error: 'Could not remove the passkey' })
       if (ack) page.loadUsers()
     },
   })
@@ -169,6 +180,27 @@ const saveAccount = async () => {
             severity="danger"
             title="Unlink this SSO login"
             @click="unlinkIdentity(identity)"
+          />
+        </li>
+      </ul>
+    </template>
+
+    <template v-if="!isNewAccount && editingAccount?.passkeys?.length">
+      <label>Passkeys</label>
+      <ul class="identity-list" data-testid="account-passkeys">
+        <li v-for="passkey in editingAccount.passkeys" :key="passkey.id" class="identity-item">
+          <div class="identity-main">
+            <span class="identity-name">{{ passkey.name }}</span>
+            <small class="muted">added {{ formatDate(passkey.created_at) }} · last used {{ formatDate(passkey.last_used_at) }}</small>
+          </div>
+          <Button
+            v-if="page.canEdit"
+            icon="pi pi-trash"
+            text
+            rounded
+            severity="danger"
+            title="Remove this passkey"
+            @click="removePasskey(passkey)"
           />
         </li>
       </ul>

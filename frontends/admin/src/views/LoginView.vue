@@ -7,6 +7,7 @@ import InputText from 'primevue/inputtext'
 import Password from 'primevue/password'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
+import { passkeysSupported } from '../utils/webauthn'
 
 // use static public logo (frontends/admin/public/logo_wh.png); bound via JS
 // rather than a literal template src so Vite doesn't try to resolve it as a
@@ -23,12 +24,19 @@ const loggingIn = ref(false)
 // Enabled SSO providers (Settings → Login providers), one button each. Their
 // errors come back through the redirect and live on the auth store.
 const providers = ref<{ slug: string; name: string }[]>([])
+// Whether the server can do passkeys at this address, and this browser can too.
+const passkeysOffered = ref(false)
+const passkeyLoggingIn = ref(false)
 
 onMounted(async () => {
   if (authStore.ssoError) error.value = authStore.ssoError
   try {
     const response = await fetch('/admin/api/auth/providers')
-    if (response.ok) providers.value = (await response.json()).providers || []
+    if (response.ok) {
+      const body = await response.json()
+      providers.value = body.providers || []
+      passkeysOffered.value = !!body.passkeys && passkeysSupported()
+    }
   } catch {
     // No buttons then; password login still works.
   }
@@ -37,6 +45,17 @@ onMounted(async () => {
 // A full page navigation, not fetch(): the backend answers with a redirect
 // to the provider's login page.
 const ssoHref = (slug: string) => `/admin/api/auth/oidc/${encodeURIComponent(slug)}/start`
+
+const submitPasskey = async () => {
+  error.value = ''
+  passkeyLoggingIn.value = true
+  try {
+    const result = await authStore.loginWithPasskey()
+    if (result) error.value = result
+  } finally {
+    passkeyLoggingIn.value = false
+  }
+}
 
 const submit = async () => {
   if (!username.value || !password.value) {
@@ -68,7 +87,17 @@ const submit = async () => {
         </div>
       </template>
       <template #content>
-        <div v-if="providers.length" class="sso-buttons">
+        <div v-if="passkeysOffered || providers.length" class="sso-buttons">
+          <Button
+            v-if="passkeysOffered"
+            type="button"
+            label="Sign in with a passkey"
+            icon="pi pi-key"
+            class="sso-button"
+            :loading="passkeyLoggingIn"
+            data-testid="login-passkey"
+            @click="submitPasskey"
+          />
           <a
             v-for="p in providers"
             :key="p.slug"

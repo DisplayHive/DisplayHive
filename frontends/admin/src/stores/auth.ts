@@ -1,3 +1,4 @@
+import { credentialToJson, passkeyErrorMessage, passkeysSupported, requestOptionsFromJson } from '../utils/webauthn'
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
@@ -257,6 +258,39 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Sign in with a passkey: no username. The browser offers the passkeys it holds for this site;
+   * the server checks the signed challenge and answers like the password login. Returns an error
+   * message, or null on success.
+   */
+  const loginWithPasskey = async (): Promise<string | null> => {
+    if (!passkeysSupported()) return 'This browser or address does not support passkeys (they need https or localhost).'
+    try {
+      const optionsResponse = await post('/admin/api/auth/passkey/login/options')
+      const started = await optionsResponse.json()
+      if (!optionsResponse.ok || !started.success) return started.error || 'Passkeys are not available'
+      let credential: PublicKeyCredential | null
+      try {
+        credential = (await navigator.credentials.get({ publicKey: requestOptionsFromJson(started.options) })) as PublicKeyCredential | null
+      } catch (e) {
+        return passkeyErrorMessage(e)
+      }
+      if (!credential) return 'No passkey was chosen.'
+      const response = await post('/admin/api/auth/passkey/login/verify', {
+        challenge_id: started.challenge_id,
+        credential: credentialToJson(credential),
+        session: 'cookie',
+      })
+      const result = await response.json()
+      if (!response.ok || !result.success) return result.error || 'Passkey sign-in failed'
+      setMustChangePassword(false)
+      applySession({ ...result, impersonator_username: null })
+      return null
+    } catch (e) {
+      return `Could not reach server: ${e}`
+    }
+  }
+
+  /**
    * Finish an SSO login: the backend's callback redirects to `/admin/#oidc_code=…`
    * (or `#oidc_error=…`). Swap the single-use code for a session (cookie).
    * App.vue calls this once on boot, before restore(), with the URL fragment —
@@ -426,6 +460,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     username,
+    expiresAt,
     preferences,
     restoring,
     isAuthenticated,
@@ -442,6 +477,7 @@ export const useAuthStore = defineStore('auth', () => {
     ssoError,
     setPreferences,
     changePassword,
+    loginWithPasskey,
     authHeader,
   }
 })

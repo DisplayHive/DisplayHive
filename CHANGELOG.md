@@ -9,6 +9,14 @@ they are called out under **Breaking changes**.
 
 ### Added
 
+- **My account page.** Clicking the name in the top bar opens a page with the account's username, theme
+  choice, *change password* (for accounts with a password) and the passkeys below.
+- **Passkeys (WebAuthn).** Admins can sign in with a passkey instead of a password — no username needed — from
+  *Sign in with a passkey* on the login page. Passkeys are managed on the **My account** page (add,
+  rename, remove; accounts created by SSO can have them too); an admin with the right to edit users can remove
+  someone else's passkey from the Users page. They need `https` (or `localhost`) and `PUBLIC_URL`; user
+  verification (PIN, fingerprint, face) is always required. New dependency `webauthn`, migration
+  `f4d9e1a6b3c0` (table `admin_user_passkey`).
 - **Weekly time windows for content.** Under *Scheduling* a content element can be limited to recurring times
   (for example Mon–Fri 08:00–18:00; a window may run past midnight). They apply on top of the start and end
   date-time, are read in the instance's time zone, and are evaluated by the screens themselves, so they work

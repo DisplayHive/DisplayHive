@@ -224,7 +224,16 @@ export interface AdminUserIdentity {
   last_login_at: string | null
 }
 
-/** An admin account (password and/or SSO login). */
+/** A passkey (WebAuthn credential) an account signs in with. */
+export interface AdminUserPasskey {
+  id: number
+  name: string
+  synced?: boolean
+  created_at: string | null
+  last_used_at: string | null
+}
+
+/** An admin account (password, SSO login and/or passkeys). */
 export interface AdminUser {
   id: number
   username: string
@@ -236,6 +245,7 @@ export interface AdminUser {
   /** Whether a password is set at all. */
   has_password?: boolean
   identities?: AdminUserIdentity[]
+  passkeys?: AdminUserPasskey[]
   created_at?: string | null
   last_login_at?: string | null
 }

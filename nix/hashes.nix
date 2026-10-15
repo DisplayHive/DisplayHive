@@ -6,7 +6,7 @@
     screen = "sha256-6I+xDz5NBVTekMTNsZyKYMlSiuscI/YzdVj+cgUHUiI=";
   };
   pythonWheels = {
-    x86_64-linux  = "sha256-Q8dLathBWCuMnTpzGGb8FMhHGt4s8bSJGTSpATIPOBM=";
-    aarch64-linux = "sha256-Ueo6W0WzV4m9GYdosNr5e9qzyR+wlECDu06ZZQvD2Qc=";
+    x86_64-linux  = "sha256-7hbz9pLqonaUs85FL3Mn8sOiYXoxxV60JCQfAMEk0OY=";
+    aarch64-linux = "sha256-6yKuTWc7a+IpHoOSA4oU1EB8Vce86FtaqqstEfYp0QM=";
   };
 }

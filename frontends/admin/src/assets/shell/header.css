@@ -103,6 +103,16 @@
   align-items: center;
   gap: 0.4rem;
   white-space: nowrap;
+  /* A link to the My account page. */
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+
+.current-user:hover,
+.current-user.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
 }
 
 .current-user i {

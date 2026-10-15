@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useSocket } from '../../composables/useSocket'
 import { useAuthStore } from '../../stores/auth'
 import { useSettingsStore } from '../../stores/settings'
@@ -94,10 +94,16 @@ const selectTheme = async (value: 'light' | 'dark' | 'system') => {
         :aria-disabled="!isConnected"
         breakpoint="600px"
       />
-      <span class="current-user" data-testid="current-username">
+      <RouterLink
+        to="/account"
+        class="current-user"
+        :class="{ active: route.name === 'account' }"
+        data-testid="current-username"
+        title="My account"
+      >
         <i class="pi pi-user"></i>
         {{ authStore.username }}
-      </span>
+      </RouterLink>
       <Button
         :icon="isDark ? 'pi pi-moon' : 'pi pi-sun'"
         text

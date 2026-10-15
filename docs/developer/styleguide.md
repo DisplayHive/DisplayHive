@@ -230,6 +230,13 @@ are fixed light-on-dark values (translucent white fill and border, `#cbd5e1` tex
 like the other header icons) and need no `.dark-mode` override. Below 1550px wide it shrinks to the
 magnifier only (label and key hint hidden); the button keeps `data-testid="palette-button"`.
 
+The icon buttons on the right of the bar — theme (`.theme-toggle-button`) and logout
+(`.logout-button`) — share one look in `assets/shell/header.css`: white text, a `#94a3b8` icon and a
+translucent white hover. PrimeVue's default text-button colour is unreadable on the dark bar, so a new
+icon button there needs its class added to those selector lists, otherwise it is on the page but
+invisible. The signed-in name (`.current-user`) is a link to the My account page and gets the same
+translucent white hover (and while that page is open).
+
 ## Tables
 
 ### Filter placement

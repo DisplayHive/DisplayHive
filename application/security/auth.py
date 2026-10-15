@@ -55,6 +55,11 @@ def verify_password(password: str, password_hash: str) -> bool:
 # --- JWT ---------------------------------------------------------------------
 
 
+# Sessions that did not use the account's password: the forced password change (must_change_password)
+# does not apply to them.
+PASSWORDLESS_METHODS = ('oidc', 'passkey')
+
+
 def create_token(app, user, impersonator_id=None, auth_method='password') -> str:
     """Issue a signed JWT for *user* (an AdminUser instance).
 
@@ -78,10 +83,10 @@ def create_token(app, user, impersonator_id=None, auth_method='password') -> str
     }
     if impersonator_id is not None:
         payload['imp'] = int(impersonator_id)
-    if auth_method == 'oidc':
+    if auth_method in PASSWORDLESS_METHODS:
         # Signed, so a client can't add it: lets user_from_token() skip the
-        # password-only must_change_password lock for SSO sessions.
-        payload['am'] = 'oidc'
+        # password-only must_change_password lock for SSO and passkey sessions.
+        payload['am'] = auth_method
     return jwt.encode(payload, app.config['SECRET_KEY'], algorithm=TOKEN_ALGORITHM)
 
 
@@ -151,7 +156,7 @@ def user_from_token(app, db, token: str, allow_pending_password_change: bool = F
     if int(payload.get('tv', 0) or 0) != int(getattr(user, 'token_version', 0) or 0):
         return None
     if (user.must_change_password and not allow_pending_password_change
-            and 'imp' not in payload and payload.get('am') != 'oidc'):
+            and 'imp' not in payload and payload.get('am') not in PASSWORDLESS_METHODS):
         return None
     return user
 
