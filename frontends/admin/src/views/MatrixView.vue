@@ -214,7 +214,7 @@ const refreshData = () => {
           <div class="header-actions">
             <Tag :value="`${screens.length} screens`" severity="info" />
             <Tag :value="`${screengroups.length} groups`" severity="secondary" />
-            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined />
+            <Button icon="pi pi-refresh" @click="refreshData" size="small" outlined title="Refresh" />
           </div>
         </div>
 

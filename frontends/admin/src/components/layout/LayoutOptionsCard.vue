@@ -40,7 +40,7 @@ const ed = useLayoutEditor()
       <div class="snapline-chip-list">
         <Tag v-for="(line, i) in ed.snaplines" :key="i" class="snapline-chip">
           {{ line.axis === 'h' ? 'H' : 'V' }} @ {{ line.position }}%
-          <i class="pi pi-times snapline-chip-remove" @click="ed.removeSnapline(i)"></i>
+          <i class="pi pi-times snapline-chip-remove" title="Remove snap line" @click="ed.removeSnapline(i)"></i>
         </Tag>
       </div>
     </div>

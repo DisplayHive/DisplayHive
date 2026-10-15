@@ -154,7 +154,7 @@ f.reportVisibleWhen(
           <img :src="String(f.get(f.name))" class="image-field-thumb" alt="selected" />
           <div class="image-field-actions">
             <Button icon="pi pi-pencil" size="small" label="Change" outlined @click="openPicker" />
-            <Button icon="pi pi-times" size="small" severity="danger" outlined @click="f.set(f.name, '')" />
+            <Button icon="pi pi-times" size="small" severity="danger" outlined title="Remove image" @click="f.set(f.name, '')" />
           </div>
         </div>
         <div v-else class="image-field-empty" @click="openPicker">

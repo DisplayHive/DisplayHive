@@ -265,7 +265,7 @@ const setPretalxTableData = (v: PretalxTableValue) => {
         <img :src="imageUrl" class="image-field-thumb" alt="selected" />
         <div class="image-field-actions">
           <Button icon="pi pi-pencil" size="small" label="Change" outlined @click="showImagePicker = true" />
-          <Button icon="pi pi-times" size="small" severity="danger" outlined @click="setImageData({ url: '', size: imageSize })" />
+          <Button icon="pi pi-times" size="small" severity="danger" outlined title="Remove image" @click="setImageData({ url: '', size: imageSize })" />
         </div>
       </div>
       <div v-else class="image-field-empty" @click="showImagePicker = true">
@@ -328,7 +328,7 @@ const setPretalxTableData = (v: PretalxTableValue) => {
                   :model-value="col" size="small" placeholder="Header"
                   @update:model-value="(v) => updateTableHeader(ci, String(v ?? ''))"
                 />
-                <Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.columns.length <= 1" @click="removeTableColumn(ci)" />
+                <Button icon="pi pi-trash" size="small" text severity="danger" title="Remove column" :disabled="tableData.columns.length <= 1" @click="removeTableColumn(ci)" />
               </th>
               <th><Button icon="pi pi-plus" size="small" text title="Add column" @click="addTableColumn" /></th>
             </tr>
@@ -341,7 +341,7 @@ const setPretalxTableData = (v: PretalxTableValue) => {
                   @update:model-value="(v) => updateTableCell(ri, ci, String(v ?? ''))"
                 />
               </td>
-              <td><Button icon="pi pi-trash" size="small" text severity="danger" :disabled="tableData.rows.length <= 1" @click="removeTableRow(ri)" /></td>
+              <td><Button icon="pi pi-trash" size="small" text severity="danger" title="Remove row" :disabled="tableData.rows.length <= 1" @click="removeTableRow(ri)" /></td>
             </tr>
           </tbody>
         </table>

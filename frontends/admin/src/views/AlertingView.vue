@@ -130,6 +130,7 @@ const canShowToken = computed(() => rightsStore.can('alerting.showtoken'))
                   icon="pi pi-refresh"
                   size="small"
                   outlined
+                  title="Check the bot for new users"
                   :loading="loadingBotUsers"
                   @click="fetchBotUsers"
                 />

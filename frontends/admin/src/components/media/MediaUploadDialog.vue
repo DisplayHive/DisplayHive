@@ -160,6 +160,7 @@ const startUpload = async () => {
           text
           rounded
           size="small"
+          title="Remove from the list"
           @click.stop="removeUploadFile(idx)"
         />
         <small v-if="uploadProgress[idx]?.status === 'error'" class="upload-file-error">{{ uploadProgress[idx].error }}</small>

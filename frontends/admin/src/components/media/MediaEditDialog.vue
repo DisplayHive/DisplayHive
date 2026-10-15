@@ -186,6 +186,7 @@ const saveMedia = async (keepOpen = false) => {
             <Button
               icon="pi pi-plus"
               size="small"
+              title="Add tag"
               :disabled="!canTag || !newTagInput.trim()"
               @click="() => { editAddTag(newTagInput); newTagInput = '' }"
             />

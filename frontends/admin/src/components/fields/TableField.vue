@@ -113,6 +113,7 @@ const onDrop = (type: 'row' | 'col', toIdx: number) => {
                     size="small"
                     text
                     severity="danger"
+                    title="Remove column"
                     :disabled="parseTableData().columns.length <= 1"
                     @click="removeTableColumn(ci)"
                   />
@@ -149,6 +150,7 @@ const onDrop = (type: 'row' | 'col', toIdx: number) => {
                   size="small"
                   text
                   severity="danger"
+                  title="Remove row"
                   :disabled="parseTableData().rows.length <= 1"
                   @click="removeTableRow(ri)"
                 />

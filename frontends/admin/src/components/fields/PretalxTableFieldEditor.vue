@@ -273,7 +273,7 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
               class="w-full"
             />
             <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateEventFieldLabel(idx, v ?? '')" size="small" class="w-full" />
-            <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeEventField(idx)" />
+            <Button icon="pi pi-trash" size="small" text severity="danger" title="Remove field" @click="removeEventField(idx)" />
           </div>
           <Button label="Add Field" icon="pi pi-plus" size="small" text class="mt-1" @click="addEventField" />
         </div>
@@ -354,7 +354,7 @@ const isVisible = (key: keyof typeof VISIBLE_FOR_TYPE): boolean =>
               class="w-full"
             />
             <InputText :modelValue="row.label" @update:modelValue="(v: string | undefined) => updateTracklistLabel(idx, v ?? '')" size="small" class="w-full" />
-            <Button icon="pi pi-trash" size="small" text severity="danger" @click="removeTracklistColumn(idx)" />
+            <Button icon="pi pi-trash" size="small" text severity="danger" title="Remove column" @click="removeTracklistColumn(idx)" />
           </div>
           <Button label="Add Column" icon="pi pi-plus" size="small" text class="mt-1" @click="addTracklistColumn" />
         </div>
