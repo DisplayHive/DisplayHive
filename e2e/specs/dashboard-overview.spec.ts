@@ -1,6 +1,6 @@
 /**
  * E2E tests for the Dashboard's working part (components/dashboard/DashboardOverview.vue):
- * quick actions, "On air", "Ending soon", "Starting soon", "Recently changed".
+ * the "On air" tile, "Ending soon", "Starting soon", "Recently changed".
  */
 
 import test, { expect } from './fixtures.js'
@@ -30,7 +30,7 @@ const localIn = (days: number) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-test('dashboard shows quick actions, schedule panels and recent changes', async ({ page, backendUrl }) => {
+test('dashboard shows schedule panels and recent changes', async ({ page, backendUrl }) => {
   await page.addInitScript((url: string) => {
     ;(window as any).__DISPLAYHIVE_TEST_BACKEND_URL__ = url
   }, backendUrl)
@@ -56,11 +56,6 @@ test('dashboard shows quick actions, schedule panels and recent changes', async 
 
   await page.reload()
   await expect(page.locator('.dashboard')).toBeVisible({ timeout: 10_000 })
-
-  // Quick actions
-  const actions = page.locator('[data-tour="dashboard-quick-actions"]')
-  await expect(actions.getByRole('button', { name: 'New content' })).toBeVisible()
-  await expect(actions.getByRole('button', { name: 'Upload media' })).toBeVisible()
 
   // Panels
   await expect(page.getByTestId('dash-expiring').getByRole('link', { name: ending })).toBeVisible({ timeout: 10_000 })

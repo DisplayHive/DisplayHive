@@ -37,8 +37,7 @@ behind each box.
 ## Finding your way around
 
 - **Dashboard** (`/`) — the status of screens, devices, content and media at a glance, plus what is
-  on air now, what ends or starts in the next seven days, what was changed last, and quick actions
-  (new content, upload media, add a screen). Tiles with a warning take you to the page that needs
+  on air now, what ends or starts in the next seven days, what was changed last. Tiles with a warning take you to the page that needs
   attention.
 - **Search** — press **Ctrl+K** (⌘K on a Mac), or click the search field in the header, and type a few
   letters: pages, actions, content, screens, screen groups and media are found by name; Enter or a click

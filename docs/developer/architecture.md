@@ -248,7 +248,7 @@ def handle_delete_user(data):
 - The content edit page: `views/ContentEditView.vue` composes `components/contentEdit/`; the form, saving,
   screen assignment and preview are `composables/contentEdit/` (`useContentEditor.ts` assembles them).
   Starting values per field handler: `utils/content/contentFieldDefaults.ts`.
-- The Dashboard: `views/DashboardView.vue` holds the stat tiles; quick actions and the schedule panels
+- The Dashboard: `views/DashboardView.vue` holds the stat tiles; the schedule panels
   (on air, ending/starting soon, recently changed) are `components/dashboard/DashboardOverview.vue`, judged
   in the browser by `utils/content/contentSchedule.ts` (the schedule is wall-clock text, read in the viewer's time
   zone like a screen does). `ContentElement.updated_at` feeds "recently changed".

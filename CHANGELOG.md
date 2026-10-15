@@ -42,8 +42,8 @@ First release candidate for 1.0.
 
 ### Added
 
-- **Dashboard:** what is on air right now, what ends or starts in the next seven days, what was changed last,
-  and quick actions (new content, upload media, add a screen). Content elements record when they were last
+- **Dashboard:** what is on air right now, what ends or starts in the next seven days, what was changed last.
+  Content elements record when they were last
   written (database migration `d1a5f7b2c8e6`; existing rows are filled in when they are next saved).
 - **Search (Ctrl+K / ⌘K):** a search field in the middle of the header (a magnifier on narrow screens) finds pages,
   actions, content, screens, screen groups and media by name.
