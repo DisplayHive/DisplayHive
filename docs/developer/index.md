@@ -5,7 +5,7 @@ frontends fit together, how content reaches a screen in real time, and how
 to contribute a change.
 
 For environment setup and day-to-day commands (`nix develop`, `npm run dev`,
-tests), see the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)
+tests), see [Installation](../user/installation.md)
 and [Contributing](contributing.md) —
 this guide assumes a working dev environment and focuses on how the code is
 organized.

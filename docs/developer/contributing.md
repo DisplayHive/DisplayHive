@@ -9,7 +9,7 @@ root; bump it when you release. The build revision comes from git, or from the
 
 ## Getting set up
 
-See the root [README](https://github.com/DisplayHive/DisplayHive#getting-started)
+See [Installation](../user/installation.md)
 for environment setup — `nix develop` provisions everything (Python, Node,
 SQLite) and runs first-time setup automatically: JS dependencies, the
 Python venv (`.venv`, see below) and `alembic upgrade head`. `nix-shell`

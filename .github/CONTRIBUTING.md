@@ -3,7 +3,6 @@
 Thanks for wanting to contribute — this file covers the short version; the
 full guide (environment setup, running the dev servers, tests, database
 migrations, PR conventions) lives at
-[docs/developer/contributing.md](docs/developer/contributing.md) and on
 [docs.displayhive.org](https://docs.displayhive.org/developer/contributing/).
 
 ## Quick start
@@ -29,7 +28,7 @@ See the [README](README.md#getting-started) for details.
 - If a change affects a model in `application/models/`, include the Alembic
   migration in the same PR.
 - If a change affects a user-facing workflow, update the relevant
-  [User Guide](docs/user/index.md) page in the same PR.
+  [User Guide](https://docs.displayhive.org/user/) page in the same PR.
 
 ## AI-assisted contributions
 
@@ -45,7 +44,7 @@ looks AI-generated and unreviewed, flag it.
 ## Reporting bugs / requesting features
 
 Open an issue on [GitHub](https://github.com/DisplayHive/DisplayHive/issues).
-For questions or discussion, see [Contact](docs/contact.md) — Mastodon,
+For questions or discussion, see [Contact](https://docs.displayhive.org/contact/) — Mastodon,
 Telegram, and more.
 
 ## Reporting security vulnerabilities

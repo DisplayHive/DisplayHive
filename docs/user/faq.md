@@ -8,15 +8,15 @@ DisplayHive is self-hosted digital signage: it drives a network of displays
 (colors, gradients, backgrounds), drop typed **content** (text, images,
 tables, Pretalx schedules, etc.) into those containers via **content
 types**, and assign that content to **screen groups**. Changes appear on
-screens instantly over Socket.IO — there's no publish step, caching, or
-refresh delay. See
+screens instantly over Socket.IO — there's no publish step or refresh
+delay. See
 [Layouts, designs, content types & content](content-and-templates.md) for
 the full workflow.
 
 ## Is there something else than a Docker or NixOS deployment?
 
 Yes. Both are convenience wrappers, not a requirement. Underneath,
-DisplayHive is a plain Flask + Flask-SocketIO app; the [Docker](https://github.com/DisplayHive/DisplayHive#deployment)
+DisplayHive is a plain Flask + Flask-SocketIO app; the [Docker](installation.md#docker)
 image and the [NixOS module](https://github.com/DisplayHive/DisplayHive/blob/main/nix/module.nix)'s
 systemd service both ultimately just run:
 
@@ -27,11 +27,13 @@ gunicorn --worker-class gthread -w 1 --threads 500 --bind 0.0.0.0:<port> app:app
 
 You can run that yourself on any Linux host with Python 3.13 (see
 `.python-version`), Node.js, and
-a PostgreSQL database (`DATABASE_URL`, required) — install dependencies from `requirements/requirements.txt`, build the
+a PostgreSQL database (`DATABASE_URL`, required; SQLite is for development
+and tests only and the Docker image and the NixOS module refuse it, see
+[Database](installation.md#database-postgresql-and-sqlite-for-development-only)) — install dependencies from `requirements/requirements.txt`, build the
 two frontends, put a reverse proxy (e.g. nginx) in front for TLS and
 WebSocket forwarding, and manage the process with systemd, another process
-supervisor, or a container of your own making. See the root
-[README](https://github.com/DisplayHive/DisplayHive#configuration) for the
+supervisor, or a container of your own making. See
+[Configuration](installation.md#configuration) for the
 environment variables involved.
 
 ## How many screens can I connect?
@@ -53,8 +55,10 @@ from trying more, but very large deployments haven't been a focus yet.
 
 - **On screen**: it keeps showing whatever content was last rendered —
   losing connection doesn't blank the display or reload the page. The
-  screen client retries the connection automatically (a fixed 20-second
-  delay between attempts) until it reaches the server again.
+  screen client retries the connection automatically and without giving
+  up: the delay starts at 1 second, doubles with each attempt up to 30
+  seconds, and is randomised by about ±25 %, so a few hundred screens
+  don't all hit a restarting server in the same second.
 - **On reconnect**: the screen re-syncs and picks up any content changes
   made while it was offline.
 - **In the admin panel**: the affected device and screen immediately show
@@ -65,9 +69,14 @@ from trying more, but very large deployments haven't been a focus yet.
   disconnect is detected, and a matching `Online` notification fires on
   reconnect.
 
-There's no local content cache beyond what's already in the page, so a
-screen that loses power (not just network) and restarts will show a blank
-page until it reconnects and receives a fresh content push.
+**Offline operation.** A screen that has been loaded once keeps its page,
+its files and its last content in the browser (a service worker). If it
+restarts while the server is unreachable — a power cut, the network is
+down — it starts again and shows that last content until the server
+answers, then re-syncs. This needs the screen to be opened over **https**
+(or on `localhost`); on plain `http` from another machine the browser
+offers no such storage, and the screen needs the server to start. See
+[Screens, devices & groups](screens-devices-groups.md) for details.
 
 ## How does the "push" to screens actually work?
 
