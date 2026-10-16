@@ -66,7 +66,8 @@ A map of the repository: where things live and where a new file belongs.
     Field handlers live in `fields/` with the registry in `fields/registry.ts`.
 - `composables/` — shared stateful logic (`useXxx.ts`), grouped in folders
   per feature; a page's socket state can live here too (`useAlerting.ts`).
-- `stores/` — Pinia stores.
+- `stores/` — Pinia stores. A store that holds data fetched for the session has a `reset()` and is listed
+  in `stores/resetAll.ts`, which runs when the session ends (logout, expiry, sign-out in another tab).
 - `utils/` — pure helpers, grouped by topic (`content/`, `design/`,
   `layout/`, `media/`); unit tests in `utils/__tests__/`.
 - `router/`, `types/` — routing and shared types.

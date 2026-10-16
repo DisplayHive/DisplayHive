@@ -1,6 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '../auth'
+import { useContentStore } from '../content'
+import { useDevicesStore } from '../devices'
+import { useMediaStore } from '../media'
+import { useRightsStore } from '../rights'
+import { useScreensStore } from '../screens'
+import { useSettingsStore } from '../settings'
 
 const HINT_KEY = 'displayhive_admin_session'
 const FUTURE = () => new Date(Date.now() + 3600_000).toISOString()
@@ -160,6 +166,47 @@ describe('logging out', () => {
     expect(headersOf(at(0))['X-DisplayHive-Request']).toBe('1')
     expect(auth.isAuthenticated).toBe(false)
     expect(localStorage.getItem(HINT_KEY)).toBeNull()
+  })
+
+  it('empties the stores that held the session\'s data, so the next person sees none of it', async () => {
+    respond = () => ({ body: { success: true, username: 'anna', expires_at: FUTURE() } })
+    const auth = useAuthStore()
+    await auth.login('anna', 'pw')
+
+    const content = useContentStore()
+    const devices = useDevicesStore()
+    const media = useMediaStore()
+    const screens = useScreensStore()
+    const settings = useSettingsStore()
+    const rights = useRightsStore()
+    content.content = [{ id: 1, title: 'Secret' }]
+    devices.devices = [{ id: 1, devicekey: 'abc', is_online: true }]
+    media.mediaItems = [{ id: 1, title: 'x', filename: 'x.png', mimetype: 'image/png', folder: '', preview_url: '', url: '', tags: [] }]
+    screens.screens = [{ id: 1, name: 'Lobby' }]
+    settings.hideDemoMode = true
+    settings.contentEditPreviewSize = 70
+    rights.rights = { 'users.page': true }
+    rights.loaded = true
+
+    auth.logout()
+
+    expect(content.content).toEqual([])
+    expect(devices.devices).toEqual([])
+    expect(media.mediaItems).toEqual([])
+    expect(screens.screens).toEqual([])
+    expect(settings.hideDemoMode).toBe(false)
+    expect(settings.contentEditPreviewSize).toBe(35)
+    expect(rights.can('users.page')).toBe(false)
+  })
+
+  it('empties them when another tab signs out as well', async () => {
+    localStorage.setItem(HINT_KEY, JSON.stringify({ username: 'anna', expiresAt: Date.now() + 10_000, impersonator: null }))
+    const auth = useAuthStore()
+    const devices = useDevicesStore()
+    devices.devices = [{ id: 1, devicekey: 'abc', is_online: true }]
+    window.dispatchEvent(new StorageEvent('storage', { key: HINT_KEY, newValue: null }))
+    expect(auth.isAuthenticated).toBe(false)
+    expect(devices.devices).toEqual([])
   })
 
   it('logs itself out when the session runs out', async () => {

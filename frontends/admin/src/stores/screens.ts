@@ -27,9 +27,16 @@ export const useScreensStore = defineStore('screens', () => {
   const offlineCount = computed(() => monitoredScreens.value.filter((s) => !s.attached_device?.is_online).length)
   const screensInDebug = computed(() => monitoredScreens.value.filter((s) => s.debug === true).length)
 
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    screens.value = []
+    loading.value = false
+  }
+
   return {
     screens,
     monitoredScreens,
+    reset,
     loading,
     fetch,
     onlineCount,

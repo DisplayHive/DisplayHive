@@ -7,6 +7,14 @@ they are called out under **Breaking changes**.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stores are emptied when a session ends.** After a logout (or an expired session, or a sign-out in
+  another tab) the admin kept the data it had fetched — screens, devices, content, media, settings, help —
+  in memory, so the next person to sign in at the same tab could see it until their own fetch replaced it,
+  and for everything their rights never fetch, not even then. Every such store now has a `reset()`, run
+  when the session is cleared.
+
 ### Added
 
 - **One server process per data directory is enforced.** DisplayHive keeps its live state (connected screens,

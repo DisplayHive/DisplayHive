@@ -59,5 +59,12 @@ export const useContentStore = defineStore('content', () => {
     emit('displayhive:admin:cts:get_unassigned_content')
   }
 
-  return { content, unassignedContent, loading, fetch }
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    content.value = []
+    unassignedContent.value = []
+    loading.value = false
+  }
+
+  return { content, unassignedContent, loading, fetch, reset }
 })

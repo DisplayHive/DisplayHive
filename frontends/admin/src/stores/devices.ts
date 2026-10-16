@@ -51,10 +51,17 @@ export const useDevicesStore = defineStore('devices', () => {
   const onlineDevices = computed(() => devices.value.filter((d) => d.is_online))
   const activeDevices = computed(() => devices.value.filter((d) => d.is_active))
 
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    devices.value = []
+    loading.value = false
+  }
+
   return {
     devices,
     loading,
     fetch,
+    reset,
     findDevice,
     adoptDevice,
     onlineDevices,

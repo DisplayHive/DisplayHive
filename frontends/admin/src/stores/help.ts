@@ -36,5 +36,11 @@ export const useHelpStore = defineStore('help', () => {
 
   const helpFor = (key: string): HelpTopic | null => topics.value[key] || null
 
-  return { topics, loaded, fetchHelp, helpFor }
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    topics.value = {}
+    loaded.value = false
+  }
+
+  return { topics, loaded, fetchHelp, helpFor, reset }
 })

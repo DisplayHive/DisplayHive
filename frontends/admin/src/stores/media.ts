@@ -98,5 +98,11 @@ export const useMediaStore = defineStore('media', () => {
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
   })
 
-  return { mediaItems, loading, fetch, allTags }
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    mediaItems.value = []
+    loading.value = false
+  }
+
+  return { mediaItems, loading, fetch, allTags, reset }
 })

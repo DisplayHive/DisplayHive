@@ -65,10 +65,17 @@ export const useScreengroupsStore = defineStore('screengroups', () => {
     emit('displayhive:admin:cts:get_screengroup_content', { screengroup_id: groupId })
   }
 
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    screengroups.value = []
+    loading.value = false
+  }
+
   return {
     screengroups,
     loading,
     fetch,
+    reset,
     getScreenGroupScreens,
     getScreenGroupContent,
   }

@@ -46,8 +46,19 @@ export const useSettingsStore = defineStore('settings', () => {
     emit('displayhive:admin:cts:get_admin_settings')
   }
 
+  /** Forget everything held for the session that ended (logout): the next person must not see it. */
+  const reset = () => {
+    hideDemoMode.value = false
+    hideUserTours.value = false
+    hideAdminTours.value = false
+    contentEditPreviewSize.value = 35
+    contentListPreviewSize.value = 20
+    loaded.value = false
+  }
+
   return {
     hideDemoMode,
+    reset,
     hideUserTours,
     hideAdminTours,
     contentEditPreviewSize,

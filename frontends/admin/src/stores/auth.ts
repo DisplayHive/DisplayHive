@@ -2,6 +2,7 @@ import { credentialToJson, passkeyErrorMessage, passkeysSupported, requestOption
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
+import { resetSessionStores } from './resetAll'
 
 // The login itself is an HttpOnly cookie that only the server can read or write
 // (application/security/session.py): no script in the page — an XSS bug included — can get at
@@ -174,6 +175,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(SESSION_HINT_KEY)
     localStorage.removeItem(PREFERENCES_STORAGE_KEY)
     clearExpiryTimer()
+    // What the other stores fetched belongs to the session that just ended.
+    resetSessionStores()
   }
 
   const post = (url: string, body?: unknown) =>
