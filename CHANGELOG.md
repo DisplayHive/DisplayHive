@@ -9,6 +9,12 @@ they are called out under **Breaking changes**.
 
 ### Added
 
+- **One server process per data directory is enforced.** DisplayHive keeps its live state (connected screens,
+  sessions, the login rate limiter) in the process and has always been meant to run as exactly one gunicorn
+  worker. The server now takes a lock on `DATA_DIR/.server.lock`; a second worker (`-w 2`, a second container on
+  the same volume, `WEB_CONCURRENCY` above 1, a `kill -HUP` reload) refuses to start with a message instead of
+  running with split state. Restart the service rather than reloading it. Docker and the NixOS module already
+  start one worker and are unaffected.
 - **My account page.** Clicking the name in the top bar opens a page with the account's username, theme
   choice, *change password* (for accounts with a password) and the passkeys below.
 - **Passkeys (WebAuthn).** Admins can sign in with a passkey instead of a password — no username needed — from

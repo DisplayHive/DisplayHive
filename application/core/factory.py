@@ -82,6 +82,9 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
         # created would then be unwritable for the server. check-config reports
         # missing ones instead.
         data_paths.ensure_dirs(paths)
+        # One server process per data directory: a second worker would split the live state.
+        from application.core import worker_guard
+        worker_guard.claim_single_worker(paths.data_dir)
     cors_origins = apply_config(app, paths, os.environ)
     if overrides:
         app.config.update(overrides)

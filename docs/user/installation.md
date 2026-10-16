@@ -298,6 +298,7 @@ itself can stay read-only and a single path covers backups:
 | `media_renditions/` | Scaled copies for screens (can be regenerated) | `0750` |
 | `icons/` | Installed icon libraries, served at `/static/icons/…` (reinstallable from Settings, not part of the backups) | `0750` |
 | `import-staging/` | Uploaded import files between preview and confirm | `0700` |
+| `.server.lock` | Lock held by the running server (and holding its process id), so a second server process on the same directory refuses to start — see [the process model](../developer/architecture.md#process-model-and-why-there-is-no-redis) | `0600` |
 | `db/project.db` | A SQLite *development* database, only if `DATABASE_URL` points into it. Never used implicitly. | `0700` (directory) |
 
 DisplayHive creates missing directories with these permissions on start and

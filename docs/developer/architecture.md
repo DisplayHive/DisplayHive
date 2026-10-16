@@ -308,7 +308,7 @@ DisplayHive runs as **one process with one gunicorn worker** (`--worker-class gt
 `GUNICORN_THREADS` threads, default 500). That is a decision, not an oversight:
 
 - **State lives in the process.** Which devices and screens are connected (`connected_devices`,
-  `connected_screens`), who is watching the Logger page, the login rate limiter, the pending SSO
+  `connected_screens`), who is watching the Logger page, the login rate limiter (so its lockouts also end with a restart), the pending SSO
   sign-ins, the admin sockets' tokens and the Socket.IO sessions themselves are in memory. A second
   worker would see only part of it: a push would reach only the screens connected to the same worker.
 - **The limit is the thread count.** Every connected screen and every open admin tab keeps one thread
@@ -322,6 +322,14 @@ DisplayHive runs as **one process with one gunicorn worker** (`--worker-class gt
   the registry, the rate limiter, the pending-SSO store, the log watcher state and sticky sessions for
   Socket.IO's polling transport to move out of process. That is a large change for a limit nobody has
   reached.
+
+The one-worker rule is **enforced**: the server takes an exclusive lock on `DATA_DIR/.server.lock`
+(`application/core/worker_guard.py`) and a second process on the same data directory refuses to start,
+naming the process that holds it. Under gunicorn `-w 2` therefore stops at boot instead of running with
+split state; `WEB_CONCURRENCY` above 1 is refused as well. Two things the lock cannot see: workers forked
+after the app was loaded (`gunicorn --preload`) inherit it, and a `kill -HUP` reload is refused because
+the new worker starts while the old one still runs — restart the service instead. `flask dh …` commands
+and tests that build their own app (`startup=False`) do not take the lock.
 
 Revisit this when the number of screens approaches `GUNICORN_THREADS`, or when deploys must happen
 without any interruption. Deployment is Docker or the NixOS module (both run exactly this), and the
