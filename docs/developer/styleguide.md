@@ -695,3 +695,12 @@ override nearby is the same bug.
 ---
 
 *This styleguide was generated with the assistance of Claude AI.*
+
+## Hot spots over a preview
+
+The content preview is a sandboxed frame, so editing "in the preview" (`ContentPreviewPane.vue`) lays buttons
+over it instead of putting anything into it: a transparent, absolutely positioned `.preview-spot` per container
+(top/left/width/height in percent of the frame), highlighted on hover with the theme's primary colour mixed into
+the background (`color-mix`), so it reads on light and dark themes alike. The in-place editor
+(`.preview-inline`) and the popover use the theme's `--p-content-background`, `--p-text-color` and
+`--p-primary-color`; no hard-coded colours. The overlay layer has `pointer-events: none`, only the spots take clicks.

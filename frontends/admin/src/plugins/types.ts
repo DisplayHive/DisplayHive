@@ -25,6 +25,11 @@ export interface FieldHandlerDef {
    */
   titleText?: boolean
   maxLength?: number
+  /**
+   * Simple values can be edited right in the content preview: `input` (one line) or `textarea`. Handlers
+   * without it open their editor in a popover when the field's area of the preview is clicked.
+   */
+  inlineEdit?: 'input' | 'textarea'
   /** Offer the handler in the dropdowns (default true). Off for handlers that exist but are not offered for new fields. */
   selectable?: boolean
   /**

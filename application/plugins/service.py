@@ -46,6 +46,7 @@ def describe(db, app) -> dict:
             'has_admin': bool(manifest.admin), 'has_screen': bool(manifest.screen),
             'requires_host': manifest.requires_host,
             'compatible': _compatible(manifest),
+            'error': '' if plugin_id in loaded else registry.failure(plugin_id),
         })
     return {'plugins': plugins, 'retired': len(registry.retired()), 'host_version': host_version()}
 

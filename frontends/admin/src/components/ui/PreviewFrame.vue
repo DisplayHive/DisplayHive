@@ -7,9 +7,11 @@
 // public/preview-frame.html — served with its own, permissive policy — and
 // posts the document to it. `sandbox="allow-scripts"` (no allow-same-origin)
 // keeps everything that runs there away from the admin session.
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ContainerTextStyle } from '../../utils/design/designPreview'
 
 const props = defineProps<{ html: string; title?: string }>()
+const emit = defineEmits<{ 'container-styles': [styles: Record<string, ContainerTextStyle>] }>()
 
 const frame = ref<HTMLIFrameElement | null>(null)
 const src = `${import.meta.env.BASE_URL}preview-frame.html`
@@ -28,6 +30,22 @@ const onLoad = () => {
 }
 
 watch(() => props.html, post)
+
+// How the containers' text looks in the document (see designPreview.ts), reported after each load.
+let lastStyles = ''
+const onMessage = (event: MessageEvent) => {
+  if (event.source !== frame.value?.contentWindow) return
+  const data = event.data
+  if (data && data.type === 'dh-preview-styles' && data.styles && typeof data.styles === 'object') {
+    // Only a change is news: the pages that listen re-render on every report.
+    const json = JSON.stringify(data.styles)
+    if (json === lastStyles) return
+    lastStyles = json
+    emit('container-styles', data.styles)
+  }
+}
+onMounted(() => window.addEventListener('message', onMessage))
+onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 </script>
 
 <template>

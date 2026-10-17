@@ -2,12 +2,22 @@
 import { useContentEditor } from '../../composables/contentEdit/useContentEditor'
 import { useSettingsStore } from '../../stores/settings'
 import { cssAspectRatio } from '../../composables/useAspectRatios'
+import { computed, ref } from 'vue'
+import type { ContainerTextStyle } from '../../utils/design/designPreview'
+import { useRightsStore } from '../../stores/rights'
 import PreviewFrame from '../ui/PreviewFrame.vue'
+import PreviewEditLayer from './PreviewEditLayer.vue'
 import Select from 'primevue/select'
 
 // The live preview next to the form (its width is a Settings option).
 const ed = useContentEditor()
 const settingsStore = useSettingsStore()
+
+// Editing in the preview: see PreviewEditLayer.vue. Changing needs the right to save: content.create
+// for new content (and copies), content.edit for existing content.
+const textStyles = ref<Record<string, ContainerTextStyle>>({})
+const rights = useRightsStore()
+const canChange = computed(() => rights.can(ed.editMode ? 'content.edit' : 'content.create'))
 </script>
 
 <template>
@@ -20,13 +30,23 @@ const settingsStore = useSettingsStore()
     <i class="pi pi-eye"></i>
     <p>Preview will appear here once a content type is selected.</p>
   </div>
-  <PreviewFrame
-    v-else
-    :html="ed.previewSrcdoc"
-    class="content-edit-preview-iframe"
-    :style="{ aspectRatio: cssAspectRatio(ed.previewRatio) }"
-    title="Content preview"
-  />
+  <div v-else class="content-edit-preview-stage" :style="{ aspectRatio: cssAspectRatio(ed.previewRatio) }">
+    <PreviewFrame
+      :html="ed.previewSrcdoc"
+      class="content-edit-preview-iframe"
+      title="Content preview"
+      @container-styles="(s) => (textStyles = s)"
+    />
+    <PreviewEditLayer
+      :containers="ed.previewContainers"
+      :tags="ed.tagConfigs"
+      :fields="ed.createForm.fields"
+      :palette="ed.designPalette"
+      :editable="canChange"
+      :control-visible="ed.tagHasVisibleControl"
+      :text-styles="textStyles"
+    />
+  </div>
 </div>
 </template>
 
@@ -53,6 +73,17 @@ const settingsStore = useSettingsStore()
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--p-text-muted-color, #6b7280);
+}
+
+.content-edit-preview-stage {
+  position: relative;
+  width: 100%;
+}
+
+.content-edit-preview-stage .content-edit-preview-iframe {
+  position: absolute;
+  inset: 0;
+  height: 100%;
 }
 
 .content-edit-preview-iframe {

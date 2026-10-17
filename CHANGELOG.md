@@ -35,6 +35,20 @@ they are called out under **Breaking changes**.
 
 ### Added
 
+- **QR code field handler** (bundled plugin `displayhive.qrcode`). Draws a QR code, as an SVG on the server, for a link,
+  plain text, a contact (vCard or MeCard), Wi-Fi access, an e-mail draft, an SMS, a phone number, a map position, a
+  calendar event or a SEPA payment (GiroCode); size, colours, error correction and quiet zone are adjustable. New
+  dependency `segno` (pure Python).
+- **Delivery settings in the content list.** An expanded row shows the very same *Delivery settings* component as the edit page
+  (scheduling with weekly windows, duration, screen groups and screens) right of its preview; changes wait for *Save* /
+  *Discard*. Only these values are written (new event `update_content_delivery`, plus the existing duration and
+  assignment events; the assignment needs `screengroups.manage_content`). The inline duration control of the row is gone.
+- **Editing in the previews.** On the Content edit page and in the expanded rows of the content list a click on a
+  field's area in the preview edits it: simple values (short text, long text, link, iFrame, raw HTML) right there, any
+  other field in a popover with the same editor as the form. Only what the form offers is clickable (no locked or
+  hidden fields), and only with the right to save (`content.edit`, or `content.create` for new content). On the edit page the page's
+  Save button saves as before; in the list, changes wait in the preview until *Save* (or *Discard*) and only the changed
+  fields are written (new event `update_content_fields`).
 - **One server process per data directory is enforced.** DisplayHive keeps its live state (connected screens,
   sessions, the login rate limiter) in the process and has always been meant to run as exactly one gunicorn
   worker. The server now takes a lock on `DATA_DIR/.server.lock`; a second worker (`-w 2`, a second container on

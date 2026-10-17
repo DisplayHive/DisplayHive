@@ -75,5 +75,8 @@ export function useContentPreview(form: Ref<{ contenttype_id: number | null; fie
     if (previewTimer) clearTimeout(previewTimer)
   }
 
-  return { previewRatios, previewRatio, previewSrcdoc, designPalette, reset }
+  // The containers of the preview with their areas (percent of the frame), keyed by container id.
+  const previewContainers = computed(() => previewData.value?.containers ?? {})
+
+  return { previewRatios, previewRatio, previewSrcdoc, previewContainers, designPalette, reset }
 }

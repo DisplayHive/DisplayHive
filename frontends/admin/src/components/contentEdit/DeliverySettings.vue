@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useContentEditor } from '../../composables/contentEdit/useContentEditor'
+import type { DeliveryModel } from '../../composables/contentEdit/useRowDelivery'
 import { SG_PAGE_SIZE } from '../../composables/contentEdit/useScreengroupAssignment'
 import Button from 'primevue/button'
 import Checkbox from 'primevue/checkbox'
@@ -11,8 +12,11 @@ import TimeField from '../ui/TimeField.vue'
 import { WEEKDAYS, WINDOW_PRESETS } from '../../utils/content/recurrence'
 
 // The "Delivery settings" section: scheduling, duration and the screen groups / screens the
-// content is assigned to (three collapsible blocks, each with a summary of its value).
-const ed = useContentEditor()
+// content is assigned to (three collapsible blocks, each with a summary of its value). On the edit
+// page it works on the page's editor; a row of the content list passes its own `model` — the
+// same blocks for the row's schedule, duration and assignment.
+const props = defineProps<{ model?: DeliveryModel }>()
+const ed: DeliveryModel = props.model ?? useContentEditor()
 </script>
 
 <template>

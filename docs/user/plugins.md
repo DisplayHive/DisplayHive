@@ -8,7 +8,7 @@ plugin on or off, installing, updating and removing take effect at once — no r
 
 | Plugin | Kind | On by default |
 |---|---|---|
-| Short text, Long text, Rich text (WYSIWYG), Number, Checkbox, Link / URL, Image, Icon, Arrow, Date / time, Countdown, Marquee, Table, Raw HTML, iFrame | Field handler | yes |
+| Short text, Long text, Rich text (WYSIWYG), Number, Checkbox, Link / URL, Image, Icon, Arrow, Date / time, Countdown, Marquee, Table, Raw HTML, iFrame, QR code | Field handler | yes |
 | Pretalx | Integration | no — switched on automatically if you used Pretalx before |
 
 Each field handler is a plugin of its own, so you can switch off the ones you do not need (they then disappear from

@@ -158,6 +158,7 @@ const installFromFile = async () => {
                 <Tag v-if="!p.compatible" value="Not compatible" severity="warn" />
               </div>
               <p v-if="p.description" class="hint">{{ p.description }}</p>
+              <p v-if="p.enabled && !p.loaded && p.error" class="plugin-error" :data-testid="`plugin-error-${p.id}`">{{ p.error }}</p>
               <small class="plugin-meta">
                 {{ p.id }}
                 <template v-if="p.fieldhandlers.length"> · field handler{{ p.fieldhandlers.length === 1 ? '' : 's' }}: {{ p.fieldhandlers.join(', ') }}</template>
@@ -282,6 +283,11 @@ const installFromFile = async () => {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+.plugin-error {
+  margin: 0.25rem 0;
+  color: var(--p-red-500, #dc2626);
+  font-size: 0.85rem;
 }
 .restart-row {
   display: flex;

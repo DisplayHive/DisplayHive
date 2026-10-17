@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import PreviewFrame from '../ui/PreviewFrame.vue'
+import RowPreviewEditor from './RowPreviewEditor.vue'
+import RowDeliverySettings from './RowDeliverySettings.vue'
+import RowSaveBar from './RowSaveBar.vue'
+import type { ScreengroupOption } from '../../composables/contentEdit/useScreengroupAssignment'
 import { ref, computed, watch } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
-import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import { useAspectRatios, bestAspectRatio, BASE_ASPECT_RATIO, cssAspectRatio } from '../../composables/useAspectRatios'
@@ -14,7 +17,7 @@ import { useRightsStore } from '../../stores/rights'
 import RouteLink from '../ui/RouteLink.vue'
 import { links } from '../../utils/links'
 import { useSettingsStore } from '../../stores/settings'
-import { buildDesignPreviewSrcdoc, type DesignPreviewPayload, type PreviewContainer } from '../../utils/design/designPreview'
+import { buildDesignPreviewSrcdoc, type ContainerTextStyle, type DesignPreviewPayload, type PreviewContainer } from '../../utils/design/designPreview'
 
 const rightsStore = useRightsStore()
 const settingsStore = useSettingsStore()
@@ -44,11 +47,16 @@ const props = withDefaults(defineProps<{
   search?: string
   /** IDs of one-screen screengroups — used to split screengroups into screens vs groups. */
   oneScreenGroupIds?: number[]
+  /** The screen groups and screens (one-screen groups) the page knows, for the rows' delivery settings. */
+  allScreengroups?: ScreengroupOption[]
+  oneScreenGroups?: ScreengroupOption[]
 }>(), {
   emptyMessage: 'No content',
   totalItems: undefined,
   search: '',
   oneScreenGroupIds: () => [],
+  allScreengroups: () => [],
+  oneScreenGroups: () => [],
 })
 
 // Links: the content type opens its editor; screen and group chips lead to the
@@ -71,8 +79,6 @@ const emit = defineEmits<{
   (e: 'copy', content: ContentElement): void
   (e: 'delete', content: ContentElement): void
   (e: 'toggleActive', content: ContentElement): void
-  (e: 'updateDuration', content: ContentElement): void
-  (e: 'setDuration', content: ContentElement, val: number): void
   (e: 'update:search', value: string): void
 }>()
 
@@ -103,16 +109,26 @@ const resolvedSrcdocKeys: Record<number, string> = {}
 // that ratio, the best matching variant is shown.
 const { ratios: previewRatios } = useAspectRatios()
 const rowRatio = ref<Record<number, string>>({})
+// A row's preview while it is being edited: the containers rendered with the unsaved values.
+const draftContainers = ref<Record<number, ContainerMap>>({})
+const setDraft = (id: number, containers: ContainerMap | null) => {
+  if (containers) draftContainers.value[id] = containers
+  else delete draftContainers.value[id]
+}
+// How each expanded row's containers look in its preview (reported by the frame).
+const rowTextStyles = ref<Record<number, Record<string, ContainerTextStyle>>>({})
 const ratioOf = (id: number) => rowRatio.value[id] || BASE_ASPECT_RATIO
 type ContainerMap = Record<string, PreviewContainer>
 const containersFor = (row: ContentElement): ContainerMap => {
+  const draft = draftContainers.value[row.id]
+  if (draft) return draft
   const byRatio = (row as unknown as { containers_by_ratio?: Record<string, ContainerMap> }).containers_by_ratio
   const keys = Object.keys(byRatio || {})
   if (!byRatio || !keys.length) return row.containers as ContainerMap
   return byRatio[bestAspectRatio(ratioOf(row.id), keys)] ?? (row.containers as ContainerMap)
 }
 
-watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => {
+watch([expandedRows, () => props.items, rowRatio, draftContainers], async ([expanded, items]) => {
   for (const row of items) {
     if (!expanded[row.id]) continue
     const containers = containersFor(row)
@@ -249,34 +265,20 @@ watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => 
               <Select :id="`preview-ratio-${data.id}`" v-model="rowRatio[data.id]" :options="previewRatios" :placeholder="BASE_ASPECT_RATIO" size="small" />
             </div>
             <div class="preview-frame-wrapper" :style="{ height: `${settingsStore.contentListPreviewSize}vh`, aspectRatio: cssAspectRatio(ratioOf(data.id)) }">
-              <PreviewFrame :html="resolvedSrcdocs[data.id] || ''" class="preview-frame" title="Content preview" />
-            </div>
-          </div>
-          <div class="expansion-details">
-            <div class="expansion-duration">
-              <span class="expansion-label">Duration</span>
-              <InputNumber
-                v-model="data.duration"
-                :disabled="!canEdit"
-                @blur="emit('updateDuration', data)"
-                :min="0"
-                :max="3600"
-                showButtons
-                buttonLayout="horizontal"
-                class="duration-input-inline"
+              <PreviewFrame :html="resolvedSrcdocs[data.id] || ''" class="preview-frame" title="Content preview" @container-styles="(s) => (rowTextStyles[data.id] = s)" />
+              <RowPreviewEditor
+                :row="data"
+                :containers="containersFor(data)"
+                :text-styles="rowTextStyles[data.id]"
+                :ratio="ratioOf(data.id)"
+                :panel="`#row-edit-panel-${data.id}`"
+                @draft="(c) => setDraft(data.id, c)"
               />
-              <div v-if="canEdit" class="duration-presets">
-                <Button
-                  v-for="val in [10, 20, 30]"
-                  :key="val"
-                  :label="`${val}s`"
-                  size="small"
-                  class="preset-btn"
-                  @click="emit('setDuration', data, val)"
-                />
-              </div>
             </div>
+            <div :id="`row-edit-panel-${data.id}`"></div>
           </div>
+          <RowDeliverySettings :row="data" :all-screengroups="allScreengroups" :one-screen-groups="oneScreenGroups" class="expansion-delivery" />
+          <RowSaveBar v-if="canEdit" :row-id="data.id" />
         </div>
       </template>
     </DataTable>
@@ -346,37 +348,8 @@ watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => 
   gap: 1.5rem;
 }
 
-.expansion-details {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
 .expansion-type-tag {
   flex-shrink: 0;
-}
-
-.expansion-duration {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.expansion-label {
-  font-size: 0.8rem;
-  color: var(--p-text-muted-color, #888);
-  white-space: nowrap;
-}
-
-.duration-input-inline {
-  width: 7rem;
-}
-
-.duration-presets {
-  display: flex;
-  gap: 0.25rem;
 }
 
 .expansion-fields {
@@ -434,6 +407,15 @@ watch([expandedRows, () => props.items, rowRatio], async ([expanded, items]) => 
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  /* As wide as the preview is: its width follows from its height and the chosen aspect ratio. */
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.expansion-delivery {
+  flex: 1 1 22rem;
+  max-width: 36rem;
+  min-width: 0;
 }
 
 .preview-ratio {

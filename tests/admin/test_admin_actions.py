@@ -278,3 +278,59 @@ def test_a_concurrent_change_gets_a_plain_answer_not_internal_error(flask_app, d
         from unittest import mock
         with mock.patch.object(actions, 'require_admin', return_value=True):
             assert handler() == {'success': False, 'error': actions.CONCURRENT_CHANGE}
+
+
+# --- editing single fields of a content element (the previews of the content list) ------------
+
+def test_update_content_fields_changes_only_the_given_fields(flask_app, db_session, superadmin_client, plain_client):
+    import json
+    from application.models import ContentElement, Contenttype, TagConfig
+    ct = Contenttype(name='ucf')
+    db_session.add(ct)
+    db_session.flush()
+    db_session.add(TagConfig(contenttype_id=ct.id, field_name='headline', field_handler='textklein', contentcontainer_id=None, order=0))
+    element = ContentElement(title='T', html='{}', duration=7, active=True, contenttype_id=ct.id, serialized_input=json.dumps({'headline': 'old', 'other': 'keep'}))
+    db_session.add(element)
+    db_session.commit()
+    event = 'displayhive:admin:cts:update_content_fields'
+
+    assert _ack(plain_client, event, {'content_element_id': element.id, 'fields': {'headline': 'x'}}) == {'success': False, 'error': 'Permission denied'}
+    assert _ack(superadmin_client, event, {'content_element_id': element.id, 'fields': {'nope': 'x'}})['success'] is False
+    assert _ack(superadmin_client, event, {'content_element_id': element.id, 'fields': {'headline': 'new'}}) == {'success': True}
+    db_session.refresh(element)
+    assert json.loads(element.serialized_input) == {'headline': 'new', 'other': 'keep'}
+    assert (element.title, element.duration) == ('T', 7)
+
+
+def test_update_content_fields_refuses_what_the_content_type_locks(flask_app, db_session, superadmin_client):
+    import json
+    from application.models import ContentElement, Contenttype, TagConfig
+    ct = Contenttype(name='ucf-locked')
+    db_session.add(ct)
+    db_session.flush()
+    db_session.add(TagConfig(contenttype_id=ct.id, field_name='headline', field_handler='textklein', contentcontainer_id=None, order=0,
+                             option_flags=json.dumps({'headline': {'locked': True, 'hidden': False}})))
+    element = ContentElement(title='T', html='{}', duration=7, active=True, contenttype_id=ct.id, serialized_input='{}')
+    db_session.add(element)
+    db_session.commit()
+    answer = _ack(superadmin_client, 'displayhive:admin:cts:update_content_fields', {'content_element_id': element.id, 'fields': {'headline': 'x'}})
+    assert answer['success'] is False and 'locked' in answer['error']
+
+
+def test_update_content_delivery_changes_only_the_schedule(flask_app, db_session, superadmin_client, plain_client):
+    from application.models import ContentElement
+    element = ContentElement(title='T', html='{}', duration=7, active=True, serialized_input='{"a": "b"}')
+    db_session.add(element)
+    db_session.commit()
+    event = 'displayhive:admin:cts:update_content_delivery'
+    data = {'content_element_id': element.id, 'start_time': '2030-01-01T08:00', 'end_time': '2030-01-02T08:00',
+            'recurrence': [{'days': [1, 2], 'from': '08:00', 'to': '18:00'}]}
+    assert _ack(plain_client, event, data) == {'success': False, 'error': 'Permission denied'}
+    assert _ack(superadmin_client, event, data) == {'success': True}
+    db_session.refresh(element)
+    assert (element.start_time.hour, element.end_time.day, element.duration, element.serialized_input) == (8, 2, 7, '{"a": "b"}')
+    assert 'from' in element.recurrence
+    assert _ack(superadmin_client, event, {**data, 'start_time': 'nonsense'})['success'] is False
+    assert _ack(superadmin_client, event, {'content_element_id': element.id})['success'] is True      # clears the schedule
+    db_session.refresh(element)
+    assert element.start_time is None and element.recurrence in (None, '', '[]')

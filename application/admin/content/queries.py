@@ -238,7 +238,7 @@ def register_content_query_handlers(socketio, app, db):
             return
 
         serialized = json.dumps(
-            {k: v for k, v in data.items() if k not in ('contenttype_id', 'aspect_ratio')}, ensure_ascii=False,
+            {k: v for k, v in data.items() if k not in ('contenttype_id', 'aspect_ratio', 'request_id')}, ensure_ascii=False,
         )
         rendered_by_container = render_content_fields(contenttype.tagconfigs, serialized, db=db)
         from application.admin.layouts.helper import containers_for_ratio
@@ -254,7 +254,9 @@ def register_content_query_handlers(socketio, app, db):
 
         socketio.emit(
             'displayhive:admin:stc:content_element_preview',
-            {'design': build_design_payload(db), 'containers': containers, 'aspect_ratio': ratio},
+            {'design': build_design_payload(db), 'containers': containers, 'aspect_ratio': ratio,
+             # echoed, so a page that asks for several previews at once can tell the answers apart
+             'request_id': data.get('request_id')},
             room=sid,
         )
 

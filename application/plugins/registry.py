@@ -23,6 +23,7 @@ class PluginRegistry:
         self._events: dict[tuple, object] = {}                        # (plugin id, event name) -> handler
         self._hooks: dict[str, list] = {}                             # plugin id -> functions to call on unload
         self._sections: dict[str, tuple] = {}                         # data section id -> (plugin id, DataSection)
+        self._failures: dict[str, str] = {}                            # plugin id -> why it could not be loaded
         self._warned: set = set()
         self._retired: list = []                                      # (plugin id, version) unloaded, code still in memory
 
@@ -80,6 +81,19 @@ class PluginRegistry:
             except Exception:
                 logger.exception('An unload hook of plugin %s failed', plugin_id)
 
+    def set_failure(self, plugin_id: str, message: str) -> None:
+        with self._lock:
+            self._failures[plugin_id] = message
+
+    def clear_failure(self, plugin_id: str) -> None:
+        with self._lock:
+            self._failures.pop(plugin_id, None)
+
+    def failure(self, plugin_id: str) -> str:
+        """Why *plugin_id* is switched on but not loaded ('' when it is fine)."""
+        with self._lock:
+            return self._failures.get(plugin_id, '')
+
     def retire(self, plugin_id: str, version: str) -> None:
         """Note that a plugin was unloaded; its code stays in memory until the server restarts."""
         with self._lock:
@@ -98,6 +112,7 @@ class PluginRegistry:
             self._hooks.clear()
             self._sections.clear()
             self._warned.clear()
+            self._failures.clear()
             self._retired.clear()
 
     # --- Look-ups --------------------------------------------------------------------------

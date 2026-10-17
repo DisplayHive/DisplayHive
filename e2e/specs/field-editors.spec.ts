@@ -37,6 +37,7 @@ const HANDLERS: Array<[name: string, handler: string, title: string]> = [
   ['f_wys', 'wysiwyg', 'Rich text'],
   ['f_icon', 'icon', 'Icon'],
   ['f_pretalx', 'pretalx_table', 'Pretalx'],
+  ['f_qr', 'qrcode', 'QR code'],
 ]
 
 let containerId = 0
@@ -119,6 +120,19 @@ test.describe('Field editors', () => {
     // nothing is installed by default: the picker says so, and where to install
     await expect(block(page, 'Icon').getByTestId('icon-picker-empty')).toContainText('No icon library is installed')
     await expect(block(page, 'Pretalx').locator('.pretalx-table-editor')).toBeVisible()
+    await expect(block(page, 'QR code').getByTestId('qr-field')).toBeVisible()
+  })
+
+  test('the QR code editor asks for what the chosen kind needs', async ({ page, backendUrl }) => {
+    await openNew(page, backendUrl)
+    const qr = block(page, 'QR code')
+    await expect(qr.getByLabel('Address')).toBeVisible()               // the default kind: a link
+    await qr.getByLabel('Kind of QR code').click()
+    await page.getByRole('option', { name: 'Wi-Fi' }).click()
+    await expect(qr.getByLabel('Network name (SSID)')).toBeVisible()
+    await expect(qr.getByLabel('Address')).toHaveCount(0)
+    await qr.getByLabel('Network name (SSID)').fill('Guest')
+    await expect(page.locator('.content-edit-preview-stage')).toBeVisible()
   })
 
   test('the date format and countdown previews update as you type', async ({ page, backendUrl }) => {

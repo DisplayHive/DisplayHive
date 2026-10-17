@@ -11,6 +11,7 @@ import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Popover from 'primevue/popover'
+import { onRowSaved } from '../composables/contentEdit/useRowEditSession'
 import ContentTable from '../components/content/ContentTable.vue'
 import { useRightsStore } from '../stores/rights'
 import { useScreensStore } from '../stores/screens'
@@ -206,6 +207,7 @@ const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: R
 }
 
 onMounted(() => {
+  stopSavedListener = onRowSaved(reloadQuietly)
   on('displayhive:admin:stc:all_content_detailed', handleAllContentDetailed)
   on('displayhive:admin:stc:unassigned_content', handleUnassignedContent)
   on('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
@@ -216,10 +218,19 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopSavedListener?.()
   off('displayhive:admin:stc:all_content_detailed', handleAllContentDetailed)
   off('displayhive:admin:stc:unassigned_content', handleUnassignedContent)
   off('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
 })
+
+let stopSavedListener: (() => void) | null = null
+
+// Read the list again without the loading state (that would replace the table, and with it the open rows).
+const reloadQuietly = () => {
+  emit('displayhive:admin:cts:get_all_content_detailed')
+  emit('displayhive:admin:cts:get_unassigned_content')
+}
 
 const refreshData = () => {
   loading.value = true
@@ -239,18 +250,6 @@ const toggleActive = async (content: ContentElement) => {
   } catch {
     content.active = !newActive
   }
-}
-
-const updateDuration = (content: ContentElement) => {
-  void request('displayhive:admin:cts:update_content_element_duration', {
-    content_element_id: content.id,
-    duration: content.duration
-  }, { error: 'Could not update the duration' })
-}
-
-const setDuration = (content: ContentElement, val: number) => {
-  content.duration = val
-  updateDuration(content)
 }
 
 const deleteContent = (content: ContentElement) => {
@@ -357,6 +356,8 @@ const copyContent = (content: ContentElement) => {
           :totalItems="allContent.length"
           v-model:search="searchFilter"
           :oneScreenGroupIds="oneScreenGroupIds"
+          :allScreengroups="allScreengroups"
+          :oneScreenGroups="oneScreenGroups"
           :emptyMessage="
             filterMode === 'screen' && selectedScreenId == null
               ? 'Select a screen to see its content'
@@ -368,8 +369,6 @@ const copyContent = (content: ContentElement) => {
           @copy="copyContent"
           @delete="deleteContent"
           @toggleActive="toggleActive"
-          @updateDuration="updateDuration"
-          @setDuration="setDuration"
         />
       </template>
     </Card>

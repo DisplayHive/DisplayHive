@@ -29,6 +29,19 @@ export interface DesignPreviewPayload {
   default_colors?: DefaultColor[]
 }
 
+/** How a container's text looks in the preview document (computed CSS values). */
+export interface ContainerTextStyle {
+  fontFamily: string
+  fontSize: string
+  fontWeight: string
+  fontStyle: string
+  color: string
+  lineHeight: string
+  textAlign: string
+  letterSpacing: string
+  textTransform: string
+}
+
 export interface PreviewContainer {
   top: number
   left: number
@@ -116,6 +129,28 @@ export async function resolveIconPlaceholders(html: string): Promise<string> {
 // needed, so `sandbox="allow-scripts"` alone is enough to run it). Mirrors
 // the token formats of both modules; kept in sync by hand since it can't
 // import them into a plain string template.
+// Tells the admin how each container's text looks in this document (font, size, colour …), so that
+// editing in the preview (components/contentEdit/PreviewEditLayer.vue) can use the same: the admin
+// cannot look into this sandboxed document, it can only be told. Sent once the page has loaded.
+const STYLE_REPORT_SCRIPT = `<script>
+(function () {
+  function report() {
+    var out = {};
+    var boxes = document.querySelectorAll('.dh-container');
+    for (var i = 0; i < boxes.length; i++) {
+      var m = /dh-container-(\\d+)/.exec(boxes[i].className);
+      if (!m) continue;
+      var target = boxes[i].querySelector(':scope > :not(style):not(script)') || boxes[i];
+      var cs = getComputedStyle(target);
+      out[m[1]] = { fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight, fontStyle: cs.fontStyle,
+        color: cs.color, lineHeight: cs.lineHeight, textAlign: cs.textAlign, letterSpacing: cs.letterSpacing, textTransform: cs.textTransform };
+    }
+    parent.postMessage({ type: 'dh-preview-styles', styles: out }, '*');
+  }
+  window.addEventListener('load', function () { setTimeout(report, 200); });
+})();
+</script>`
+
 const TICK_SCRIPT = `<script>
 (function () {
   function fmtClock(d, fmt, tz) {
@@ -194,6 +229,6 @@ export async function buildDesignPreviewSrcdoc(
   ).join('')
   return (
     `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:relative;}${design.css}</style></head>` +
-    `<body>${buildEffectFragment(design.background_effect)}<div style="position:relative;">${design.html}</div>${containersHtml}${TICK_SCRIPT}</body></html>`
+    `<body>${buildEffectFragment(design.background_effect)}<div style="position:relative;">${design.html}</div>${containersHtml}${TICK_SCRIPT}${STYLE_REPORT_SCRIPT}</body></html>`
   )
 }

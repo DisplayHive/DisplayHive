@@ -1,0 +1,19 @@
+{
+  "id": "displayhive.qrcode",
+  "name": "QR code",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "description": "A QR code for a link, text, contact (vCard / MeCard), Wi-Fi access, e-mail, SMS, phone number, map position, calendar event or SEPA payment.",
+  "author": "DisplayHive",
+  "license": "MIT",
+  "provides": {
+    "fieldhandlers": [
+      "qrcode"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts"
+}

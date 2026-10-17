@@ -17,6 +17,8 @@ export interface PluginInfo {
   has_screen: boolean
   requires_host: string
   compatible: boolean
+  /** Why a plugin that is switched on is not running. */
+  error: string
 }
 
 export interface PluginsState {

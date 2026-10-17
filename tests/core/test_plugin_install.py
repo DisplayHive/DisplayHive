@@ -294,3 +294,14 @@ def test_a_plugins_route_and_files_are_served_under_its_id(flask_app, app):
 def test_the_upload_route_needs_the_right(flask_app, app):
     response = flask_app.app.test_client().post('/admin/api/plugins/upload', data={'file': (io.BytesIO(build_zip()), 'p.zip')})
     assert response.status_code in (401, 403)
+
+
+def test_a_missing_python_package_is_named_and_shown(flask_app, app):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr('plugin.json', json.dumps({'id': 'acme.demo', 'name': 'D', 'kind': 'integration', 'version': '1.0.0', 'plugin_api': 1, 'backend': 'backend'}))
+        archive.writestr('backend/__init__.py', 'import a_package_nobody_installed\n')
+    with pytest.raises(PluginError, match='needs the Python package "a_package_nobody_installed"'):
+        service.install_zip(flask_app.db, app, buffer.getvalue())
+    listed = {p['id']: p for p in service.describe(flask_app.db, app)['plugins']}
+    assert 'a_package_nobody_installed' in listed['acme.demo']['error']

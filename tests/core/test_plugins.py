@@ -17,7 +17,7 @@ BUNDLED = {
     'displayhive.table': 'table', 'displayhive.image': 'image', 'displayhive.icon': 'icon',
     'displayhive.arrows': 'arrows', 'displayhive.datetime-format': 'datetime_format',
     'displayhive.countdown': 'countdown', 'displayhive.marquee': 'marquee', 'displayhive.rawhtml': 'rawhtml',
-    'displayhive.iframe': 'iframe', 'displayhive.pretalx': 'pretalx_table',
+    'displayhive.iframe': 'iframe', 'displayhive.pretalx': 'pretalx_table', 'displayhive.qrcode': 'qrcode',
 }
 
 

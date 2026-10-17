@@ -21,12 +21,19 @@ export const SG_PAGE_SIZE = 10
  * (searchable, paged), the picked ids, and the screens the element is currently live on —
  * so any edit is flagged as affecting them. (Screens are the one-screen groups.)
  */
-export function useScreengroupAssignment(editMode: Ref<boolean>) {
+export function useScreengroupAssignment(
+  editMode: Ref<boolean>,
+  /**
+   * Lists somebody else already keeps current (the content list page does): then nothing is fetched or
+   * listened to here. A page with many users of this composable (a row each) must not ask the server once per row.
+   */
+  shared?: { allScreengroups: Ref<ScreengroupOption[]>; oneScreenGroups: Ref<ScreengroupOption[]> },
+) {
   const { on, off, emit } = useSocket()
   const screensStore = useScreensStore()
 
-  const allScreengroups = ref<ScreengroupOption[]>([])
-  const oneScreenGroups = ref<ScreengroupOption[]>([])
+  const allScreengroups = shared?.allScreengroups ?? ref<ScreengroupOption[]>([])
+  const oneScreenGroups = shared?.oneScreenGroups ?? ref<ScreengroupOption[]>([])
 
   const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
     const arr = data?.screengroups || data?.data || []
@@ -43,14 +50,16 @@ export function useScreengroupAssignment(editMode: Ref<boolean>) {
       .map(toOption)
   }
 
-  onMounted(() => {
-    on('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
-    emit('displayhive:admin:cts:get_screengroups')
-    screensStore.fetch()
-  })
-  onUnmounted(() => {
-    off('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
-  })
+  if (!shared) {
+    onMounted(() => {
+      on('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
+      emit('displayhive:admin:cts:get_screengroups')
+      screensStore.fetch()
+    })
+    onUnmounted(() => {
+      off('displayhive:admin:stc:upd_screengroups', handleAllScreengroups)
+    })
+  }
 
   const formScreengroupIds = ref<number[]>([])
   const originalScreengroupIds = ref<number[]>([])

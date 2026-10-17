@@ -30,3 +30,5 @@ pyjwt[crypto]
 psycopg2-binary
 # WebAuthn / passkeys: verifies registration and sign-in responses (application/security/passkeys.py).
 webauthn>=2.5
+# QR codes as SVG (the QR code field handler: plugins/displayhive.qrcode); pure Python, no dependencies.
+segno>=1.6

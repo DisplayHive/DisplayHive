@@ -9,6 +9,7 @@ import { seedField, seedMissingField, type FieldValue } from '../../utils/conten
 import { fieldHandlerDef } from '../../plugins/registry'
 import type { OptionFlags } from '../../utils/content/optionFlags'
 import { describeWindows, type WeeklyWindow } from '../../utils/content/recurrence'
+import { cloneWindows, fmtDt, formatDateDisplay, parseIsoDate } from '../../utils/content/scheduling'
 
 export interface ContentType {
   id: number
@@ -25,6 +26,8 @@ export interface TagConfig {
   description?: string
   max_length?: number
   optionFlags?: OptionFlags
+  /** The container the field fills: its area in the preview is where the field can be edited. */
+  containerId?: number | null
 }
 
 // Raw TagConfig as the backend sends it (snake_case, JSON-encoded
@@ -39,6 +42,7 @@ interface RawTagConfig {
   max_length?: number
   option_flags?: string
   default_value?: string
+  contentcontainer_id?: number | null
 }
 
 // Raw content-element payload from get_content_element_detail: the known
@@ -56,27 +60,6 @@ interface RawContentDetail {
   [key: string]: unknown
 }
 
-
-/** A copy of the windows from the server (or none), so editing the form never touches the loaded data. */
-const cloneWindows = (v: unknown): WeeklyWindow[] =>
-  Array.isArray(v) ? v.map((w) => ({ days: [...(w.days ?? [])], from: String(w.from ?? ''), to: String(w.to ?? '') })) : []
-
-const parseIsoDate = (v: string | null | undefined): Date | null => {
-  if (!v) return null
-  const d = new Date(v)
-  return isNaN(d.getTime()) ? null : d
-}
-
-const formatDateDisplay = (d: Date | null): string => {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d!.getDate())}.${pad(d!.getMonth() + 1)}.${d!.getFullYear()} ${pad(d!.getHours())}:${pad(d!.getMinutes())}`
-}
-
-const fmtDt = (d: Date | null | undefined): string | null => {
-  if (!d) return null
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 /**
  * The content edit page (/content/new, /content/:id/edit, /content/:id/copy): what is being
@@ -299,6 +282,7 @@ function createContentEditor() {
           name: t.field_name || t.name || '',
           title: t.field_label || t.title || (t.field_name || t.name || ''),
           fieldHandler,
+          containerId: t.contentcontainer_id ?? null,
           description: (t.description as string) || '',
           max_length: (t.max_length as number) || fieldHandlerDef(fieldHandler)?.maxLength || 255,
           optionFlags: (() => {

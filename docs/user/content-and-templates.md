@@ -75,7 +75,7 @@ size fields, a table builder, etc.) opens from the container's own settings.
 This default is what renders whenever no active content currently targets
 that container. The available handlers are: Short text, Long text, WYSIWYG,
 Number, Link/URL, Image, Icon, Arrow, Date/Time Format, Countdown, Table,
-Pretalx Table (when the Pretalx plugin is on), Raw HTML, iFrame, Marquee (scrolling text), or None. Each handler is a [plugin](plugins.md); the ones you switch off are not offered.
+Pretalx Table (when the Pretalx plugin is on), QR code, Raw HTML, iFrame, Marquee (scrolling text), or None. Each handler is a [plugin](plugins.md); the ones you switch off are not offered.
 
 There's no per-screen "this screen uses layout X" assignment — a layout's
 only job is to group containers and scope which containers a content type
@@ -140,7 +140,7 @@ For each field you can set:
 - A **field handler** — the same set available for a layout container's
   default content (short text, long text, WYSIWYG, number, link/URL, image,
   icon, arrow, date/time format, countdown, table, Pretalx table — see
-  [Pretalx](pretalx.md) — raw HTML, iFrame, marquee, or none). Leaving a
+  [Pretalx](pretalx.md) — QR code, raw HTML, iFrame, marquee, or none). Leaving a
   field as **None** means it has no input of its own and always falls back
   to showing its container's default content. A **Raw HTML** field is shown
   in a sandbox: its own small document in an isolated frame, where scripts
@@ -164,6 +164,28 @@ to edit.
 
 A **Copy** action on the list duplicates a content type, including its field
 configuration, under a new name.
+
+### QR codes
+
+A **QR code** field draws a code a phone's camera turns into an action. Pick what it is for, fill in what that kind needs
+and the code is drawn from it (as a picture on the server, so it also shows offline):
+
+| Kind | Result when scanned |
+|---|---|
+| Link / website | opens the page |
+| Plain text | shows the text |
+| Contact (vCard / MeCard) | offers to save the contact (name, organisation, phone, e-mail, address …) |
+| Wi-Fi | joins the network (name, password, WPA / WEP / open, hidden) |
+| E-mail | opens a draft with recipient, subject and text |
+| SMS | opens a message to a number |
+| Phone number | offers to call |
+| Map position | opens the position (latitude, longitude) in the maps app |
+| Calendar event | offers to add the event (title, start, end, place, description) |
+| SEPA payment (GiroCode) | opens the banking app with recipient, IBAN, amount and purpose filled in |
+
+*Appearance* sets the size (empty: as large as the container), the colours (a dark code on a light background reads
+best; the background can be transparent), the error correction and the quiet zone. A code that holds more than a QR
+code can carry is not drawn. A payment to a PayPal or other payment page is a *Link*.
 
 ## Creating content
 

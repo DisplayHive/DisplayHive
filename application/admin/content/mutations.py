@@ -74,6 +74,86 @@ def register_content_mutation_handlers(socketio, app, db):
         logger.info('ContentElement %s deleted', content_element_id)
         return ok()
 
+    @socketio.on('displayhive:admin:cts:update_content_fields')
+    @admin_action('content.edit')
+    def update_content_fields(message):
+        """Change some field values of a content element and leave everything else as it is.
+
+        message: ``{content_element_id, fields: {field key: value}}``. The values are merged into the
+        element's ``serialized_input`` (keys are a content type's field names and their ``__suffix``
+        sub-values) and the element is rendered again; what a content type locks or hides is enforced by
+        that rendering, as for every other save. Used by editing in the previews of the content list.
+        """
+        from application.admin.content.helper import render_content_fields
+
+        content_element_id, values = fields(message, 'content_element_id', 'fields')
+        element = get_or_fail(db, ContentElement, content_element_id, 'Content')
+        if not isinstance(values, dict) or not values:
+            raise Fail('Nothing to change')
+        try:
+            stored = json.loads(element.serialized_input or '{}')
+        except (ValueError, TypeError):
+            stored = {}
+        if not isinstance(stored, dict):
+            stored = {}
+        tagconfigs = element.contenttype.tagconfigs if element.contenttype else []
+        allowed = {t.field_name for t in tagconfigs if t.field_name}
+        locked = set()      # what the content type locks or hides: not changeable per content
+        for t in tagconfigs:
+            try:
+                flags = json.loads(t.option_flags) if t.option_flags else {}
+            except (ValueError, TypeError):
+                flags = {}
+            for flag_key, flag in (flags.items() if isinstance(flags, dict) else []):
+                if isinstance(flag, dict) and (flag.get('locked') or flag.get('hidden')):
+                    locked.add(flag_key)
+        for key, value in values.items():
+            if not any(key == name or str(key).startswith(name + '_') for name in allowed):
+                raise Fail(f'"{key}" is not a field of this content type')
+            if key in locked:
+                raise Fail(f'"{key}" is locked by the content type')
+            stored[key] = value
+        element.serialized_input = json.dumps(stored, ensure_ascii=False)
+        element.html = json.dumps(render_content_fields(tagconfigs, element.serialized_input, db=db), ensure_ascii=False)
+        db.session.commit()
+        push_content_list_to_all_screens(socketio, app, db)
+        return ok()
+
+    @socketio.on('displayhive:admin:cts:update_content_delivery')
+    @admin_action('content.edit')
+    def update_content_delivery(message):
+        """Change when a content element is shown (start, end, weekly windows) and nothing else.
+
+        message: ``{content_element_id, start_time, end_time, recurrence}`` — the formats
+        ``create_content_element`` takes. Used by the delivery settings of the content list.
+        """
+        from datetime import datetime as _dt
+
+        content_element_id, start_raw, end_raw, windows = fields(message, 'content_element_id', 'start_time', 'end_time', 'recurrence')
+        element = get_or_fail(db, ContentElement, content_element_id, 'Content')
+
+        def parse(value):
+            if not value:
+                return None
+            for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+                try:
+                    return _dt.strptime(str(value).strip(), fmt)
+                except ValueError:
+                    continue
+            raise Fail(f'"{value}" is not a date and time')
+
+        try:
+            recurrence = dump_recurrence(normalize_recurrence(windows))
+        except ValueError as problem:
+            raise Fail(str(problem)) from None
+        start, end = parse(start_raw), parse(end_raw)
+        if start and end and end <= start:
+            end = None
+        element.start_time, element.end_time, element.recurrence = start, end, recurrence
+        db.session.commit()
+        push_content_list_to_all_screens(socketio, app, db)
+        return ok()
+
     @socketio.on('displayhive:admin:cts:create_content_element')
     @admin_action()
     def create_content_element(message):

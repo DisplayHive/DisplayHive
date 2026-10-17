@@ -103,6 +103,11 @@ def load(manifest: Manifest, host_version: str = '') -> None:
         _forget_modules(manifest)
         if isinstance(problem, PluginError):
             raise
+        if isinstance(problem, ModuleNotFoundError) and problem.name:
+            raise PluginError(
+                f'{manifest.id} needs the Python package "{problem.name}", which is not installed here. '
+                'Install the server\'s requirements again (requirements/requirements.txt) and restart.'
+            ) from problem
         raise PluginError(f'{manifest.id} failed to load: {problem}') from problem
 
 
@@ -274,7 +279,9 @@ def reconcile(db, installed_dir: Optional[Path] = None, host_version: str = '', 
                         run_migrations(db, manifest, current)       # whatever is not applied yet, loaded or not
                 if not loaded:
                     load(manifest, host_version)
+                registry.clear_failure(plugin_id)
             except PluginError as problem:
+                registry.set_failure(plugin_id, str(problem))
                 logger.error('Plugin %s could not be loaded: %s', plugin_id, problem)
                 problems.append(str(problem))
     for plugin_id in list(registry.loaded()):

@@ -45,7 +45,7 @@ describe('the bundled plugins', () => {
   it('register the handlers the backend provides, each with an editor', () => {
     registerBundledPlugins()
     const ids = ['textklein', 'textbig', 'link', 'wysiwyg', 'numbers', 'checkbox', 'table', 'image', 'icon', 'arrows',
-      'datetime_format', 'countdown', 'marquee', 'rawhtml', 'iframe', 'pretalx_table']
+      'datetime_format', 'countdown', 'marquee', 'rawhtml', 'iframe', 'pretalx_table', 'qrcode']
     for (const id of ids) expect(fieldHandlerDef(id)?.editor, id).toBeDefined()
   })
 
@@ -62,6 +62,12 @@ describe('the bundled plugins', () => {
     const random = image.unpack(JSON.stringify({ url: '', mode: 'random_tags', tags: ['a'] }))
     expect(random.default__image_tags).toEqual(['a'])
     expect(JSON.parse(image.pack(random)).mode).toBe('random_tags')
+
+    const code = fieldHandlerDef('qrcode')!.container!
+    const wifi = code.unpack(JSON.stringify({ content: '', type: 'wifi', wifi_ssid: 'Guest', bg: '' }))
+    expect(wifi).toEqual({ default: '', default__type: 'wifi', default__wifi_ssid: 'Guest', default__bg: '' })
+    expect(JSON.parse(code.pack(wifi))).toEqual({ content: '', type: 'wifi', wifi_ssid: 'Guest', bg: '' })
+    expect(code.unpack('https://example.org')).toEqual({ default: 'https://example.org', default__type: 'url' })     // a plain string is the link
 
     const pretalx = fieldHandlerDef('pretalx_table')!.container!
     const table = pretalx.unpack(JSON.stringify({ url: 'https://x', linecount: 3 }))
