@@ -107,8 +107,8 @@ Defined under `application/models/`:
   `Screen.aspect_ratio` picks the best-matching variation in `upd_content`),
   `SystemSetting`,
   Telegram alerting models (`AlertSubscription`, `TelegramUser`), `Media`,
-  and the Pretalx models (`PretalxApiUrl`, `PretalxApiCache`,
-  `PretalxSettings`).
+  and the `plugin` table (which plugins are switched on). The Pretalx tables belong to
+  the Pretalx plugin (see [Plugins](plugins.md)).
 - **`device.py`** — `Device` (a physical/browser player: `devicekey`,
   `is_online`, FK to `Screen`).
 - **`screen.py`** — `Screen` (a logical display slot — resolution,
@@ -144,7 +144,7 @@ panel feature, using a `displayhive:admin:<feature>:cts:*` (client-to-server)
 | `layouts` | CRUD for `Layout` and `ContentContainer` positioning/assignment |
 | `matrix` | No handlers of its own — the Matrix page calls the same `screens`/`screengroups` mutations directly |
 | `media` | Media library CRUD, folders, uploads |
-| `pretalx` | Pretalx URL/settings/room config, cache; triggers a content push when data refreshes |
+| `plugin` / `displayhive:plugin:call` | The Plugins page, and the one door through which a plugin's own events arrive (the Pretalx plugin's URL/settings/room config and cache among them) |
 | `rights` | CRUD for `Group`/`GroupRight`, user↔group membership, per-user `UserRight` overrides |
 | `screengroups` | CRUD for `Screengroup` plus screen/content membership |
 | `screens` | Create/delete/rename `Screen`, toggle monitoring/debug, reset size |

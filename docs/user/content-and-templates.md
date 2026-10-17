@@ -75,7 +75,7 @@ size fields, a table builder, etc.) opens from the container's own settings.
 This default is what renders whenever no active content currently targets
 that container. The available handlers are: Short text, Long text, WYSIWYG,
 Number, Link/URL, Image, Icon, Arrow, Date/Time Format, Countdown, Table,
-Pretalx Table, Raw HTML, iFrame, Marquee (scrolling text), or None.
+Pretalx Table (when the Pretalx plugin is on), Raw HTML, iFrame, Marquee (scrolling text), or None. Each handler is a [plugin](plugins.md); the ones you switch off are not offered.
 
 There's no per-screen "this screen uses layout X" assignment — a layout's
 only job is to group containers and scope which containers a content type

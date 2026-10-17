@@ -34,6 +34,7 @@ stable ``uuid`` column, which is the authoritative identity used here:
 
 import logging
 
+from . import plugin_data
 from .payload import prepare_import_payload
 from .registry import ENTITY_TYPES, get_model
 from .rows import (
@@ -167,6 +168,9 @@ def import_manifest(data: dict, app, db) -> dict:
                 }
                 for row in rows
             ]
+        entries, labels = plugin_data.import_manifest(db, data)
+        manifest.update(entries)
+        manifest['_labels'] = labels
         return manifest
 
 
@@ -286,6 +290,7 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             import_devices(ctx)
             import_soft_associations(ctx)
             import_system_settings(ctx)
+            plugin_counts, plugin_skipped = plugin_data.import_sections(db, data, selection, mode, conflict_resolution)
 
             if mode == 'reset':
                 _reset_postgres_sequences(db)
@@ -298,7 +303,8 @@ def import_database(app, db, data: dict, selection=None, mode: str = 'reset', co
             logger.info('Import committed successfully')
 
             counts = {key: len(ctx.id_map[key]) for key in ctx.id_map}
-            return {'success': True, 'counts': counts}
+            counts.update(plugin_counts)
+            return {'success': True, 'counts': counts, 'skipped_plugin_data': plugin_skipped}
         except Exception as e:
             db.session.rollback()
             _sqlite_foreign_keys(db, True)

@@ -22,6 +22,12 @@ describe("strategyFor", () => {
     expect(get("/favicon.ico")).toBe("static");
   });
 
+  it("caches the files of an installed plugin (their URL carries the version), but not its routes", () => {
+    expect(get("/api/plugins/acme.demo/assets/1.0.0/screen/index.js")).toBe("static");
+    expect(get("/api/plugins/acme.demo/hello")).toBe("bypass");
+    expect(get("/api/plugins/_active")).toBe("bypass");
+  });
+
   it("caches uploaded media, previews and renditions", () => {
     expect(get("/static/media/a/b.png")).toBe("media");
     expect(get("/static/media_previews/b_preview.jpg")).toBe("media");

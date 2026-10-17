@@ -10,7 +10,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useRightsStore } from '../../stores/rights'
 import { onRightsReady } from '../../composables/useRightsReady'
 import { httpErrorMessage, errorText } from '../../utils/httpError'
-import { buildTree, allCheckedKeys, selectionFromKeys, type Manifest, type SelectionKeys } from '../../utils/importExportTree'
+import { buildTree, allCheckedKeys, selectionFromKeys, splitManifest, type SelectionKeys } from '../../utils/importExportTree'
 
 // "Export Database" card of the Im-/Export page: pick items in a checkbox tree
 // and download them as a ZIP.
@@ -31,8 +31,8 @@ const loadExportTree = async () => {
   try {
     const response = await fetch('/admin/export/tree', { headers: authStore.authHeader() })
     if (!response.ok) throw new Error(await httpErrorMessage(response))
-    const manifest: Manifest = await response.json()
-    exportTree.value = buildTree(manifest)
+    const { manifest, labels } = splitManifest(await response.json())
+    exportTree.value = buildTree(manifest, '', labels)
     exportSelectionKeys.value = allCheckedKeys(exportTree.value)
     exportTreeLoaded.value = true
   } catch (e) {

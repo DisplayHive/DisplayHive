@@ -1,4 +1,5 @@
 import type { TourDefinition } from '../types'
+import { pluginRegistry } from '../../plugins/registry'
 import { contentTypesTour } from './contentTypes'
 import { layoutUsageTour } from './layoutUsage'
 import { createEditContentTour } from './createEditContent'
@@ -12,7 +13,7 @@ import { devicesTour } from './devices'
 import { usersTour } from './users'
 import { importExportTour } from './importexport'
 import { alertingTour } from './alerting'
-import { pretalxTour } from './pretalx'
+import { pluginsTour } from './plugins'
 
 export const TOURS: TourDefinition[] = [
   dashboardTour,
@@ -28,8 +29,11 @@ export const TOURS: TourDefinition[] = [
   usersTour,
   importExportTour,
   alertingTour,
-  pretalxTour,
+  pluginsTour,
 ]
 
+/** The tours of the host and of the plugins that are switched on. */
+export const allTours = (): TourDefinition[] => [...TOURS, ...pluginRegistry.tours.values()]
+
 export const toursByCategory = (category: TourDefinition['category']) =>
-  TOURS.filter((tour) => tour.category === category)
+  allTours().filter((tour) => tour.category === category)

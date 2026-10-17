@@ -23,7 +23,7 @@ one of these commands, see _loaded_for_flask_cli_command there.
 
 from .group import dh
 # Importing the modules registers their commands on `dh`.
-from . import check, database, media, users  # noqa: F401
+from . import check, database, media, plugins, users  # noqa: F401
 from .database import _revision_of, _upgrade_to_head  # noqa: F401  (used by tests)
 from .media import rerender_all, rerender_media  # noqa: F401
 

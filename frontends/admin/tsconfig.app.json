@@ -1,12 +1,17 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
+  "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "../../plugins/*/admin/**/*", "../../plugins/*/admin/**/*.vue"],
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@plugins/*": ["../../plugins/*"],
+      "vue": ["./node_modules/vue"],
+      "vue-router": ["./node_modules/vue-router"],
+      "pinia": ["./node_modules/pinia"],
+      "primevue/*": ["./node_modules/primevue/*"]
     }
   }
 }

@@ -36,6 +36,21 @@ const redirectAdminTrailingSlash = (req: Connect.IncomingMessage, res: ServerRes
 const backendUrl =
   process.env.VITE_BACKEND_URL || process.env.VITE_SOCKET_URL || 'http://localhost:5000'
 
+const adminEntry = fileURLToPath(new URL('./src/main.ts', import.meta.url))
+const pluginsDir = fileURLToPath(new URL('../../plugins', import.meta.url))
+
+// The bundled plugins' admin code lives in plugins/<id>/admin/, outside this package, so a bare import
+// there (`vue`, `primevue/button`) would be looked up next to the plugin and not found. Resolve it as
+// if the plugin were part of the admin — which also makes it share the admin's single copy of Vue.
+const resolvePluginImports = () => ({
+  name: 'resolve-plugin-imports',
+  enforce: 'pre' as const,
+  async resolveId(this: { resolve: (s: string, i: string, o: object) => Promise<unknown> }, source: string, importer?: string) {
+    if (!importer || !importer.startsWith(pluginsDir) || source.startsWith('.') || source.startsWith('/') || source.startsWith('@/') || source.startsWith('@plugins/')) return null
+    return this.resolve(source, adminEntry, { skipSelf: true })
+  },
+})
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/admin/',
@@ -47,6 +62,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   plugins: [
+    resolvePluginImports(),
     vue(),
     vueDevTools(),
     {
@@ -67,6 +83,8 @@ export default defineConfig({
     // must use a different port — see frontends/screen/vite.config.ts).
     port: 5173,
     strictPort: true,
+    // The bundled plugins' admin code sits next to the frontends, not inside this one.
+    fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] },
     proxy: {
       // Forward Socket.IO requests to the Flask backend.
       // This allows the Vite dev server (used by Playwright) to act as a
@@ -121,6 +139,11 @@ export default defineConfig({
       },
       // Forward the admin auth REST endpoints (login/session-check) to the
       // Flask backend, same rationale as export/download and import/upload above.
+      // Plugin routes and the files of installed plugins.
+      '/api/plugins': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       '/admin/api': {
         target: backendUrl,
         changeOrigin: true,
@@ -138,6 +161,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // The admin side of the plugins bundled with DisplayHive (plugins/<id>/admin/).
+      '@plugins': fileURLToPath(new URL('../../plugins', import.meta.url)),
     },
   },
 })

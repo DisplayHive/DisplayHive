@@ -1,0 +1,37 @@
+{
+  "id": "displayhive.pretalx",
+  "name": "Pretalx",
+  "kind": "integration",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": false,
+  "provides": {
+    "fieldhandlers": [
+      "pretalx_table"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts",
+  "description": "Show a conference schedule from a Pretalx API: session lists, what is on now and next, event days, track lists.",
+  "author": "DisplayHive",
+  "license": "MIT",
+  "rights": [
+    {
+      "id": "displayhive.pretalx.page",
+      "group": "pretalx",
+      "label": "View Pretalx page"
+    },
+    {
+      "id": "displayhive.pretalx.manage",
+      "group": "pretalx",
+      "label": "Manage Pretalx settings / API URLs"
+    }
+  ],
+  "adopts_tables": [
+    "pretalx_api_url",
+    "pretalx_api_cache",
+    "pretalx_settings"
+  ],
+  "migrations": "migrations"
+}

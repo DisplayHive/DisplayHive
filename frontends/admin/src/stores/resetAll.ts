@@ -2,6 +2,7 @@ import { useContentStore } from './content'
 import { useDevicesStore } from './devices'
 import { useHelpStore } from './help'
 import { useMediaStore } from './media'
+import { usePluginsStore } from './plugins'
 import { useRightsStore } from './rights'
 import { useScreengroupsStore } from './screengroups'
 import { useScreensStore } from './screens'
@@ -21,6 +22,7 @@ export function resetSessionStores(): void {
   useDevicesStore().reset()
   useHelpStore().reset()
   useMediaStore().reset()
+  usePluginsStore().reset()
   useRightsStore().reset()
   useScreengroupsStore().reset()
   useScreensStore().reset()

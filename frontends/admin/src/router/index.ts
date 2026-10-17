@@ -114,9 +114,9 @@ const router = createRouter({
       component: () => import('../views/ImportExportView.vue'),
     },
     {
-      path: '/pretalx',
-      name: 'pretalx',
-      component: () => import('../views/PretalxView.vue'),
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('../views/PluginsView.vue'),
     },
     {
       path: '/alerting',

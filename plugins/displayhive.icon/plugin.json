@@ -1,0 +1,17 @@
+{
+  "id": "displayhive.icon",
+  "name": "Icon",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "provides": {
+    "fieldhandlers": [
+      "icon"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts",
+  "screen": "screen/index.ts"
+}

@@ -1,12 +1,19 @@
 # Pretalx integration
 
+!!! note "Pretalx is a plugin"
+    The integration ships with DisplayHive but is **off** on a new installation: switch it on under
+    *Admin → System → Plugins* (see [Plugins](plugins.md)). An instance that used Pretalx before it became a
+    plugin has it switched on automatically on upgrade, with its addresses, settings and rights unchanged.
+    While it is off the Pretalx page and the *Pretalx Table* field handler are not offered, and content that uses
+    the handler shows that field empty.
+
 DisplayHive can pull a conference schedule from a [Pretalx](https://pretalx.com/)
 instance and render it as live content — useful for "next up in this room"
 displays at conferences.
 
 ## Configuring a source
 
-On the **Pretalx** page (`/pretalx`):
+On the **Pretalx** page (*Admin → Integrations → Pretalx*, `/pretalx`):
 
 1. Add a **Pretalx API URL**: a name plus the schedule URL (`schedule.json` /
    widget URL) for the event.

@@ -65,6 +65,7 @@ nav:
       - Getting started: user/getting-started.md
       - Layouts, designs, content types & content: user/content-and-templates.md
       - Screens, devices & groups: user/screens-devices-groups.md
+      - Plugins: user/plugins.md
       - Pretalx integration: user/pretalx.md
       - Alerting: user/alerting.md
       - Import & export: user/import-export.md
@@ -78,6 +79,7 @@ nav:
       - Overview: developer/index.md
       - Architecture: developer/architecture.md
       - Project structure: developer/project-structure.md
+      - Plugins: developer/plugins.md
       - Real-time content push: developer/realtime-push.md
       - Admin panel styleguide: developer/styleguide.md
       - Guided tour design ruleset: developer/tour-design-ruleset.md

@@ -1,0 +1,468 @@
+<script setup lang="ts">
+import DialogTitle from '@/components/ui/DialogTitle.vue'
+/**
+ * Config editor for the `icon` field handler — shared by ContentEditView.vue
+ * (a Contenttype field's live value) and LayoutCanvasEditor.vue (a
+ * container's default_content), following the same modelValue pattern as
+ * PretalxTableFieldEditor.vue so this multi-part picker UI (library
+ * toggles, search, results grid, license dialog, height input) isn't
+ * duplicated across both editors.
+ *
+ * Which libraries are active and the current search text are pure
+ * in-component UI state — nothing here is persisted beyond the final
+ * selected "<library>/<name>" value and its height.
+ */
+import { ref, computed, onMounted, watch } from 'vue'
+import { getIconManifest, getInstalledLibraries, loadIcon, type IconLibraryMeta, type IconPickerValue } from '@/utils/media/iconLibraries'
+import RouteLink from '@/components/ui/RouteLink.vue'
+import { links } from '@/utils/links'
+import type { OptionFlags } from '@/utils/content/optionFlags'
+import type { DefaultColor } from '@/types/models'
+
+import InputText from 'primevue/inputtext'
+import InputNumber from 'primevue/inputnumber'
+import Checkbox from 'primevue/checkbox'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import Tag from 'primevue/tag'
+import ColorPicker from '@/components/ui/ColorPicker.vue'
+import OptionFlagToggle from '@/components/ui/OptionFlagToggle.vue'
+import ColorPalettePicker from '@/components/ui/ColorPalettePicker.vue'
+
+const props = withDefaults(defineProps<{
+  modelValue: IconPickerValue
+  /** See FieldValueEditor.vue's own `mode`/`optionFlags` doc comment. Local
+   * keys here are 'icon' (the library/search/results/selected section),
+   * 'size' (the Height (vh) input) and 'color' (the Color row) — the caller
+   * translates to/from wire keys. */
+  mode?: 'edit' | 'preset'
+  optionFlags?: OptionFlags
+  /** Active Design's color palette, offered as quick-pick swatches for the
+   * icon color. Picking one stores a "@default:<id>" reference. */
+  palette?: DefaultColor[]
+}>(), {
+  mode: 'edit',
+  optionFlags: undefined,
+  palette: () => [],
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [value: IconPickerValue]
+  'update:optionFlags': [OptionFlags]
+}>()
+
+const patch = (partial: Partial<IconPickerValue>) => emit('update:modelValue', { ...props.modelValue, ...partial })
+
+const isHidden = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.hidden
+const isLocked = (key: string) => props.mode === 'edit' && !!props.optionFlags?.[key]?.locked
+const flagsFor = (key: string) => props.optionFlags?.[key] ?? { locked: false, hidden: false }
+const toggleFlag = (key: string, kind: 'locked' | 'hidden') => {
+  const current = flagsFor(key)
+  emit('update:optionFlags', { ...props.optionFlags, [key]: { ...current, [kind]: !current[kind] } })
+}
+
+// The installed libraries (Settings → Icon libraries); empty until they are loaded or when none is installed.
+const libraries = ref<IconLibraryMeta[]>([])
+const librariesLoaded = ref(false)
+const activeLibraries = ref<Set<string>>(new Set())
+const allActive = computed(() => libraries.value.length > 0 && activeLibraries.value.size === libraries.value.length)
+const toggleLibrary = (id: string, checked: boolean) => {
+  const next = new Set(activeLibraries.value)
+  if (checked) next.add(id)
+  else next.delete(id)
+  activeLibraries.value = next
+}
+const toggleAll = () => {
+  activeLibraries.value = allActive.value ? new Set() : new Set(libraries.value.map((l) => l.id))
+}
+
+const searchText = ref('')
+
+// {library id: sorted icon names[]} — fetched once from /icons/manifest.json.
+const manifest = ref<Record<string, string[]>>({})
+
+interface IconMatch {
+  library: IconLibraryMeta
+  name: string
+}
+
+const filteredIcons = computed<IconMatch[]>(() => {
+  const query = searchText.value.trim().toLowerCase()
+  const results: IconMatch[] = []
+  for (const library of libraries.value) {
+    if (!activeLibraries.value.has(library.id)) continue
+    for (const name of manifest.value[library.id] || []) {
+      if (query && !name.includes(query)) continue
+      results.push({ library, name })
+      if (results.length >= 50) return results
+    }
+  }
+  return results
+})
+
+// Lazily-loaded raw SVG text per "<library>/<name>" key, for the result
+// grid's previews and the currently-selected icon's own preview.
+const previewCache = ref<Record<string, string>>({})
+const previewKey = (libraryId: string, name: string) => `${libraryId}/${name}`
+
+async function ensurePreview(libraryId: string, name: string): Promise<void> {
+  const key = previewKey(libraryId, name)
+  if (key in previewCache.value) return
+  const svg = await loadIcon(libraryId, name)
+  if (svg) previewCache.value = { ...previewCache.value, [key]: svg }
+}
+
+// Eagerly load previews for every icon currently shown in the results grid
+// (rather than only on hover) so the grid renders with real icons visible
+// immediately instead of empty slots until the user mouses over each one.
+watch(
+  filteredIcons,
+  (matches) => {
+    for (const match of matches) void ensurePreview(match.library.id, match.name)
+  },
+  { immediate: true },
+)
+
+const selectedLibraryId = computed(() => props.modelValue.icon.split('/', 1)[0] || '')
+const selectedName = computed(() => props.modelValue.icon.slice(selectedLibraryId.value.length + 1))
+const selectedLibrary = computed(() => libraries.value.find((l) => l.id === selectedLibraryId.value))
+
+onMounted(async () => {
+  const [m, installed] = await Promise.all([getIconManifest(), getInstalledLibraries()])
+  manifest.value = m
+  libraries.value = installed.filter((l) => l.id in m)
+  activeLibraries.value = new Set(libraries.value.map((l) => l.id))
+  librariesLoaded.value = true
+  if (props.modelValue.icon) void ensurePreview(selectedLibraryId.value, selectedName.value)
+})
+
+const selectIcon = (match: IconMatch) => {
+  patch({ icon: `${match.library.id}/${match.name}` })
+  void ensurePreview(match.library.id, match.name)
+}
+const clearIcon = () => patch({ icon: '' })
+
+// --- icon color ----------------------------------------------------------
+// modelValue.color is a literal CSS color, a "@default:<id>" palette
+// reference, or '' (keep the icon's own colors). Same reference mechanism
+// as DesignsView.vue's color fields — resolved server-side by
+// render_content_fields (application/admin/content/helper.py).
+const DEFAULT_COLOR_PREFIX = '@default:'
+const isColorRef = (v: string): boolean => v.startsWith(DEFAULT_COLOR_PREFIX)
+const resolvedColor = computed<string>(() => {
+  const v = props.modelValue.color || ''
+  if (!isColorRef(v)) return v
+  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
+  return props.palette.find((c) => c.id === id)?.hex || ''
+})
+const colorLabel = computed<string>(() => {
+  const v = props.modelValue.color || ''
+  if (!v) return 'Icon default'
+  if (!isColorRef(v)) return v
+  const id = v.slice(DEFAULT_COLOR_PREFIX.length)
+  const c = props.palette.find((x) => x.id === id)
+  return c ? `🎨 ${c.name || c.hex}` : '(deleted default color)'
+})
+// PrimeVue ColorPicker works in bare hex (no '#').
+const colorHex = computed<string>(() => resolvedColor.value.replace(/^#/, ''))
+const setColorHex = (hex: string | undefined) => patch({ color: hex ? `#${hex}` : '' })
+const setColorRef = (c: DefaultColor) => patch({ color: `${DEFAULT_COLOR_PREFIX}${c.id}` })
+const clearColor = () => patch({ color: '' })
+
+const showLicenseDialog = ref(false)
+</script>
+
+<template>
+  <div class="icon-picker">
+    <div v-if="mode !== 'edit' || !isHidden('icon')" class="icon-picker-option-row">
+      <div :class="['icon-picker-option-content', { 'icon-picker-disabled': isLocked('icon') }]">
+        <div class="icon-picker-selected">
+          <div v-if="modelValue.icon && selectedLibrary" class="icon-picker-preview">
+            <span
+              class="icon-picker-preview-svg"
+              :style="{ height: `${modelValue.size}vh`, color: resolvedColor || undefined }"
+              v-html="previewCache[previewKey(selectedLibraryId, selectedName)] || ''"
+            ></span>
+            <span class="icon-picker-preview-label">
+              {{ selectedName }}
+              <Tag :value="selectedLibrary.label" severity="secondary" />
+            </span>
+            <Button icon="pi pi-times" text size="small" @click="clearIcon" aria-label="Clear selected icon" />
+          </div>
+          <span v-else-if="modelValue.icon && librariesLoaded" class="icon-picker-none">
+            {{ modelValue.icon }} — the library “{{ selectedLibraryId }}” is not installed.
+          </span>
+          <span v-else class="icon-picker-none">No icon selected</span>
+        </div>
+
+        <p v-if="librariesLoaded && !libraries.length" class="icon-picker-none" data-testid="icon-picker-empty">
+          No icon library is installed.
+          <RouteLink :to="links.settings()">Install one in Settings → Icon libraries.</RouteLink>
+        </p>
+
+        <div v-if="libraries.length" class="icon-picker-libraries">
+          <label class="icon-picker-label">Libraries</label>
+          <div class="icon-picker-library-list">
+            <Button
+              :label="allActive ? 'Deactivate all' : 'Activate all'"
+              size="small"
+              text
+              @click="toggleAll"
+            />
+            <div v-for="library in libraries" :key="library.id" class="icon-picker-library-item">
+              <Checkbox
+                :inputId="'icon-lib-' + library.id"
+                :binary="true"
+                :modelValue="activeLibraries.has(library.id)"
+                @update:modelValue="(v: boolean) => toggleLibrary(library.id, v)"
+              />
+              <label :for="'icon-lib-' + library.id">{{ library.label }}</label>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="libraries.length" class="icon-picker-search">
+          <InputText v-model="searchText" placeholder="Search icons…" class="w-full" />
+        </div>
+
+        <div v-if="libraries.length" class="icon-picker-results">
+          <button
+            v-for="match in filteredIcons"
+            :key="match.library.id + '/' + match.name"
+            type="button"
+            class="icon-picker-result"
+            :class="{ 'icon-picker-result--selected': modelValue.icon === `${match.library.id}/${match.name}` }"
+            @click="selectIcon(match)"
+            @mouseenter="ensurePreview(match.library.id, match.name)"
+          >
+            <span class="icon-picker-result-svg" v-html="previewCache[previewKey(match.library.id, match.name)] || ''"></span>
+            <span class="icon-picker-result-name">{{ match.name }}</span>
+            <Tag :value="match.library.label" severity="secondary" class="icon-picker-result-badge" />
+          </button>
+          <span v-if="filteredIcons.length === 0" class="icon-picker-empty">No matching icons</span>
+        </div>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('icon')" @toggle-locked="toggleFlag('icon', 'locked')" @toggle-hidden="toggleFlag('icon', 'hidden')" />
+    </div>
+
+    <div v-if="mode !== 'edit' || !isHidden('size')" class="icon-picker-option-row">
+      <div class="icon-picker-size field icon-picker-option-content">
+        <label>Height (vh)</label>
+        <InputNumber
+          :modelValue="modelValue.size"
+          @update:modelValue="(v: number | null) => patch({ size: v ?? 5 })"
+          :min="1"
+          :max="100"
+          :disabled="isLocked('size')"
+          class="w-full"
+        />
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('size')" @toggle-locked="toggleFlag('size', 'locked')" @toggle-hidden="toggleFlag('size', 'hidden')" />
+    </div>
+
+    <div v-if="mode !== 'edit' || !isHidden('color')" class="icon-picker-option-row">
+      <div :class="['icon-picker-color field icon-picker-option-content', { 'icon-picker-disabled': isLocked('color') }]">
+        <label>Color</label>
+        <div class="icon-picker-color-controls">
+          <ColorPicker :modelValue="colorHex" @update:modelValue="(v: string | undefined) => setColorHex(v)" />
+          <ColorPalettePicker :palette="palette" @select="setColorRef" />
+          <span class="icon-picker-color-label">{{ colorLabel }}</span>
+          <Button
+            v-if="modelValue.color"
+            icon="pi pi-times"
+            text
+            size="small"
+            @click="clearColor"
+            aria-label="Clear icon color"
+          />
+        </div>
+      </div>
+      <OptionFlagToggle v-if="mode === 'preset'" v-bind="flagsFor('color')" @toggle-locked="toggleFlag('color', 'locked')" @toggle-hidden="toggleFlag('color', 'hidden')" />
+    </div>
+
+    <Button label="Icon Libraries Licenses" icon="pi pi-info-circle" size="small" text @click="showLicenseDialog = true" />
+
+    <Dialog v-model:visible="showLicenseDialog" modal :style="{ width: '640px', maxWidth: '90vw' }">
+      <template #header>
+        <DialogTitle icon="pi-book" title="Icon Libraries Licenses" />
+      </template>
+      <div v-for="library in libraries" :key="library.id" class="icon-picker-license-entry">
+        <h4>
+          {{ library.label }}
+          <Tag :value="library.license" severity="info" />
+        </h4>
+        <p><a :href="library.homepage" target="_blank" rel="noopener">{{ library.homepage }}</a></p>
+        <pre v-if="library.licenseText" class="icon-picker-license-text">{{ library.licenseText }}</pre>
+      </div>
+    </Dialog>
+  </div>
+</template>
+
+<style scoped>
+.icon-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.icon-picker-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.icon-picker-option-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.icon-picker-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.icon-picker-selected {
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.icon-picker-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-picker-preview-svg {
+  display: inline-block;
+  max-height: 8rem;
+}
+
+.icon-picker-preview-svg :deep(svg) {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+
+.icon-picker-result-svg :deep(svg) {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: block;
+}
+
+.icon-picker-preview-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-picker-none {
+  color: var(--p-text-muted-color, #6b7280);
+  font-size: 0.9rem;
+}
+
+.icon-picker-color-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-picker-color-label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.icon-picker-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--p-text-muted-color, #6b7280);
+}
+
+.icon-picker-library-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.icon-picker-library-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.icon-picker-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.5rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--p-inputtext-border-color, #d1d5db);
+  border-radius: 6px;
+}
+
+.icon-picker-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+.icon-picker-result:hover {
+  background: var(--p-content-hover-background, #f3f4f6);
+}
+
+.icon-picker-result--selected {
+  border-color: var(--p-primary-color, #3b82f6);
+}
+
+.icon-picker-result-name {
+  font-size: 0.7rem;
+  word-break: break-word;
+}
+
+.icon-picker-result-badge {
+  font-size: 0.6rem;
+}
+
+.icon-picker-empty {
+  grid-column: 1 / -1;
+  color: var(--p-text-muted-color, #6b7280);
+  font-size: 0.9rem;
+  padding: 0.5rem;
+}
+
+.icon-picker-license-entry {
+  margin-bottom: 1.5rem;
+}
+
+.icon-picker-license-entry h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.icon-picker-license-text {
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+  background: var(--p-content-background, #f9fafb);
+  padding: 0.75rem;
+  border-radius: 6px;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+</style>

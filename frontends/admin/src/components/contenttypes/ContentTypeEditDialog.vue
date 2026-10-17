@@ -18,6 +18,7 @@ import { useRightsStore } from '../../stores/rights'
 import type { Layout, ContentContainer, DefaultColor } from '../../types/models'
 import type { OptionFlags } from '../../utils/content/optionFlags'
 import type { ContentType, TagConfig, RawContentTypeDetail } from './types'
+import { fieldHandlerOptions } from '../../plugins/registry'
 
 // Create / edit dialog of the Content Types page. `contentType` null means
 // "new"; otherwise the dialog loads that type's fields from the server each
@@ -57,29 +58,10 @@ const containersForLayout = computed(() => {
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id)
 })
 
-// Field handler options (matches legacy UI and DB schema), English labels, A→Z
-// (except 'None', kept first — it means "no input for this field in the
-// ContentElement editor; always fall through to the container's own
-// default_content", same value/meaning as ContentContainer.default_field_handler's
-// own 'None' option in LayoutCanvasEditor.vue).
-const fieldHandlerOptions = [
-  { label: 'None', value: '' },
-  { label: 'Arrow', value: 'arrows' },
-  { label: 'Countdown', value: 'countdown' },
-  { label: 'Date / Time Format', value: 'datetime_format' },
-  { label: 'HTML (raw)', value: 'rawhtml' },
-  { label: 'Icon', value: 'icon' },
-  { label: 'iFrame', value: 'iframe' },
-  { label: 'Lauftext (Marquee)', value: 'marquee' },
-  { label: 'Image', value: 'image' },
-  { label: 'Link/URL', value: 'link' },
-  { label: 'Long Text', value: 'textbig' },
-  { label: 'Number', value: 'numbers' },
-  { label: 'Pretalx Table', value: 'pretalx_table' },
-  { label: 'Short Text', value: 'textklein' },
-  { label: 'Table', value: 'table' },
-  { label: 'WYSIWYG', value: 'wysiwyg' },
-]
+// The field handlers on offer come from the active plugins ("None" first: it means no input for
+// this field in the ContentElement editor; always fall through to the container's own
+// default_content, same value/meaning as ContentContainer.default_field_handler's own 'None' option
+// in LayoutCanvasEditor.vue), then A→Z.
 
 const editForm = ref({
   id: null as number | null,

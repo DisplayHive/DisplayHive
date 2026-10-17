@@ -39,7 +39,8 @@ into groups so you can target one display or a hundred at once.
 - **Screens & groups** — register devices, assign them to screens, organize screens into groups, and manage assignments from a matrix view.
 - **Live preview** — watch exactly what a screen renders from the admin panel, without a physical display.
 - **Demo mode** — import ready-made example content packages to explore the admin panel with data already in place.
-- **Pretalx integration** — pull conference schedules from a Pretalx instance and render them as content.
+- **Plugins** — every field handler and the Pretalx integration are plugins that can be switched on and off, installed and removed while the server runs.
+- **Pretalx integration** — pull conference schedules from a Pretalx instance and render them as content (a plugin, off until you switch it on).
 - **Screens that look after themselves** — a status dot appears only when something is wrong, screens report to a stored log you can filter in the admin, reconnect with backoff, restart offline from the browser's cache, hide the pointer, keep the display awake and reload daily.
 - **Dashboard & search** — see what is on air or about to end at a glance, and jump anywhere with Ctrl+K.
 - **Alerting** — Telegram notifications for screens and devices going online or offline, screens leaving or returning to fullscreen, and debug or find mode being switched on or off.

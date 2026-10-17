@@ -1,0 +1,16 @@
+{
+  "id": "displayhive.rawhtml",
+  "name": "Raw HTML",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "provides": {
+    "fieldhandlers": [
+      "rawhtml"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts"
+}

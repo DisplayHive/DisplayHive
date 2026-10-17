@@ -190,6 +190,11 @@ def apply_config(app, paths: data_paths.DataPaths, environ: Mapping[str, str]) -
     cfg['PREVIEW_FOLDER'] = paths.media_previews
     cfg['MEDIA_RENDITIONS_FOLDER'] = paths.media_renditions
     cfg['ICON_LIBRARIES_FOLDER'] = paths.icons
+    cfg['PLUGINS_FOLDER'] = paths.plugins
+    # Where the Plugins page looks for plugins to install (a catalog.json); empty: no catalog.
+    # Plugins' background jobs (the Pretalx poller …); off in the tests.
+    cfg['PLUGIN_BACKGROUND_JOBS'] = (environ.get('PLUGIN_BACKGROUND_JOBS') or '1').strip().lower() not in ('0', 'false', 'off', 'no')
+    cfg['PLUGIN_CATALOG_URL'] = (environ.get('PLUGIN_CATALOG_URL') or '').strip()
     cfg['LEGACY_DATA_PATHS'] = paths.legacy
     # Uploaded files (media, imports) are streamed here, not into memory or
     # /tmp — see DataDirRequest in application/admin/media/routes.py.

@@ -14,6 +14,8 @@ grouped by type (Screens, Screen Groups, Designs, Gradients, Layouts,
 Content Containers, Content Types, Content Elements, Media, Devices). Check
 the types or individual items you want, then click **Download Export**.
 
+- A plugin that owns data adds a node of its own to the tree (for example *Pretalx sources*); tick it to take that
+  data along. See [Plugins](plugins.md#export-and-import).
 - If something you selected depends on something else (a Content Type's
   Layout, a container's styling Design, an image a Content Element
   displays, and so on), that dependency is pulled in automatically — the

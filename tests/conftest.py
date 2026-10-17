@@ -60,24 +60,11 @@ os.environ.setdefault('LOG_LEVEL', 'WARNING')
 import pytest
 
 
-def _silence_pretalx_polling():
-    """The Pretalx polling loop (application/admin/pretalx/sockethandlers.py) wakes
-    every 10 s and queries the default app's database. While a test has swapped in
-    its own transaction (db_session below) that query lands in the middle of the
-    test's SAVEPOINT on PostgreSQL and aborts it — an occasional, timing-dependent
-    failure of whatever test happens to be running. No test needs the loop."""
-    from flask_socketio import SocketIO
-    original = SocketIO.start_background_task
-
-    def start_background_task(self, target, *args, **kwargs):
-        if getattr(target, '__name__', '') == '_polling_loop':
-            return None
-        return original(self, target, *args, **kwargs)
-
-    SocketIO.start_background_task = start_background_task
-
-
-_silence_pretalx_polling()
+# The Pretalx poller wakes every 10 s and queries the default app's database. While a test has swapped
+# in its own transaction (db_session below) that query lands in the middle of the test's SAVEPOINT on
+# PostgreSQL and aborts it — an occasional, timing-dependent failure of whatever test happens to be
+# running. No test needs the loop: plugins' background jobs are off here (plugins/displayhive.pretalx).
+os.environ.setdefault('PLUGIN_BACKGROUND_JOBS', '0')
 
 import app as app_module  # noqa: E402 — must import after the env vars above are set
 

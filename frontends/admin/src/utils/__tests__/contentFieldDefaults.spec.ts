@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { registerBundledPlugins } from '../../plugins/testing'
 import { defaultFieldValues, seedField, seedMissingField, type FieldValue } from '../content/contentFieldDefaults'
 
 describe('content field defaults', () => {
+  beforeAll(registerBundledPlugins)
+
   it('seeds each handler with its empty value', () => {
     expect(defaultFieldValues('textklein', 'a')).toEqual({ a: '' })
     expect(defaultFieldValues('numbers', 'a')).toEqual({ a: 0 })

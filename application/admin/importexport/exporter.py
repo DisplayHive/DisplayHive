@@ -10,12 +10,13 @@ from datetime import datetime, timezone
 
 from application.admin.content.recurrence import load_recurrence
 
+from . import plugin_data
 from .common import _exportable_setting_keys, _support_models
 from .registry import ENTITY_TYPES, get_model
 
 logger = logging.getLogger(__name__)
 
-EXPORT_VERSION = 11  # bumped from 10: content elements carry 'recurrence' (weekly windows); 10 added 'system_settings'.
+EXPORT_VERSION = 12  # bumped from 11: 'plugin_data' (what plugins own). 11: content elements carry 'recurrence' (weekly windows); 10 added 'system_settings'.
 
 # Export — one row-serialiser per entity type, filtered to a resolved id set.
 # ---------------------------------------------------------------------------
@@ -322,6 +323,7 @@ def export_database(app, db, selection=None):
             'content_element_screengroup': content_element_screengroup_rows,
             'media': [_row_media(med) for med in rows_of('media')],
             'devices': [_row_device(d, selected['screens']) for d in rows_of('devices')],
+            'plugin_data': plugin_data.export_sections(db, selection),
         }
 
 
@@ -336,4 +338,7 @@ def export_manifest(app, db):
                 {'uuid': r.uuid, 'id': r.id, 'label': getattr(r, et.label_field, None) or f'#{r.id}'}
                 for r in rows
             ]
+        entries, labels = plugin_data.export_manifest(db)
+        manifest.update(entries)
+        manifest['_labels'] = labels          # the names of the plugins' nodes
         return manifest

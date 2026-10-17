@@ -7,6 +7,24 @@ they are called out under **Breaking changes**.
 
 ## [Unreleased]
 
+### Changed
+
+- **Field handlers and Pretalx are plugins.** Every field handler (short text, image, icon, countdown, …) is a
+  plugin of its own in `plugins/`, with its rendering, its editor and its screen code together; Pretalx is a
+  plugin that brings its page, its poller, its rights and its tables. The core no longer knows any handler by
+  name. Plugins are loaded **while the server runs** (switch on/off, install, update and remove without a
+  restart) from the new **Plugins** page, which also installs from a ZIP file, a link with a SHA-256 checksum or a
+  catalog (`PLUGIN_CATALOG_URL`), counts the unloaded versions that still sit in memory and offers a restart.
+  Bundled plugins can be switched off but not removed. The rendered HTML of every handler is unchanged (pinned
+  by a golden test). A field whose handler is not available now renders empty instead of passing its raw stored
+  value on. New rights `plugins.page` and `plugins.manage`; `flask dh plugins …`; plugin data (Pretalx addresses
+  and settings) goes along in export and import when ticked (export file version 12). Container default content
+  now uses the same editor as content fields (an image default can also pick a random image by tag). See
+  [Plugins](docs/user/plugins.md) and the [developer guide](docs/developer/plugins.md).
+- **Upgrading from a version where Pretalx was part of the core:** the Pretalx plugin switches itself on if you
+  had addresses; its rights `pretalx.page` / `pretalx.manage` are renamed to `displayhive.pretalx.page` /
+  `displayhive.pretalx.manage` with their group assignments intact. Migration `a7c3e5f1b9d2` adds the `plugin` table.
+
 ### Fixed
 
 - **Stores are emptied when a session ends.** After a logout (or an expired session, or a sign-out in

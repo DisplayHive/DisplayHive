@@ -42,6 +42,10 @@
     </script>
 
 
+    <!-- The plugins whose screen part this page loads. Data, not code: written here so a screen that is
+         offline and shows its cached page knows the same list it had. `tojson` makes it safe inside a script block. -->
+    <script type="application/json" id="dh-plugins">{{ (plugins or []) | tojson }}</script>
+
     <!-- storage module is now imported where needed -->
 
    </head>

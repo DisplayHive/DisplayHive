@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { registerBundledPlugins } from '../../plugins/testing'
 import { DEFAULT_FIELD_HANDLER_OPTIONS, defaultContentFor } from '../content/containerDefaultContent'
 
 describe('defaultContentFor', () => {
+  beforeAll(registerBundledPlugins)
+
   it('gives structured handlers an empty value of their shape', () => {
     expect(JSON.parse(defaultContentFor('arrows'))).toEqual({ char: '', size: 5 })
     expect(JSON.parse(defaultContentFor('image'))).toEqual({ url: '', size: null })
@@ -19,8 +22,10 @@ describe('defaultContentFor', () => {
   })
 
   it('offers None first and every handler once', () => {
-    expect(DEFAULT_FIELD_HANDLER_OPTIONS[0]).toEqual({ label: 'None', value: '' })
-    const values = DEFAULT_FIELD_HANDLER_OPTIONS.map((o) => o.value)
+    expect(DEFAULT_FIELD_HANDLER_OPTIONS.value[0]).toEqual({ label: 'None', value: '' })
+    const values = DEFAULT_FIELD_HANDLER_OPTIONS.value.map((o) => o.value)
     expect(new Set(values).size).toBe(values.length)
+    expect(values).toContain('pretalx_table')
+    expect(values).not.toContain('checkbox')          // exists, but is not offered for new fields
   })
 })

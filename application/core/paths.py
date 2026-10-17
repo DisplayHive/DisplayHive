@@ -53,6 +53,7 @@ class DataPaths:
     import_staging: str
     backups: str
     icons: str
+    plugins: str
     # The SQLite file DATABASE_URL points at, or None (PostgreSQL, or unset).
     db_path: str | None
     # Old locations still in use: [{'kind': 'media', 'path': '/app/static/media'}, …]
@@ -94,6 +95,7 @@ def resolve(environ=None, app_root: str | None = None) -> DataPaths:
         import_staging=os.path.join(data_dir, 'import-staging'),
         backups=os.path.join(data_dir, 'backups'),
         icons=os.path.join(data_dir, 'icons'),
+        plugins=os.path.join(data_dir, 'plugins'),
         db_path=db_path,
         legacy=legacy,
     )
@@ -124,6 +126,7 @@ def ensure_dirs(paths: DataPaths) -> None:
     for name in MEDIA_DIRS:
         _make_dir(getattr(paths, name), 0o750)
     _make_dir(paths.icons, 0o750)
+    _make_dir(paths.plugins, 0o750)
     _make_dir(paths.import_staging, 0o700)
     _make_dir(paths.backups, 0o700)
     if paths.db_path:

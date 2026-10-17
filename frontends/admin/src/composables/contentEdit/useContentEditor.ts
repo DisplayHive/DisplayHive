@@ -6,6 +6,7 @@ import { useSocket } from '../useSocket'
 import { useScreengroupAssignment } from './useScreengroupAssignment'
 import { useContentPreview } from './useContentPreview'
 import { seedField, seedMissingField, type FieldValue } from '../../utils/content/contentFieldDefaults'
+import { fieldHandlerDef } from '../../plugins/registry'
 import type { OptionFlags } from '../../utils/content/optionFlags'
 import { describeWindows, type WeeklyWindow } from '../../utils/content/recurrence'
 
@@ -55,10 +56,6 @@ interface RawContentDetail {
   [key: string]: unknown
 }
 
-// Text-like field handlers whose value is reasonable material for an auto-generated title
-// (rendered as InputText/Textarea/rich-text — the handlers rendered by other widgets, e.g.
-// numbers/checkbox/image/table, wouldn't produce sensible title text).
-const TEXT_FIELD_HANDLERS = new Set(['textklein', 'textbig', 'wysiwyg'])
 
 /** A copy of the windows from the server (or none), so editing the form never touches the loaded data. */
 const cloneWindows = (v: unknown): WeeklyWindow[] =>
@@ -150,7 +147,7 @@ function createContentEditor() {
     (fields) => {
       if (titleManuallyEdited.value || createForm.value.title.trim()) return
       const source = tagConfigs.value.find(
-        (t) => TEXT_FIELD_HANDLERS.has(t.fieldHandler) && String(fields[t.name] ?? '').trim(),
+        (t) => fieldHandlerDef(t.fieldHandler)?.titleText && String(fields[t.name] ?? '').trim(),
       )
       if (!source) return
       lastAutoTitle = String(fields[source.name]).trim().slice(0, 255)
@@ -303,7 +300,7 @@ function createContentEditor() {
           title: t.field_label || t.title || (t.field_name || t.name || ''),
           fieldHandler,
           description: (t.description as string) || '',
-          max_length: (t.max_length as number) || (fieldHandler === 'textbig' ? 5000 : 255),
+          max_length: (t.max_length as number) || fieldHandlerDef(fieldHandler)?.maxLength || 255,
           optionFlags: (() => {
             try { return t.option_flags ? JSON.parse(t.option_flags) : {} } catch { return {} }
           })(),
@@ -324,7 +321,7 @@ function createContentEditor() {
               createForm.value.fields[tag.name] = v as FieldValue
             }
           })
-          // Sub-fields of a pretalx_table field (`${name}__type`, `${name}__roomname`, etc.)
+          // Sub-fields of a field (`${name}__type`, `${name}__roomname`, … of a Pretalx table)
           // aren't their own tagConfigs entry — copy any of those over too.
           const pendingIgnore = new Set(['id', 'title', 'active', 'duration', 'start_time', 'end_time', 'recurrence', 'contentcontainer', 'contenttypeName', 'screengroups', 'contenttype_id', '_field_metadata'])
           for (const k of Object.keys(pending)) {

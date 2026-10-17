@@ -1,0 +1,16 @@
+{
+  "id": "displayhive.textklein",
+  "name": "Short text",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "provides": {
+    "fieldhandlers": [
+      "textklein"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts"
+}

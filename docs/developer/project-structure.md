@@ -8,6 +8,7 @@ A map of the repository: where things live and where a new file belongs.
 | --- | --- |
 | `app.py` | Entry point (`create_app` from `application/core/factory.py`). |
 | `application/` | The Python backend (Flask + Socket.IO + SQLAlchemy). |
+| `plugins/` | The plugins bundled with DisplayHive, one folder each (`plugins/<id>/`: `plugin.json`, `backend/`, `admin/`, `screen/`, `migrations/`). See [Plugins](plugins.md). |
 | `frontends/admin/` | Admin SPA (Vue 3, TypeScript, Vite). |
 | `frontends/screen/` | Screen client shown on the displays. |
 | `migrations/`, `alembic.ini` | Alembic database migrations. |
@@ -25,6 +26,7 @@ A map of the repository: where things live and where a new file belongs.
 
 ## Backend (`application/`)
 
+- `plugins/` — the plugin system: manifest, registry, loader, installer, service (see [Plugins](plugins.md)).
 - `admin/<domain>/` — one folder per admin domain (`content`, `devices`,
   `screens`, `layouts`, `designs`, `users`, …). Typical files:
   `sockethandlers.py` (the Socket.IO actions), `helper.py` (domain logic),
@@ -61,7 +63,7 @@ A map of the repository: where things live and where a new file belongs.
     `PageActions`, `PageHeader`, `RouteLink`, `ColorPicker`, …),
   - `app/` — the app shell (`AppHeader`, `AppBanners`, `CommandPalette`, …),
   - one folder per feature (`media/`, `devices/`, `screens/`, `screengroups/`,
-    `contenttypes/`, `pretalx/`, `importexport/`, `settings/`, `users/`,
+    `contenttypes/`, `plugins/`, `importexport/`, `settings/`, `users/`,
     `dashboard/`, `designs/`, `layout/`, `content/`, `contentEdit/`).
     Field handlers live in `fields/` with the registry in `fields/registry.ts`.
 - `composables/` — shared stateful logic (`useXxx.ts`), grouped in folders
@@ -98,7 +100,7 @@ A view over roughly 500 lines gets its self-contained parts (a dialog with
 its own state and styles, a card) moved into a feature folder under
 `components/`: Media (`media/`: edit and upload dialog), Devices (`devices/`),
 Screens (`screens/`), Screen Groups (`screengroups/`), Content Types
-(`contenttypes/`), Pretalx (`pretalx/`), Im-/Export (`importexport/`),
+(`contenttypes/`), Plugins (`plugins/`), Im-/Export (`importexport/`),
 Settings (`settings/`) and the Dashboard (`dashboard/DashboardCommunity.vue`).
 Page state that is mostly socket plumbing moves into a composable instead
 (Alerting: `composables/useAlerting.ts`).

@@ -4,14 +4,13 @@
  * Mirrors clock.ts's role for [data-dh-clock] elements: every second,
  * tickCountdown() updates all [data-dh-countdown] elements using the target
  * datetime, format string and finished-text stored in their data attributes.
- * Reuses clock.ts's server-corrected getNow() so a countdown stays in sync
+ * Uses the host's server-corrected clock (host.getNow()) so a countdown stays in sync
  * with the same server time offset as the clock, rather than trusting the
  * screen's own unadjusted clock.
  */
 
-import { getNow } from "./clock.js";
-
 let _tickInterval: ReturnType<typeof setInterval> | null = null;
+let getNow: () => Date = () => new Date();
 
 function _format(remainingMs: number, fmt: string): string {
   const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
@@ -53,7 +52,8 @@ export function tickCountdown(): void {
   });
 }
 
-export function startCountdownTicker(): void {
+export function startCountdownTicker(clock: () => Date): void {
+  getNow = clock;
   if (_tickInterval) return;
   tickCountdown();
   _tickInterval = setInterval(tickCountdown, 1000);

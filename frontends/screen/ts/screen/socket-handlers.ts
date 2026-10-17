@@ -36,7 +36,6 @@ import type {
 import { setSocketEmitter } from "./container-manager.js";
 import { startSceneRotation, patchCurrentScene } from "./content-display.js";
 import { applyServerTime, setClockEmitter, startClockTicker } from "./clock.js";
-import { startCountdownTicker } from "./countdown.js";
 import { startAdoptionFlow, hideAdoptionOverlay } from "./adopt.js";
 import { getDeviceKey, setDeviceKey, clearAdoptionToken } from "./storage";
 import { preloadIframesInHtml } from "./preload-iframes.js";
@@ -203,7 +202,6 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
   setClockEmitter(safeEmit);
   initViewportTracking(safeEmit);
   startClockTicker();
-  startCountdownTicker();
 
   initStatusIndicator();
   setConnectionCheck(() => socket.connected);

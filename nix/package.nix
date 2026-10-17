@@ -34,7 +34,7 @@ let
     in
       !(builtins.elem base [ "node_modules" "__pycache__" ".venv" "dist" ".git" ])
       && (builtins.elem top [
-        "app.py" "application" "migrations" "alembic.ini" "VERSION" "deploy"
+        "app.py" "application" "plugins" "migrations" "alembic.ini" "VERSION" "deploy"
         "static" "requirements" ".python-version" "frontends"
       ])
       && !(lib.hasPrefix "static/media" rel);

@@ -1,0 +1,16 @@
+{
+  "id": "displayhive.wysiwyg",
+  "name": "Rich text (WYSIWYG)",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "provides": {
+    "fieldhandlers": [
+      "wysiwyg"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts"
+}

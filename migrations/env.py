@@ -53,6 +53,17 @@ from application.models import db  # noqa: E402  (must come after sys.path setup
 
 target_metadata = db.metadata
 
+# Tables of plugins are not in the core models' metadata (a plugin's models exist only while it is loaded);
+# their migrations are the plugin's own (application/plugins/loader.py). Autogenerate must not propose to
+# drop them. The legacy names are tables older versions created in the core and the Pretalx plugin adopted.
+PLUGIN_LEGACY_TABLES = {'pretalx_api_url', 'pretalx_api_cache', 'pretalx_settings'}
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    if type_ == 'table' and reflected and compare_to is None:
+        return not (name.startswith('plg_') or name in PLUGIN_LEGACY_TABLES)
+    return True
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode (no DB connection required)."""
@@ -70,7 +81,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode (with a live DB connection)."""
     if _given_connection is not None:
-        context.configure(connection=_given_connection, target_metadata=target_metadata)
+        context.configure(connection=_given_connection, target_metadata=target_metadata, include_object=include_object)
         with context.begin_transaction():
             context.run_migrations()
         return
@@ -83,6 +94,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRightsStore } from '../stores/rights'
+import { pluginRegistry } from '../plugins/registry'
 
 type Can = (right: string) => boolean
 
@@ -48,7 +49,7 @@ const ADMIN_GROUPS: NavGroup[] = [
   {
     label: 'Integrations',
     icon: 'pi pi-share-alt',
-    items: [{ label: 'Pretalx', icon: 'pi pi-calendar', path: '/pretalx', allowed: page('pretalx.page') }],
+    items: [],     // the integrations that are switched on add their page here (see plugins/types.ts)
   },
   {
     label: 'System',
@@ -56,6 +57,7 @@ const ADMIN_GROUPS: NavGroup[] = [
     items: [
       { label: 'Im-/Export', icon: 'pi pi-database', path: '/importexport', allowed: page('importexport.page') },
       { label: 'Settings', icon: 'pi pi-cog', path: '/settings', allowed: page('settings.page') },
+      { label: 'Plugins', icon: 'pi pi-box', path: '/plugins', allowed: (can) => can('plugins.page') || can('plugins.manage') },
       { label: 'Alerting', icon: 'pi pi-bell', path: '/alerting', allowed: page('alerting.page') },
       { label: 'Logger', icon: 'pi pi-list', path: '/logger', allowed: page('logger.page') },
     ],
@@ -94,7 +96,7 @@ const PAGES: Record<string, { title: string; icon: string }> = {
   matrix: { title: 'Matrix', icon: 'pi pi-th-large' },
   importexport: { title: 'Im-/Export', icon: 'pi pi-database' },
   alerting: { title: 'Alerting', icon: 'pi pi-bell' },
-  pretalx: { title: 'Pretalx', icon: 'pi pi-calendar' },
+  plugins: { title: 'Plugins', icon: 'pi pi-box' },
   users: { title: 'Users & Rights', icon: 'pi pi-users' },
 }
 
@@ -112,9 +114,15 @@ export function useAdminNavigation() {
       .filter((leaf) => leaf.allowed(rights.can))
       .map((leaf) => ({ label: leaf.label, icon: leaf.icon, command: () => router.push(leaf.path) }))
 
+  /** The pages the active plugins added, with a menu entry, by menu group. */
+  const pluginLeaves = (groupLabel: string): NavLeaf[] =>
+    [...pluginRegistry.pages.values()]
+      .filter((p) => p.menu?.group === groupLabel)
+      .map((p) => ({ label: p.menu!.label, icon: p.icon, path: p.path, allowed: page(p.right) }))
+
   const menuItems = computed(() => {
     const content = visible(CONTENT)
-    const groups = ADMIN_GROUPS.map((group) => ({ ...group, items: visible(group.items) }))
+    const groups = ADMIN_GROUPS.map((group) => ({ ...group, items: visible([...group.items, ...pluginLeaves(group.label)]) }))
       .filter((group) => group.items.length)
       .map(({ label, icon, items }) => ({ label, icon, items }))
     const admin = [...groups, ...visible([USERS])]
@@ -127,15 +135,16 @@ export function useAdminNavigation() {
 
   /** Every page the person may open, flat — for the command palette. */
   const pages = computed(() => {
-    const leaves = [...CONTENT, ...ADMIN_GROUPS.flatMap((g) => g.items), USERS]
+    const leaves = [...CONTENT, ...ADMIN_GROUPS.flatMap((g) => [...g.items, ...pluginLeaves(g.label)]), USERS]
     return [
       { label: 'Dashboard', icon: 'pi pi-home', path: '/' },
       ...leaves.filter((leaf) => leaf.allowed(rights.can)).map(({ label, icon, path }) => ({ label, icon, path })),
     ]
   })
 
-  const pageTitle = computed(() => PAGES[route.name as string]?.title || 'DisplayHive Admin')
-  const pageIcon = computed(() => PAGES[route.name as string]?.icon || '')
+  const pageOf = (name: unknown) => PAGES[name as string] ?? pluginRegistry.pages.get(name as string)
+  const pageTitle = computed(() => pageOf(route.name)?.title || 'DisplayHive Admin')
+  const pageIcon = computed(() => pageOf(route.name)?.icon || '')
 
   return { menuItems, pages, pageTitle, pageIcon }
 }

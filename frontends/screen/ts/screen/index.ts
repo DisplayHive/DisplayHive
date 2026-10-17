@@ -12,6 +12,7 @@ import {
 import { getAdoptionToken } from "./storage";
 import { initDebugPanel } from "./debug-panel";
 import { applyStageTransform } from "./rotation";
+import { loadScreenPlugins } from "./plugins";
 import { jumpToScene, stopSceneRotation, resumeSceneRotation } from "./content-display";
 
 /**
@@ -68,6 +69,9 @@ export function screenInit(): void {
   // Note: Do NOT call initializeSocketConnection() here anymore
   // It will be called by initializeAuthentication() if devicekey exists
   // or after adoption completes
+
+  // The screen parts of the active plugins (countdown ticker, icon and random-image resolvers …).
+  void loadScreenPlugins();
 
   registerServiceWorker();
   initCursorHider();

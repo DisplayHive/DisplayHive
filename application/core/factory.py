@@ -134,6 +134,14 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
         startup_tasks.raise_open_files_limit()
         startup_tasks.run_startup_steps(app, db)
 
+    # Load the plugins that are switched on (field handlers, ...). Also for the apps of `flask dh …`
+    # commands and tests: rendering needs the handlers, and they only read the plugin state then.
+    from pathlib import Path
+    from application.core import version
+    from application.plugins import loader as plugin_loader
+    with app.app_context():
+        plugin_loader.reconcile(db, installed_dir=Path(paths.plugins), host_version=version.release(), write=startup)
+
     from application.admin.auth.routes import register_auth_routes
     from application.admin.media.routes import DataDirRequest, register_media_routes
     from application.cli import register_cli
@@ -147,6 +155,8 @@ def create_app(overrides: Optional[dict] = None, *, startup: bool = True):
     register_media_routes(app, db)            # /admin/api/media/upload
     from application.admin.icons.routes import register_icon_routes
     register_icon_routes(app, db, on_change=lambda: app.extensions['icon_libraries_push']())   # /admin/api/icons/upload
+    from application.admin.plugins.routes import register_plugin_routes
+    register_plugin_routes(app, db)           # /admin/api/plugins/upload, /api/plugins/…
     register_cli(app)                         # `flask dh …` maintenance commands
     register_web_routes(app, db, socketio)    # static files, screen page, admin SPA, import/export
 

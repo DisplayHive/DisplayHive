@@ -11,9 +11,7 @@
 
 import type { Scene, SocketEmitter } from "./types.js";
 import { tickNow } from "./clock.js";
-import { tickCountdown } from "./countdown.js";
-import { resolveIcons } from "./icon-resolver.js";
-import { resolveRandomImages } from "./random-image-resolver.js";
+import { runAfterRender } from "./plugins.js";
 import { log } from "./logger.js";
 import { adaptCss, adaptHtml, containerGeometry } from "./rotation.js";
 import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
@@ -176,24 +174,16 @@ export function renderScene(scene: Scene): void {
   }
 
   tickNow(); // immediately fill any dh-clock elements in the new HTML
-  tickCountdown(); // immediately fill any dh-countdown elements in the new HTML
-  // Only re-resolve icon placeholders inside containers whose content
-  // actually changed — resolveIcons() re-fetches+reinjects unconditionally
-  // for whatever it's given, so scoping this avoids needlessly reloading an
-  // icon that was already showing correctly.
-  for (const id of changedIds) {
-    const el = containerElements[id];
-    if (el) void resolveIcons(el);
-  }
-  // Unlike icons, a random-image placeholder must resolve to a *new* pick
-  // every time this scene is shown — including repeat/unchanged displays,
-  // where the HTML string is byte-identical to last time and so never made
-  // it into changedIds — so this runs for every active container, not just
-  // the ones above.
-  for (const id of activeIds) {
-    const el = containerElements[id];
-    if (el) void resolveRandomImages(el);
-  }
+  // What a field handler needs to do with the HTML it was just given (start a ticker, swap a placeholder
+  // for an image or an icon) is the handler's plugin's business: it is told about every container, and
+  // whether its content changed.
+  const changed = new Set(changedIds);
+  runAfterRender(
+    [...activeIds].flatMap((id) => {
+      const element = containerElements[id];
+      return element ? [{ id, element, changed: changed.has(id) }] : [];
+    }),
+  );
   log(
     "info", "renderScene",
     `Rendered scene ${scene.id} across ${activeIds.size} container(s), ${changedIds.length} changed`,

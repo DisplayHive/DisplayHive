@@ -2,98 +2,11 @@
 
 import json
 import logging
-import random as _random
-import urllib.parse
-from html import escape as _html_escape
-from markupsafe import Markup
 
-from application.utils.aspect_ratio import BASE_RATIO
-
-from application.admin.content.pretalx_render import (
-    _get_pretalx_data,
-    _render_pretalx_table,
-    _render_table,
-)
+from application.plugins import registry as plugin_registry
+from application.plugins.handlers import RenderContext
 
 logger = logging.getLogger(__name__)
-
-
-def _image_style(ctx: dict, field_name: str) -> str:
-    """CSS for an image field, from its `__fit` / `__size` sub-settings.
-
-    `__fit` ('height'/'width'/'stretch') takes priority and ignores
-    `__size` entirely; unset, falls back to the vh-based fixed-height
-    behavior (explicit height keeps it consistent regardless of the
-    container's own height; 0/blank just scales to fit as before).
-
-    Any mode that sets an explicit height together with `max-width` also sets
-    `object-fit: contain`: when `max-width` clamps the box (an image wider than
-    the container), the picture is letterboxed inside it instead of being
-    squashed to the unclamped height — i.e. the aspect ratio is kept. Only
-    'stretch' deliberately distorts.
-    """
-    fit = str(ctx.get(f'{field_name}__fit') or '').strip()
-    if fit == 'height':
-        return 'height:100%;width:auto;max-width:100%;object-fit:contain;'
-    if fit == 'width':
-        return 'width:100%;height:auto;'
-    if fit == 'stretch':
-        return 'width:100%;height:100%;object-fit:fill;'
-    size = ctx.get(f'{field_name}__size')
-    try:
-        size = float(size)
-    except (TypeError, ValueError):
-        size = 0
-    return f'height:{size}vh;width:auto;max-width:100%;object-fit:contain;' if size > 0 else 'max-width:100%;height:auto;'
-
-
-# What a Raw HTML field is shown in: a document of its own. The iframe is sandboxed without
-# `allow-same-origin`, so it gets an opaque origin — whatever the HTML does (scripts, event handlers,
-# `javascript:` links) cannot reach the page around it, its DOM, its Socket.IO connection or its
-# storage. Scripts still run inside, so embed codes keep working. The frame does not inherit the
-# design's fonts or colours: it is a separate document.
-_RAW_HTML_FRAME_STYLE = 'html,body{margin:0;width:100%;height:100%;background:transparent;}'
-
-
-def _sandboxed_html(html: str) -> Markup:
-    """The Raw HTML field's value as a sandboxed ``<iframe srcdoc>``."""
-    document = (
-        '<!doctype html><meta charset="utf-8">'
-        f'<style>{_RAW_HTML_FRAME_STYLE}</style>'
-        f'{html}'
-    )
-    return Markup(
-        '<iframe sandbox="allow-scripts" referrerpolicy="no-referrer"'
-        ' style="width:100%;height:100%;border:none;background:transparent;"'
-        f' srcdoc="{_html_escape(document, quote=True)}"></iframe>'
-    )
-
-
-def _resolve_icon_color(raw, db=None) -> str:
-    """Resolve an `icon` field's color value to a literal CSS color.
-
-    A literal ('#rrggbb', 'red', …) passes through; a "@default:<id>"
-    reference is resolved against the active Design's palette (same
-    mechanism as the Designs page — see resolve_default_color in
-    application/admin/designs/helper.py); a blank value, an unresolvable
-    reference, or a missing db all yield '' (meaning "keep the icon's own
-    colors").
-    """
-    raw = (raw or '').strip()
-    if not raw:
-        return ''
-    if not raw.startswith('@default:'):
-        return raw
-    if db is None:
-        return ''
-    try:
-        from application.utils.design import get_default_design
-        from application.admin.designs.helper import resolve_default_color
-        design = get_default_design(db)
-        return resolve_default_color(design, raw) if design is not None else ''
-    except Exception:
-        logger.debug('_resolve_icon_color: failed to resolve %r', raw, exc_info=True)
-        return ''
 
 
 def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
@@ -128,8 +41,6 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
     except (ValueError, TypeError):
         ctx = {}
 
-    field_handlers = {tc.field_name: tc.field_handler for tc in (tagconfigs or []) if tc.field_name}
-
     # Locked/hidden *individual sub-settings* always render their
     # Contenttype-configured preset, regardless of what the caller's
     # serialized_input actually contains for that key — this is the single
@@ -158,207 +69,29 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             if isinstance(flag, dict) and (flag.get('locked') or flag.get('hidden')) and key in preset:
                 ctx[key] = preset[key]
 
-    # Collect random_tags image fields' full candidate lists — the actual
-    # pick happens client-side, fresh on every display, not here (see the
-    # `image` rendering branch below and
-    # frontends/screen/ts/screen/random-image-resolver.ts). Picking once
-    # server-side and baking a single URL into the (shared, per-
-    # ContentElement) rendered HTML meant every screen showing this content
-    # saw the same image, it only changed on the next display after a
-    # throttled server round trip, and that round trip silently failed
-    # offline, repeating the same image forever.
-    random_pools: dict = {}
-    if db is not None and field_handlers:
-        from application.models.content import Media
-        image_mode_keys = [k for k in ctx if k.endswith('__image_mode') and ctx[k] == 'random_tags']
-        for mode_key in image_mode_keys:
-            field_name = mode_key[: -len('__image_mode')]
-            if field_handlers.get(field_name) != 'image':
-                continue
-            tags_key = f'{field_name}__image_tags'
-            selected_tags = [t for t in ctx.get(tags_key, []) if t]
-            if not selected_tags:
-                continue
-            all_media = db.session.execute(db.select(Media)).scalars().all()
-            candidates = []
-            for m in all_media:
-                media_tags = {t.strip() for t in (m.tags or '').split(',') if t.strip()}
-                if any(t in media_tags for t in selected_tags):
-                    folder = m.folder_path or ''
-                    file_rel = (folder + '/' + m.filename) if folder else m.filename
-                    candidates.append(f'/static/media/{file_rel}')
-            if candidates:
-                random_pools[field_name] = candidates
-
-    # Transform each field's raw value according to its field_handler.
-    # Values are HTML-escaped to prevent XSS from stored field data.
-    for field_name, ftype in field_handlers.items():
-        if ftype == 'image' and field_name in random_pools:
-            # Same size/style logic as a normal image field below, just no
-            # `src` — the screen client fills it in from the candidate pool.
-            # See frontends/screen/ts/screen/random-image-resolver.ts.
-            style = _image_style(ctx, field_name)
-            pool_json = _html_escape(json.dumps(random_pools[field_name]))
-            ctx[field_name] = Markup(f"<img data-dh-random-pool='{pool_json}' style=\"{style}\" />")
-        elif ftype == 'image' and field_name in ctx and ctx[field_name]:
-            url = str(ctx[field_name]).strip()
-            parsed_scheme = urllib.parse.urlparse(url).scheme.lower()
-            if parsed_scheme not in ('', 'http', 'https', 'data'):
-                ctx[field_name] = ''
-            elif url:
-                style = _image_style(ctx, field_name)
-                ctx[field_name] = Markup(f'<img src="{_html_escape(url)}" style="{style}" />')
-        elif ftype == 'icon' and field_name in ctx and ctx[field_name]:
-            # The value is "<library>/<icon-name>" — the backend has no
-            # access to the icon SVGs themselves (they ship as npm packages
-            # bundled into the frontends, not backend-readable files), so it
-            # emits a placeholder the screen client resolves to real markup
-            # client-side. See frontends/screen/ts/screen/icon-resolver.ts.
-            raw = str(ctx[field_name]).strip()
-            if '/' in raw:
-                library, name = raw.split('/', 1)
-                size = ctx.get(f'{field_name}__size')
-                try:
-                    size = float(size)
-                except (TypeError, ValueError):
-                    size = 0
-                size = size if size > 0 else 5
-                color = _resolve_icon_color(ctx.get(f'{field_name}__color'), db)
-                color_attr = f' data-dh-icon-color="{_html_escape(color)}"' if color else ''
-                ctx[field_name] = Markup(
-                    f'<div class="dh-icon"'
-                    f' data-dh-icon-library="{_html_escape(library)}"'
-                    f' data-dh-icon-name="{_html_escape(name)}"'
-                    f'{color_attr}'
-                    f' style="height:{size}vh;display:inline-block;"></div>'
-                )
-            else:
-                ctx[field_name] = ''
-        elif ftype == 'arrows' and field_name in ctx and ctx[field_name]:
-            char = _html_escape(str(ctx[field_name]).strip())
-            size_key = f'{field_name}_size'
-            size = ctx.get(size_key, 5)
-            try:
-                size = float(size)
-            except (ValueError, TypeError):
-                size = 5
-            if char:
-                ctx[field_name] = Markup(f'<span style="font-size:{size}vh;line-height:1;">{char}</span>')
-        elif ftype == 'datetime_format':
-            fmt_str = str(ctx.get(field_name, 'HH:mm:ss')).strip()
-            tz_name = 'UTC'
-            if db is not None:
-                try:
-                    from application.models import SystemSetting
-                    tz_row = db.session.execute(
-                        db.select(SystemSetting).where(SystemSetting.key == 'timezone')
-                    ).scalar_one_or_none()
-                    if tz_row and tz_row.value:
-                        tz_name = tz_row.value
-                except Exception:
-                    logger.debug('render_content_fields: failed to load timezone setting, defaulting to UTC', exc_info=True)
-            ctx[field_name] = Markup(
-                f'<div class="dh-clock"'
-                f' data-dh-clock="{_html_escape(fmt_str)}"'
-                f' data-dh-timezone="{_html_escape(tz_name)}"></div>'
-            )
-        elif ftype == 'countdown':
-            target = str(ctx.get(field_name, '')).strip()
-            fmt_str = str(ctx.get(f'{field_name}__format', 'DD:HH:mm:ss')).strip() or 'DD:HH:mm:ss'
-            finished_text = str(ctx.get(f'{field_name}__finished_text', '')).strip()
-            ctx[field_name] = Markup(
-                f'<div class="dh-countdown" data-dh-countdown="1"'
-                f' data-dh-countdown-target="{_html_escape(target)}"'
-                f' data-dh-countdown-format="{_html_escape(fmt_str)}"'
-                f' data-dh-countdown-finished="{_html_escape(finished_text)}"></div>'
-            )
-        elif ftype == 'pretalx_table':
-            pretalx_data = _get_pretalx_data(str(ctx.get(field_name, '')).strip(), db)
-            _ps_no_session  = 'No session running'
-            _ps_coming_up   = 'Coming up next'
-            _ps_invalid     = 'Invalid API data'
-            _ps_time_format = 'HH:mm'
-            _ps_end_of_day  = '23:59'
-            _ps_sim_dt      = ''
-            try:
-                if db is not None:
-                    from application.models import PretalxSettings
-                    _ps = db.session.execute(db.select(PretalxSettings)).scalar_one_or_none()
-                    if _ps:
-                        _ps_no_session  = _ps.no_session_text or _ps_no_session
-                        _ps_coming_up   = _ps.coming_up_text  or _ps_coming_up
-                        _ps_invalid     = _ps.invalid_data_text or _ps_invalid
-                        _ps_time_format = _ps.time_format or _ps_time_format
-                        _ps_end_of_day  = _ps.end_of_day  or _ps_end_of_day
-                        _ps_sim_dt      = _ps.sim_datetime or ''
-            except Exception:
-                logger.debug('render_content_fields: failed to load pretalx settings, using defaults', exc_info=True)
-            _el_invalid = str(ctx.get(f'{field_name}__invalid_data_text', '')).strip()
-            if _el_invalid:
-                _ps_invalid = _el_invalid
-            ctx[field_name] = Markup(_render_pretalx_table(
-                data=pretalx_data,
-                roomname=str(ctx.get(f'{field_name}__roomname', '')).strip(),
-                linecount=ctx.get(f'{field_name}__linecount', 10),
-                fields_config=str(ctx.get(f'{field_name}__fields', '')).strip(),
-                display_author=bool(ctx.get(f'{field_name}__author_under_title', False)),
-                display_type=str(ctx.get(f'{field_name}__type', 'list')).strip() or 'list',
-                empty_text=str(ctx.get(f'{field_name}__empty_text', '')).strip(),
-                tracklist_columns=str(ctx.get(f'{field_name}__tracklist_columns', 'name|Name,color|Color')).strip(),
-                tracklist_layout=str(ctx.get(f'{field_name}__tracklist_layout', 'list')).strip() or 'list',
-                tracklist_exclude=str(ctx.get(f'{field_name}__tracklist_exclude', '')).strip(),
-                invalid_data_text=_ps_invalid,
-                no_session_text=_ps_no_session,
-                coming_up_text=_ps_coming_up,
-                time_format=_ps_time_format,
-                end_of_day=_ps_end_of_day,
-                sim_datetime=_ps_sim_dt,
-                today_only=bool(ctx.get(f'{field_name}__today_only', False)),
-                separate_days=bool(ctx.get(f'{field_name}__separate_days', False)),
-                day_prefix=str(ctx.get(f'{field_name}__day_prefix', '')).strip(),
-                tracks_by_color=bool(ctx.get(f'{field_name}__tracks_by_color', False)),
-            ))
-        elif ftype == 'iframe' and field_name in ctx and ctx[field_name]:
-            url = str(ctx[field_name]).strip()
-            parsed_scheme = urllib.parse.urlparse(url).scheme.lower()
-            if parsed_scheme not in ('', 'http', 'https'):
-                ctx[field_name] = ''
-            elif url:
-                ctx[field_name] = Markup(
-                    f'<iframe src="{_html_escape(url)}"'
-                    f' style="width:100%;height:100%;border:none;"'
-                    f' allowfullscreen></iframe>'
-                )
-        elif ftype == 'rawhtml' and field_name in ctx and ctx[field_name]:
-            ctx[field_name] = _sandboxed_html(str(ctx[field_name]))
-        elif ftype == 'marquee' and field_name in ctx:
-            text = str(ctx.get(field_name, '')).strip()
-            speed = ctx.get(f'{field_name}__speed', 20)
-            try:
-                speed = float(speed)
-            except (TypeError, ValueError):
-                speed = 20
-            if speed <= 0:
-                speed = 20
-            escaped = _html_escape(text)
-            ctx[field_name] = Markup(
-                f'<style>@keyframes dh-marquee{{from{{transform:translateX(100vw)}}to{{transform:translateX(-100%)}}}}</style>'
-                f'<div style="overflow:hidden;white-space:nowrap;width:100%;height:100%;display:flex;align-items:center;">'
-                f'<span style="display:inline-block;animation:dh-marquee {speed:.1f}s linear infinite;">{escaped}</span>'
-                f'</div>'
-            )
-        elif ftype in ('textklein', 'textbig', 'link') and field_name in ctx:
-            raw = str(ctx[field_name])
-            escaped = _html_escape(raw)
-            ctx[field_name] = Markup(escaped.replace('\n', '<br>'))
-        elif ftype == 'table':
-            ctx[field_name] = Markup(_render_table(ctx.get(field_name, '')))
-        elif ftype == '':
-            # 'None': this field has no input in the ContentElement editor —
-            # always fall through to the container's own default_content
-            # below, even if a value happens to still be stored from before
-            # the field's handler was switched to 'None'.
+    # Each field is rendered by its field handler — code that lives in a plugin (plugins/<id>/), found
+    # through the registry. Handlers escape what they output; nothing from the stored data reaches the
+    # page as markup unless a handler deliberately says so (the Markup it returns).
+    for tc in (tagconfigs or []):
+        field_name, ftype = tc.field_name, tc.field_handler
+        if not field_name:
+            continue
+        if ftype == '':
+            # 'None': this field has no input in the ContentElement editor — always fall through to the
+            # container's own default_content below, even if a value happens to still be stored from
+            # before the field's handler was switched to 'None'.
             ctx[field_name] = ''
+            continue
+        handler = plugin_registry.fieldhandler(ftype)
+        if handler is None:
+            # The plugin that provides this handler is not installed or not switched on: the field stays
+            # empty (the stored value is kept) and comes back once the plugin is active again.
+            plugin_registry.warn_missing_handler(ftype)
+            ctx[field_name] = ''
+            continue
+        rendered = handler.render(RenderContext(field_name=field_name, values=ctx, db=db, tagconfig=tc))
+        if rendered is not None:
+            ctx[field_name] = rendered
 
     rendered_by_container: dict = {}
     for tc in (tagconfigs or []):
@@ -373,6 +106,16 @@ def render_content_fields(tagconfigs, serialized_input: str, db=None) -> dict:
             value = render_container_default(tc.contentcontainer, db=db)
         rendered_by_container[str(tc.contentcontainer_id)] = value
     return rendered_by_container
+
+
+def _key_bag_of(content: str):
+    """A container default saved as the field's flat key bag (``{"default": …, "default__size": …}``, how
+    some instances stored it) as it is; ``None`` for the packed form every handler's ``default_values`` reads."""
+    try:
+        parsed = json.loads(content)
+    except (ValueError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) and 'default' in parsed else None
 
 
 def render_default_value(field_handler: str, content: str, db=None) -> str:
@@ -391,76 +134,10 @@ def render_default_value(field_handler: str, content: str, db=None) -> str:
     from application.models import TagConfig
 
     fake_tc = TagConfig(field_name='default', field_handler=field_handler, contentcontainer_id=0)
-    ctx = {'default': content}
-    if field_handler == 'image':
-        # Back-compat: a container's default_content used to be just the raw
-        # URL string (no size); only switch to the {url, size} shape when the
-        # stored value actually parses as one.
-        try:
-            parsed = json.loads(content)
-        except (ValueError, TypeError):
-            parsed = None
-        if isinstance(parsed, dict) and 'url' in parsed:
-            ctx = {
-                'default': parsed.get('url', ''),
-                'default__size': parsed.get('size') or 0,
-                'default__fit': parsed.get('fit') or '',
-            }
-    elif field_handler == 'icon':
-        try:
-            parsed = json.loads(content)
-        except (ValueError, TypeError):
-            parsed = None
-        if isinstance(parsed, dict) and 'icon' in parsed:
-            ctx = {
-                'default': parsed.get('icon', ''),
-                'default__size': parsed.get('size') or 0,
-                'default__color': parsed.get('color', ''),
-            }
-    elif field_handler == 'arrows':
-        try:
-            parsed = json.loads(content)
-            ctx = {'default': parsed.get('char', ''), 'default_size': parsed.get('size', 5)}
-        except (ValueError, TypeError, AttributeError):
-            ctx = {'default': content}
-    elif field_handler == 'marquee':
-        try:
-            parsed = json.loads(content)
-            ctx = {'default': parsed.get('text', ''), 'default__speed': parsed.get('speed', 20)}
-        except (ValueError, TypeError, AttributeError):
-            ctx = {'default': content, 'default__speed': 20}
-    elif field_handler == 'countdown':
-        try:
-            parsed = json.loads(content)
-            ctx = {
-                'default': parsed.get('target', ''),
-                'default__format': parsed.get('format', 'DD:HH:mm:ss'),
-                'default__finished_text': parsed.get('finished_text', ''),
-            }
-        except (ValueError, TypeError, AttributeError):
-            ctx = {'default': content, 'default__format': 'DD:HH:mm:ss', 'default__finished_text': ''}
-    elif field_handler == 'pretalx_table':
-        try:
-            parsed = json.loads(content)
-        except (ValueError, TypeError):
-            parsed = {}
-        ctx = {
-            'default': parsed.get('url', ''),
-            'default__type': parsed.get('type', 'list'),
-            'default__roomname': parsed.get('roomname', ''),
-            'default__fields': parsed.get('fields', ''),
-            'default__linecount': parsed.get('linecount', 10),
-            'default__author_under_title': parsed.get('author_under_title', False),
-            'default__tracks_by_color': parsed.get('tracks_by_color', False),
-            'default__today_only': parsed.get('today_only', False),
-            'default__separate_days': parsed.get('separate_days', False),
-            'default__day_prefix': parsed.get('day_prefix', ''),
-            'default__empty_text': parsed.get('empty_text', ''),
-            'default__tracklist_columns': parsed.get('tracklist_columns', 'name|Name,color|Color'),
-            'default__tracklist_layout': parsed.get('tracklist_layout', 'list'),
-            'default__tracklist_exclude': parsed.get('tracklist_exclude', ''),
-            'default__invalid_data_text': parsed.get('invalid_data_text', ''),
-        }
+    handler = plugin_registry.fieldhandler(field_handler)
+    ctx = _key_bag_of(content)
+    if ctx is None:
+        ctx = handler.default_values(content) if handler is not None else {'default': content}
     serialized = json.dumps(ctx, ensure_ascii=False)
     rendered = render_content_fields([fake_tc], serialized, db=db)
     return rendered.get('0', '')

@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { io, type Socket } from 'socket.io-client'
 
 // Test-only globals injected by Playwright fixtures (see connect() below).
@@ -192,6 +192,21 @@ export function useSocket() {
   }
 
   /**
+   * Resolves once the socket is connected (at once if it is). For a page that opens on a fresh load
+   * and asks the server for its data right away: `emitWithAck` refuses while there is no connection.
+   */
+  const whenConnected = (): Promise<void> =>
+    isConnected.value
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          const stop = watch(isConnected, (connected) => {
+            if (!connected) return
+            stop()
+            resolve()
+          })
+        })
+
+  /**
    * Register a listener for a socket event.
    *
    * If the socket is not yet connected the listener is queued and registered
@@ -245,6 +260,7 @@ export function useSocket() {
     disconnect,
     emit,
     emitWithAck,
+    whenConnected,
     on,
     off,
     getSocket,

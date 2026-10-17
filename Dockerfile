@@ -24,6 +24,8 @@ COPY frontends/screen/package.json frontends/screen/package-lock.json frontends/
 RUN npm --prefix frontends/screen ci
 COPY frontends/admin/ frontends/admin/
 COPY frontends/screen/ frontends/screen/
+# The bundled plugins' admin and screen code is part of both builds (see frontends/*/vite.config.ts).
+COPY plugins/ plugins/
 
 # The build context has no .git, so the commit comes in as a build argument (CI
 # passes github.sha; locally: --build-arg GIT_COMMIT=$(git rev-parse HEAD)). It is

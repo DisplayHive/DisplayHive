@@ -16,6 +16,14 @@ export default defineConfig({
   // Set the base URL so generated chunks are referenced under /dist/screen/
   base: "/dist/screen/",
   root: ".",
+  resolve: {
+    alias: {
+      // The screen side of the plugins bundled with DisplayHive (plugins/<id>/screen/), and the screen
+      // modules they may use.
+      "@plugins": path.resolve(__dirname, "../../plugins"),
+      "@screen": path.resolve(__dirname, "ts/screen"),
+    },
+  },
   define: {
     __GIT_COMMIT__: JSON.stringify(gitCommit),
   },
@@ -26,6 +34,7 @@ export default defineConfig({
     // on 5173 and would otherwise silently reuse whichever one got there first.
     port: 5174,
     strictPort: true,
+    fs: { allow: [path.resolve(__dirname, "../..")] },
   },
   build: {
     outDir: "../../dist/screen",

@@ -14,7 +14,7 @@ import { useConfirmAction } from '../../composables/useConfirmAction'
 import { useAuthStore } from '../../stores/auth'
 import { useRightsStore } from '../../stores/rights'
 import { httpErrorMessage, errorText } from '../../utils/httpError'
-import { buildTree, allCheckedKeys, selectionFromKeys, type Manifest, type SelectionKeys } from '../../utils/importExportTree'
+import { buildTree, allCheckedKeys, selectionFromKeys, splitManifest, type SelectionKeys } from '../../utils/importExportTree'
 
 // "Import Database" card of the Im-/Export page: choose a file, preview what it
 // holds, pick items, mode and conflict handling, then import.
@@ -27,7 +27,7 @@ const canImport = computed(() => rightsStore.can('importexport.import'))
 const fileInput = ref<HTMLInputElement | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
-const importResult = ref<{ success: boolean; error?: string; counts?: Record<string, number> } | null>(null)
+const importResult = ref<{ success: boolean; error?: string; counts?: Record<string, number>; skipped_plugin_data?: string[] } | null>(null)
 
 const importToken = ref<string | null>(null)
 const importIsLegacy = ref(false)
@@ -108,8 +108,8 @@ const onFileSelected = async (event: Event) => {
     }
     importToken.value = result.token
     importIsLegacy.value = !!result.is_legacy
-    const manifest: Manifest = result.manifest || {}
-    importTree.value = buildTree(manifest, 'import-')
+    const { manifest, labels } = splitManifest(result.manifest)
+    importTree.value = buildTree(manifest, 'import-', labels)
     importSelectionKeys.value = allCheckedKeys(importTree.value)
   } catch (e) {
     toast.add({ severity: 'error', summary: 'Could not read file', detail: errorText(e), life: 6000 })
@@ -310,7 +310,11 @@ watch(checkedConflictUuids, (uuids) => {
             </li>
           </ul>
         </Message>
-        <Message v-else severity="error" :closable="false">
+        <Message v-if="importResult.success && importResult.skipped_plugin_data?.length" severity="warn" :closable="false" class="mt-2">
+          The file also holds data of {{ importResult.skipped_plugin_data.join(', ') }}. That plugin is not active here, so its data was not imported.
+          Switch it on (Admin → Plugins) and import the file again to take it along.
+        </Message>
+        <Message v-else-if="!importResult.success" severity="error" :closable="false">
           Import failed: {{ importResult.error }}
         </Message>
       </div>

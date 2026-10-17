@@ -107,8 +107,8 @@ RIGHTS = [
 
     ('tour.page', 'tour', 'View Guided Tour page'),
 
-    ('pretalx.page', 'pretalx', 'View Pretalx page'),
-    ('pretalx.manage', 'pretalx', 'Manage Pretalx settings / API URLs'),
+    ('plugins.page', 'plugins', 'View Plugins page'),
+    ('plugins.manage', 'plugins', 'Install, switch on and off, update and remove plugins; restart the server'),
 
     ('users.page', 'users', 'View Users page'),
     ('users.create', 'users', 'Create admin user'),
@@ -122,6 +122,13 @@ RIGHTS = [
 ]
 
 SUPERADMIN_GROUP_NAME = 'Superadmin'
+
+
+def all_rights():
+    """The host's rights plus those of the loaded plugins (``(key, category, label)``)."""
+    from application.plugins import registry
+    known = {key for key, _, _ in RIGHTS}
+    return RIGHTS + [r for r in registry.rights() if r[0] not in known]
 
 
 def sync_right_definitions(db):
@@ -138,7 +145,7 @@ def sync_right_definitions(db):
         r.key: r for r in db.session.execute(db.select(RightDefinition)).scalars().all()
     }
     changed = False
-    for key, category, label in RIGHTS:
+    for key, category, label in all_rights():
         row = existing.get(key)
         if row is None:
             db.session.add(RightDefinition(key=key, category=category, label=label))
@@ -320,4 +327,4 @@ def get_effective_rights(db, user):
     the admin UI to show the *resolved* value next to a user's inherit/
     allow/deny override.
     """
-    return {key: has_right(db, user, key) for key, _category, _label in RIGHTS}
+    return {key: has_right(db, user, key) for key, _category, _label in all_rights()}

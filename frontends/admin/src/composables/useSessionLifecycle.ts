@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth'
 import { useSettingsStore } from '../stores/settings'
 import { useRightsStore } from '../stores/rights'
 import { useHelpStore } from '../stores/help'
+import { usePluginsStore } from '../stores/plugins'
 
 /**
  * Ties the admin page's session to its socket connection (used once, by App.vue):
@@ -24,6 +25,7 @@ export function useSessionLifecycle() {
   const settingsStore = useSettingsStore()
   const rightsStore = useRightsStore()
   const helpStore = useHelpStore()
+  const pluginsStore = usePluginsStore()
 
   on('connect_error', (err: unknown) => {
     const message = (err as { message?: string } | null)?.message
@@ -61,6 +63,7 @@ export function useSessionLifecycle() {
       settingsStore.fetchSettings()
       rightsStore.fetchMyRights()
       helpStore.fetchHelp()
+      pluginsStore.fetchActive()
     } else if (hasEverConnected.value) {
       // Only reload on reconnect if the disconnect lasts longer than the grace
       // period — brief polling hiccups (~1 s) must not trigger a page reload.

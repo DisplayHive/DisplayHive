@@ -1,25 +1,18 @@
-export type FieldValue = string | number | boolean
+import { fieldHandlerDef } from '../../plugins/registry'
+import type { FieldValue } from '../../plugins/types'
+
+export type { FieldValue }
 
 /**
  * The starting value(s) of one content field, by its handler. Most handlers keep a single
  * value under the field's name; a few keep extra sub-values next to it (`<name>_size`,
- * `<name>__size`). A field with no handler ("None") has no input at all and is not seeded —
- * it always falls through to its container's own default content.
- *
- * (Per-handler knowledge in the host: it moves into the handlers' plugins with the plugin
- * system, see the roadmap.)
+ * `<name>__size`) — the handler's plugin says which (`defaults` in plugins/types.ts). A field with no
+ * handler ("None") has no input at all and is not seeded — it always falls through to its
+ * container's own default content.
  */
 export const defaultFieldValues = (handler: string, name: string): Record<string, FieldValue> => {
-  switch (handler) {
-    case '': return {}
-    case 'numbers': return { [name]: 0 }
-    case 'checkbox': return { [name]: false }
-    case 'arrows': return { [name]: '', [`${name}_size`]: 5 }
-    case 'icon': return { [name]: '', [`${name}__size`]: 5 }
-    case 'datetime_format': return { [name]: 'HH:mm:ss' }
-    case 'table': return { [name]: JSON.stringify({ columns: ['Column 1', 'Column 2'], rows: [['', '']] }) }
-    default: return { [name]: '' }
-  }
+  if (handler === '') return {}
+  return fieldHandlerDef(handler)?.defaults?.(name) ?? { [name]: '' }
 }
 
 /** Seed a field for a NEW element: every value is set. */

@@ -19,6 +19,8 @@ export const MEDIA_MAX_ENTRIES = 300;
 export const PAGE_NETWORK_TIMEOUT_MS = 4_000;
 
 const STATIC_PREFIXES = ["/dist/screen/", "/screen/assets/"];
+/** Files of an installed plugin: the URL carries the plugin's version, so its content never changes. */
+const PLUGIN_ASSET = /^\/api\/plugins\/[^/]+\/assets\//;
 const STATIC_FILES = ["/logo_bl.png", "/logo_wh.png", "/favicon.ico", "/favicon-32x32.png", "/favicon-16x16.png", "/apple-touch-icon.png"];
 const MEDIA_PREFIXES = ["/static/media/", "/static/media_previews/", "/static/media_renditions/", "/static/icons/"];
 /** The icon libraries' index files change when one is installed or removed: always from the network. */
@@ -53,7 +55,7 @@ export function strategyFor(request: RequestInfo, origin: string): Strategy {
   if (request.mode === "navigate") {
     return path === "/" && !isSpecialPage(url.search) ? "page" : "bypass";
   }
-  if (STATIC_PREFIXES.some((p) => path.startsWith(p)) || STATIC_FILES.includes(path)) return "static";
+  if (STATIC_PREFIXES.some((p) => path.startsWith(p)) || STATIC_FILES.includes(path) || PLUGIN_ASSET.test(path)) return "static";
   if (MEDIA_PREFIXES.some((p) => path.startsWith(p))) return "media";
   return "bypass";
 }

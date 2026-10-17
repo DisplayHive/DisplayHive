@@ -31,9 +31,13 @@ import logging
 from typing import List, Optional
 
 from application.admin.content.recurrence import load_recurrence
+from application.plugins import registry as plugin_registry
+from application.plugins.handlers import FieldHandler
 from application.socketio_handlers.devconfig import system_setting
 
 logger = logging.getLogger(__name__)
+
+_NO_HANDLER = FieldHandler()          # stands in for a handler whose plugin is not active
 
 
 def _build_payload(db, screen):
@@ -145,7 +149,7 @@ def _build_payload(db, screen):
             # pretalx_table is the only handler left that genuinely needs a
             # server-side re-render (live schedule data).
             if any(
-                getattr(tc, 'field_handler', '') == 'pretalx_table'
+                (plugin_registry.fieldhandler(getattr(tc, 'field_handler', '')) or _NO_HANDLER).refresh_after_show
                 for tc in (getattr(mc.contenttype, 'tagconfigs', None) or [])
             ):
                 scene['update_after_show'] = True

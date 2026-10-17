@@ -46,7 +46,11 @@ def index():
         db.session.rollback()
         hide_powered_by = False
 
+    from application.plugins import service as plugin_service
+    plugins = [p for p in plugin_service.public_list(current_app) if p['screen']]
+
     return render_template('index.html',
+                           plugins=plugins,
                            async_mode=current_app.extensions['socketio'].async_mode,
                            design_html=design_html,
                            design_css=design_css,

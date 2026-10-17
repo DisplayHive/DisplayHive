@@ -1,0 +1,16 @@
+{
+  "id": "displayhive.datetime-format",
+  "name": "Date / time",
+  "kind": "fieldhandler",
+  "version": "1.0.0",
+  "plugin_api": 1,
+  "requires_host": ">=1.0.0",
+  "preinstalled": true,
+  "provides": {
+    "fieldhandlers": [
+      "datetime_format"
+    ]
+  },
+  "backend": "backend",
+  "admin": "admin/index.ts"
+}

@@ -12,8 +12,7 @@ declare global {
 
   // Minimal hand-rolled Vite client types — this project doesn't pull in
   // the full `vite/client` type package, so only what's actually used
-  // (import.meta.env.BASE_URL, read in icon-libraries.ts to resolve /icons/
-  // paths correctly under this bundle's configured `base`) is declared here.
+  // (import.meta.env.BASE_URL, and import.meta.glob for the plugins' screen modules) is declared here.
   interface ImportMetaEnv {
     readonly BASE_URL: string;
     /** True in a production build (Vite). */
@@ -22,6 +21,8 @@ declare global {
 
   interface ImportMeta {
     readonly env: ImportMetaEnv;
+    /** Vite's lazy glob import: one loader per matching file. */
+    glob<T = unknown>(pattern: string): Record<string, () => Promise<T>>;
   }
 
   /** Every global the screen client reads or writes on `window`. */

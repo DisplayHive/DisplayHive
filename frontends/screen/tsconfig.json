@@ -13,8 +13,9 @@
     "sourceMap": true,
     "incremental": true,
     "allowJs": true,
+    "paths": { "@plugins/*": ["../../plugins/*"], "@screen/*": ["./ts/screen/*"] },
     "checkJs": false
   },
-  "include": ["ts/**/*", "js/**/*"],
+  "include": ["ts/**/*", "js/**/*", "../../plugins/*/screen/**/*"],
   "exclude": ["node_modules", "dist"]
 }

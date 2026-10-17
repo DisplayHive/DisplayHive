@@ -75,7 +75,7 @@ def copy_database(source: sa.engine.Engine, target: sa.engine.Engine, metadata: 
         raise CopyError('The target database lacks tables (' + ', '.join(missing) + ') — run `alembic upgrade head` on it first.')
     unknown = sorted(source_tables - {t.name for t in metadata.sorted_tables} - {'alembic_version'})
     if unknown:
-        echo('Not copied (no such table in this version): ' + ', '.join(unknown))
+        echo('Not copied (no such table in this version, or it belongs to a plugin that is switched off): ' + ', '.join(unknown))
 
     copied = {}
     try:

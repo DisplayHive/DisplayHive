@@ -48,6 +48,18 @@ provider is down, or the only Superadmin forgot their password.
 flask dh reset-password admin --activate
 ```
 
+### `plugins list | enable | disable | install | remove`
+
+Manage [plugins](plugins.md) from the command line: `list` shows every plugin and whether it is on; `enable` and
+`disable` switch one (its data is kept); `install SOURCE [--sha256 CHECKSUM]` installs a ZIP file or a download link
+(a link needs the checksum); `remove` deletes an installed plugin's files. A running server picks the changes up after a
+restart; the Plugins page switches at run time.
+
+```bash
+flask dh plugins list
+flask dh plugins disable displayhive.marquee
+```
+
 ### `check-config`
 
 Checks the setup and prints `OK` / `INFO` / `WARN` / `FAIL` lines. It covers:

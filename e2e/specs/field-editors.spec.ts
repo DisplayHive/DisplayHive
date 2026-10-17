@@ -86,6 +86,8 @@ test.describe('Field editors', () => {
     await open(page, backendUrl, '/content')
     await expect(page.locator('.content-view')).toBeVisible({ timeout: 15_000 })
     await page.waitForTimeout(1000)
+    // Pretalx is a plugin that starts switched off; its editor is one of the handlers under test
+    expect((await emitAck(page, 'displayhive:admin:cts:set_plugin_enabled', { id: 'displayhive.pretalx', enabled: true })).success).toBe(true)
     containerId = (await emitAck(page, 'displayhive:admin:cts:create_container', { name: `fe-c-${suffix}`, order: 1, top: 5, left: 5, width: 90, height: 90 })).id
     layoutId = (await emitAck(page, 'displayhive:admin:cts:create_layout', { name: `e2e-fe-layout-${suffix}`, description: '', container_ids: [containerId] })).id
     const ct = await emitAck(page, 'displayhive:admin:cts:create_contenttype', {

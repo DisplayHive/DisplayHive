@@ -1,9 +1,7 @@
-"""Pretalx schedule + table rendering helpers for the admin Content page.
+"""Pretalx schedule rendering: turns Pretalx API data into HTML.
 
-Self-contained rendering routines consumed by ``content.helper.render_content_fields``
-to turn Pretalx API data (and generic table field values) into HTML. Kept in a separate
-module so the general content element renderer stays focused and this Pretalx-specific logic
-can be read and tested on its own.
+Self-contained routines, kept apart from the plugin's handler so this Pretalx-specific logic can be read
+and tested on its own.
 """
 
 import json
@@ -467,36 +465,6 @@ def _render_pretalx_table(data: dict, roomname: str, linecount, fields_config: s
     return _build_talk_table(talks, visible_columns, author_mode, _date_fmt, tracks_by_color)
 
 
-def _render_table(raw_value) -> str:
-    """Render a table-field_handler field value (JSON) as an HTML <table>."""
-    try:
-        data = json.loads(str(raw_value or ''))
-        columns = data.get('columns', [])
-        rows = data.get('rows', [])
-        if not isinstance(columns, list) or not isinstance(rows, list):
-            return ''
-    except Exception:
-        return ''
-
-    parts = ['<table class="dh-table">']
-    if columns:
-        parts.append('<thead><tr>')
-        for col in columns:
-            parts.append(f'<th>{_html_escape(str(col))}</th>')
-        parts.append('</tr></thead>')
-    if rows:
-        parts.append('<tbody>')
-        for row in rows:
-            parts.append('<tr>')
-            if isinstance(row, list):
-                for cell in row:
-                    parts.append(f'<td>{_html_escape(str(cell))}</td>')
-            parts.append('</tr>')
-        parts.append('</tbody>')
-    parts.append('</table>')
-    return ''.join(parts)
-
-
 def _get_pretalx_data(url_id_str: str, db) -> dict:
     """Resolve a PretalxApiUrl ID to its cached JSON dict. Returns {} on any failure."""
     if not url_id_str:
@@ -508,8 +476,8 @@ def _get_pretalx_data(url_id_str: str, db) -> dict:
     if db is None:
         return {}
     try:
-        from application.models import PretalxApiUrl
-        url_obj = db.session.get(PretalxApiUrl, url_id)
+        from .models import load_models
+        url_obj = db.session.get(load_models().PretalxApiUrl, url_id)
         if url_obj and url_obj.cache and url_obj.cache.cached_json:
             return json.loads(url_obj.cache.cached_json)
     except Exception:

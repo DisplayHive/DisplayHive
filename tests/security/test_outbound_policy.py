@@ -4,12 +4,31 @@ import pytest
 
 from application.security import net
 from application.security.auth import create_token
-from application.models import PretalxApiUrl, SystemSetting
+from application.models import SystemSetting
 
 GET = 'displayhive:admin:cts:get_outbound_policy'
 SET = 'displayhive:admin:cts:set_outbound_policy'
 GENERIC = 'displayhive:admin:cts:set_system_settings'
-ADD_URL = 'displayhive:admin:pretalx:cts:add_url'
+CALL = 'displayhive:plugin:call'
+PRETALX_RIGHTS = ('displayhive.pretalx.manage', 'displayhive.pretalx.page')
+
+
+def _add_url(client, name, url):
+    return _call(client, CALL, {'plugin': 'displayhive.pretalx', 'event': 'add_url', 'data': {'name': name, 'url': url}})
+
+
+def _stored_urls(db_session):
+    from sqlalchemy import text
+    return db_session.execute(text('SELECT count(*) FROM pretalx_api_url')).scalar()
+
+
+@pytest.fixture(autouse=True)
+def pretalx_on(flask_app, db_session):
+    """The Pretalx plugin is where the addresses are managed; switch it on for these tests."""
+    from application.plugins import loader
+    loader.set_enabled(flask_app.db, 'displayhive.pretalx', True, host_version='1.0.0')
+    yield
+    loader.unload('displayhive.pretalx')        # the test's changes to the database are rolled back after this
 
 
 def _client(flask_app, user):
@@ -51,7 +70,7 @@ def settings_editor(flask_app, db_session, make_user, make_group):
     user = make_user()
     group = make_group()
     db_session.add(UserGroup(user_id=user.id, group_id=group.id))
-    for key in ('settings.page', 'settings.edit', 'pretalx.manage', 'pretalx.page'):
+    for key in ('settings.page', 'settings.edit', *PRETALX_RIGHTS):
         right = db_session.execute(select(RightDefinition).where(RightDefinition.key == key)).scalar_one()
         db_session.add(GroupRight(group_id=group.id, right_id=right.id))
     db_session.commit()
@@ -95,13 +114,13 @@ def test_the_environment_switch_is_reported_as_forcing_it(superadmin, monkeypatc
 
 
 def test_a_pretalx_address_in_a_private_network_is_not_saved(superadmin, db_session):
-    result = _call(superadmin, ADD_URL, {'name': 'Internal', 'url': 'http://127.0.0.1:9/api/events/x/'})
+    result = _add_url(superadmin, 'Internal', 'http://127.0.0.1:9/api/events/x/')
     assert result['success'] is False and '127.0.0.1' in result['error'] and 'private' in result['error']
-    assert db_session.query(PretalxApiUrl).count() == 0
+    assert _stored_urls(db_session) == 0
 
 
 def test_once_allowed_the_address_is_saved_even_if_nothing_answers_yet(superadmin, db_session):
     _call(superadmin, SET, {'allow_private': True})
-    result = _call(superadmin, ADD_URL, {'name': 'Internal', 'url': 'http://127.0.0.1:9/api/events/x/'})   # port 9: nobody listens
+    result = _add_url(superadmin, 'Internal', 'http://127.0.0.1:9/api/events/x/')   # port 9: nobody listens
     assert result['success'] is True and result['is_valid'] is False
-    assert db_session.query(PretalxApiUrl).count() == 1
+    assert _stored_urls(db_session) == 1
