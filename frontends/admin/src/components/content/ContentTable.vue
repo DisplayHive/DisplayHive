@@ -41,6 +41,8 @@ interface ContentElement {
 
 const props = withDefaults(defineProps<{
   items: ContentElement[]
+  /** The active Design the previews are drawn on (the same for every row). */
+  design?: DesignPreviewPayload | null
   emptyMessage?: string
   /** Unfiltered total from the backend. When 0 the search box and table are hidden. */
   totalItems?: number
@@ -52,6 +54,7 @@ const props = withDefaults(defineProps<{
   oneScreenGroups?: ScreengroupOption[]
 }>(), {
   emptyMessage: 'No content',
+  design: null,
   totalItems: undefined,
   search: '',
   oneScreenGroupIds: () => [],
@@ -92,7 +95,7 @@ const hasBackendContent = computed(() =>
 // rather than an array of row objects (that only happens without dataKey).
 const expandedRows = ref<Record<string, boolean>>({})
 
-// data.design/data.containers are the same Layout-positioned + Design-
+// data.containers (and the list-wide `design` prop) are the same Layout-positioned + Design-
 // skinned shape the Content edit page's live preview uses (see
 // application/admin/content/helper.py's build_scene_containers) — reuse the
 // same srcdoc builder rather than the old unpositioned fragment-concatenation
@@ -122,21 +125,26 @@ type ContainerMap = Record<string, PreviewContainer>
 const containersFor = (row: ContentElement): ContainerMap => {
   const draft = draftContainers.value[row.id]
   if (draft) return draft
-  const byRatio = (row as unknown as { containers_by_ratio?: Record<string, ContainerMap> }).containers_by_ratio
-  const keys = Object.keys(byRatio || {})
-  if (!byRatio || !keys.length) return row.containers as ContainerMap
-  return byRatio[bestAspectRatio(ratioOf(row.id), keys)] ?? (row.containers as ContainerMap)
+  // `containers` is the Layout's base ratio, `containers_by_ratio` holds only its other ratios.
+  const others = (row as unknown as { containers_by_ratio?: Record<string, ContainerMap> }).containers_by_ratio ?? {}
+  const keys = Object.keys(others)
+  if (!keys.length) return row.containers as ContainerMap
+  const all: Record<string, ContainerMap> = { [BASE_ASPECT_RATIO]: row.containers as ContainerMap, ...others }
+  return all[bestAspectRatio(ratioOf(row.id), Object.keys(all))] ?? (row.containers as ContainerMap)
 }
 
-watch([expandedRows, () => props.items, rowRatio, draftContainers], async ([expanded, items]) => {
+watch([expandedRows, () => props.items, rowRatio, draftContainers, () => props.design], async ([expanded, items]) => {
+  const design = props.design
+  if (!design) return
+  const designKey = JSON.stringify(design)        // once for all rows (the Design is the same for each)
   for (const row of items) {
     if (!expanded[row.id]) continue
     const containers = containersFor(row)
-    const key = JSON.stringify([row.design, containers])
+    const key = designKey + JSON.stringify(containers)
     if (resolvedSrcdocKeys[row.id] === key) continue
     resolvedSrcdocKeys[row.id] = key
     resolvedSrcdocs.value[row.id] = await buildDesignPreviewSrcdoc(
-      row.design as DesignPreviewPayload,
+      design,
       containers,
     )
   }

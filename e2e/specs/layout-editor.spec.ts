@@ -10,6 +10,7 @@
  */
 
 import test, { expect } from './fixtures.js'
+import { emitAck } from './helpers.js'
 import { adminUrl } from './urls.js'
 import type { Page, Locator } from '@playwright/test'
 
@@ -29,19 +30,6 @@ let designId = 0
 const extraContainers: number[] = []
 
 /** Emit a socket event on the admin page and resolve with its ack. */
-async function emitAck<T = any>(page: Page, event: string, data: unknown): Promise<T> {
-  return page.evaluate(
-    ({ event, data }) =>
-      new Promise<any>((resolve, reject) => {
-        const socket = (window as any).__displayhive_socket__
-        if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error(`Timed out: ${event}`)), 10_000)
-        socket.emit(event, data, (ack: any) => { clearTimeout(t); resolve(ack) })
-      }),
-    { event, data },
-  )
-}
-
 async function gotoEditor(page: Page, backendUrl: string) {
   // tall enough that the whole canvas is on screen: the pointer tests use real mouse coordinates
   await page.setViewportSize({ width: 1400, height: 1500 })

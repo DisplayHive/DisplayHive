@@ -16,6 +16,16 @@ def register_content_handlers(socketio, app, db):
     # Old endpoints `request_content_list` and `request_content_html` removed.
     # Devices should use the unified `device_request` event below.
 
+    def emit_logger_status():
+        """Tell the requesting device whether the screen log is being collected right now."""
+        logger_active = False
+        try:
+            from .logger import get_logger_status
+            logger_active = get_logger_status()
+        except Exception:
+            logger.debug('Failed to read logger status', exc_info=True)
+        socketio.emit('logger_active' if logger_active else 'logger_inactive', {}, room=request.sid)
+
     @socketio.event
     def device_request(message):
         """Unified device request.
@@ -128,16 +138,7 @@ def register_content_handlers(socketio, app, db):
                 # If no name provided, send defaults
                 if not screen_name:
                     socketio.emit('debug_mode', {'debug': False}, room=request.sid)
-                    logger_active = False
-                    try:
-                        from .logger import get_logger_status
-                        logger_active = get_logger_status()
-                    except Exception:
-                        logger.debug('Failed to read logger status', exc_info=True)
-                    if logger_active:
-                        socketio.emit('logger_active', {}, room=request.sid)
-                    else:
-                        socketio.emit('logger_inactive', {}, room=request.sid)
+                    emit_logger_status()
                     return
 
                 screen = db.session.execute(
@@ -150,16 +151,7 @@ def register_content_handlers(socketio, app, db):
                 else:
                     socketio.emit('debug_mode', {'debug': False}, room=request.sid)
 
-                logger_active = False
-                try:
-                    from .logger import get_logger_status
-                    logger_active = get_logger_status()
-                except Exception:
-                    logger.debug('Failed to read logger status', exc_info=True)
-                if logger_active:
-                    socketio.emit('logger_active', {}, room=request.sid)
-                else:
-                    socketio.emit('logger_inactive', {}, room=request.sid)
+                emit_logger_status()
                 return
 
         except Exception:

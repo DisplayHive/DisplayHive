@@ -11,7 +11,9 @@ import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Popover from 'primevue/popover'
+import { parseScreengroups, type ScreengroupOption } from '../composables/contentEdit/useScreengroupAssignment'
 import { onRowSaved } from '../composables/contentEdit/useRowEditSession'
+import type { DesignPreviewPayload } from '../utils/design/designPreview'
 import ContentTable from '../components/content/ContentTable.vue'
 import { useRightsStore } from '../stores/rights'
 import { useScreensStore } from '../stores/screens'
@@ -78,7 +80,6 @@ const allContent = ref<ContentElement[]>([])
 const unassignedContent = ref<ContentElement[]>([])
 const loading = ref(true)
 
-interface ScreengroupOption { id: number; name: string; screen_ids: number[] }
 const allScreengroups = ref<ScreengroupOption[]>([])
 const oneScreenGroups = ref<ScreengroupOption[]>([])
 const oneScreenGroupIds = computed(() => oneScreenGroups.value.map(g => g.id))
@@ -172,38 +173,24 @@ const filteredContent = computed<ContentElement[]>(() => {
   return items
 })
 
-const handleAllContentDetailed = (data: { content: ContentElement[] }) => {
+// The Design is the same for every row, so the lists come with it once.
+const design = ref<DesignPreviewPayload | null>(null)
+
+const handleAllContentDetailed = (data: { content: ContentElement[]; design?: DesignPreviewPayload }) => {
   allContent.value = data.content || []
+  if (data.design) design.value = data.design
   loading.value = false
 }
 
-const handleUnassignedContent = (data: { content: ContentElement[] }) => {
+const handleUnassignedContent = (data: { content: ContentElement[]; design?: DesignPreviewPayload }) => {
   unassignedContent.value = data.content || []
+  if (data.design) design.value = data.design
 }
 
-// Wire shape pushed by 'upd_screengroups' — either flat or JSON:API-style
-// (attributes/relationships), depending on which backend path produced it.
-interface RawScreengroup {
-  id: number | string
-  name?: string
-  is_one_screen?: boolean
-  attributes?: { name?: string; is_one_screen?: boolean }
-  relationships?: { screens?: { data?: Array<{ id: number | string }> } }
-}
-
-const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
-  const arr = data?.screengroups || data?.data || []
-  const toOption = (sg: RawScreengroup): ScreengroupOption => ({
-    id: Number(sg.id),
-    name: sg.attributes?.name || sg.name || '',
-    screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
-  })
-  allScreengroups.value = arr
-    .filter((sg) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-    .map(toOption)
-  oneScreenGroups.value = arr
-    .filter((sg) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-    .map(toOption)
+const handleAllScreengroups = (data: Parameters<typeof parseScreengroups>[0]) => {
+  const { groups, screens } = parseScreengroups(data)
+  allScreengroups.value = groups
+  oneScreenGroups.value = screens
 }
 
 onMounted(() => {
@@ -353,6 +340,7 @@ const copyContent = (content: ContentElement) => {
 
         <ContentTable
           :items="filteredContent"
+          :design="design"
           :totalItems="allContent.length"
           v-model:search="searchFilter"
           :oneScreenGroupIds="oneScreenGroupIds"

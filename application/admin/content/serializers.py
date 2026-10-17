@@ -21,16 +21,19 @@ def fmt_dt(dt) -> str | None:
         return str(dt)
 
 
-def build_content_dict(content, design_payload=None, db=None):
+def build_content_dict(content, db=None, defaults=None):
     """Serialize a ContentElement ORM object into a dict for admin clients.
 
     Includes a Layout-positioned `containers` map (see
-    build_scene_containers) and the shared `design_payload` (the active
-    Design's {name, html, css, background_effect} — same shape
-    build_design_payload/get_design_preview already use, computed once by
-    the caller and passed in rather than re-fetched per row) so the admin
-    Content list's row-expansion preview can render an accurate as-on-screen
-    iframe instead of an unpositioned concatenation of fragments.
+    build_scene_containers) so the admin Content list's row-expansion preview
+    can render an accurate as-on-screen iframe instead of an unpositioned
+    concatenation of fragments. The active Design is the same for every row, so it
+    is not in here: the list is sent with it once (`_emit_content_list`).
+    *defaults* is the rendered-default-content cache shared by a whole list (see
+    combine_layout_containers).
+
+    `containers` is the Layout's base ratio; `containers_by_ratio` holds only the
+    other ratios of the Layout.
     """
     from application.admin.content.scene import build_scene_containers, build_scene_containers_by_ratio
 
@@ -44,11 +47,9 @@ def build_content_dict(content, design_payload=None, db=None):
         'recurrence': load_recurrence(getattr(content, 'recurrence', None)),
         'contenttypeName': content.contenttype.name if content.contenttype else '',
         'contenttype_id': content.contenttype_id,
-        'design': design_payload,
-        'containers': build_scene_containers(content.contenttype, content.html or '', db=db),
-        # Same, per aspect ratio the Layout has a variant for (the base is
-        # also under '16:9'); lets the admin previews switch ratio client-side.
-        'containers_by_ratio': build_scene_containers_by_ratio(content.contenttype, content.html or '', db=db),
+        'containers': build_scene_containers(content.contenttype, content.html or '', db=db, defaults=defaults),
+        # Same, per other aspect ratio the Layout has a variant for; lets the admin previews switch ratio client-side.
+        'containers_by_ratio': build_scene_containers_by_ratio(content.contenttype, content.html or '', db=db, defaults=defaults),
         'screengroups': [
             {'id': sg.id, 'name': sg.name} for sg in content.screengroups
         ] if content.screengroups else [],

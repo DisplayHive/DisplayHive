@@ -39,6 +39,19 @@ def _backslash(value: str, chars: str) -> str:
     return re.sub(f'([{re.escape(chars)}])', r'\\\1', value)
 
 
+def _escaper(chars: str, newlines: bool = False):
+    """A function that puts a backslash before each of *chars* (and, for iCalendar and vCard text, turns line breaks
+    into ``\\n``)."""
+    def escape(value: str) -> str:
+        value = _backslash(value, chars)
+        return value.replace('\n', '\\n') if newlines else value
+    return escape
+
+
+_ESC_MECARD = _escaper('\\;,:"')       # also what the Wi-Fi format reserves
+_ESC_TEXT = _escaper('\\;,', newlines=True)
+
+
 def wifi(v: dict) -> str:
     ssid = _clean(v.get('wifi_ssid'))
     if not ssid:
@@ -46,7 +59,7 @@ def wifi(v: dict) -> str:
     security = _clean(v.get('wifi_security')).upper() or 'WPA'
     if security not in ('WPA', 'WEP', 'NOPASS'):
         security = 'WPA'
-    esc = lambda s: _backslash(s, r'\;,:"')       # noqa: E731
+    esc = _ESC_MECARD
     parts = [f'T:{"nopass" if security == "NOPASS" else security}', f'S:{esc(ssid)}']
     password = _clean(v.get('wifi_password'))
     if security != 'NOPASS' and password:
@@ -64,7 +77,7 @@ def vcard(v: dict) -> str:
     fields = {k: _clean(v.get(k)) for k in ('vc_title', 'vc_phone', 'vc_mobile', 'vc_email', 'vc_web', 'vc_street',
                                            'vc_zip', 'vc_city', 'vc_country', 'vc_note')}
     if _clean(v.get('vc_format')).lower() == 'mecard':
-        esc = lambda s: _backslash(s, r'\;,:"')   # noqa: E731
+        esc = _ESC_MECARD
         parts = [f'N:{esc(last)},{esc(first)}']
         if fields['vc_phone']:
             parts.append(f'TEL:{esc(fields["vc_phone"])}')
@@ -81,7 +94,7 @@ def vcard(v: dict) -> str:
         if fields['vc_note']:
             parts.append(f'NOTE:{esc(fields["vc_note"])}')
         return 'MECARD:' + ';'.join(parts) + ';;'
-    esc = lambda s: _backslash(s, r'\;,').replace('\n', '\\n')   # noqa: E731
+    esc = _ESC_TEXT
     lines = ['BEGIN:VCARD', 'VERSION:3.0', f'N:{esc(last)};{esc(first)};;;', f'FN:{esc((first + " " + last).strip() or org)}']
     if org:
         lines.append(f'ORG:{esc(org)}')
@@ -153,7 +166,7 @@ def event(v: dict) -> str:
     start = _ical_time(_clean(v.get('ev_start')))
     if not title or not start:
         return ''
-    esc = lambda s: _backslash(s, r'\;,').replace('\n', '\\n')   # noqa: E731
+    esc = _ESC_TEXT
     end = _ical_time(_clean(v.get('ev_end')))
     lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', f'SUMMARY:{esc(title)}', f'DTSTART:{start}']
     if end:

@@ -155,6 +155,7 @@ const setImage = (url: string) => {
   </DesignPanel>
 </template>
 
+<style scoped src="./design-panel.css"></style>
 <style scoped>
 .gradient-picker-row {
   display: flex;
@@ -183,30 +184,5 @@ const setImage = (url: string) => {
   border: 1px solid var(--p-content-border-color, #ddd);
   background-size: cover;
   background-position: center;
-}
-
-.font-properties-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.75rem 1rem;
-  margin-top: 0.6rem;
-}
-
-.font-properties-grid .field label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #666;
-}
-
-.color-field-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.color-field-value {
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #666;
 }
 </style>

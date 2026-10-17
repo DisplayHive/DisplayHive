@@ -16,6 +16,21 @@ interface RawScreengroup {
 
 export const SG_PAGE_SIZE = 10
 
+/** The screen groups and the screens (one-screen groups) of an `upd_screengroups` push. */
+export function parseScreengroups(data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }): {
+  groups: ScreengroupOption[]
+  screens: ScreengroupOption[]
+} {
+  const arr = data?.screengroups || data?.data || []
+  const toOption = (sg: RawScreengroup): ScreengroupOption => ({
+    id: Number(sg.id),
+    name: sg.attributes?.name || sg.name || '',
+    screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
+  })
+  const isScreen = (sg: RawScreengroup) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen)
+  return { groups: arr.filter((sg) => !isScreen(sg)).map(toOption), screens: arr.filter(isScreen).map(toOption) }
+}
+
 /**
  * Which screen groups and screens a content element is assigned to: the lists to pick from
  * (searchable, paged), the picked ids, and the screens the element is currently live on —
@@ -35,19 +50,10 @@ export function useScreengroupAssignment(
   const allScreengroups = shared?.allScreengroups ?? ref<ScreengroupOption[]>([])
   const oneScreenGroups = shared?.oneScreenGroups ?? ref<ScreengroupOption[]>([])
 
-  const handleAllScreengroups = (data: { screengroups?: RawScreengroup[]; data?: RawScreengroup[] }) => {
-    const arr = data?.screengroups || data?.data || []
-    const toOption = (sg: RawScreengroup): ScreengroupOption => ({
-      id: Number(sg.id),
-      name: sg.attributes?.name || sg.name || '',
-      screen_ids: (sg.relationships?.screens?.data || []).map((s) => Number(s.id)),
-    })
-    allScreengroups.value = arr
-      .filter((sg) => !(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-      .map(toOption)
-    oneScreenGroups.value = arr
-      .filter((sg) => !!(sg.attributes?.is_one_screen ?? sg.is_one_screen))
-      .map(toOption)
+  const handleAllScreengroups = (data: Parameters<typeof parseScreengroups>[0]) => {
+    const { groups, screens } = parseScreengroups(data)
+    allScreengroups.value = groups
+    oneScreenGroups.value = screens
   }
 
   if (!shared) {

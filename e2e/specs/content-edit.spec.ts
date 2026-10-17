@@ -10,6 +10,7 @@
  */
 
 import test, { expect } from './fixtures.js'
+import { emitAck } from './helpers.js'
 import { adminUrl } from './urls.js'
 import type { Page } from '@playwright/test'
 
@@ -26,19 +27,6 @@ let layoutId = 0
 let contenttypeId = 0
 let groupId = 0
 let contentId = 0
-
-async function emitAck<T = any>(page: Page, event: string, data: unknown): Promise<T> {
-  return page.evaluate(
-    ({ event, data }) =>
-      new Promise<any>((resolve, reject) => {
-        const socket = (window as any).__displayhive_socket__
-        if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error(`Timed out: ${event}`)), 10_000)
-        socket.emit(event, data, (ack: any) => { clearTimeout(t); resolve(ack) })
-      }),
-    { event, data },
-  )
-}
 
 async function open(page: Page, backendUrl: string, path: string) {
   await page.setViewportSize({ width: 1500, height: 1300 })

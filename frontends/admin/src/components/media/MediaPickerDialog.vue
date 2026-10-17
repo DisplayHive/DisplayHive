@@ -40,7 +40,10 @@ const filtered = computed(() => {
   const images = mediaItems.value.filter((m) => m.mimetype.startsWith('image/'))
   if (!q) return images
   return images.filter(
-    (m) => m.title?.toLowerCase().includes(q) || m.filename?.toLowerCase().includes(q),
+    (m) =>
+      m.title?.toLowerCase().includes(q) ||
+      m.filename?.toLowerCase().includes(q) ||
+      (m.tags || []).some((t) => t.toLowerCase().includes(q)),
   )
 })
 

@@ -199,6 +199,7 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
 </Dialog>
 </template>
 
+<style scoped src="./rights-dialog.css"></style>
 <style scoped>
 .dialog-form {
   display: flex;
@@ -222,63 +223,6 @@ const bulkSetUserRights = async (rightKeys: string[], value: RightOverrideValue)
   display: flex;
   gap: 0.5rem;
   align-items: center;
-}
-
-.muted {
-  color: var(--p-text-muted-color, #9ca3af);
-  font-size: 0.85rem;
-}
-
-.rights-category {
-  margin-top: 1rem;
-}
-
-.rights-category-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.rights-category h4,
-.rights-category-header h4 {
-  margin: 0 0 0.4rem;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--p-text-muted-color, #9ca3af);
-}
-
-.rights-section-actions {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.4rem;
-}
-
-.rights-global-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--p-content-border-color, #e5e7eb);
-}
-
-.rights-global-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--p-text-muted-color, #9ca3af);
-  margin-right: auto;
-}
-
-.rights-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-}
-
-.rights-inherited-tag {
-  font-size: 0.7rem;
 }
 
 .rights-row--user {

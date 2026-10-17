@@ -2,27 +2,14 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useFieldContext } from '@/composables/fields/useFieldContext'
 import { useSocket } from '@/composables/useSocket'
-import DialogTitle from '@/components/ui/DialogTitle.vue'
+import MediaPickerDialog from '@/components/media/MediaPickerDialog.vue'
 import FieldSlot from '@/components/fields/FieldSlot.vue'
 import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
 import InputNumber from 'primevue/inputnumber'
-import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
 
 // An image: one picked from the media library, or a random one by tag, plus how it fits its
 // container (fixed height, full width/height, stretch).
-interface MediaItem {
-  id: number
-  title: string
-  filename: string
-  mimetype: string
-  url: string
-  preview_url: string
-  tags: string[]
-}
-
 const f = useFieldContext()
 const { on, off, emit: socketEmit } = useSocket()
 
@@ -77,51 +64,19 @@ const imageSize = computed((): number | null => {
 
 const imageFit = computed(() => String(f.fields[`${f.name}__fit`] || ''))
 
-// --- the picker dialog ---
+// --- the picker dialog (components/media/MediaPickerDialog.vue) ---
 const showPicker = ref(false)
-const pickerMediaItems = ref<MediaItem[]>([])
-const pickerSearchText = ref('')
-const pickerLoading = ref(false)
+const openPicker = () => { showPicker.value = true }
 
-const pickerFiltered = computed(() => {
-  const q = pickerSearchText.value.toLowerCase()
-  const images = pickerMediaItems.value.filter((m) => m.mimetype.startsWith('image/'))
-  if (!q) return images
-  return images.filter(
-    (m) =>
-      m.title?.toLowerCase().includes(q) ||
-      m.filename?.toLowerCase().includes(q) ||
-      (m.tags || []).some((t) => t.toLowerCase().includes(q)),
-  )
-})
-
-const openPicker = () => {
-  pickerSearchText.value = ''
-  pickerLoading.value = true
-  showPicker.value = true
-  socketEmit('displayhive:admin:cts:get_media_for_picker')
-}
-
-const selectPickerImage = (item: MediaItem) => {
-  f.set(f.name, item.url)
-  showPicker.value = false
-}
-
-const handleMediaForPicker = (data: { media: MediaItem[] }) => {
-  pickerMediaItems.value = data.media || []
-  pickerLoading.value = false
-}
 const handleImageTags = (data: { tags: string[] }) => {
   availableImageTags.value = data.tags || []
 }
 
 onMounted(() => {
-  on('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   on('displayhive:admin:stc:image_tags', handleImageTags)
   if (imageMode.value === 'random_tags') socketEmit('displayhive:admin:cts:get_image_tags')
 })
 onUnmounted(() => {
-  off('displayhive:admin:stc:media_for_picker', handleMediaForPicker)
   off('displayhive:admin:stc:image_tags', handleImageTags)
 })
 
@@ -213,44 +168,11 @@ f.reportVisibleWhen(
       />
     </FieldSlot>
 
-    <Dialog
+    <MediaPickerDialog
       v-model:visible="showPicker"
-      modal
-      :style="{ width: '860px', maxWidth: '95vw' }"
-    >
-      <template #header>
-        <DialogTitle icon="pi-image" title="Select Image" />
-      </template>
-      <div class="picker-toolbar">
-        <InputText v-model="pickerSearchText" placeholder="Search images…" class="picker-search" />
-        <Tag :value="`${pickerFiltered.length} images`" />
-      </div>
-      <div v-if="pickerLoading" class="loading-state">
-        <i class="pi pi-spin pi-spinner" />
-        <p>Loading media…</p>
-      </div>
-      <div v-else-if="pickerFiltered.length === 0" class="empty-state">
-        <i class="pi pi-images" />
-        <p>No images found</p>
-      </div>
-      <div v-else class="picker-grid">
-        <div
-          v-for="item in pickerFiltered"
-          :key="item.id"
-          class="picker-item"
-          :class="{ 'picker-item--selected': String(f.get(f.name)) === item.url }"
-          @click="selectPickerImage(item)"
-        >
-          <div class="picker-thumb">
-            <img :src="item.preview_url || item.url" :alt="item.title" />
-          </div>
-          <div class="picker-label">{{ item.title || item.filename }}</div>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Cancel" text @click="showPicker = false" />
-      </template>
-    </Dialog>
+      :selected-url="String(f.get(f.name))"
+      @select="(item: { url: string }) => f.set(f.name, item.url)"
+    />
   </div>
 </template>
 
@@ -386,70 +308,5 @@ f.reportVisibleWhen(
 /* Same right-alignment fix as .arrow-size-row above. */
 .image-size-row :deep(.option-flag-toggle) {
   margin-left: auto;
-}
-
-/* Image picker dialog */
-.picker-toolbar {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.picker-search {
-  flex: 1;
-  max-width: 320px;
-}
-
-.picker-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 0.75rem;
-  max-height: 460px;
-  overflow-y: auto;
-  padding: 0.25rem;
-}
-
-.picker-item {
-  border: 2px solid var(--p-content-border-color, #e2e8f0);
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.picker-item:hover {
-  border-color: var(--p-primary-color, #3b82f6);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-}
-
-.picker-item--selected {
-  border-color: var(--p-primary-color, #3b82f6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-}
-
-.picker-thumb {
-  width: 100%;
-  height: 90px;
-  background: var(--p-content-background, #f1f5f9);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.picker-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.picker-label {
-  padding: 0.3rem 0.4rem;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: var(--p-content-background, white);
 }
 </style>

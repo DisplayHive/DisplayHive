@@ -110,12 +110,12 @@ def register_content_query_handlers(socketio, app, db):
 
     def _emit_content_list(event, extra, content_items):
         """Serialize content items (each with a Layout-positioned preview)
-        and emit them under *event*. The Design skin is the same for every
-        row, so it's built once here rather than per item."""
+        and emit them under *event*. The Design skin and the rendered default content are the same for
+        every row: the skin is sent once with the list (`design`), the defaults are rendered once."""
         from application.admin.designs.helper import build_design_payload
-        design_payload = build_design_payload(db)
-        content_list = [build_content_dict(c, design_payload, db=db) for c in content_items]
-        socketio.emit(event, {**extra, 'content': content_list}, room=request.sid)
+        defaults = {}
+        content_list = [build_content_dict(c, db=db, defaults=defaults) for c in content_items]
+        socketio.emit(event, {**extra, 'design': build_design_payload(db), 'content': content_list}, room=request.sid)
         return content_list
 
     @socketio.on('displayhive:admin:cts:get_all_content_detailed')

@@ -66,6 +66,7 @@ const setColorHex = (hex: string | undefined) => {
   </DesignPanel>
 </template>
 
+<style scoped src="./design-panel.css"></style>
 <style scoped>
 .indicator-enable-row {
   flex-direction: row;
@@ -75,30 +76,5 @@ const setColorHex = (hex: string | undefined) => {
 
 .indicator-fields-off {
   opacity: 0.55;
-}
-
-.font-properties-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.75rem 1rem;
-  margin-top: 0.6rem;
-}
-
-.font-properties-grid .field label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: #666;
-}
-
-.color-field-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.color-field-value {
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #666;
 }
 </style>

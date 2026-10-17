@@ -5,7 +5,8 @@ from application.utils.aspect_ratio import BASE_RATIO
 from .helper import render_container_default
 
 
-def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None, ratio: str = BASE_RATIO) -> dict:
+def combine_layout_containers(layout_containers, rendered_by_container: dict, db=None, ratio: str = BASE_RATIO,
+                              defaults: dict = None) -> dict:
     """Combine already-rendered per-container HTML (keyed by
     contentcontainer_id, e.g. from render_content_fields/parse_content_html)
     with each container's own Layout position, falling back to the
@@ -25,19 +26,31 @@ def combine_layout_containers(layout_containers, rendered_by_container: dict, db
     *ratio* picks which aspect-ratio variant's position/size each container
     is placed at (the caller passes that variant's own member containers).
 
+    *defaults* is a cache for the rendered default content, ``{(container id, handler, content): html}``: a page that
+    builds many scenes (the content list) shares one, so each container's default is rendered once, not once per
+    content element and aspect ratio.
+
     Returns {contentcontainer_id_str: {top, left, width, height, html}}.
     """
     from application.admin.layouts.helper import container_geometry
     containers = {}
     for c in (layout_containers or []):
-        html = rendered_by_container.get(str(c.id)) or render_container_default(c, db=db)
+        html = rendered_by_container.get(str(c.id))
+        if not html:
+            key = (c.id, c.default_field_handler, c.default_content)
+            if defaults is None:
+                html = render_container_default(c, db=db)
+            else:
+                if key not in defaults:
+                    defaults[key] = render_container_default(c, db=db)
+                html = defaults[key]
         if not html and not c.show_when_empty:
             continue
         containers[str(c.id)] = {**container_geometry(c, ratio), 'html': html or ''}
     return containers
 
 
-def build_scene_containers(contenttype, content_html: str, db=None, ratio: str = BASE_RATIO) -> dict:
+def build_scene_containers(contenttype, content_html: str, db=None, ratio: str = BASE_RATIO, defaults: dict = None) -> dict:
     """Combine a saved ContentElement's already-rendered per-field HTML
     (its `html` column) with its Contenttype's Layout container positions —
     see combine_layout_containers. Reused by admin previews (Content list,
@@ -54,18 +67,19 @@ def build_scene_containers(contenttype, content_html: str, db=None, ratio: str =
     rendered_by_container = parse_content_html(content_html, contenttype.tagconfigs or [])
     from application.admin.layouts.helper import containers_for_ratio
     return combine_layout_containers(
-        containers_for_ratio(contenttype.layout, ratio), rendered_by_container, db=db, ratio=ratio,
+        containers_for_ratio(contenttype.layout, ratio), rendered_by_container, db=db, ratio=ratio, defaults=defaults,
     )
 
 
-def build_scene_containers_by_ratio(contenttype, content_html: str, db=None) -> dict:
-    """build_scene_containers for every aspect ratio the Contenttype's Layout
-    has a variant for: {ratio: {contentcontainer_id_str: {...}}}."""
+def build_scene_containers_by_ratio(contenttype, content_html: str, db=None, defaults: dict = None) -> dict:
+    """build_scene_containers for every aspect ratio the Contenttype's Layout has a variant for
+    *besides the base*: {ratio: {contentcontainer_id_str: {...}}}. (The base is what `build_scene_containers`
+    returns; sending it a second time under its own ratio only made the content list larger.)"""
     from application.admin.layouts.helper import layout_ratios
 
     if not contenttype or not contenttype.layout:
         return {}
     return {
-        r: build_scene_containers(contenttype, content_html, db=db, ratio=r)
-        for r in layout_ratios(contenttype.layout)
+        r: build_scene_containers(contenttype, content_html, db=db, ratio=r, defaults=defaults)
+        for r in layout_ratios(contenttype.layout) if r != BASE_RATIO
     }

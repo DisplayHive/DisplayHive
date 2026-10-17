@@ -5,24 +5,12 @@
  */
 
 import test, { expect } from './fixtures.js'
+import { emitAck } from './helpers.js'
 import { adminUrl } from './urls.js'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(90_000)
-
-async function emitAck<T = any>(page: Page, event: string, data: unknown): Promise<T> {
-  return page.evaluate(
-    ({ event, data }: { event: string; data: unknown }) =>
-      new Promise<any>((resolve, reject) => {
-        const socket = (window as any).__displayhive_socket__
-        if (!socket) { reject(new Error('Socket not available')); return }
-        const t = setTimeout(() => reject(new Error(`Timed out: ${event}`)), 10_000)
-        socket.emit(event, data, (ack: any) => { clearTimeout(t); resolve(ack) })
-      }),
-    { event, data },
-  )
-}
 
 async function adminPage(page: Page, backendUrl: string, path: string) {
   await page.addInitScript((url: string) => {
