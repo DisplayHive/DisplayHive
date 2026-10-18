@@ -148,5 +148,7 @@ def admin_action(*rights: str):
                 logger.exception('Unhandled error in admin handler %s (reference %s)', fn.__name__, reference)
                 _rollback()
                 return internal_failure(reference)
+        # Read by tests/admin/test_admin_rights.py, which checks every handler really refuses a caller without them.
+        wrapper.required_rights = rights
         return wrapper
     return decorator

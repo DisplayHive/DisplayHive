@@ -207,6 +207,9 @@ def handle_delete_user(data):
   `Permission denied`; an unexpected exception is logged (with a short reference), rolled back and
   answered with `Unexpected server error (reference …)` plus `error_ref`, so the admin shows which log
   line to look for (never an empty answer).
+- `tests/admin/test_admin_rights.py` calls every handler that names rights as an admin without any right and expects
+  `Permission denied`. A new handler must name its rights or be listed there on purpose (`CHECKS_ITSELF` for handlers
+  that check inside, `NOT_ADMIN_ACTIONS` for reads and screen events).
 - Send replies to the requester with `room=request.sid` — an emit without a room reaches **every**
   connected client, screens included.
 - Don't call `fetch()` on the page right after a change the handler already broadcasts (see the
