@@ -49,6 +49,8 @@ FIELD_CASES = [
     ('rawhtml-empty', 'rawhtml', {'f': ''}),
     ('iframe', 'iframe', {'f': 'https://example.org/embed?a=1&b="2"'}),
     ('iframe-js', 'iframe', {'f': 'javascript:alert(1)'}),
+    ('iframe-relative', 'iframe', {'f': '/admin/'}),
+    ('iframe-loopback', 'iframe', {'f': 'http://localhost:5000/'}),
     ('pretalx-empty', 'pretalx_table', {'f': '', 'f__type': 'list', 'f__linecount': 5}),
     ('none', '', {'f': 'ignored'}),
 ]
@@ -155,3 +157,13 @@ def test_a_container_default_saved_as_a_key_bag_renders_like_the_packed_form(fla
     from application.admin.content.helper import render_default_value
     assert render_default_value('textklein', '{"default": "DHCON 2027"}') == 'DHCON 2027'
     assert render_default_value('marquee', '{"default": "Hi", "default__speed": 30}') == render_default_value('marquee', '{"text": "Hi", "speed": 30}')
+
+
+def test_iframe_refuses_the_own_origin_and_is_sandboxed(flask_app, db_session, app_ctx, monkeypatch):
+    monkeypatch.setitem(flask_app.app.config, 'PUBLIC_URL', 'https://signage.example.org')
+    own = ('https://signage.example.org/admin/', '//signage.example.org/', '/admin/', 'http://127.0.0.1:8000/',
+           'http://screen.localhost/', 'ftp://example.org/', 'https:///nohost')
+    for url in own:
+        assert _render_field('iframe', {'f': url}) == '', url
+    other = _render_field('iframe', {'f': 'https://signage.example.org.evil.test/x'})
+    assert 'sandbox="allow-scripts allow-same-origin' in other and 'referrerpolicy="no-referrer"' in other

@@ -9,6 +9,8 @@ they are called out under **Breaking changes**.
 
 ### Changed
 
+- **iFrame field:** only absolute `http(s)` addresses of other sites; DisplayHive's own address (`PUBLIC_URL`),
+  loopback addresses and relative paths are refused, and the frame is sandboxed and sends no referrer.
 - **Session expiry warning:** five minutes before a login ends, the admin shows a countdown with **Extend session**
   (`POST /admin/api/auth/refresh`) instead of signing out without notice. Extending is always a click, never automatic.
 - **Screen log:** an identical line repeated by a screen is counted in one row (`×N` on the Logger page) instead of

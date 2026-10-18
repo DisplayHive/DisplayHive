@@ -27,6 +27,7 @@ EXPECTED_ROUTES = [
     ('/admin/api/auth/oidc/exchange', 'POST'),
     ('/admin/api/auth/passkey/login/options', 'POST'),
     ('/admin/api/auth/passkey/login/verify', 'POST'),
+    ('/admin/api/auth/refresh', 'POST'),
     ('/admin/api/auth/providers', 'GET'),
     ('/admin/api/icons/upload', 'POST'),
     ('/admin/api/media/upload', 'POST'),

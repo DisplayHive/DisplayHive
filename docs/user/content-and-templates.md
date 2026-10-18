@@ -146,7 +146,9 @@ For each field you can set:
   in a sandbox: its own small document in an isolated frame, where scripts
   and embed codes still run but cannot reach the screen page, its connection
   to the server or its stored data. The frame does not take over the
-  design's fonts or colours, so set them in the HTML itself. A **countdown** field counts
+  design's fonts or colours, so set them in the HTML itself. An **iFrame** field takes the full
+  address (`https://…`) of another site; DisplayHive's own address and relative paths are refused,
+  and the frame is sandboxed and sends no referrer. A **countdown** field counts
   down to a target date/time, with a customizable format (day/hour/minute/
   second tokens) and an optional "finished" text shown once the target has
   passed.
