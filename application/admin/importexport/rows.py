@@ -2,12 +2,13 @@
 the import context, conflict handling and one ``import_<type>`` function per
 entity type. ``importer.py`` drives them."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from application.admin.content.recurrence import dump_recurrence, load_recurrence
 
 from .common import _exportable_setting_keys, _support_models
 from .registry import ENTITY_TYPES, ENTITY_TYPES_BY_KEY, get_model
+from application.core.timeutil import utcnow_naive
 
 
 def conflict_action(conflict_resolution, row_uuid) -> str:
@@ -75,7 +76,7 @@ class ImportContext:
 def import_screens(ctx):
     ctx.upsert('screens', lambda row: dict(
         active=bool(row.get('active', True)),
-        lastseen=datetime.fromisoformat(row['lastseen']) if row.get('lastseen') else datetime.now(timezone.utc),
+        lastseen=datetime.fromisoformat(row['lastseen']) if row.get('lastseen') else utcnow_naive(),
         name=row['name'],
         resolution_width=row.get('resolution_width') or 0,
         resolution_height=row.get('resolution_height') or 0,
@@ -261,7 +262,7 @@ def import_media(ctx):
     ctx.upsert('media', lambda row: dict(
         filename=row['filename'], title=row.get('title'), tags=row.get('tags'),
         folder_path=row.get('folder_path') or '', mime_type=row.get('mime_type'), file_size=row.get('file_size'),
-        created_at=datetime.fromisoformat(row['created_at']) if row.get('created_at') else datetime.now(timezone.utc),
+        created_at=datetime.fromisoformat(row['created_at']) if row.get('created_at') else utcnow_naive(),
     ))
 
 
@@ -269,7 +270,7 @@ def import_devices(ctx):
     ctx.upsert('devices', lambda row: dict(
         devicekey=row['devicekey'], name=row.get('name'), registration_token=row.get('registration_token'),
         find=bool(row.get('find', False)), is_online=False,
-        created_at=datetime.fromisoformat(row['created_at']) if row.get('created_at') else datetime.now(timezone.utc),
+        created_at=datetime.fromisoformat(row['created_at']) if row.get('created_at') else utcnow_naive(),
         last_connected_at=datetime.fromisoformat(row['last_connected_at']) if row.get('last_connected_at') else None,
         is_active=bool(row.get('is_active', True)),
         max_resolution_width=row.get('max_resolution_width'),

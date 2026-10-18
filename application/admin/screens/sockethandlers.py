@@ -1,8 +1,9 @@
 import logging
 
-from datetime import datetime, timezone
+from datetime import datetime
 from flask import request
 from application.utils import emit_screengroups_update
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def register_admin_screens_handlers(socketio, app, db):
         screen = Screen(
             name=name,
             active=True,
-            lastseen=datetime.now(timezone.utc),
+            lastseen=utcnow_naive(),
             resolution_width=int(width) if width else 0,
             resolution_height=int(height) if height else 0,
         )

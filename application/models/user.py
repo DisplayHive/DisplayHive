@@ -2,11 +2,12 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, DateTime, Boolean, Integer, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class AdminUser(db.Model):
     # this account's tokens on the self-service password-change routes; cleared
     # by POST /admin/api/auth/me/password.
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # JSON-encoded dict of self-service UI preferences (e.g. {"theme": "dark"}),
     # opaque here — same convention as Design.default_colors etc. Never exposed
@@ -94,7 +95,7 @@ class AdminUserLogin(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey('admin_user.id', ondelete='CASCADE'), nullable=False, index=True)
-    logged_in_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    logged_in_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
 
     def to_dict(self):
@@ -126,7 +127,7 @@ class AuthProvider(db.Model):
     client_secret: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     scopes: Mapped[str] = mapped_column(String(512), nullable=False, default='openid profile email', server_default='openid profile email')
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default='1')
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
     def to_dict(self):
         """Admin view. Never includes client_secret, only whether one is set."""
@@ -162,7 +163,7 @@ class AdminUserIdentity(db.Model):
     # Human-readable label from the ID token (email / preferred_username), for
     # admins telling identities apart. Never used for matching.
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user = relationship('AdminUser', back_populates='identities')
@@ -200,5 +201,5 @@ class AdminUserPasskey(db.Model):
     # Whether the passkey is synced between devices (backup eligible), for display only.
     synced: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

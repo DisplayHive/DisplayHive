@@ -24,7 +24,7 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -43,6 +43,8 @@ from webauthn.helpers.structs import (
     ResidentKeyRequirement,
     UserVerificationRequirement,
 )
+
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -261,5 +263,5 @@ def finish_login(db, rp: RelyingParty, challenge_id: str, credential):
         logger.info('Passkey sign-in refused: %s', problem)
         raise PasskeyError('The passkey could not be verified.') from None
     passkey.sign_count = int(verified.new_sign_count or 0)
-    passkey.last_used_at = datetime.now(timezone.utc)
+    passkey.last_used_at = utcnow_naive()
     return user

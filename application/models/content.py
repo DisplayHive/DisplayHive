@@ -1,11 +1,12 @@
 """Content-related database models."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 from sqlalchemy import String, Text, Table, Column, Integer, Float, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db, content_element_screengroup
+from application.core.timeutil import utcnow_naive
 
 # Many-to-many association table for Layout and ContentContainer
 layout_container = Table(
@@ -53,8 +54,8 @@ class ContentElement(db.Model):
     # before the column existed stay NULL until they are edited.
     updated_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True,
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        default=utcnow_naive,
+        onupdate=utcnow_naive,
     )
     # Foreign key to Contenttype
     contenttype_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey('contenttype.id'), nullable=True, index=True)

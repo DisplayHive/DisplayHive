@@ -27,6 +27,7 @@ from application.plugins.manifest import (
     MANIFEST_NAME, PLUGIN_API, Manifest, PluginError, host_accepts, read_manifest,
 )
 from application.plugins.registry import registry
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -317,7 +318,7 @@ def set_enabled(db, plugin_id: str, enabled: bool, installed_dir: Optional[Path]
         db.session.add(row)
     row.enabled = enabled
     row.version = manifest.version
-    row.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    row.updated_at = utcnow_naive()
     db.session.commit()
     problems = reconcile(db, installed_dir, host_version, write=True)
     return problems

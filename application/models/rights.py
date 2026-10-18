@@ -5,11 +5,12 @@ closure, allow/deny/inherit precedence, superadmin bypass) that consumes
 these tables. Kept deliberately data-only here; no business logic.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Boolean, Integer, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db
+from application.core.timeutil import utcnow_naive
 
 
 class RightDefinition(db.Model):
@@ -47,7 +48,7 @@ class Group(db.Model):
     # group is expected to exist (seeded on first run); it cannot be deleted
     # and its is_superadmin flag cannot be unset via the admin UI.
     is_superadmin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default='0')
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
     parent: Mapped[Optional["Group"]] = relationship("Group", remote_side=[id], back_populates="children")
     children: Mapped[list["Group"]] = relationship("Group", back_populates="parent")

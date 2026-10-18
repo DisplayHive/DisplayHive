@@ -11,11 +11,12 @@ import logging
 import mimetypes
 import os
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
 
 from werkzeug.utils import secure_filename
 
 from application.admin.media import renditions as media_renditions
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ def ingest_upload(db, config, staged_path: str, filename: str, folder_path: str 
         folder_path=folder_path,
         mime_type=mime_type,
         file_size=file_size,
-        created_at=datetime.now(timezone.utc),
+        created_at=utcnow_naive(),
     )
     db.session.add(media)
     db.session.commit()

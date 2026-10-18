@@ -1,9 +1,10 @@
 """Shared Telegram alert sender for the DisplayHive alerting system."""
 
 import logging
-from datetime import datetime
 
 import requests
+
+from application.core.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def fire_alert(db, alert_type: str, subject: str) -> None:
 
         token = token_row.value
         label = ALERT_LABELS.get(alert_type, alert_type)
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
         text = f'[DisplayHive] {label}\n{subject}\n{now}'
 
         recipients = db.session.execute(

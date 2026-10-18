@@ -4,6 +4,7 @@ viewport reporting. Split out of the devices ``sockethandlers`` module.
 """
 
 import logging
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ def register_device_management_handlers(socketio, app, db):
                 notify_admins = True
 
             try:
-                dev.last_connected_at = datetime.now(timezone.utc)
+                dev.last_connected_at = utcnow_naive()
             except Exception:
                 logger.debug('Ping: failed to set last_connected_at for devicekey=%s', devicekey, exc_info=True)
 
@@ -407,7 +408,7 @@ def register_device_management_handlers(socketio, app, db):
             devicekey=devicekey,
             name=device_name or None,
             registration_token=token,
-            created_at=datetime.now(timezone.utc),
+            created_at=utcnow_naive(),
             is_active=True,
         )
         db.session.add(device)

@@ -27,6 +27,10 @@ they are called out under **Breaking changes**.
 
 ### Fixed
 
+- **"Last seen" of a screen was wrong on servers that do not run in UTC.** Disconnecting a screen wrote the server's local time into
+  `Screen.lastseen`, everything else (and the display of it) reads UTC; the Telegram alert text now says its time in UTC.
+  All code now takes its time from `application/core/timeutil.py` (`utcnow()`, `utcnow_naive()`), and a test fails on
+  `datetime.now()` without a zone.
 - **Stored content no longer goes stale when what its rendering depends on changes.** Content is stored rendered, so an icon
   colour taken from the Design's palette, or the pool of a random image by tag, stayed as it was when the palette or the
   media changed. Field handlers now declare what they depend on (`depends_on`, `'design'` / `'media'`); saving the active

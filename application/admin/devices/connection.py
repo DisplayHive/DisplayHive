@@ -6,6 +6,7 @@ self-contained concern separate from admin device management.
 """
 
 import logging
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,7 @@ def register_device_connection_handlers(socketio, app, db):
                         with registry_lock:
                             try:
                                 dev.is_online = True
-                                dev.last_connected_at = datetime.now(timezone.utc)
+                                dev.last_connected_at = utcnow_naive()
                                 if getattr(dev, 'registration_token', None):
                                     dev.registration_token = None
                                 db.session.commit()

@@ -15,6 +15,7 @@ from flask import request, jsonify, redirect
 
 from application.security import session as web_session
 from application.core import version
+from application.core.timeutil import utcnow_naive
 from application.security import passkeys
 from application.security.auth import (
     PASSWORDLESS_METHODS,
@@ -112,7 +113,7 @@ def register_auth_routes(app, db):
 
     def _record_login(user):
         """Stamp last_login_at and add a login-history row (password or SSO)."""
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = utcnow_naive()
         db.session.add(AdminUserLogin(
             user_id=user.id,
             logged_in_at=user.last_login_at,

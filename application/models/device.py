@@ -1,11 +1,12 @@
 """Device models for authentication and registration."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 from sqlalchemy import String, Boolean, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import db
+from application.core.timeutil import utcnow_naive
 
 
 class Device(db.Model):
@@ -19,7 +20,7 @@ class Device(db.Model):
     registration_token: Mapped[Optional[str]] = mapped_column(String(36), unique=True, nullable=True, index=True)
     find: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
     last_connected_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     screen_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('screen.id'), nullable=True, index=True)

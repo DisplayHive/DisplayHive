@@ -2,9 +2,10 @@
 
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import request
+from application.core.timeutil import utcnow_naive
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def register_lifecycle_handlers(socketio, app, db):
                     ).scalar_one_or_none()
                     if dev:
                         dev.is_online = False
-                        dev.last_connected_at = datetime.now(timezone.utc)
+                        dev.last_connected_at = utcnow_naive()
                         db.session.commit()
                         offline_device_label = dev.name or disconnected_devicekey[:8]
                 except Exception:
@@ -127,7 +128,7 @@ def register_lifecycle_handlers(socketio, app, db):
                 db.session.execute(
                     db.update(Screen)
                     .where(Screen.name == disconnected_screen_name)
-                    .values(lastseen=datetime.now())
+                    .values(lastseen=utcnow_naive())
                 )
                 db.session.commit()
                 logger.info("[Disconnect] Updated lastseen for screen '%s'", disconnected_screen_name)
