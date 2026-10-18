@@ -44,6 +44,29 @@ describe("rotation", () => {
     );
   });
 
+  it("leaves url(), strings, comments and @media conditions alone, but swaps inside var() fallbacks", () => {
+    setRotation(90);
+    expect(adaptCss(".a { background: url(img10vh.png) 0 5vh; }")).toBe(".a { background: url(img10vh.png) 0 5vw; }");
+    expect(adaptCss('.a { background: url("a 3vw.png"); content: "5vw"; top: 2vh }')).toBe(
+      '.a { background: url("a 3vw.png"); content: "5vw"; top: 2vw }',
+    );
+    expect(adaptCss("/* 9vh */ .a { top: 9vh !important }")).toBe("/* 9vh */ .a { top: 9vw !important }");
+    expect(adaptCss("@media (min-width: 100vw) { .a { top: 2vh } } .b { left: 1vw }")).toBe(
+      "@media (min-width: 100vw) { .a { top: 2vw } } .b { left: 1vh }",
+    );
+    expect(adaptCss(".a { width: var(--a, 3vw) }")).toBe(".a { width: var(--a, 3vh) }");
+  });
+
+  it("swaps units in HTML only inside style attributes and <style> blocks", () => {
+    setRotation(90);
+    expect(adaptHtml('<p>Height 10vh</p><a href="/x10vh">go</a><div style="top:5vh;background:url(a10vw.png)">x</div>')).toBe(
+      '<p>Height 10vh</p><a href="/x10vh">go</a><div style="top:5vw;background:url(a10vw.png)">x</div>',
+    );
+    expect(adaptHtml("<style>.a{width:10vh}</style><script>var h='10vh'</script><i style='left:2vw'>x</i>")).toBe(
+      "<style>.a{width:10vw}</style><script>var h='10vh'</script><i style='left:2vh'>x</i>",
+    );
+  });
+
   it("retargets body selectors to the stage for any non-zero rotation, keeps units at 180", () => {
     setRotation(180);
     expect(adaptCss("body { background: blue; }\nhtml body, .x { color: red; } .y { width: 1vh }")).toBe(

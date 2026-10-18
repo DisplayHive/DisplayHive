@@ -37,10 +37,38 @@ export function setRotation(deg: number): void {
 // 1.5vh / -.5 vw / 100dvh … -> same number with the h/w axis swapped.
 const VIEWPORT_UNIT = /(-?(?:\d+\.?\d*|\.\d+))(\s*)([dsl]?)v([hw])\b/gi;
 
-function swapViewportUnits(text: string): string {
-  return text.replace(VIEWPORT_UNIT, (_m, num: string, space: string, prefix: string, axis: string) => {
-    const swapped = axis === axis.toLowerCase() ? (axis === "h" ? "w" : "h") : axis === "H" ? "W" : "H";
-    return `${num}${space}${prefix}v${swapped}`;
+// Parts of a stylesheet that are not lengths of the stage and must stay as written: comments, strings,
+// url(...) (file names like img10vh.png) and the condition of @media/@container/@supports (those refer to
+// the real screen, not to the stage).
+const CSS_PROTECTED =
+  /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)|@(?:media|container|supports)\b[^{;]*/gi;
+
+function swapViewportUnits(css: string): string {
+  const swap = (part: string) =>
+    part.replace(VIEWPORT_UNIT, (_m, num: string, space: string, prefix: string, axis: string) => {
+      const swapped = axis === axis.toLowerCase() ? (axis === "h" ? "w" : "h") : axis === "H" ? "W" : "H";
+      return `${num}${space}${prefix}v${swapped}`;
+    });
+  let out = "";
+  let last = 0;
+  for (const m of css.matchAll(CSS_PROTECTED)) {
+    out += swap(css.slice(last, m.index)) + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + swap(css.slice(last));
+}
+
+// A `<style>` block, or any opening tag (to reach its style="…" attribute).
+const HTML_STYLE_PARTS = /(<style\b[^>]*>)([\s\S]*?)(<\/style>)|<[a-z][^>]*>/gi;
+const STYLE_ATTRIBUTE = /(\sstyle\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi;
+
+/** Swaps the units in the `<style>` blocks and `style` attributes of *html* only, not in its text, scripts or links. */
+function swapViewportUnitsInHtml(html: string): string {
+  return html.replace(HTML_STYLE_PARTS, (tag: string, open?: string, css?: string, close?: string) => {
+    if (open !== undefined) return open + swapViewportUnits(css ?? "") + (close ?? "");
+    return tag.replace(STYLE_ATTRIBUTE, (_m, head: string, dq?: string, sq?: string) =>
+      dq !== undefined ? `${head}"${swapViewportUnits(dq)}"` : `${head}'${swapViewportUnits(sq ?? "")}'`,
+    );
   });
 }
 
@@ -58,7 +86,7 @@ export function adaptCss(css: string): string {
 /** Adapts HTML carrying inline vh/vw styles to the current rotation. */
 export function adaptHtml(html: string): string {
   if (!isQuarterTurn() || !html) return html;
-  return swapViewportUnits(html);
+  return swapViewportUnitsInHtml(html);
 }
 
 /** The unit for lengths measured along the stage's height: `vh`, or `vw` for quarter turns. */
