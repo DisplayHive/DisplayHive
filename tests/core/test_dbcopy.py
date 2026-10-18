@@ -142,21 +142,38 @@ PLG = 'CREATE TABLE plg_acme_demo_note (id INTEGER PRIMARY KEY, text VARCHAR(50)
 
 
 def _with_plugin_tables(engine, *statements):
+    """Run *statements*. A table the statement creates is dropped first: when a test that switched the Pretalx
+    plugin on ran earlier in the same process, its models are part of ``db.metadata`` and ``create_all`` made it."""
+    import re
     with engine.begin() as conn:
         for statement in statements:
+            created = re.match(r'CREATE TABLE (\w+)', statement)
+            if created:
+                conn.execute(sa.text(f'DROP TABLE IF EXISTS {created.group(1)}'))
             conn.execute(sa.text(statement))
 
 
+def _core_metadata():
+    """``db.metadata`` without the Pretalx tables: they are in it when an earlier test of the same run switched the
+    Pretalx plugin on (its models cannot be unmapped), but this test treats them as a plugin's own, outside it."""
+    meta = sa.MetaData()
+    for table in db.metadata.tables.values():
+        if table.name not in ('pretalx_api_url', 'pretalx_api_cache'):
+            table.to_metadata(meta)
+    return meta
+
+
 def test_the_tables_of_plugins_are_copied_too(tmp_path, source):
+    metadata = _core_metadata()
     _with_plugin_tables(source, PRETALX, PRETALX_CACHE, PLG,
                         "INSERT INTO pretalx_api_url (id, name, url, polling_enabled) VALUES (3, 'Main', 'https://x', 1)",
                         "INSERT INTO pretalx_api_cache (id, api_url_id, cached_json) VALUES (1, 3, '{}')",
                         "INSERT INTO plg_acme_demo_note (id, text) VALUES (1, 'hello')")
     target = _engine(tmp_path, 'target.db')
-    db.metadata.create_all(target)
+    metadata.create_all(target)
     _with_plugin_tables(target, PRETALX, PRETALX_CACHE, PLG,
                         "INSERT INTO plg_acme_demo_note (id, text) VALUES (9, 'stale')")
-    counts = copy_database(source, target, db.metadata, plugin_tables={'pretalx_api_url', 'pretalx_api_cache'})
+    counts = copy_database(source, target, metadata, plugin_tables={'pretalx_api_url', 'pretalx_api_cache'})
     assert counts['pretalx_api_url'] == 1 and counts['pretalx_api_cache'] == 1 and counts['plg_acme_demo_note'] == 1
     with target.connect() as conn:
         assert conn.execute(sa.text('SELECT name, polling_enabled FROM pretalx_api_url')).fetchall() == [('Main', 1)]
