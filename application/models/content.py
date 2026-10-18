@@ -112,6 +112,20 @@ class Design(db.Model):
     indicator_color: Mapped[str] = mapped_column(String(64), nullable=True)
     indicator_height: Mapped[float] = mapped_column(Float, nullable=True)
     indicator_direction: Mapped[str] = mapped_column(String(8), nullable=True)
+    # Transition between the contents of a container when the next scene replaces it (see
+    # frontends/screen/ts/screen/transitions.ts). `transition` is a type ('fade', 'slide', …; NULL = none),
+    # `transition_direction` the direction for the types that have one, `transition_duration_ms` how long it takes.
+    transition: Mapped[str] = mapped_column(String(20), nullable=True)
+    transition_direction: Mapped[str] = mapped_column(String(8), nullable=True)
+    transition_duration_ms: Mapped[int] = mapped_column(Integer, nullable=True)
+    # True: the new content comes in only after the old has left, each taking half of the duration.
+    transition_sequential: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False, server_default=db.false())
+    # True: containers whose content stays the same at a scene change are animated too (out and in again).
+    # 'container' (each container on its own) or 'slide' (one effect across the whole screen); NULL = container.
+    transition_scope: Mapped[str] = mapped_column(String(10), nullable=True)
+    # Containers start one after another instead of all at once: 'order', 'top-bottom', 'left-right', 'centre-out', 'random'.
+    transition_stagger: Mapped[str] = mapped_column(String(12), nullable=True)
+    transition_unchanged: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False, server_default=db.false())
     # Ordered, many-to-many: a Design can stack several Gradients as layered
     # `background-image` values (CSS supports comma-separated layers) —
     # see DesignGradient.order and application/admin/designs/helper.py.

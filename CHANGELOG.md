@@ -7,6 +7,17 @@ they are called out under **Breaking changes**.
 
 ## [Unreleased]
 
+### Added
+
+- **Transitions between scenes:** a Design can animate how a container's content changes when the next scene
+  starts, with 27 effects in three classes (light: fade, slide, push, bounce, cover, reveal, parallax, stack, zoom,
+  rotate, hinge, skew; medium: wipe, diagonal, split, circle, corner circle, diamond, box; heavy, marked with a
+  warning because they can stutter on weak hardware: blinds, flash, flip, cube, blur, glitch), a random pick (per scene
+  change or per container, limited to light, to light and medium, or unlimited), a direction, a duration, a start
+  order for the containers (one after another, top to bottom, left to right, from the middle, random), an optional
+  outro at the end of the old scene, and an option to also animate unchanged containers. The effect can run per
+  container or as one effect across the whole slide. A browser that cannot do an effect fades instead.
+
 ### Changed
 
 - **iFrame field:** only absolute `http(s)` addresses of other sites; DisplayHive's own address (`PUBLIC_URL`),

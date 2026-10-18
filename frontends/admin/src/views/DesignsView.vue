@@ -7,6 +7,7 @@ import DesignDefaultColorsPanel from '../components/designs/DesignDefaultColorsP
 import DesignAspectRatiosPanel from '../components/designs/DesignAspectRatiosPanel.vue'
 import DesignBackdropPanel from '../components/designs/DesignBackdropPanel.vue'
 import DesignIndicatorPanel from '../components/designs/DesignIndicatorPanel.vue'
+import DesignTransitionPanel from '../components/designs/DesignTransitionPanel.vue'
 import DesignEffectPanel from '../components/designs/DesignEffectPanel.vue'
 import DesignGlobalStylesPanel from '../components/designs/DesignGlobalStylesPanel.vue'
 import DesignCodePanel from '../components/designs/DesignCodePanel.vue'
@@ -128,6 +129,13 @@ const applyDetail = (design: Design) => {
   form.indicator_color = design.indicator_color || ''
   form.indicator_height = design.indicator_height ?? 0.8
   form.indicator_direction = design.indicator_direction === 'rtl' ? 'rtl' : 'ltr'
+  form.transition = design.transition || ''
+  form.transition_direction = design.transition_direction || 'left'
+  form.transition_duration_ms = design.transition_duration_ms ?? 600
+  form.transition_sequential = !!design.transition_sequential
+  form.transition_unchanged = !!design.transition_unchanged
+  form.transition_scope = design.transition_scope === 'slide' ? 'slide' : 'container'
+  form.transition_stagger = design.transition_stagger && design.transition_stagger !== 'none' ? design.transition_stagger : ''
 }
 
 const stopLoadTimer = () => {
@@ -252,6 +260,13 @@ const saveDesign = async (keepOpen = false) => {
     indicator_color: form.indicator_color,
     indicator_height: form.indicator_height,
     indicator_direction: form.indicator_direction,
+    transition: form.transition,
+    transition_direction: form.transition_direction,
+    transition_duration_ms: form.transition_duration_ms,
+    transition_sequential: form.transition_sequential,
+    transition_unchanged: form.transition_unchanged,
+    transition_scope: form.transition_scope,
+    transition_stagger: form.transition_stagger,
   }, { success: isNew.value ? 'Design created' : 'Design updated', error: 'Could not save the design' })
   if (ack && !keepOpen) showEditDialog.value = false
 }
@@ -392,6 +407,7 @@ useOpenFromQuery(() => designs.value, openEditDialog, () => canEdit.value)
           <DesignAspectRatiosPanel v-model:form="editForm" />
           <DesignBackdropPanel v-model:form="editForm" />
           <DesignIndicatorPanel v-model:form="editForm" />
+          <DesignTransitionPanel v-model:form="editForm" />
           <DesignEffectPanel v-model:form="editForm" />
           <DesignGlobalStylesPanel v-model:form="editForm" />
         </template>

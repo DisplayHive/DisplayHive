@@ -123,6 +123,8 @@ export interface DesignPayload {
   css?: string;
   /** Validated by indicator.ts's own normalize(). */
   indicator?: unknown;
+  /** Validated by transitions.ts's setTransitionConfig(). */
+  transition?: unknown;
   background_effect?: { name: string; settings: Record<string, unknown> } | null;
 }
 

@@ -22,6 +22,14 @@ export interface DesignForm {
   indicator_color: string
   indicator_height: number
   indicator_direction: 'ltr' | 'rtl'
+  /** Animation between the contents of a container ('' = none). */
+  transition: string
+  transition_direction: 'left' | 'right' | 'up' | 'down'
+  transition_duration_ms: number
+  transition_sequential: boolean
+  transition_unchanged: boolean
+  transition_scope: 'container' | 'slide'
+  transition_stagger: string
   gradient_ids: number[]
 }
 
@@ -44,5 +52,12 @@ export const blankDesignForm = (): DesignForm => ({
   indicator_color: '',
   indicator_height: 0.8,
   indicator_direction: 'ltr',
+  transition: '',
+  transition_direction: 'left',
+  transition_duration_ms: 600,
+  transition_sequential: false,
+  transition_unchanged: false,
+  transition_scope: 'container',
+  transition_stagger: '',
   gradient_ids: [],
 })

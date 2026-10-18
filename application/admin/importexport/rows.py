@@ -5,6 +5,7 @@ entity type. ``importer.py`` drives them."""
 from datetime import datetime
 
 from application.admin.content.recurrence import dump_recurrence, load_recurrence
+from application.admin.designs.helper import clean_transition, clean_transition_direction, clean_transition_duration, clean_transition_scope, clean_transition_stagger
 
 from .common import _exportable_setting_keys, _support_models
 from .registry import ENTITY_TYPES, ENTITY_TYPES_BY_KEY, get_model
@@ -127,6 +128,13 @@ def import_designs(ctx):
         aspect_ratios=row.get('aspect_ratios'),
         indicator_enabled=bool(row.get('indicator_enabled')), indicator_color=row.get('indicator_color'),
         indicator_height=row.get('indicator_height'), indicator_direction=row.get('indicator_direction'),
+        transition=clean_transition(row.get('transition')),
+        transition_direction=clean_transition_direction(row.get('transition_direction')),
+        transition_duration_ms=clean_transition_duration(row.get('transition_duration_ms')),
+        transition_sequential=bool(row.get('transition_sequential')),
+        transition_unchanged=bool(row.get('transition_unchanged')),
+        transition_scope=clean_transition_scope(row.get('transition_scope')),
+        transition_stagger=clean_transition_stagger(row.get('transition_stagger')),
     ))
 
     for file_id, local_id in ctx.id_map['designs'].items():

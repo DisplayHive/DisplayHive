@@ -72,6 +72,10 @@ def _row_design(d):
         'aspect_ratios': d.aspect_ratios,
         'indicator_enabled': bool(d.indicator_enabled), 'indicator_color': d.indicator_color,
         'indicator_height': d.indicator_height, 'indicator_direction': d.indicator_direction,
+        'transition': d.transition, 'transition_direction': d.transition_direction,
+        'transition_duration_ms': d.transition_duration_ms, 'transition_sequential': bool(d.transition_sequential),
+        'transition_unchanged': bool(d.transition_unchanged), 'transition_scope': d.transition_scope,
+        'transition_stagger': d.transition_stagger,
     }
 
 

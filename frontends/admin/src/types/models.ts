@@ -77,6 +77,13 @@ export interface Design {
   indicator_color?: string
   indicator_height?: number | null
   indicator_direction?: 'ltr' | 'rtl'
+  transition?: string
+  transition_direction?: 'left' | 'right' | 'up' | 'down'
+  transition_duration_ms?: number
+  transition_sequential?: boolean
+  transition_unchanged?: boolean
+  transition_scope?: 'container' | 'slide'
+  transition_stagger?: string
   is_default?: boolean
 }
 

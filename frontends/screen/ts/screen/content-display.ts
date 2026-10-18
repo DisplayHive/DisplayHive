@@ -8,7 +8,8 @@
  */
 
 import type { Scene } from "./types.js";
-import { renderScene, clearAllContainers, getSocketEmitter } from "./container-manager.js";
+import { renderScene, clearAllContainers, getSocketEmitter, playOutro } from "./container-manager.js";
+import { getTransitionConfig, transitionWanted } from "./transitions.js";
 import { log } from "./logger.js";
 import { setContentMissing } from "./status-indicator.js";
 import { setIndicatorSuppressed, startIndicator, stopIndicator } from "./indicator.js";
@@ -17,6 +18,7 @@ import { isInWindows, minutesToNextBoundary } from "./recurrence.js";
 let scenes: Scene[] = [];
 let currentSceneId: number | null = null;
 let advanceTimer: ReturnType<typeof setTimeout> | null = null;
+let outroTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 let startTime: number | null = null;
 
@@ -45,6 +47,10 @@ function syncIndicatorVisibility(): void {
 }
 
 function clearAdvanceTimer(): void {
+  if (outroTimer) {
+    clearTimeout(outroTimer);
+    outroTimer = null;
+  }
   if (advanceTimer) {
     clearTimeout(advanceTimer);
     advanceTimer = null;
@@ -101,11 +107,27 @@ export function displayScene(sceneId: number): void {
   log("debug", "displayScene", `Displayed scene ${sceneId} (duration: ${scene.duration}s)`);
 }
 
+/**
+ * With the Design's sequential transition the old content leaves in the last half of its scene: shortly before the
+ * advance, tell the container manager which scene follows so it can animate out what is about to change.
+ */
+function scheduleOutro(scene: Scene): void {
+  const config = getTransitionConfig();
+  if (!config.sequential || !transitionWanted()) return;
+  const delay = Math.max(0, scene.duration * 1000 - config.durationMs / 2);
+  outroTimer = setTimeout(() => {
+    outroTimer = null;
+    const nextIdx = findNextActiveIndex(currentSceneId);
+    if (nextIdx !== null) playOutro(scenes[nextIdx]);
+  }, delay);
+}
+
 /** Schedule the next `advanceScene` call based on the current scene's duration. */
 function scheduleAdvance(): void {
   const scene = scenes.find((s) => s.id === currentSceneId);
   if (scene && scene.duration > 0) {
     advanceTimer = setTimeout(() => advanceScene(), scene.duration * 1000);
+    scheduleOutro(scene);
   }
 }
 
@@ -175,7 +197,7 @@ export function patchCurrentScene(sceneId: number, containerHtml: Record<string,
   }
 
   if (sceneId === currentSceneId) {
-    renderScene(scene);
+    renderScene(scene, true); // an update of what is showing, not a scene change: no transition
   }
 }
 

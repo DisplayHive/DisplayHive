@@ -113,13 +113,46 @@ panels, layered in this order (later panels win over earlier ones):
    its **direction** (left to right or right to left). It turns with the
    screen if the screen is rotated, and saving the active design reloads the
    screens so the change shows up.
-5. **Global Styles** — font and layout properties (family from a websafe
+5. **Transition** — the animation with which the content of a container changes
+   when the next scene starts. The effects come in three classes:
+   - *Light* (movement and fading, fine on any screen): fade, slide, push and
+     fade, slide with bounce, cover, reveal, parallax, stack, zoom in/out,
+     rotate, hinge, skew slide.
+   - *Medium* (shapes that open, `clip-path`): wipe, diagonal wipe, split open
+     and close, circle, circle from a corner, diamond, box.
+   - *Heavy* (⚠ masks, filters, 3D — can stutter on weak hardware such as an
+     older Raspberry Pi or a smart-TV browser; try them on your real screens):
+     blinds, flash, flip, cube, blur, glitch.
+   - *Random*: the same random effect for all containers at a scene change, or
+     **random by container** (each container picks its own), each limited to
+     light effects, to light and medium, or unlimited (including heavy).
+
+   Slide-like effects, wipes, diagonals, splits, hinge, flip and cube have a
+   **direction**; the **duration** (100–5000 ms) counts inside the scene's
+   duration. **Applies to** chooses between each container animating on its own
+   (the effect happens inside the container's area) and the whole slide: then
+   one effect runs across the screen, so all containers slide out to the edge of
+   the screen together, a circle opens from the middle of the screen over all of
+   them, a wipe crosses the screen once and zoom works around the middle of the
+   screen. **Start order** lets the containers start one after another (in
+   layout order, top to bottom, left to right, from the middle outwards or at
+   random) instead of all at once; the last one still ends with the transition's
+   time. With *The old content leaves at the end of its scene* the old content
+   leaves during the last half of the duration before the scene ends and the new
+   one comes in during the first half of the next scene (the random modes keep
+   their pick across the two). By default only containers whose content
+   actually changes animate; *Also animate containers whose content stays the
+   same* shows the unchanged content again too (a video or page inside it
+   restarts). A browser that cannot do what an effect needs fades instead; one
+   that cannot animate shows the new content at once; a system setting for
+   reduced motion turns every effect into a short fade.
+6. **Global Styles** — font and layout properties (family from a websafe
    list, variant, weight, stretch, size in vh, line-height, style, color,
    text-align, display, justify-content, align-items) applied to every
    container by default. Styling for a single container (font, background,
    border, padding …) is done in the Layout editor's **Container Design**
    card instead.
-6. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
+7. **Custom HTML and CSS** — hand-written HTML/CSS for anything the
    structured options above don't cover; it always renders last and wins
    over every other panel.
 

@@ -284,6 +284,64 @@ def clean_indicator_direction(value) -> Optional[str]:
     return value if value in ('ltr', 'rtl') else None
 
 
+TRANSITION_TYPES = (
+    # light (opacity, transform), medium (clip-path), heavy (masks, filters, 3D)
+    'fade', 'slide', 'push-fade', 'bounce', 'cover', 'reveal', 'parallax', 'stack', 'zoom-in', 'zoom-out',
+    'rotate', 'hinge', 'skew',
+    'wipe', 'diagonal', 'split-open', 'split-close', 'circle', 'corner-circle', 'diamond', 'box',
+    'blinds', 'flash', 'flip', 'cube', 'blur', 'glitch',
+    # a random pick per scene change / per container, limited to light, to light and medium, or unlimited
+    'random-light', 'random-medium', 'random', 'random-container-light', 'random-container-medium', 'random-container',
+)
+TRANSITION_DIRECTIONS = ('left', 'right', 'up', 'down')
+TRANSITION_SCOPES = ('container', 'slide')
+TRANSITION_STAGGERS = ('order', 'top-bottom', 'left-right', 'centre-out', 'random')
+TRANSITION_DEFAULT_DURATION_MS = 600
+TRANSITION_MAX_DURATION_MS = 5000
+
+
+def clean_transition(value) -> Optional[str]:
+    """A known transition type, or None (no transition)."""
+    return value if value in TRANSITION_TYPES else None
+
+
+def clean_transition_direction(value) -> Optional[str]:
+    return value if value in TRANSITION_DIRECTIONS else None
+
+
+def clean_transition_scope(value) -> Optional[str]:
+    return value if value in TRANSITION_SCOPES else None
+
+
+def clean_transition_stagger(value) -> Optional[str]:
+    return value if value in TRANSITION_STAGGERS else None
+
+
+def clean_transition_duration(value) -> Optional[int]:
+    """Duration in ms, clamped to 100…5000; None if not a number."""
+    try:
+        ms = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ms != ms:  # NaN
+        return None
+    return int(min(max(ms, 100), TRANSITION_MAX_DURATION_MS))
+
+
+def transition_payload(design) -> dict:
+    """The transition config sent to screens: {type ('none' when unset), direction, duration_ms, sequential, unchanged, scope, stagger}."""
+    return {
+        'type': clean_transition(getattr(design, 'transition', None)) or 'none',
+        'direction': clean_transition_direction(getattr(design, 'transition_direction', None)) or 'left',
+        'duration_ms': clean_transition_duration(getattr(design, 'transition_duration_ms', None))
+                       or TRANSITION_DEFAULT_DURATION_MS,
+        'sequential': bool(getattr(design, 'transition_sequential', False)),
+        'unchanged': bool(getattr(design, 'transition_unchanged', False)),
+        'scope': clean_transition_scope(getattr(design, 'transition_scope', None)) or 'container',
+        'stagger': clean_transition_stagger(getattr(design, 'transition_stagger', None)) or 'none',
+    }
+
+
 def indicator_payload(design) -> dict:
     """The progress-indicator config sent to screens: {enabled, color (resolved
     to a literal), height (vh), direction}. Disabled when there is no design."""
@@ -345,6 +403,8 @@ def build_design_payload(db) -> dict:
         'default_colors': _design_default_colors(design) if design is not None else [],
         # Progress bar along the bottom of the screen (see frontends/screen indicator.ts)
         'indicator': indicator_payload(design),
+        # Animation between the contents of a container (see frontends/screen transitions.ts)
+        'transition': transition_payload(design),
     }
 
     # Animated canvas background effect: not representable as CSS (see

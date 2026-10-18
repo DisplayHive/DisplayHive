@@ -42,6 +42,7 @@ import { preloadIframesInHtml } from "./preload-iframes.js";
 import { initViewportTracking, emitCurrentViewport } from "./viewport-tracker";
 import { applyBackgroundEffect } from "./background-effects.js";
 import { adaptCss, adaptHtml, setRotation } from "./rotation.js";
+import { setTransitionConfig } from "./transitions.js";
 import { adaptMediaCss, adaptMediaImages } from "./media-renditions.js";
 import { applyIndicatorConfig } from "./indicator.js";
 
@@ -417,11 +418,12 @@ export function setupSocketHandlers(socket: ScreenSocket): void {
           styleEl.textContent = adapted;
           // The Backdrop image: swap in the right-sized rendition once it's confirmed to exist.
           void adaptMediaCss(adapted).then((withRenditions) => {
-            if (withRenditions !== adapted) styleEl.textContent = withRenditions;
+            if (withRenditions !== adapted && styleEl.textContent === adapted) styleEl.textContent = withRenditions;
           });
         }
       }
       applyIndicatorConfig(design.indicator);
+      setTransitionConfig(design.transition);
       applyBackgroundEffect(design.background_effect || null).catch((err) => {
         log("error", "socket.on(upd_content)", "Failed to apply background effect", err);
       });

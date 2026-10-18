@@ -16,6 +16,7 @@ def register_admin_designs_handlers(socketio, app, db):
     from application.admin.designs.helper import (
         emit_designs_update, upsert_container_styles,
         clean_indicator_color, clean_indicator_height, clean_indicator_direction,
+        clean_transition, clean_transition_direction, clean_transition_duration, clean_transition_scope, clean_transition_stagger, TRANSITION_DEFAULT_DURATION_MS,
     )
     from application.socketio_handlers.actions import admin_action, get_or_fail, Fail, ok
     from application.models import Design, DesignContainerStyle, DesignGlobalStyle, Gradient
@@ -82,6 +83,13 @@ def register_admin_designs_handlers(socketio, app, db):
                 'indicator_color': design.indicator_color or '',
                 'indicator_height': design.indicator_height,
                 'indicator_direction': design.indicator_direction or 'ltr',
+                'transition': design.transition or '',
+                'transition_direction': design.transition_direction or 'left',
+                'transition_duration_ms': design.transition_duration_ms or TRANSITION_DEFAULT_DURATION_MS,
+                'transition_sequential': bool(design.transition_sequential),
+                'transition_unchanged': bool(design.transition_unchanged),
+                'transition_scope': design.transition_scope or 'container',
+                'transition_stagger': design.transition_stagger or 'none',
                 'is_default': bool(getattr(design, 'isDefault', False)),
             }
         }
@@ -112,6 +120,13 @@ def register_admin_designs_handlers(socketio, app, db):
             indicator_color=clean_indicator_color(data.get('indicator_color')),
             indicator_height=clean_indicator_height(data.get('indicator_height')),
             indicator_direction=clean_indicator_direction(data.get('indicator_direction')),
+            transition=clean_transition(data.get('transition')),
+            transition_direction=clean_transition_direction(data.get('transition_direction')),
+            transition_duration_ms=clean_transition_duration(data.get('transition_duration_ms')),
+            transition_sequential=bool(data.get('transition_sequential')),
+            transition_unchanged=bool(data.get('transition_unchanged')),
+            transition_scope=clean_transition_scope(data.get('transition_scope')),
+            transition_stagger=clean_transition_stagger(data.get('transition_stagger')),
         )
         db.session.add(design)
         db.session.flush()  # assigns design.id, needed for the global style row below
@@ -165,6 +180,20 @@ def register_admin_designs_handlers(socketio, app, db):
             design.indicator_height = clean_indicator_height(data.get('indicator_height'))
         if 'indicator_direction' in data:
             design.indicator_direction = clean_indicator_direction(data.get('indicator_direction'))
+        if 'transition' in data:
+            design.transition = clean_transition(data.get('transition'))
+        if 'transition_direction' in data:
+            design.transition_direction = clean_transition_direction(data.get('transition_direction'))
+        if 'transition_duration_ms' in data:
+            design.transition_duration_ms = clean_transition_duration(data.get('transition_duration_ms'))
+        if 'transition_sequential' in data:
+            design.transition_sequential = bool(data.get('transition_sequential'))
+        if 'transition_unchanged' in data:
+            design.transition_unchanged = bool(data.get('transition_unchanged'))
+        if 'transition_scope' in data:
+            design.transition_scope = clean_transition_scope(data.get('transition_scope'))
+        if 'transition_stagger' in data:
+            design.transition_stagger = clean_transition_stagger(data.get('transition_stagger'))
 
         db.session.add(design)
         db.session.commit()
