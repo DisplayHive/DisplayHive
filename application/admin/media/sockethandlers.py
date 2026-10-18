@@ -5,6 +5,7 @@ import logging
 
 from flask_socketio import emit
 
+from application.admin.content import rerender
 from application.admin.media import renditions as media_renditions
 from application.admin.media.usage import media_usage
 
@@ -81,6 +82,9 @@ def register_admin_media_handlers(socketio, app, db):
 
         db.session.commit()
         logger.info("media_edit saved id=%s title='%s' tags='%s'", media_id, media.title, media.tags)
+
+        if tags_raw is not None:
+            rerender.schedule('media')           # a random image by tag may now find other files
 
         # Push refreshed list to the caller
         _push_media_list()
@@ -186,6 +190,7 @@ def register_admin_media_handlers(socketio, app, db):
         # Delete from database
         db.session.delete(media)
         db.session.commit()
+        rerender.schedule('media')               # the file may have been in a random image's pool
 
         # Push refreshed media list
         _push_media_list()

@@ -44,6 +44,9 @@ class FieldHandler:
     id: str = ''
     #: A scene that uses this handler is rendered again after it was shown (live data, e.g. a schedule).
     refresh_after_show: bool = False
+    #: What this handler's output depends on besides the field's own values, so content that uses it is rendered
+    #: again when that changes: ``'design'`` (the active Design) and/or ``'media'`` (the media library).
+    depends_on: tuple = ()
 
     def render(self, rc: RenderContext) -> Optional[str]:
         """The field's HTML. Return ``None`` to leave the stored value as it is (plain pass-through)."""

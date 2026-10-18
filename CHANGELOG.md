@@ -27,6 +27,11 @@ they are called out under **Breaking changes**.
 
 ### Fixed
 
+- **Stored content no longer goes stale when what its rendering depends on changes.** Content is stored rendered, so an icon
+  colour taken from the Design's palette, or the pool of a random image by tag, stayed as it was when the palette or the
+  media changed. Field handlers now declare what they depend on (`depends_on`, `'design'` / `'media'`); saving the active
+  Design, making another the default, uploading, tagging or deleting media re-renders the content that uses such a handler
+  and pushes it to the screens (bursts are coalesced), and an import renders everything again.
 - **`flask dh copy-database` copies the data of plugins.** Moving from SQLite to PostgreSQL silently left out the Pretalx
   addresses and settings (the command only knew the plugins that were switched on in the new, empty target). It now copies
   every table a plugin owns (`plg_…` tables and the ones listed in a manifest's `adopts_tables`); if the target lacks the

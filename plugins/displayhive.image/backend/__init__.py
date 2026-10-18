@@ -44,6 +44,7 @@ def image_style(ctx: dict, field_name: str) -> str:
 
 class Handler(FieldHandler):
     id = 'image'
+    depends_on = ('media',)
 
     def _pool(self, rc: RenderContext):
         """Candidate URLs of a ``random_tags`` field (media carrying one of the chosen tags), or ``None``."""

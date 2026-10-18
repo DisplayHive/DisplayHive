@@ -171,6 +171,8 @@ def register_admin_designs_handlers(socketio, app, db):
         _emit_designs()
 
         if design.isDefault:
+            from application.admin.content import rerender
+            rerender.schedule('design')          # content whose rendering uses the Design's palette
             try:
                 from application.utils import reload_devices_on_all_screens
                 reload_devices_on_all_screens(socketio, db)

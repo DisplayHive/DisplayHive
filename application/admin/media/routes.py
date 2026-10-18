@@ -90,4 +90,6 @@ def register_media_routes(app, db):
         finally:
             upload.close()
 
+        from application.admin.content import rerender
+        rerender.schedule('media')               # a random image by tag may find the new file
         return jsonify({'success': True, 'id': media.id, 'filename': media.filename})

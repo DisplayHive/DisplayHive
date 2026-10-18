@@ -116,6 +116,8 @@ def register_admin_settings_handlers(socketio, app, db):
             d.isDefault = False
         new_default.isDefault = True
         db.session.commit()
+        from application.admin.content import rerender
+        rerender.schedule('design')              # content whose rendering uses the Design's palette
 
         try:
             from application.utils import push_content_list_to_all_screens

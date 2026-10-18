@@ -44,6 +44,7 @@ def resolve_icon_color(raw, db=None) -> str:
 
 class Handler(FieldHandler):
     id = 'icon'
+    depends_on = ('design',)
 
     def render(self, rc: RenderContext):
         if not rc.has_value:

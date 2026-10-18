@@ -70,6 +70,7 @@ from application.plugins.handlers import FieldHandler, RenderContext
 class Weather(FieldHandler):
     id = 'weather'
     refresh_after_show = False        # True: the screen asks for a fresh render after each display (live data)
+    depends_on = ()                   # 'design' and/or 'media': content is rendered again when the Design / the media library change
 
     def render(self, rc: RenderContext):
         city = rc.value                      # the field's value
@@ -92,6 +93,11 @@ def register(api):
 * **Handlers** escape what they output. A handler returns `Markup` only for HTML it built itself. A field whose
   handler is not available (plugin off, not installed) renders **empty** — the stored value is kept and comes back
   when the plugin is active again. A handler that raises is logged and renders empty; it never breaks a scene.
+* **Stored rendering.** Content is stored rendered (`ContentElement.html`). A handler whose output depends on more than the
+  field's own values says so with `depends_on`: `'design'` (the icon handler resolves a palette colour when it renders) or
+  `'media'` (a random image by tag puts the matching files into the HTML). When the active Design is saved or changed, or
+  media are uploaded, tagged or deleted, the content that uses such a handler is rendered again and pushed to the screens
+  (application/admin/content/rerender.py; bursts are coalesced into one run). After an import everything is rendered again.
 * **Routes** live under `/api/plugins/<id>/<subpath>`. Flask accepts no new routes once the first request was
   served, so there is one dispatcher route for all plugins. A route is **not** authenticated by itself — check
   with `api.require(right)` or your own means.

@@ -162,6 +162,8 @@ def _finish_import(result: dict, *, app, db, socketio, media_folder: str, rendit
     images' FHD/4K/8K renditions."""
     if result.get('success'):
         broadcast_import_update(socketio, app, db)
+        from application.admin.content import rerender
+        rerender.schedule(rerender.ALL)          # the imported HTML was rendered against another database
         media_renditions.schedule_backfill(socketio, app, db, media_folder, renditions_folder)
     return result
 

@@ -138,6 +138,11 @@ class PluginRegistry:
             entry = self._handlers.get(handler_id)
         return entry[1] if entry else None
 
+    def handlers_depending_on(self, kind: str) -> list:
+        """Ids of the loaded field handlers whose output depends on *kind* (see ``FieldHandler.depends_on``)."""
+        with self._lock:
+            return sorted(h for h, (_, handler) in self._handlers.items() if kind in handler.depends_on)
+
     def fieldhandler_ids(self) -> list:
         with self._lock:
             return sorted(self._handlers)
