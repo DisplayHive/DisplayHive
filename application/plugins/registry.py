@@ -24,6 +24,7 @@ class PluginRegistry:
         self._hooks: dict[str, list] = {}                             # plugin id -> functions to call on unload
         self._sections: dict[str, tuple] = {}                         # data section id -> (plugin id, DataSection)
         self._failures: dict[str, str] = {}                            # plugin id -> why it could not be loaded
+        self._help: dict[str, tuple] = {}                              # help topic key -> (plugin id, topic dict)
         self._warned: set = set()
         self._retired: list = []                                      # (plugin id, version) unloaded, code still in memory
 
@@ -62,6 +63,18 @@ class PluginRegistry:
                 raise ValueError(f'The data section "{section.id}" already belongs to {taken[0]}')
             self._sections[section.id] = (plugin_id, section)
 
+    def add_help(self, plugin_id: str, key: str, topic: dict) -> None:
+        with self._lock:
+            taken = self._help.get(key)
+            if taken is not None and taken[0] != plugin_id:
+                raise ValueError(f'The help topic "{key}" already belongs to {taken[0]}')
+            self._help[key] = (plugin_id, dict(topic))
+
+    def help_topics(self) -> dict:
+        """``{key: topic}`` of the help topics of the loaded plugins."""
+        with self._lock:
+            return {key: dict(topic) for key, (_, topic) in self._help.items()}
+
     def remove_plugin(self, plugin_id: str) -> None:
         """Take back everything *plugin_id* has registered; its unload hooks run (a failing one is logged)."""
         with self._lock:
@@ -74,6 +87,8 @@ class PluginRegistry:
                 del self._events[key]
             for key in [k for k, (owner, _) in self._sections.items() if owner == plugin_id]:
                 del self._sections[key]
+            for key in [k for k, (owner, _) in self._help.items() if owner == plugin_id]:
+                del self._help[key]
             self._plugins.pop(plugin_id, None)
         for hook in reversed(hooks):
             try:
@@ -111,6 +126,7 @@ class PluginRegistry:
             self._events.clear()
             self._hooks.clear()
             self._sections.clear()
+            self._help.clear()
             self._warned.clear()
             self._failures.clear()
             self._retired.clear()

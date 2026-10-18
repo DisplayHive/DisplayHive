@@ -9,6 +9,8 @@ missing — once a topic has an 'en' translation row, sync_help_topics() will
 not overwrite it, so an admin (or a future help-editing UI) can safely
 change help text without it reverting on the next deploy.
 
+Plugins add topics of their own with `api.help.add`; those are served from the registry, not stored here.
+
 Naming convention: "page.<route name>" for whole-page help. Field-level
 help (e.g. "field.pretalx.api_key") can be added the same way once needed.
 """
@@ -18,6 +20,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_LOCALE = 'en'
+
+# Topics that used to be here and now come with a plugin (application/plugins/api.py: api.help). A database that still
+# has them must not show them while the plugin is off.
+RETIRED_KEYS = ('page.pretalx',)
 
 # (key, category, context, docs_url, title, body)
 PAGE_HELP = [
@@ -51,8 +57,6 @@ PAGE_HELP = [
      'Back up your configuration or move content, designs, and settings between DisplayHive installations.'),
     ('page.alerting', 'page', 'alerting', None, None,
      'Configure alerts that notify you when devices go offline or other important events occur.'),
-    ('page.pretalx', 'page', 'pretalx', None, None,
-     'Connect to a Pretalx conference schedule to automatically display session and talk information.'),
     ('page.users', 'page', 'users', None, None,
      'Manage user accounts and the permissions (rights) they have within DisplayHive.'),
 ]
@@ -69,6 +73,10 @@ def sync_help_topics(db):
         t.key: t for t in db.session.execute(db.select(HelpTopic)).scalars().all()
     }
     changed = False
+    for key in RETIRED_KEYS:
+        if key in existing:
+            db.session.delete(existing[key])
+            changed = True
     for key, category, context, docs_url, title, body in PAGE_HELP:
         topic = existing.get(key)
         if topic is None:

@@ -314,3 +314,53 @@ def test_installing_a_plugin_that_needs_a_missing_package_is_refused_and_shown(f
     assert not (tmp_path / 'plugins' / 'acme.demo').exists()
     listed = {p['id']: p for p in service.describe(flask_app.db, app)['plugins']}
     assert listed['displayhive.qrcode']['missing_packages'] == []
+
+
+# --- Help topics ----------------------------------------------------------------------------------
+
+HELP_PLUGIN = 'def register(api):\n    api.help.add("page.acme-demo", "Help for the demo page.", title="Demo")\n'
+
+
+def _help_plugin_zip(code=HELP_PLUGIN):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr('plugin.json', json.dumps({'id': 'acme.demo', 'name': 'D', 'kind': 'integration', 'version': '1.0.0', 'plugin_api': 1, 'backend': 'backend'}))
+        archive.writestr('backend/__init__.py', code)
+    return buffer.getvalue()
+
+
+def _all_help(client):
+    client.get_received()
+    client.emit('displayhive:admin:cts:get_all_help', {})
+    return next(r['args'][0] for r in client.get_received() if r['name'] == 'displayhive:admin:stc:all_help')
+
+
+def test_a_plugins_help_topic_is_served_only_while_it_is_active(flask_app, app, admin):
+    assert 'page.pretalx' not in _all_help(admin)              # Pretalx is off: its page help is not offered
+    service.install_zip(flask_app.db, app, _help_plugin_zip())
+    topic = _all_help(admin)['page.acme-demo']
+    assert (topic['body'], topic['title'], topic['context']) == ('Help for the demo page.', 'Demo', 'acme.demo')
+    service.set_enabled(flask_app.db, app, 'acme.demo', False)
+    assert 'page.acme-demo' not in _all_help(admin)
+
+
+def test_pretalx_brings_its_page_help_when_it_is_on(flask_app, app, admin):
+    service.set_enabled(flask_app.db, app, 'displayhive.pretalx', True)
+    try:
+        assert 'Pretalx' in _all_help(admin)['page.pretalx']['body']
+    finally:
+        registry.remove_plugin('displayhive.pretalx')
+
+
+def test_a_plugin_cannot_take_a_help_topic_of_the_host(flask_app, app):
+    with pytest.raises(PluginError, match='one of the host'):
+        service.install_zip(flask_app.db, app, _help_plugin_zip('def register(api):\n    api.help.add("page.devices", "x")\n'))
+
+
+def test_a_help_topic_the_core_used_to_have_is_removed_from_the_database(flask_app, db_session):
+    from application.admin.help.content import sync_help_topics
+    from application.models import HelpTopic
+    db_session.add(HelpTopic(key='page.pretalx', category='page', context='pretalx'))
+    db_session.commit()
+    sync_help_topics(flask_app.db)
+    assert db_session.execute(db_session.query(HelpTopic).filter_by(key='page.pretalx').exists().select()).scalar() is False

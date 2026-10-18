@@ -35,6 +35,9 @@ they are called out under **Breaking changes**.
 
 ### Added
 
+- **Plugins bring their own in-app help.** `api.help.add(key, body, …)` offers a help topic while the plugin is active; the
+  Pretalx page's help moved out of the core into its plugin, so it no longer shows while Pretalx is off. Admins reload the
+  help when plugins change.
 - **Plugins declare the Python packages they need** (`requires_python_packages` in `plugin.json`). The server checks them when a
   plugin is installed and loaded and the Plugins page shows what is missing (the plugin cannot be switched on until the
   package is installed), instead of an import error in the middle of loading.

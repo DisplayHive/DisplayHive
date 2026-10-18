@@ -84,6 +84,7 @@ def register(api):
     api.routes.add('forecast', view)         # GET /api/plugins/acme.weather/forecast
     api.events.on('refresh', handler)        # socket event, see below
     api.data.add(MySection())                # a node in export / import
+    api.help.add('page.weather', 'What this page does.')   # in-app help topic, served while the plugin is active
     api.on_unload(stop_my_thread)
     models = api.models.once(build)          # SQLAlchemy models, see "Tables"
 ```
@@ -212,5 +213,4 @@ here. Rows carry a `uuid` so the same row is recognised on another instance.
 * Python dependencies of a plugin are not installed: a plugin may use what the host ships and declares what it needs
   (`requires_python_packages`). Shipping packages inside a plugin's ZIP is not supported; it will be looked at when a plugin
   from outside the repository needs it.
-* The Help page's topic for Pretalx is still in the core.
 * `flask dh copy-database` copies the tables of the plugins that are switched on.

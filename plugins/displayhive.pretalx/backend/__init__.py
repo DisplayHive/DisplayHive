@@ -99,4 +99,5 @@ def register(api):
     from .data import PretalxData
     api.fieldhandlers.add(Handler())
     api.data.add(PretalxData())
+    api.help.add('page.pretalx', 'Connect to a Pretalx conference schedule to automatically display session and talk information.')
     register_events(api)

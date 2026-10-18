@@ -58,6 +58,23 @@ class _Data:
         self._api._registry.add_section(self._api.plugin_id, section)
 
 
+class _Help:
+    def __init__(self, api: 'PluginApi'):
+        self._api = api
+
+    def add(self, key: str, body: str, *, title: str = None, context: str = None, docs_url: str = None,
+            category: str = 'page') -> None:
+        """Offer an in-app help topic while the plugin is active. *key* is what the admin asks for: ``page.<route name>``
+        for a page of the plugin (the page header looks that up), or any ``field.…`` key. It must not be a key of the
+        host's own help (application/admin/help/content.py)."""
+        from application.admin.help.content import PAGE_HELP
+        if key in {row[0] for row in PAGE_HELP}:
+            raise ValueError(f'The help topic "{key}" is one of the host\'s own')
+        self._api._registry.add_help(self._api.plugin_id, key, {
+            'category': category, 'context': context or self._api.plugin_id, 'title': title, 'body': body, 'docs_url': docs_url,
+        })
+
+
 class _Models:
     def __init__(self, api: 'PluginApi'):
         self._api = api
@@ -78,6 +95,7 @@ class PluginApi:
         self.events = _Events(self)
         self.data = _Data(self)
         self.models = _Models(self)
+        self.help = _Help(self)
 
     @property
     def app(self):

@@ -34,6 +34,10 @@ def register_admin_help_handlers(socketio, app, db):
                 'body': translation.body,
                 'docs_url': topic.docs_url,
             }
+        # What the plugins that are active now add (they are not in the database: they come and go with the plugin).
+        from application.plugins import registry
+        for key, topic in registry.help_topics().items():
+            result.setdefault(key, topic)
         return result
 
     @socketio.on('displayhive:admin:cts:get_all_help')

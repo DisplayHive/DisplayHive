@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { useSocket } from '../composables/useSocket'
 import router from '../router'
 import { syncPlugins } from '../plugins/loader'
+import { useHelpStore } from './help'
 import type { ActivePlugin } from '../plugins/types'
 
 /**
@@ -19,6 +20,7 @@ export const usePluginsStore = defineStore('plugins', () => {
     active.value = plugins
     await syncPlugins(plugins, router)
     ready.value = true
+    useHelpStore().fetchHelp()        // the plugins that are active bring help topics of their own
   }
 
   on('displayhive:admin:stc:active_plugins', (data: unknown) => {
