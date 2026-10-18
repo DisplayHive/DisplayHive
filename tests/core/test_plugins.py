@@ -296,3 +296,45 @@ def test_the_old_pretalx_rights_keep_their_groups_under_the_new_names(flask_app,
     assert renamed.key == 'displayhive.pretalx.page'
     assert db_session.execute(select(GroupRight).where(GroupRight.group_id == group.id)).scalar_one().right_id == old.id
     registry.remove_plugin('displayhive.pretalx')
+
+
+# --- The Python packages a plugin needs --------------------------------------------------------------
+
+def test_a_requirement_is_read_and_checked_against_the_installed_packages():
+    from application.plugins import packages
+    assert packages.parse_requirement('segno>=1.6') == ('segno', '>=', (1, 6))
+    assert packages.parse_requirement(' flask ') == ('flask', '', ())
+    for bad in ('', 'seg no', 'segno>=', 'segno~=1.6', 'x; python_version<"3"', 5):
+        with pytest.raises(PluginError):
+            packages.parse_requirement(bad)
+    assert packages.unmet(['segno', 'segno>=1.0', 'segno<99']) == []
+    assert packages.unmet(['segno>=99']) == ['segno>=99 (installed: ' + '.'.join(map(str, packages._installed_version('segno'))) + ')']
+    assert packages.unmet(['no-such-package-here>=1']) == ['no-such-package-here>=1 (not installed)']
+
+
+def test_a_manifest_with_a_bad_requirement_is_refused():
+    with pytest.raises(PluginError, match='requirement'):
+        parse_manifest(manifest_data(requires_python_packages=['seg no']))
+    with pytest.raises(PluginError, match='list'):
+        parse_manifest(manifest_data(requires_python_packages='segno'))
+    assert parse_manifest(manifest_data(requires_python_packages=['segno>=1.6'])).requires_python_packages == ('segno>=1.6',)
+
+
+def test_a_plugin_whose_package_is_missing_is_not_loaded_and_says_what_is_missing(tmp_path):
+    write_plugin(tmp_path, extra={'requires_python_packages': ['no-such-package-here>=2']})
+    manifest = loader.discover(tmp_path)['acme.demo'][0]
+    with pytest.raises(PluginError, match=r'no-such-package-here>=2 \(not installed\)'):
+        loader.load(manifest)
+    assert not registry.is_loaded('acme.demo')
+
+
+def test_every_package_a_bundled_plugin_declares_is_in_the_servers_requirements():
+    import re
+    from pathlib import Path
+    from application.plugins import packages
+    wanted = Path(__file__).resolve().parents[2].joinpath('requirements', 'requirements.in').read_text()
+    listed = {re.split(r'[<>=\s\[]', line.strip(), maxsplit=1)[0].lower() for line in wanted.splitlines() if line.strip() and not line.startswith('#')}
+    for pid, (manifest, _) in loader.discover().items():
+        for text in manifest.requires_python_packages:
+            assert packages.parse_requirement(text)[0].lower() in listed, f'{pid} needs {text}, which requirements.in does not list'
+        assert not packages.unmet(manifest.requires_python_packages), pid

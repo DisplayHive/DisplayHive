@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from application.core import version as app_version
-from application.plugins import installer, loader
+from application.plugins import installer, loader, packages
 from application.plugins.manifest import PluginError
 from application.plugins.registry import registry
 
@@ -46,6 +46,8 @@ def describe(db, app) -> dict:
             'has_admin': bool(manifest.admin), 'has_screen': bool(manifest.screen),
             'requires_host': manifest.requires_host,
             'compatible': _compatible(manifest),
+            'missing_packages': packages.unmet(manifest.requires_python_packages),
+            'requires_python_packages': list(manifest.requires_python_packages),
             'error': '' if plugin_id in loaded else registry.failure(plugin_id),
         })
     return {'plugins': plugins, 'retired': len(registry.retired()), 'host_version': host_version()}

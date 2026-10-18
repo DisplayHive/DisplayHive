@@ -37,6 +37,7 @@ class Manifest:
     rights: tuple = ()                # ({id, group, label}, …): rights the plugin adds, ids start with "<plugin id>."
     migrations: str = ''              # folder with the plugin's schema migrations
     adopts_tables: tuple = ()         # tables older versions created in the core, which now belong to the plugin
+    requires_python_packages: tuple = ()   # Python packages the server must have, e.g. ("segno>=1.6",)
     directory: Path = field(default=None, compare=False)
     raw: dict = field(default_factory=dict, compare=False)
 
@@ -69,6 +70,15 @@ def _adopted(plugin_id: str, data) -> tuple:
     if not isinstance(data, list) or not all(isinstance(t, str) and _TABLE.match(t) for t in data):
         raise PluginError(f'{plugin_id}: "adopts_tables" must be a list of table names')
     return tuple(data)
+
+
+def _packages(plugin_id: str, data) -> tuple:
+    from application.plugins.packages import parse_requirement
+    if not isinstance(data, list):
+        raise PluginError(f'{plugin_id}: "requires_python_packages" must be a list')
+    for text in data:
+        parse_requirement(text)         # a PluginError for one that is not understood
+    return tuple(str(t).strip() for t in data)
 
 
 _RIGHT = re.compile(r'^[a-z0-9][a-z0-9.-]*\.[a-z][a-z0-9_]*$')
@@ -134,6 +144,7 @@ def parse_manifest(data, directory: Path = None) -> Manifest:
         rights=rights,
         migrations=_relative(_text(data, 'migrations', required=False), 'migrations'),
         adopts_tables=_adopted(plugin_id, data.get('adopts_tables') or []),
+        requires_python_packages=_packages(plugin_id, data.get('requires_python_packages') or []),
         directory=directory,
         raw=data,
     )

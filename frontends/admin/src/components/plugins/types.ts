@@ -19,6 +19,9 @@ export interface PluginInfo {
   compatible: boolean
   /** Why a plugin that is switched on is not running. */
   error: string
+  /** Python packages the plugin needs that this server lacks (it cannot be switched on until they are installed). */
+  missing_packages: string[]
+  requires_python_packages: string[]
 }
 
 export interface PluginsState {

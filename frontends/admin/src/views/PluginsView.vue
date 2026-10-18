@@ -156,9 +156,13 @@ const installFromFile = async () => {
                 <Tag :value="p.source === 'bundled' ? 'Bundled' : 'Installed'" :severity="p.source === 'bundled' ? 'secondary' : 'info'" />
                 <Tag v-if="p.enabled && !p.loaded" value="Failed to load" severity="danger" />
                 <Tag v-if="!p.compatible" value="Not compatible" severity="warn" />
+                <Tag v-if="p.missing_packages.length" value="Package missing" severity="warn" />
               </div>
               <p v-if="p.description" class="hint">{{ p.description }}</p>
-              <p v-if="p.enabled && !p.loaded && p.error" class="plugin-error" :data-testid="`plugin-error-${p.id}`">{{ p.error }}</p>
+              <p v-if="p.missing_packages.length" class="plugin-error" :data-testid="`plugin-missing-${p.id}`">
+                Needs the Python package(s) {{ p.missing_packages.join(', ') }}. Install the server's requirements again and restart.
+              </p>
+              <p v-else-if="p.enabled && !p.loaded && p.error" class="plugin-error" :data-testid="`plugin-error-${p.id}`">{{ p.error }}</p>
               <small class="plugin-meta">
                 {{ p.id }}
                 <template v-if="p.fieldhandlers.length"> · field handler{{ p.fieldhandlers.length === 1 ? '' : 's' }}: {{ p.fieldhandlers.join(', ') }}</template>
@@ -169,7 +173,7 @@ const installFromFile = async () => {
             <div class="plugin-actions">
               <ToggleSwitch
                 :model-value="p.enabled"
-                :disabled="!canManage || busyId === p.id || (!p.enabled && !p.compatible)"
+                :disabled="!canManage || busyId === p.id || (!p.enabled && (!p.compatible || p.missing_packages.length > 0))"
                 :aria-label="`${p.name} on or off`"
                 @update:model-value="(v: boolean) => setEnabled(p, v)"
               />

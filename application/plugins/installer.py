@@ -101,6 +101,10 @@ def install_zip(data: bytes, installed_dir: Path, *, host_version: str = '', sha
             raise PluginError(f'{manifest.id} is built for plugin API {manifest.plugin_api}; this DisplayHive offers {PLUGIN_API}.')
         if not host_accepts(manifest.requires_host, host_version):
             raise PluginError(f'{manifest.id} needs DisplayHive {manifest.requires_host} (this is {host_version}).')
+        from application.plugins import packages
+        lacking = packages.unmet(manifest.requires_python_packages)
+        if lacking:
+            raise PluginError(f'{manifest.id} needs the Python package(s) {", ".join(lacking)}, which this server does not have; nothing was installed.')
         installed_dir = Path(installed_dir)
         installed_dir.mkdir(parents=True, exist_ok=True)
         staging = installed_dir / f'.staging-{uuid.uuid4().hex}'

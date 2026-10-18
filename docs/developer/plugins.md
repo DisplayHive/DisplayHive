@@ -37,6 +37,7 @@ installed plugin replaces a bundled one of the same id when its version is highe
   "admin": "admin/index.js",
   "screen": "screen/index.js",
   "migrations": "migrations",
+  "requires_python_packages": ["segno>=1.6"],
   "rights": [{ "id": "acme.weather.manage", "group": "weather", "label": "Manage the weather sources" }],
   "adopts_tables": []
 }
@@ -51,6 +52,11 @@ installed plugin replaces a bundled one of the same id when its version is highe
 * `rights` — every id starts with the plugin's id. They appear in the Groups & Rights page like the host's.
 * `adopts_tables` — tables that older versions created in the core and that now belong to the plugin
   (Pretalx). Rows in them switch the plugin on when an instance is upgraded.
+* `requires_python_packages` — Python packages the plugin imports that the server must have (`name` or `name>=1.2`; `>=`, `>`,
+  `<=`, `<`, `==`). DisplayHive **never installs packages while it runs** (the Docker image has no pip, the NixOS package is read-only):
+  a plugin may use what the server ships. The list is checked when the plugin is installed and loaded and shown on the
+  Plugins page, so a missing package is named before anything is imported and the plugin cannot be switched on. A bundled
+  plugin's packages must also be in `requirements/requirements.in` (a test checks it).
 * The paths (`backend`, `admin`, `screen`, `migrations`) are relative to the plugin and may not leave it.
 
 ## Backend
@@ -203,7 +209,8 @@ here. Rows carry a `uuid` so the same row is recognised on another instance.
 
 ## Known limits
 
-* Python dependencies of a plugin are not installed: a plugin may use what the host ships. (A later step may allow
-  pure-Python wheels inside the plugin's package.)
+* Python dependencies of a plugin are not installed: a plugin may use what the host ships and declares what it needs
+  (`requires_python_packages`). Shipping packages inside a plugin's ZIP is not supported; it will be looked at when a plugin
+  from outside the repository needs it.
 * The Help page's topic for Pretalx is still in the core.
 * `flask dh copy-database` copies the tables of the plugins that are switched on.

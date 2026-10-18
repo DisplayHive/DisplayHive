@@ -83,6 +83,13 @@ def load(manifest: Manifest, host_version: str = '') -> None:
         raise PluginError(f'{manifest.id} needs DisplayHive {manifest.requires_host} (this is {host_version})')
     if registry.is_loaded(manifest.id):
         return
+    from application.plugins import packages
+    lacking = packages.unmet(manifest.requires_python_packages)
+    if lacking:
+        raise PluginError(
+            f'{manifest.id} needs the Python package(s) {", ".join(lacking)}. DisplayHive does not install packages '
+            "while it runs: install the server's requirements again (requirements/requirements.txt) and restart."
+        )
     registry.add_plugin(manifest.id, {
         'version': manifest.version, 'kind': manifest.kind, 'name': manifest.name,
         'fieldhandlers': list(manifest.fieldhandlers), 'rights': [dict(r) for r in manifest.rights],

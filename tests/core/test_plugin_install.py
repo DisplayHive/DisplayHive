@@ -305,3 +305,12 @@ def test_a_missing_python_package_is_named_and_shown(flask_app, app):
         service.install_zip(flask_app.db, app, buffer.getvalue())
     listed = {p['id']: p for p in service.describe(flask_app.db, app)['plugins']}
     assert 'a_package_nobody_installed' in listed['acme.demo']['error']
+
+
+def test_installing_a_plugin_that_needs_a_missing_package_is_refused_and_shown(flask_app, app, tmp_path):
+    data = build_zip(manifest={'requires_python_packages': ['no-such-package-here>=2']})
+    with pytest.raises(PluginError, match='nothing was installed'):
+        service.install_zip(flask_app.db, app, data)
+    assert not (tmp_path / 'plugins' / 'acme.demo').exists()
+    listed = {p['id']: p for p in service.describe(flask_app.db, app)['plugins']}
+    assert listed['displayhive.qrcode']['missing_packages'] == []

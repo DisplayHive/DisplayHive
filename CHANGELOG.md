@@ -35,6 +35,9 @@ they are called out under **Breaking changes**.
 
 ### Added
 
+- **Plugins declare the Python packages they need** (`requires_python_packages` in `plugin.json`). The server checks them when a
+  plugin is installed and loaded and the Plugins page shows what is missing (the plugin cannot be switched on until the
+  package is installed), instead of an import error in the middle of loading.
 - **QR code field handler** (bundled plugin `displayhive.qrcode`). Draws a QR code, as an SVG on the server, for a link,
   plain text, a contact (vCard or MeCard), Wi-Fi access, an e-mail draft, an SMS, a phone number, a map position, a
   calendar event or a SEPA payment (GiroCode); size, colours, error correction and quiet zone are adjustable. New

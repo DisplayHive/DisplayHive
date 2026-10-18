@@ -15,5 +15,8 @@
     ]
   },
   "backend": "backend",
-  "admin": "admin/index.ts"
+  "admin": "admin/index.ts",
+  "requires_python_packages": [
+    "segno>=1.6"
+  ]
 }
