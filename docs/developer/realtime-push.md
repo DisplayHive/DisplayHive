@@ -57,4 +57,5 @@ to its own screen.
   (`application/admin/screens/logs.py`, table `screen_log`, under the screen of that connection) and pushes
   `stc:log_entry` to the admins on the Logger page. `cts:query` (ack) returns stored lines, filtered
   and paged. Screens send warnings and errors always, debug/info only while the Logger page is open
-  (`logger_active`).
+  (`logger_active`). A line identical to the screen's previous one is not stored again: that row counts it in
+  `repeat_count` and is pushed again with the same `id` (the Logger page updates the line in place).

@@ -81,8 +81,21 @@ def normalize_entry(payload) -> dict:
 
 
 def record(db, screen_id: int, entry: dict):
-    """Store one normalized entry for a screen; returns the row."""
+    """Store one normalized entry for a screen; returns the row.
+
+    A line identical to the screen's previous one (same severity, message and function) is not stored
+    again: the previous row counts it in ``repeat_count`` and takes the new time. A screen stuck in an
+    error loop thus fills one row, not the log.
+    """
     from application.models import ScreenLog
+    last = db.session.execute(
+        db.select(ScreenLog).where(ScreenLog.screen_id == screen_id).order_by(ScreenLog.id.desc()).limit(1)
+    ).scalar_one_or_none()
+    if last and (last.severity, last.message, last.function) == (entry['severity'], entry['message'], entry['function']):
+        last.repeat_count = (last.repeat_count or 1) + 1
+        last.timestamp = _now()
+        db.session.commit()
+        return last
     row = ScreenLog(screen_id=screen_id, timestamp=_now(), **entry)
     db.session.add(row)
     db.session.commit()
@@ -99,6 +112,7 @@ def entry_dict(row, screen_name: str) -> dict:
         'screen': screen_name,
         'screen_id': row.screen_id,
         'function': row.function,
+        'repeat_count': row.repeat_count or 1,
     }
 
 

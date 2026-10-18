@@ -88,3 +88,17 @@ def test_rate_limit_drops_a_flood():
     assert allowed.count(True) == logger_handlers.RATE_LIMIT
     # a new window starts counting again
     assert logger_handlers._within_rate_limit(sid, now=1000.0 + logger_handlers.RATE_WINDOW_SECONDS + 1) is True
+
+
+def test_identical_consecutive_lines_are_counted_not_stored(screens):
+    a, b = screens
+    line = {'severity': 'error', 'message': 'boom', 'function': 'f'}
+    first = screen_logs.record(db, a.id, line)
+    again = screen_logs.record(db, a.id, line)
+    assert again.id == first.id and again.repeat_count == 2
+    # another screen, or a different line in between, starts a new row
+    assert screen_logs.record(db, b.id, line).id != first.id
+    screen_logs.record(db, a.id, {**line, 'message': 'other'})
+    assert screen_logs.record(db, a.id, line).id != first.id
+    entries, _ = screen_logs.query(db, screen_id=a.id)
+    assert [(e['message'], e['repeat_count']) for e in entries] == [('boom', 2), ('other', 1), ('boom', 1)]

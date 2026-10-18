@@ -44,6 +44,8 @@ class ScreenLog(db.Model):
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="info")
     message: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
     function: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    # How many times in a row the screen sent exactly this line (see screens/logs.py `record`).
+    repeat_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     screen: Mapped["Screen"] = relationship("Screen", back_populates="logs")
 

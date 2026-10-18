@@ -29,6 +29,7 @@ interface LogEntry {
   screen: string
   screen_id: number | null
   function: string
+  repeat_count?: number
 }
 
 const { on, off, emit, isConnected } = useSocket()
@@ -105,6 +106,12 @@ const loadOlder = async () => {
 
 const handleLogEntry = (data: LogEntry) => {
   if (!matches(data)) return
+  // A repeat of the screen's previous line comes with the id of the row that counts it: update in place.
+  const known = data.id === null ? -1 : logs.value.findIndex((l) => l.id === data.id)
+  if (known >= 0) {
+    logs.value[known] = data
+    return
+  }
   logs.value.push(data)
   if (logs.value.length > maxLogs) {
     logs.value.shift()
@@ -260,6 +267,7 @@ const sendTestLog = () => {
             </span>
             <span class="log-function" v-if="log.function">[{{ log.function }}]</span>
             <span class="log-message">{{ log.message }}</span>
+            <span v-if="(log.repeat_count ?? 1) > 1" class="log-repeat" title="Sent this many times in a row">×{{ log.repeat_count }}</span>
           </div>
           <div v-if="logs.length === 0" class="no-logs">
             <i class="pi pi-inbox"></i>
@@ -372,6 +380,10 @@ const sendTestLog = () => {
   word-break: break-word;
 }
 
+.log-repeat {
+  margin-left: 0.5rem;
+  opacity: 0.7;
+}
 .log-debug { border-left: 3px solid #888; padding-left: 0.5rem; }
 .log-info { border-left: 3px solid #4fc3f7; padding-left: 0.5rem; }
 .log-warn { border-left: 3px solid #ffc107; padding-left: 0.5rem; }
