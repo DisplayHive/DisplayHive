@@ -91,8 +91,10 @@ backups, and restore one. See [Backup & restore](backup.md).
 ### `copy-database --from URL [--upgrade-source] [--yes]`
 
 Moves an installation from SQLite to PostgreSQL: copies everything into the
-database `DATABASE_URL` points at. See
-[Moving from SQLite to PostgreSQL](installation.md#moving-from-sqlite-to-postgresql).
+database `DATABASE_URL` points at, including the data of [plugins](plugins.md) (for example the Pretalx addresses). A plugin that
+created tables of its own needs them on the target first: start DisplayHive once on the target (or run
+`flask dh plugins enable <id>` there) so the plugin's migrations run; the command says so and changes nothing if one is
+missing. See [Moving from SQLite to PostgreSQL](installation.md#moving-from-sqlite-to-postgresql).
 
 ### `rerender`
 

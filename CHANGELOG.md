@@ -27,6 +27,10 @@ they are called out under **Breaking changes**.
 
 ### Fixed
 
+- **`flask dh copy-database` copies the data of plugins.** Moving from SQLite to PostgreSQL silently left out the Pretalx
+  addresses and settings (the command only knew the plugins that were switched on in the new, empty target). It now copies
+  every table a plugin owns (`plg_…` tables and the ones listed in a manifest's `adopts_tables`); if the target lacks the
+  tables of a plugin, it says what to do and changes nothing.
 - **Stores are emptied when a session ends.** After a logout (or an expired session, or a sign-out in
   another tab) the admin kept the data it had fetched — screens, devices, content, media, settings, help —
   in memory, so the next person to sign in at the same tab could see it until their own fetch replaced it,

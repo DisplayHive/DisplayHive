@@ -5,6 +5,10 @@ the models is copied 1:1 — users, groups and rights, SSO providers, devices an
 their keys, settings, content — in one transaction on the target, which is
 emptied first. If anything fails, the target is left exactly as it was.
 
+The tables that plugins own are copied too (see ``plugin_tables`` below): they are not in the models' metadata, which
+only holds the plugins that are loaded, and the tool runs against the (new, empty) target where only the default
+plugins are. They are read from the source as they are (reflection).
+
 Both databases must already have the schema (``alembic upgrade head``); the
 revision check is the CLI's job (application/cli/, ``flask dh copy-database``).
 Media files are not in the database and are not touched.
@@ -60,11 +64,26 @@ def _reset_sequence(conn, table: sa.Table) -> None:
     ))
 
 
+def _plugin_tables(source: sa.engine.Engine, known: set, plugin_tables: set) -> list:
+    """The source's tables that belong to plugins, reflected, parents first: those named ``plg_…`` and the ones a plugin
+    adopted from older versions (*plugin_tables*), as far as the models do not describe them already."""
+    wanted = sorted(name for name in sa.inspect(source).get_table_names()
+                    if name not in known and (name.startswith('plg_') or name in plugin_tables))
+    if not wanted:
+        return []
+    reflected = sa.MetaData()
+    for name in wanted:
+        sa.Table(name, reflected, autoload_with=source)      # also pulls in what they refer to; only *wanted* is used
+    return [t for t in reflected.sorted_tables if t.name in wanted]
+
+
 def copy_database(source: sa.engine.Engine, target: sa.engine.Engine, metadata: sa.MetaData,
-                  echo: Optional[Callable[[str], None]] = None) -> dict:
+                  echo: Optional[Callable[[str], None]] = None, plugin_tables: Optional[set] = None) -> dict:
     """Replace the contents of *target* with those of *source*.
 
-    *metadata* describes the tables (the models'). Returns {table: row count}.
+    *metadata* describes the tables (the models'). *plugin_tables* are the names of tables older versions created in
+    the core and plugins own now (``adopts_tables`` of their manifests); tables named ``plg_…`` are plugins' too.
+    Returns {table: row count}.
     """
     echo = echo or (lambda _msg: None)
     source_tables = set(sa.inspect(source).get_table_names())
@@ -73,25 +92,36 @@ def copy_database(source: sa.engine.Engine, target: sa.engine.Engine, metadata: 
     missing = [t.name for t in metadata.sorted_tables if t.name not in target_tables]
     if missing:
         raise CopyError('The target database lacks tables (' + ', '.join(missing) + ') — run `alembic upgrade head` on it first.')
-    unknown = sorted(source_tables - {t.name for t in metadata.sorted_tables} - {'alembic_version'})
+    known = {t.name for t in metadata.sorted_tables}
+    from_plugins = _plugin_tables(source, known, plugin_tables or set())
+    lacking = [t.name for t in from_plugins if t.name not in target_tables]
+    if lacking:
+        raise CopyError(
+            'The target database lacks the tables of plugins (' + ', '.join(lacking) + '). Tables a plugin created itself '
+            'come with the plugin: start DisplayHive once on the target (or run `flask dh plugins enable <id>` there) so '
+            'its migrations run, then copy again. Tables that older versions created in the core: run `alembic upgrade head`.'
+        )
+    unknown = sorted(source_tables - known - {t.name for t in from_plugins} - {'alembic_version'})
     if unknown:
-        echo('Not copied (no such table in this version, or it belongs to a plugin that is switched off): ' + ', '.join(unknown))
+        echo('Not copied (no such table in this version): ' + ', '.join(unknown))
 
     copied = {}
     try:
         with source.connect() as src, target.begin() as dst:
+            for table in reversed(from_plugins):       # plugins' tables refer to the core's: emptied first, filled last
+                dst.execute(table.delete())
             for table in reversed(tables):
                 dst.execute(table.delete())
-            for table in tables:
+            for table in tables + from_plugins:
                 rows = _in_insert_order(table, [dict(r) for r in src.execute(sa.select(table)).mappings()])
                 for start in range(0, len(rows), BATCH):
                     dst.execute(table.insert(), rows[start:start + BATCH])
                 copied[table.name] = len(rows)
                 echo(f'  {table.name}: {len(rows)}')
             if dst.dialect.name == 'postgresql':
-                for table in tables:
+                for table in tables + from_plugins:
                     _reset_sequence(dst, table)
-            for table in tables:
+            for table in tables + from_plugins:
                 count = dst.execute(sa.select(sa.func.count()).select_from(table)).scalar()
                 if count != copied[table.name]:
                     raise CopyError(f'{table.name}: copied {copied[table.name]} rows but the target holds {count}')

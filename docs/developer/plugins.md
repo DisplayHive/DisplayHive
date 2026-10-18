@@ -213,4 +213,3 @@ here. Rows carry a `uuid` so the same row is recognised on another instance.
 * Python dependencies of a plugin are not installed: a plugin may use what the host ships and declares what it needs
   (`requires_python_packages`). Shipping packages inside a plugin's ZIP is not supported; it will be looked at when a plugin
   from outside the repository needs it.
-* `flask dh copy-database` copies the tables of the plugins that are switched on.

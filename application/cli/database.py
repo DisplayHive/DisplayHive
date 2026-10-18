@@ -135,7 +135,7 @@ def copy_database_command(source_url, upgrade_source, yes):
     """Move a SQLite installation to PostgreSQL: copy everything into DATABASE_URL.
 
     Copies users, groups and rights, SSO providers, devices and their keys,
-    settings and content 1:1 from the --from database into the configured one,
+    settings and content — and the data of plugins (for example Pretalx) — 1:1 from the --from database into the configured one,
     which is EMPTIED first (all or nothing: on an error the target is left as
     it was). Prepare the target with `alembic upgrade head`, and stop the app
     (screens reconnect afterwards). Media files are not in the database: keep
@@ -175,7 +175,9 @@ def copy_database_command(source_url, upgrade_source, yes):
     if not yes:
         click.confirm('This REPLACES everything in the target database. Continue?', abort=True)
     try:
-        counts = copy_database(source, target, db.metadata, echo=click.echo)
+        from application.plugins import loader, service
+        adopted = {t for manifest, _ in loader.discover(service.installed_dir(current_app)).values() for t in manifest.adopts_tables}
+        counts = copy_database(source, target, db.metadata, echo=click.echo, plugin_tables=adopted)
     except CopyError as exc:
         raise click.ClickException(str(exc))
     click.secho(f'Done: {sum(counts.values())} row(s) in {len(counts)} table(s) copied.', fg='green', bold=True)

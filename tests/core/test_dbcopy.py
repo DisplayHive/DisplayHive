@@ -130,3 +130,56 @@ def test_copy_into_postgresql_keeps_ids_usable(tmp_path, source):
         target.dispose()
         with admin.connect() as conn:
             conn.execute(sa.text(f'DROP DATABASE {name} WITH (FORCE)'))
+
+
+# --- The data of plugins ----------------------------------------------------------------------------
+
+PRETALX = ('CREATE TABLE pretalx_api_url (id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, url TEXT NOT NULL, '
+           'polling_enabled BOOLEAN NOT NULL DEFAULT 0, polling_interval INTEGER NOT NULL DEFAULT 300)')
+PRETALX_CACHE = ('CREATE TABLE pretalx_api_cache (id INTEGER PRIMARY KEY, api_url_id INTEGER NOT NULL REFERENCES pretalx_api_url(id), '
+                 'cached_json TEXT NOT NULL)')
+PLG = 'CREATE TABLE plg_acme_demo_note (id INTEGER PRIMARY KEY, text VARCHAR(50))'
+
+
+def _with_plugin_tables(engine, *statements):
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(sa.text(statement))
+
+
+def test_the_tables_of_plugins_are_copied_too(tmp_path, source):
+    _with_plugin_tables(source, PRETALX, PRETALX_CACHE, PLG,
+                        "INSERT INTO pretalx_api_url (id, name, url, polling_enabled) VALUES (3, 'Main', 'https://x', 1)",
+                        "INSERT INTO pretalx_api_cache (id, api_url_id, cached_json) VALUES (1, 3, '{}')",
+                        "INSERT INTO plg_acme_demo_note (id, text) VALUES (1, 'hello')")
+    target = _engine(tmp_path, 'target.db')
+    db.metadata.create_all(target)
+    _with_plugin_tables(target, PRETALX, PRETALX_CACHE, PLG,
+                        "INSERT INTO plg_acme_demo_note (id, text) VALUES (9, 'stale')")
+    counts = copy_database(source, target, db.metadata, plugin_tables={'pretalx_api_url', 'pretalx_api_cache'})
+    assert counts['pretalx_api_url'] == 1 and counts['pretalx_api_cache'] == 1 and counts['plg_acme_demo_note'] == 1
+    with target.connect() as conn:
+        assert conn.execute(sa.text('SELECT name, polling_enabled FROM pretalx_api_url')).fetchall() == [('Main', 1)]
+        assert conn.execute(sa.text('SELECT api_url_id FROM pretalx_api_cache')).fetchall() == [(3,)]
+        assert conn.execute(sa.text('SELECT id, text FROM plg_acme_demo_note')).fetchall() == [(1, 'hello')]   # the stale row is gone
+
+
+def test_a_plugin_table_the_target_lacks_stops_the_copy_before_anything_is_deleted(tmp_path, source):
+    _with_plugin_tables(source, PLG, "INSERT INTO plg_acme_demo_note (id, text) VALUES (1, 'hello')")
+    target = _engine(tmp_path, 'target.db')
+    db.metadata.create_all(target)
+    with target.begin() as conn:
+        conn.execute(db.metadata.tables['system_setting'].insert().values(key='keep', value='x'))
+    with pytest.raises(CopyError, match='plg_acme_demo_note.*start DisplayHive once'):
+        copy_database(source, target, db.metadata)
+    with target.connect() as conn:
+        assert conn.execute(sa.select(db.metadata.tables['system_setting'].c.key)).scalar() == 'keep'
+
+
+def test_a_table_nobody_owns_is_still_only_reported(tmp_path, source):
+    _with_plugin_tables(source, 'CREATE TABLE leftover (id INTEGER PRIMARY KEY)')
+    target = _engine(tmp_path, 'target.db')
+    db.metadata.create_all(target)
+    said = []
+    copy_database(source, target, db.metadata, echo=said.append)
+    assert any('leftover' in line and 'Not copied' in line for line in said)
