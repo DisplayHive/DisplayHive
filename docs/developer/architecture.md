@@ -318,6 +318,11 @@ DisplayHive runs as **one process with one gunicorn worker** (`--worker-class gt
 - **Restarts are short interruptions.** Screens keep their page, files and last content in the browser
   (service worker, `content-snapshot.ts`) and reconnect on their own, so a deploy is a blink, not an
   outage.
+- **After a restart every device shows offline for a few seconds.** The connection state is not kept across the
+  restart: the start sets `Device.is_online` to false (`reset_devices_online`, `application/core/startup.py`) and each
+  screen sets it again when it reconnects. That is right, because every socket died with the process. No offline
+  alert is sent for it — alerts fire only when a disconnect is handled (`socketio_handlers/lifecycle.py`), which a
+  dying process does not do.
 - **No Redis for now.** A message queue would make several workers (or hosts) possible, but would need
   the registry, the rate limiter, the pending-SSO store, the log watcher state and sticky sessions for
   Socket.IO's polling transport to move out of process. That is a large change for a limit nobody has
