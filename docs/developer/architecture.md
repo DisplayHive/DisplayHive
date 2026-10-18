@@ -126,6 +126,16 @@ Defined under `application/models/`:
 - **`base.py`** — the `Screen` ↔ `Screengroup` and `ContentElement` ↔
   `Screengroup` many-to-many association tables.
 
+### Deleting rows
+
+Foreign keys do not all carry an `ON DELETE` rule (the user, rights and layout-variation tables cascade; the design styles,
+gradients, associations and most nullable references do not), so **whoever deletes cleans up**: a delete handler removes
+the children itself, lets an ORM relationship (`cascade`, nullify) do it, or refuses with a reason ("Content type is used
+by 1 content item(s)"). It must never fail with an integrity error and never leave a row that points at a row that is gone.
+`tests/admin/test_delete_paths.py` deletes each kind of parent with children through the real handler and then checks
+every foreign key of every table for orphans; a new delete handler gets a case there. (A schema-level cascade was weighed
+and left out: SQLite needs the tables rebuilt for it, and the handlers already guard every path.)
+
 ## Admin feature areas (`application/admin/*`)
 
 Each subfolder is a self-contained Socket.IO handler package for one admin
