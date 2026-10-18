@@ -18,6 +18,11 @@ const PREFERENCES_STORAGE_KEY = 'displayhive_admin_preferences'
 // other tabs (via the `storage` event) know not to connect a socket the
 // server would refuse anyway. The server stays the source of truth.
 const MUST_CHANGE_PASSWORD_STORAGE_KEY = 'displayhive_admin_must_change_password'
+// Written just before the session hint when "extend session" renewed the session, with the new end time:
+// other tabs then take over the new end instead of reloading as they do for a different session.
+const SESSION_EXTENDED_KEY = 'displayhive_admin_session_extended'
+/** How long before the session ends the admin is warned and offered to extend it. */
+export const EXPIRY_WARNING_MS = 5 * 60_000
 // Keys of earlier versions, which kept the JWT itself in localStorage. Removed on
 // start: a token left there is readable by any script on the page.
 const LEGACY_KEYS = [
@@ -109,12 +114,20 @@ export const useAuthStore = defineStore('auth', () => {
   const isImpersonating = computed(() => !!originalUsername.value)
 
   let expiryTimer: ReturnType<typeof setTimeout> | null = null
+  let warningTimer: ReturnType<typeof setTimeout> | null = null
+  // True from EXPIRY_WARNING_MS before the session ends: App.vue then shows SessionExpiryDialog.
+  const expiryWarning = ref(false)
 
   const clearExpiryTimer = () => {
     if (expiryTimer !== null) {
       clearTimeout(expiryTimer)
       expiryTimer = null
     }
+    if (warningTimer !== null) {
+      clearTimeout(warningTimer)
+      warningTimer = null
+    }
+    expiryWarning.value = false
   }
 
   // Auto-logout when the session's own end passes, so an idle tab doesn't linger on
@@ -129,6 +142,8 @@ export const useAuthStore = defineStore('auth', () => {
       return
     }
     expiryTimer = setTimeout(() => logout(), delay)
+    if (delay <= EXPIRY_WARNING_MS) expiryWarning.value = true
+    else warningTimer = setTimeout(() => (expiryWarning.value = true), delay - EXPIRY_WARNING_MS)
   }
 
   const cachePreferences = (newPreferences: UserPreferences) => {
@@ -328,6 +343,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Give the session a fresh term (the "extend session" button of the expiry warning). Only ever on
+   * request, never from a timer or an API call, so an unattended page still logs itself out. Returns an
+   * error message, or null on success.
+   */
+  const extendSession = async (): Promise<string | null> => {
+    try {
+      const response = await post('/admin/api/auth/refresh')
+      const result = await response.json()
+      if (!response.ok || !result.success) return result.error || 'Could not extend the session'
+      const next = parseExpiry(result.expires_at)
+      // Before the hint write, which is what other tabs react to (see the storage listener).
+      localStorage.setItem(SESSION_EXTENDED_KEY, String(next))
+      applySession({ username: username.value ?? undefined, expires_at: result.expires_at })
+      useSocket().reconnect()
+      return null
+    } catch (e) {
+      return `Could not reach server: ${e}`
+    }
+  }
+
   /** End the session: tell the server to remove the cookie, forget it here, disconnect the socket. */
   const logout = () => {
     // Fire and forget: the page is leaving the session either way.
@@ -438,6 +474,18 @@ export const useAuthStore = defineStore('auth', () => {
       // the previous identity's data — see startImpersonation() for why a reconnect is
       // not enough.
       if (
+        next.username === username.value &&
+        next.impersonator === originalUsername.value &&
+        next.expiresAt !== expiresAt.value &&
+        localStorage.getItem(SESSION_EXTENDED_KEY) === String(next.expiresAt)
+      ) {
+        // Extended in another tab: same session, new end.
+        expiresAt.value = next.expiresAt
+        scheduleExpiry()
+        useSocket().reconnect()
+        return
+      }
+      if (
         next.username !== username.value ||
         next.impersonator !== originalUsername.value ||
         next.expiresAt !== expiresAt.value
@@ -464,6 +512,8 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     username,
     expiresAt,
+    expiryWarning,
+    extendSession,
     preferences,
     restoring,
     isAuthenticated,

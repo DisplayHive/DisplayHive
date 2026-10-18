@@ -300,3 +300,27 @@ def test_the_token_in_the_handshake_still_works(flask_app, user):
         assert socket.is_connected()
     finally:
         socket.disconnect()
+
+
+# --- extending the session --------------------------------------------------------------------------
+
+
+def test_refresh_issues_a_new_cookie_and_needs_the_csrf_header(client, user):
+    _login(client)
+    assert client.post('/admin/api/auth/refresh').status_code == 403
+    response = client.post('/admin/api/auth/refresh', headers=CSRF)
+    body = response.get_json()
+    assert response.status_code == 200 and body['success'] and body['expires_at'] and 'token' not in body
+    assert _cookie_named(response, 'dh_session')
+    assert client.get('/admin/api/auth/me').status_code == 200
+
+
+def test_refresh_without_a_session_is_unauthorized(client, user):
+    assert client.post('/admin/api/auth/refresh', headers=CSRF).status_code == 401
+
+
+def test_an_impersonated_session_is_not_extended(client, admin_and_target):
+    _admin, target = admin_and_target
+    _login(client, 'boss')
+    client.post('/admin/api/auth/impersonate', json={'user_id': target.id}, headers=CSRF)
+    assert client.post('/admin/api/auth/refresh', headers=CSRF).status_code == 400

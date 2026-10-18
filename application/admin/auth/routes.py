@@ -574,6 +574,24 @@ def register_auth_routes(app, db):
             return (None, None), None, None, (jsonify({'success': False, 'error': 'Unauthorized'}), 401)
         return (token, source), user, decode_token(app, token) or {}, None
 
+    @app.route('/admin/api/auth/refresh', methods=['POST'])
+    def admin_auth_refresh():
+        """Give the caller's session a fresh term (the admin's "extend session" button, offered shortly
+        before the session ends). Only on request, never automatically; the sign-in method is kept.
+        An impersonation session is not extended: it keeps its original, limited term."""
+        (token, source), user, payload, error = _cookie_session()
+        if error:
+            return error
+        if 'imp' in payload:
+            return jsonify({'success': False, 'error': 'An impersonated session cannot be extended'}), 400
+        new_token = create_token(app, user, auth_method=payload.get('am', 'password'))
+        reply = {'success': True, 'expires_at': web_session.expires_at(app, new_token)}
+        if source != 'cookie':
+            return jsonify({**reply, 'token': new_token})
+        response = jsonify(reply)
+        web_session.set_cookie(response, app, request, new_token)
+        return response
+
     @app.route('/admin/api/auth/impersonate', methods=['POST'])
     def admin_auth_impersonate():
         """Log the caller in as another user. data: {user_id}. Needs special.impersonate and

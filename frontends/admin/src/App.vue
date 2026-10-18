@@ -10,6 +10,7 @@ import AppBanners from './components/app/AppBanners.vue'
 import AppHeader from './components/app/AppHeader.vue'
 import PageHeader from './components/ui/PageHeader.vue'
 import CommandPalette from './components/app/CommandPalette.vue'
+import SessionExpiryDialog from './components/app/SessionExpiryDialog.vue'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 
@@ -39,6 +40,7 @@ const security = useSecurityStatus()
 
       <AppHeader />
       <CommandPalette />
+      <SessionExpiryDialog />
 
       <main class="app-main p-fluid">
         <div v-if="!isConnected" class="disconnect-overlay" data-testid="disconnect-overlay">

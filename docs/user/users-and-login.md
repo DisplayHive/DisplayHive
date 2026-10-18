@@ -58,7 +58,7 @@ password (unless password login is switched off for it).
 
 ## Sessions
 
-A login lasts 12 hours; you'll be asked to log in again once it has expired.
+A login lasts 12 hours. Five minutes before it ends, a window warns you and offers **Extend session** (for another 12 hours); the session is never extended automatically, so a page left alone still signs out. If you do nothing, you are asked to log in again. An impersonated session cannot be extended.
 
 In the browser the session lives in a **cookie** the page cannot read
 (`HttpOnly`), that is only sent on requests started from DisplayHive's own

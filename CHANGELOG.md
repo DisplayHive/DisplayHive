@@ -9,6 +9,10 @@ they are called out under **Breaking changes**.
 
 ### Changed
 
+- **Session expiry warning:** five minutes before a login ends, the admin shows a countdown with **Extend session**
+  (`POST /admin/api/auth/refresh`) instead of signing out without notice. Extending is always a click, never automatic.
+- **Screen log:** an identical line repeated by a screen is counted in one row (`×N` on the Logger page) instead of
+  stored again.
 - **Field handlers and Pretalx are plugins.** Every field handler (short text, image, icon, countdown, …) is a
   plugin of its own in `plugins/`, with its rendering, its editor and its screen code together; Pretalx is a
   plugin that brings its page, its poller, its rights and its tables. The core no longer knows any handler by

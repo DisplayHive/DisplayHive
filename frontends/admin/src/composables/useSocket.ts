@@ -143,6 +143,16 @@ export function useSocket() {
     return socket
   }
 
+  /**
+   * Reconnect with the session cookie as it is now. A socket holds the token it connected with and the
+   * server checks that on every event, so after the session was extended the socket must pick up the new one.
+   */
+  const reconnect = () => {
+    if (!socket) return
+    socket.disconnect()
+    socket.connect()
+  }
+
   /** Close the socket connection and clear the singleton instance. */
   const disconnect = () => {
     if (socket) {
@@ -257,6 +267,7 @@ export function useSocket() {
     isConnected,
     reconnectFailed,
     connect,
+    reconnect,
     disconnect,
     emit,
     emitWithAck,

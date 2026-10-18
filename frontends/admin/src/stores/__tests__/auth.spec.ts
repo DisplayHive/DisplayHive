@@ -220,6 +220,50 @@ describe('logging out', () => {
   })
 })
 
+describe('the expiry warning', () => {
+  it('rises shortly before the end and extending the session clears it again', async () => {
+    vi.useFakeTimers()
+    const end = (ms: number) => new Date(Date.now() + ms).toISOString()
+    respond = (url) =>
+      url.endsWith('/login')
+        ? { body: { success: true, username: 'anna', expires_at: end(10 * 60_000) } }
+        : { body: { success: true, expires_at: end(12 * 3600_000) } }
+    const auth = useAuthStore()
+    await auth.login('anna', 'pw')
+    expect(auth.expiryWarning).toBe(false)
+    vi.advanceTimersByTime(5 * 60_000 + 1)
+    expect(auth.expiryWarning).toBe(true)
+    expect(auth.isAuthenticated).toBe(true)
+
+    expect(await auth.extendSession()).toBeNull()
+    expect(calls.some((c) => c.url.endsWith('/auth/refresh'))).toBe(true)
+    expect(auth.expiryWarning).toBe(false)
+    vi.advanceTimersByTime(60 * 60_000)
+    expect(auth.isAuthenticated).toBe(true)
+  })
+
+  it('does not extend by itself: without a click the session still ends', async () => {
+    vi.useFakeTimers()
+    respond = () => ({ body: { success: true, username: 'anna', expires_at: new Date(Date.now() + 10 * 60_000).toISOString() } })
+    const auth = useAuthStore()
+    await auth.login('anna', 'pw')
+    vi.advanceTimersByTime(10 * 60_000 + 1)
+    expect(auth.isAuthenticated).toBe(false)
+    expect(calls.some((c) => c.url.endsWith('/auth/refresh'))).toBe(false)
+  })
+
+  it('reports why the extension failed and keeps the session', async () => {
+    respond = (url) =>
+      url.endsWith('/refresh')
+        ? { status: 400, body: { success: false, error: 'An impersonated session cannot be extended' } }
+        : { body: { success: true, username: 'anna', expires_at: FUTURE() } }
+    const auth = useAuthStore()
+    await auth.login('anna', 'pw')
+    expect(await auth.extendSession()).toBe('An impersonated session cannot be extended')
+    expect(auth.isAuthenticated).toBe(true)
+  })
+})
+
 describe('changing the password', () => {
   it('carries on under the new cookie and clears the flag', async () => {
     respond = (url) =>
